@@ -50,6 +50,12 @@ const _navItems = <_NavItem>[
     requiredPermission: 'service.view',
   ),
   _NavItem(
+    label: 'Service Attributes',
+    icon: Icons.tune_rounded,
+    route: '/dashboard/service-attributes',
+    requiredPermission: 'service.view',
+  ),
+  _NavItem(
     label: 'Vendors',
     icon: Icons.store_rounded,
     route: '/dashboard/vendors',

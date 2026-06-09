@@ -12,6 +12,7 @@ import '../../features/rbac/presentation/pages/rbac_page.dart';
 import '../../features/categories/presentation/pages/categories_page.dart';
 import '../../features/sub_categories/presentation/pages/sub_categories_page.dart';
 import '../../features/services/presentation/pages/services_page.dart';
+import '../../features/service_attributes/presentation/pages/service_attributes_page.dart';
 import '../../features/vendors/presentation/pages/vendors_page.dart';
 import '../../features/bookings/presentation/pages/bookings_page.dart';
 import '../../features/customers/presentation/pages/customers_page.dart';
@@ -161,6 +162,13 @@ final routerProvider = Provider<GoRouter>((ref) {
             name: 'services',
             pageBuilder: (context, state) => const NoTransitionPage(
               child: ServicesPage(),
+            ),
+          ),
+          GoRoute(
+            path: '/dashboard/service-attributes',
+            name: 'serviceAttributes',
+            pageBuilder: (context, state) => const NoTransitionPage(
+              child: ServiceAttributesPage(),
             ),
           ),
           GoRoute(
