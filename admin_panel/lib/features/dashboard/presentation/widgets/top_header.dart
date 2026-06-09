@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../features/auth/application/providers/auth_provider.dart';
+import '../../../../features/notifications/application/providers/notifications_providers.dart';
 
 class TopHeader extends ConsumerWidget {
   const TopHeader({super.key});
@@ -11,6 +12,7 @@ class TopHeader extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final adminUser = ref.watch(currentAdminUserProvider);
     final title = _resolveTitle(GoRouterState.of(context).matchedLocation);
+    final unreadCount = ref.watch(unreadCountProvider);
 
     return Container(
       height: 64,
@@ -35,11 +37,11 @@ class TopHeader extends ConsumerWidget {
 
           const Spacer(),
 
-          // Notification icon (placeholder for future)
+          // Notification bell — navigates to /dashboard/notifications
           _HeaderIconButton(
             icon: Icons.notifications_outlined,
-            onTap: () {},
-            badgeCount: 0,
+            onTap: () => context.go('/dashboard/notifications'),
+            badgeCount: unreadCount,
           ),
           const SizedBox(width: 8),
 
@@ -67,6 +69,7 @@ class TopHeader extends ConsumerWidget {
       '/dashboard/bookings': 'Bookings',
       '/dashboard/customers': 'Customers',
       '/dashboard/coupons': 'Coupons & Promotions',
+      '/dashboard/notifications': 'Notifications',
       '/dashboard/settings': 'Settings',
     };
     return titles[location] ?? 'Admin Panel';

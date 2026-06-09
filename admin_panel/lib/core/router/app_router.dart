@@ -17,6 +17,7 @@ import '../../features/vendors/presentation/pages/vendors_page.dart';
 import '../../features/bookings/presentation/pages/bookings_page.dart';
 import '../../features/customers/presentation/pages/customers_page.dart';
 import '../../features/coupons/presentation/pages/coupons_page.dart';
+import '../../features/notifications/presentation/pages/notifications_page.dart';
 import '../../features/settings/presentation/pages/settings_page.dart';
 import '../../shared/pages/unauthorized_page.dart';
 import '../rbac/permission_guard.dart';
@@ -197,6 +198,13 @@ final routerProvider = Provider<GoRouter>((ref) {
             name: 'coupons',
             pageBuilder: (context, state) => const NoTransitionPage(
               child: CouponsPage(),
+            ),
+          ),
+          GoRoute(
+            path: '/dashboard/notifications',
+            name: 'notifications',
+            pageBuilder: (context, state) => const NoTransitionPage(
+              child: NotificationsPage(),
             ),
           ),
           GoRoute(

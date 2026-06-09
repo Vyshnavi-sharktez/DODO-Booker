@@ -80,6 +80,12 @@ const _navItems = <_NavItem>[
     requiredPermission: 'coupon.view',
   ),
   _NavItem(
+    label: 'Notifications',
+    icon: Icons.notifications_rounded,
+    route: '/dashboard/notifications',
+    requiredPermission: 'notification.view',
+  ),
+  _NavItem(
     label: 'Settings',
     icon: Icons.settings_rounded,
     route: '/dashboard/settings',
