@@ -4,6 +4,7 @@ import '../../../../core/theme/app_theme.dart';
 import '../../../../features/auth/application/providers/auth_provider.dart';
 import '../../application/providers/dashboard_providers.dart';
 import '../../../vendors/application/providers/vendors_providers.dart';
+import '../../../bookings/application/providers/bookings_providers.dart';
 
 class DashboardHomePage extends ConsumerWidget {
   const DashboardHomePage({super.key});
@@ -102,24 +103,26 @@ class _StatsGrid extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final stats = ref.watch(dashboardStatsProvider);
     final vendorsAsync = ref.watch(vendorsNotifierProvider);
-    final isLoading = vendorsAsync.isLoading;
+    final bookingsAsync = ref.watch(bookingsNotifierProvider);
+    final isLoadingVendors = vendorsAsync.isLoading;
+    final isLoadingBookings = bookingsAsync.isLoading;
 
     final items = [
       _StatData(
         label: 'Total Vendors',
-        value: isLoading ? '…' : '${stats.totalVendors}',
+        value: isLoadingVendors ? '…' : '${stats.totalVendors}',
         icon: Icons.store_rounded,
         color: const Color(0xFF4A90D9),
       ),
       _StatData(
         label: 'Active Vendors',
-        value: isLoading ? '…' : '${stats.activeVendors}',
+        value: isLoadingVendors ? '…' : '${stats.activeVendors}',
         icon: Icons.check_circle_outline_rounded,
         color: const Color(0xFF38A169),
       ),
       _StatData(
         label: 'Total Bookings',
-        value: '—',
+        value: isLoadingBookings ? '…' : '${stats.totalBookings}',
         icon: Icons.book_online_rounded,
         color: const Color(0xFFDD6B20),
       ),
