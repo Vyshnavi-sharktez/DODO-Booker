@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../features/auth/application/providers/auth_provider.dart';
+import '../../application/providers/dashboard_providers.dart';
+import '../../../vendors/application/providers/vendors_providers.dart';
 
 class DashboardHomePage extends ConsumerWidget {
   const DashboardHomePage({super.key});
@@ -91,38 +93,44 @@ class _WelcomeBanner extends StatelessWidget {
   }
 }
 
-class _StatsGrid extends StatelessWidget {
+// ── Stats grid ─────────────────────────────────────────────────────────────────
+
+class _StatsGrid extends ConsumerWidget {
   const _StatsGrid();
 
-  static const _stats = [
-    _StatData(
-      label: 'Total Bookings',
-      value: '—',
-      icon: Icons.book_online_rounded,
-      color: Color(0xFF4A90D9),
-    ),
-    _StatData(
-      label: 'Active Vendors',
-      value: '—',
-      icon: Icons.store_rounded,
-      color: Color(0xFF38A169),
-    ),
-    _StatData(
-      label: 'Customers',
-      value: '—',
-      icon: Icons.people_rounded,
-      color: Color(0xFFDD6B20),
-    ),
-    _StatData(
-      label: 'Total Revenue',
-      value: '—',
-      icon: Icons.currency_rupee_rounded,
-      color: Color(0xFF805AD5),
-    ),
-  ];
-
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final stats = ref.watch(dashboardStatsProvider);
+    final vendorsAsync = ref.watch(vendorsNotifierProvider);
+    final isLoading = vendorsAsync.isLoading;
+
+    final items = [
+      _StatData(
+        label: 'Total Vendors',
+        value: isLoading ? '…' : '${stats.totalVendors}',
+        icon: Icons.store_rounded,
+        color: const Color(0xFF4A90D9),
+      ),
+      _StatData(
+        label: 'Active Vendors',
+        value: isLoading ? '…' : '${stats.activeVendors}',
+        icon: Icons.check_circle_outline_rounded,
+        color: const Color(0xFF38A169),
+      ),
+      _StatData(
+        label: 'Total Bookings',
+        value: '—',
+        icon: Icons.book_online_rounded,
+        color: const Color(0xFFDD6B20),
+      ),
+      _StatData(
+        label: 'Customers',
+        value: '—',
+        icon: Icons.people_rounded,
+        color: const Color(0xFF805AD5),
+      ),
+    ];
+
     return LayoutBuilder(
       builder: (context, constraints) {
         final crossAxisCount = constraints.maxWidth > 900
@@ -137,7 +145,7 @@ class _StatsGrid extends StatelessWidget {
           mainAxisSpacing: 16,
           crossAxisSpacing: 16,
           childAspectRatio: 2.2,
-          children: _stats.map((s) => _StatCard(data: s)).toList(),
+          children: items.map((s) => _StatCard(data: s)).toList(),
         );
       },
     );
@@ -176,7 +184,7 @@ class _StatCard extends StatelessWidget {
             width: 48,
             height: 48,
             decoration: BoxDecoration(
-              color: data.color.withValues(alpha:0.1),
+              color: data.color.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(12),
             ),
             child: Icon(data.icon, color: data.color, size: 24),
@@ -212,6 +220,8 @@ class _StatCard extends StatelessWidget {
     );
   }
 }
+
+// ── Quick actions ──────────────────────────────────────────────────────────────
 
 class _QuickActions extends StatelessWidget {
   const _QuickActions();
