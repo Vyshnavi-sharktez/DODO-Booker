@@ -70,6 +70,9 @@ class TopHeader extends ConsumerWidget {
       '/dashboard/customers': 'Customers',
       '/dashboard/coupons': 'Coupons & Promotions',
       '/dashboard/notifications': 'Notifications',
+      '/dashboard/vendor-assignment': 'Vendor Assignment',
+      '/dashboard/pricing-engine': 'Pricing Engine',
+      '/dashboard/vendor-settlement': 'Vendor Settlement',
       '/dashboard/settings': 'Settings',
     };
     return titles[location] ?? 'Admin Panel';

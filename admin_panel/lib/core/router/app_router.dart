@@ -18,6 +18,9 @@ import '../../features/bookings/presentation/pages/bookings_page.dart';
 import '../../features/customers/presentation/pages/customers_page.dart';
 import '../../features/coupons/presentation/pages/coupons_page.dart';
 import '../../features/notifications/presentation/pages/notifications_page.dart';
+import '../../features/vendor_assignment/presentation/pages/vendor_assignment_page.dart';
+import '../../features/pricing_engine/presentation/pages/pricing_engine_page.dart';
+import '../../features/vendor_settlement/presentation/pages/vendor_settlement_page.dart';
 import '../../features/settings/presentation/pages/settings_page.dart';
 import '../../shared/pages/unauthorized_page.dart';
 import '../rbac/permission_guard.dart';
@@ -201,10 +204,31 @@ final routerProvider = Provider<GoRouter>((ref) {
             ),
           ),
           GoRoute(
+            path: '/dashboard/pricing-engine',
+            name: 'pricingEngine',
+            pageBuilder: (context, state) => const NoTransitionPage(
+              child: PricingEnginePage(),
+            ),
+          ),
+          GoRoute(
+            path: '/dashboard/vendor-assignment',
+            name: 'vendorAssignment',
+            pageBuilder: (context, state) => const NoTransitionPage(
+              child: VendorAssignmentPage(),
+            ),
+          ),
+          GoRoute(
             path: '/dashboard/notifications',
             name: 'notifications',
             pageBuilder: (context, state) => const NoTransitionPage(
               child: NotificationsPage(),
+            ),
+          ),
+          GoRoute(
+            path: '/dashboard/vendor-settlement',
+            name: 'vendorSettlement',
+            pageBuilder: (context, state) => const NoTransitionPage(
+              child: VendorSettlementPage(),
             ),
           ),
           GoRoute(

@@ -56,6 +56,12 @@ const _navItems = <_NavItem>[
     requiredPermission: 'service.view',
   ),
   _NavItem(
+    label: 'Pricing Engine',
+    icon: Icons.price_change_rounded,
+    route: '/dashboard/pricing-engine',
+    requiredPermission: 'service.view',
+  ),
+  _NavItem(
     label: 'Vendors',
     icon: Icons.store_rounded,
     route: '/dashboard/vendors',
@@ -66,6 +72,18 @@ const _navItems = <_NavItem>[
     icon: Icons.book_online_rounded,
     route: '/dashboard/bookings',
     requiredPermission: 'booking.view',
+  ),
+  _NavItem(
+    label: 'Vendor Assignment',
+    icon: Icons.assignment_ind_rounded,
+    route: '/dashboard/vendor-assignment',
+    requiredPermission: 'booking.view',
+  ),
+  _NavItem(
+    label: 'Settlements',
+    icon: Icons.account_balance_wallet_rounded,
+    route: '/dashboard/vendor-settlement',
+    requiredPermission: 'vendor.view',
   ),
   _NavItem(
     label: 'Customers',
