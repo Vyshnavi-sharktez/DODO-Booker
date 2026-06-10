@@ -6,7 +6,10 @@ import '../../../../features/auth/application/providers/auth_provider.dart';
 import '../../../../features/notifications/application/providers/notifications_providers.dart';
 
 class TopHeader extends ConsumerWidget {
-  const TopHeader({super.key});
+  const TopHeader({super.key, this.showHamburger = false});
+
+  /// When true, renders a hamburger button that opens the Scaffold drawer.
+  final bool showHamburger;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -16,7 +19,9 @@ class TopHeader extends ConsumerWidget {
 
     return Container(
       height: 64,
-      padding: const EdgeInsets.symmetric(horizontal: 24),
+      padding: EdgeInsets.symmetric(
+        horizontal: showHamburger ? 8 : 24,
+      ),
       decoration: const BoxDecoration(
         color: AppColors.surface,
         border: Border(
@@ -25,17 +30,31 @@ class TopHeader extends ConsumerWidget {
       ),
       child: Row(
         children: [
+          // Hamburger button for mobile/tablet
+          if (showHamburger)
+            Builder(
+              builder: (ctx) => IconButton(
+                icon: const Icon(Icons.menu_rounded),
+                color: AppColors.textPrimary,
+                tooltip: 'Open menu',
+                onPressed: () => Scaffold.of(ctx).openDrawer(),
+              ),
+            ),
+
           // Page title
-          Text(
-            title,
-            style: const TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.w700,
-              color: AppColors.textPrimary,
+          Expanded(
+            child: Text(
+              title,
+              style: const TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w700,
+                color: AppColors.textPrimary,
+              ),
+              overflow: TextOverflow.ellipsis,
             ),
           ),
 
-          const Spacer(),
+          const SizedBox(width: 8),
 
           // Notification bell — navigates to /dashboard/notifications
           _HeaderIconButton(
@@ -73,6 +92,7 @@ class TopHeader extends ConsumerWidget {
       '/dashboard/vendor-assignment': 'Vendor Assignment',
       '/dashboard/pricing-engine': 'Pricing Engine',
       '/dashboard/vendor-settlement': 'Vendor Settlement',
+      '/dashboard/cms': 'CMS & SEO',
       '/dashboard/settings': 'Settings',
     };
     return titles[location] ?? 'Admin Panel';

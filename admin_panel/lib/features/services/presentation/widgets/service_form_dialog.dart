@@ -141,9 +141,10 @@ class _ServiceFormDialogState extends State<ServiceFormDialog> {
     final subCats = _filteredSubCategories;
 
     return Dialog(
+      insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      child: SizedBox(
-        width: 580,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 580),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,

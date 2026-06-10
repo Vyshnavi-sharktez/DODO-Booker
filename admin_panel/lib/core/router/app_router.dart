@@ -21,6 +21,7 @@ import '../../features/notifications/presentation/pages/notifications_page.dart'
 import '../../features/vendor_assignment/presentation/pages/vendor_assignment_page.dart';
 import '../../features/pricing_engine/presentation/pages/pricing_engine_page.dart';
 import '../../features/vendor_settlement/presentation/pages/vendor_settlement_page.dart';
+import '../../features/cms/presentation/pages/cms_pages_page.dart';
 import '../../features/settings/presentation/pages/settings_page.dart';
 import '../../shared/pages/unauthorized_page.dart';
 import '../rbac/permission_guard.dart';
@@ -229,6 +230,13 @@ final routerProvider = Provider<GoRouter>((ref) {
             name: 'vendorSettlement',
             pageBuilder: (context, state) => const NoTransitionPage(
               child: VendorSettlementPage(),
+            ),
+          ),
+          GoRoute(
+            path: '/dashboard/cms',
+            name: 'cms',
+            pageBuilder: (context, state) => const NoTransitionPage(
+              child: CmsPagesPage(),
             ),
           ),
           GoRoute(

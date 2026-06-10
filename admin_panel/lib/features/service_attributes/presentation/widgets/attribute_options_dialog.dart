@@ -146,10 +146,10 @@ class _AttributeOptionsDialogState
         ref.watch(serviceAttributesNotifierProvider).isLoading;
 
     return Dialog(
+      insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      child: SizedBox(
-        width: 520,
-        height: 540,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 520, maxHeight: 540),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [

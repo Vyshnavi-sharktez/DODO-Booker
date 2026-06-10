@@ -286,65 +286,74 @@ class _NotificationsPageState extends ConsumerState<NotificationsPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // ── Header ────────────────────────────────────────────────────────
-          Row(
-            children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+          // ── Responsive Header ─────────────────────────────────────────────
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final narrow = constraints.maxWidth < 600;
+              return Flex(
+                direction: narrow ? Axis.vertical : Axis.horizontal,
+                crossAxisAlignment: narrow
+                    ? CrossAxisAlignment.start
+                    : CrossAxisAlignment.center,
                 children: [
-                  Row(
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        'Notifications',
-                        style: TextStyle(
-                          fontSize: 22,
-                          fontWeight: FontWeight.w700,
-                          color: AppColors.textPrimary,
-                        ),
-                      ),
-                      if (!state.isLoading && unread > 0) ...[
-                        const SizedBox(width: 10),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 8, vertical: 2),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF3182CE),
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Text(
-                            '$unread unread',
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 11,
-                              fontWeight: FontWeight.w600,
+                      Row(
+                        children: [
+                          Text(
+                            'Notifications',
+                            style: TextStyle(
+                              fontSize: 22,
+                              fontWeight: FontWeight.w700,
+                              color: AppColors.textPrimary,
                             ),
                           ),
+                          if (!state.isLoading && unread > 0) ...[
+                            const SizedBox(width: 10),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 8, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF3182CE),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Text(
+                                '$unread unread',
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        'Manage platform notifications',
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: AppColors.textSecondary,
                         ),
-                      ],
+                      ),
                     ],
                   ),
-                  const SizedBox(height: 2),
-                  Text(
-                    'Manage platform notifications',
-                    style: TextStyle(
-                      fontSize: 13,
-                      color: AppColors.textSecondary,
+                  if (narrow) const SizedBox(height: 12) else const Spacer(),
+                  FilledButton.icon(
+                    onPressed: _openCreate,
+                    icon: const Icon(Icons.add_rounded, size: 18),
+                    label: const Text('New Notification'),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: AppColors.primary,
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 20, vertical: 12),
                     ),
                   ),
                 ],
-              ),
-              const Spacer(),
-              FilledButton.icon(
-                onPressed: _openCreate,
-                icon: const Icon(Icons.add_rounded, size: 18),
-                label: const Text('New Notification'),
-                style: FilledButton.styleFrom(
-                  backgroundColor: AppColors.primary,
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 20, vertical: 12),
-                ),
-              ),
-            ],
+              );
+            },
           ),
           const SizedBox(height: 16),
 
@@ -360,20 +369,27 @@ class _NotificationsPageState extends ConsumerState<NotificationsPage> {
                 border: Border.all(
                     color: AppColors.primary.withValues(alpha: 0.2)),
               ),
-              child: Row(
+              child: Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                crossAxisAlignment: WrapCrossAlignment.center,
                 children: [
-                  Icon(Icons.check_box_rounded,
-                      size: 18, color: AppColors.primary),
-                  const SizedBox(width: 8),
-                  Text(
-                    '${_selectedIds.length} selected',
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      color: AppColors.primary,
-                    ),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.check_box_rounded,
+                          size: 18, color: AppColors.primary),
+                      const SizedBox(width: 8),
+                      Text(
+                        '${_selectedIds.length} selected',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.primary,
+                        ),
+                      ),
+                    ],
                   ),
-                  const SizedBox(width: 16),
                   OutlinedButton.icon(
                     onPressed: _bulkMarkRead,
                     icon: const Icon(Icons.mark_email_read_rounded,
@@ -385,7 +401,6 @@ class _NotificationsPageState extends ConsumerState<NotificationsPage> {
                       textStyle: const TextStyle(fontSize: 13),
                     ),
                   ),
-                  const SizedBox(width: 8),
                   OutlinedButton.icon(
                     onPressed: _bulkDelete,
                     icon: Icon(Icons.delete_outline_rounded,
@@ -400,7 +415,6 @@ class _NotificationsPageState extends ConsumerState<NotificationsPage> {
                       textStyle: const TextStyle(fontSize: 13),
                     ),
                   ),
-                  const Spacer(),
                   TextButton(
                     onPressed: () =>
                         setState(() => _selectedIds.clear()),
@@ -701,6 +715,8 @@ class _NotificationsTable extends StatelessWidget {
     required this.onDelete,
   });
 
+  static const double _minTableWidth = 750;
+
   @override
   Widget build(BuildContext context) {
     final allSelected = notifications.isNotEmpty &&
@@ -719,54 +735,75 @@ class _NotificationsTable extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // Header
-            Container(
-              color: AppColors.background,
-              padding: const EdgeInsets.symmetric(
-                  horizontal: 16, vertical: 12),
-              child: Row(
-                children: [
-                  SizedBox(
-                    width: 40,
-                    child: Checkbox(
-                      value: allSelected ? true : (someSelected ? null : false),
-                      tristate: true,
-                      onChanged: (v) => onSelectAll(v ?? false),
-                      materialTapTargetSize:
-                          MaterialTapTargetSize.shrinkWrap,
-                    ),
-                  ),
-                  const _HCell('Title / Message', flex: 4),
-                  const _HCell('User Type', flex: 2),
-                  const _HCell('User ID', flex: 2),
-                  const _HCell('Type', flex: 2),
-                  const _HCell('Status', flex: 1),
-                  const _HCell('Created', flex: 2),
-                  const _HCell('Actions', flex: 2,
-                      align: TextAlign.center),
-                ],
-              ),
-            ),
-            const Divider(height: 1),
-            // Rows
             Expanded(
-              child: ListView.separated(
-                itemCount: notifications.length,
-                separatorBuilder: (_, idx) => const Divider(height: 1),
-                itemBuilder: (ctx, i) {
-                  final n = notifications[i];
-                  return _NotificationRow(
-                    notification: n,
-                    isSelected: selectedIds.contains(n.id),
-                    onSelectionChanged: (v) =>
-                        onSelectionChanged(n.id, v),
-                    onToggleRead: () => onToggleRead(n),
-                    onDelete: () => onDelete(n),
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final tableWidth = constraints.maxWidth < _minTableWidth
+                      ? _minTableWidth
+                      : constraints.maxWidth;
+                  return SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: SizedBox(
+                      width: tableWidth,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Container(
+                            color: AppColors.background,
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 16, vertical: 12),
+                            child: Row(
+                              children: [
+                                SizedBox(
+                                  width: 40,
+                                  child: Checkbox(
+                                    value: allSelected
+                                        ? true
+                                        : (someSelected ? null : false),
+                                    tristate: true,
+                                    onChanged: (v) =>
+                                        onSelectAll(v ?? false),
+                                    materialTapTargetSize:
+                                        MaterialTapTargetSize.shrinkWrap,
+                                  ),
+                                ),
+                                const _HCell('Title / Message', flex: 4),
+                                const _HCell('User Type', flex: 2),
+                                const _HCell('User ID', flex: 2),
+                                const _HCell('Type', flex: 2),
+                                const _HCell('Status', flex: 1),
+                                const _HCell('Created', flex: 2),
+                                const _HCell('Actions', flex: 2,
+                                    align: TextAlign.center),
+                              ],
+                            ),
+                          ),
+                          const Divider(height: 1),
+                          Expanded(
+                            child: ListView.separated(
+                              itemCount: notifications.length,
+                              separatorBuilder: (_, idx) =>
+                                  const Divider(height: 1),
+                              itemBuilder: (ctx, i) {
+                                final n = notifications[i];
+                                return _NotificationRow(
+                                  notification: n,
+                                  isSelected: selectedIds.contains(n.id),
+                                  onSelectionChanged: (v) =>
+                                      onSelectionChanged(n.id, v),
+                                  onToggleRead: () => onToggleRead(n),
+                                  onDelete: () => onDelete(n),
+                                );
+                              },
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                   );
                 },
               ),
             ),
-            // Footer
             Container(
               color: AppColors.background,
               padding: const EdgeInsets.symmetric(

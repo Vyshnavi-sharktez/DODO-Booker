@@ -34,6 +34,7 @@ const Map<String, String> routePermissions = {
   '/vendor-assignment': 'booking.view',
   '/pricing-engine': 'service.view',
   '/vendor-settlement': 'vendor.view',
+  '/cms': 'cms.manage',
   '/settings': 'settings.manage',
 };
 

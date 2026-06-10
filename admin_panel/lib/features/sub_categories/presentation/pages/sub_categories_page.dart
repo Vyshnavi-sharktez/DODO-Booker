@@ -203,67 +203,73 @@ class _SubCategoriesPageState extends ConsumerState<SubCategoriesPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // ── Header ───────────────────────────────────────────────────────
-          Row(
-            children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+          // ── Responsive Header ────────────────────────────────────────────
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final narrow = constraints.maxWidth < 600;
+              return Flex(
+                direction: narrow ? Axis.vertical : Axis.horizontal,
+                crossAxisAlignment: narrow
+                    ? CrossAxisAlignment.start
+                    : CrossAxisAlignment.center,
                 children: [
-                  Text(
-                    'Sub Categories',
-                    style: TextStyle(
-                      fontSize: 22,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.textPrimary,
-                    ),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Sub Categories',
+                        style: TextStyle(
+                          fontSize: 22,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.textPrimary,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        'Manage sub categories within each category',
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: AppColors.textSecondary,
+                        ),
+                      ),
+                    ],
                   ),
-                  const SizedBox(height: 2),
-                  Text(
-                    'Manage sub categories within each category',
-                    style: TextStyle(
-                      fontSize: 13,
-                      color: AppColors.textSecondary,
+                  if (narrow) const SizedBox(height: 12) else const Spacer(),
+                  FilledButton.icon(
+                    onPressed: _openCreate,
+                    icon: const Icon(Icons.add_rounded, size: 18),
+                    label: const Text('New Sub Category'),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: AppColors.primary,
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 20, vertical: 12),
                     ),
                   ),
                 ],
-              ),
-              const Spacer(),
-              FilledButton.icon(
-                onPressed: _openCreate,
-                icon: const Icon(Icons.add_rounded, size: 18),
-                label: const Text('New Sub Category'),
-                style: FilledButton.styleFrom(
-                  backgroundColor: AppColors.primary,
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 20, vertical: 12),
-                ),
-              ),
-            ],
+              );
+            },
           ),
           const SizedBox(height: 20),
 
           // ── Search ───────────────────────────────────────────────────────
-          SizedBox(
-            width: 320,
-            child: TextField(
-              controller: _searchController,
-              decoration: InputDecoration(
-                hintText: 'Search by name…',
-                prefixIcon: const Icon(Icons.search_rounded, size: 18),
-                suffixIcon: _searchQuery.isNotEmpty
-                    ? IconButton(
-                        icon: const Icon(Icons.clear_rounded, size: 18),
-                        onPressed: () {
-                          _searchController.clear();
-                          setState(() => _searchQuery = '');
-                        },
-                      )
-                    : null,
-                contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 16, vertical: 10),
-              ),
-              onChanged: (v) => setState(() => _searchQuery = v.trim()),
+          TextField(
+            controller: _searchController,
+            decoration: InputDecoration(
+              hintText: 'Search by name…',
+              prefixIcon: const Icon(Icons.search_rounded, size: 18),
+              suffixIcon: _searchQuery.isNotEmpty
+                  ? IconButton(
+                      icon: const Icon(Icons.clear_rounded, size: 18),
+                      onPressed: () {
+                        _searchController.clear();
+                        setState(() => _searchQuery = '');
+                      },
+                    )
+                  : null,
+              contentPadding:
+                  const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
             ),
+            onChanged: (v) => setState(() => _searchQuery = v.trim()),
           ),
           const SizedBox(height: 20),
 
@@ -348,6 +354,8 @@ class _SubCategoriesTable extends StatelessWidget {
     required this.onToggle,
   });
 
+  static const double _minTableWidth = 800;
+
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -361,41 +369,60 @@ class _SubCategoriesTable extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // Header
-            Container(
-              color: AppColors.background,
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              child: Row(
-                children: [
-                  _HeaderCell('Name', flex: 3),
-                  _HeaderCell('Category', flex: 2),
-                  _HeaderCell('Slug', flex: 3),
-                  _HeaderCell('Sort', flex: 1),
-                  _HeaderCell('Status', flex: 2),
-                  _HeaderCell('Created', flex: 2),
-                  _HeaderCell('Actions', flex: 2, align: TextAlign.center),
-                ],
-              ),
-            ),
-            const Divider(height: 1),
-            // Rows
             Expanded(
-              child: ListView.separated(
-                itemCount: subCategories.length,
-                separatorBuilder: (_, i) => const Divider(height: 1),
-                itemBuilder: (ctx, i) {
-                  final sub = subCategories[i];
-                  return _SubCategoryRow(
-                    sub: sub,
-                    onEdit: () => onEdit(sub),
-                    onDelete: () => onDelete(sub),
-                    onToggle: () => onToggle(sub),
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final tableWidth = constraints.maxWidth < _minTableWidth
+                      ? _minTableWidth
+                      : constraints.maxWidth;
+                  return SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: SizedBox(
+                      width: tableWidth,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Container(
+                            color: AppColors.background,
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 16, vertical: 12),
+                            child: Row(
+                              children: [
+                                _HeaderCell('Name', flex: 3),
+                                _HeaderCell('Category', flex: 2),
+                                _HeaderCell('Slug', flex: 3),
+                                _HeaderCell('Sort', flex: 1),
+                                _HeaderCell('Status', flex: 2),
+                                _HeaderCell('Created', flex: 2),
+                                _HeaderCell('Actions', flex: 2,
+                                    align: TextAlign.center),
+                              ],
+                            ),
+                          ),
+                          const Divider(height: 1),
+                          Expanded(
+                            child: ListView.separated(
+                              itemCount: subCategories.length,
+                              separatorBuilder: (_, i) =>
+                                  const Divider(height: 1),
+                              itemBuilder: (ctx, i) {
+                                final sub = subCategories[i];
+                                return _SubCategoryRow(
+                                  sub: sub,
+                                  onEdit: () => onEdit(sub),
+                                  onDelete: () => onDelete(sub),
+                                  onToggle: () => onToggle(sub),
+                                );
+                              },
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                   );
                 },
               ),
             ),
-            // Footer
             Container(
               color: AppColors.background,
               padding: const EdgeInsets.symmetric(
@@ -528,13 +555,17 @@ class _SubCategoryRow extends StatelessWidget {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Transform.scale(
-                  scale: 0.8,
-                  child: Switch(
-                    value: sub.isActive,
-                    onChanged: (_) => onToggle(),
-                    activeThumbColor: AppColors.success,
-                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                SizedBox(
+                  width: 40,
+                  height: 24,
+                  child: FittedBox(
+                    fit: BoxFit.contain,
+                    child: Switch(
+                      value: sub.isActive,
+                      onChanged: (_) => onToggle(),
+                      activeThumbColor: AppColors.success,
+                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
                   ),
                 ),
                 IconButton(

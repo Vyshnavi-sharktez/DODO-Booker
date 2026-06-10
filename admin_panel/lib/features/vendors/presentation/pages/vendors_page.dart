@@ -215,50 +215,62 @@ class _VendorsPageState extends ConsumerState<VendorsPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // ── Header ────────────────────────────────────────────────────────
-          Row(
-            children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+          // ── Responsive Header ─────────────────────────────────────────────
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final narrow = constraints.maxWidth < 600;
+              return Flex(
+                direction: narrow ? Axis.vertical : Axis.horizontal,
+                crossAxisAlignment: narrow
+                    ? CrossAxisAlignment.start
+                    : CrossAxisAlignment.center,
                 children: [
-                  Text(
-                    'Vendors',
-                    style: TextStyle(
-                      fontSize: 22,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.textPrimary,
-                    ),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Vendors',
+                        style: TextStyle(
+                          fontSize: 22,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.textPrimary,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        'Manage vendor onboarding and lifecycle',
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: AppColors.textSecondary,
+                        ),
+                      ),
+                    ],
                   ),
-                  const SizedBox(height: 2),
-                  Text(
-                    'Manage vendor onboarding and lifecycle',
-                    style: TextStyle(
-                      fontSize: 13,
-                      color: AppColors.textSecondary,
+                  if (narrow) const SizedBox(height: 12) else const Spacer(),
+                  FilledButton.icon(
+                    onPressed: _openCreate,
+                    icon: const Icon(Icons.add_rounded, size: 18),
+                    label: const Text('Add Vendor'),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: AppColors.primary,
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 20, vertical: 12),
                     ),
                   ),
                 ],
-              ),
-              const Spacer(),
-              FilledButton.icon(
-                onPressed: _openCreate,
-                icon: const Icon(Icons.add_rounded, size: 18),
-                label: const Text('Add Vendor'),
-                style: FilledButton.styleFrom(
-                  backgroundColor: AppColors.primary,
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 20, vertical: 12),
-                ),
-              ),
-            ],
+              );
+            },
           ),
           const SizedBox(height: 20),
 
-          // ── Search + Filters row ──────────────────────────────────────────
+          // ── Search + Filters ──────────────────────────────────────────────
           state.when(
             loading: () => const SizedBox.shrink(),
             error: (err, st) => const SizedBox.shrink(),
-            data: (all) => Row(
+            data: (all) => Wrap(
+              spacing: 12,
+              runSpacing: 8,
+              crossAxisAlignment: WrapCrossAlignment.center,
               children: [
                 // Search
                 SizedBox(
@@ -286,7 +298,6 @@ class _VendorsPageState extends ConsumerState<VendorsPage> {
                         setState(() => _searchQuery = v.trim()),
                   ),
                 ),
-                const SizedBox(width: 12),
 
                 // City filter
                 SizedBox(
@@ -317,7 +328,6 @@ class _VendorsPageState extends ConsumerState<VendorsPage> {
                     isExpanded: true,
                   ),
                 ),
-                const SizedBox(width: 12),
 
                 // Status filter
                 SizedBox(
@@ -352,8 +362,7 @@ class _VendorsPageState extends ConsumerState<VendorsPage> {
                 ),
 
                 // Clear filters button
-                if (_cityFilter != null || _statusFilter != null) ...[
-                  const SizedBox(width: 8),
+                if (_cityFilter != null || _statusFilter != null)
                   TextButton.icon(
                     onPressed: () => setState(() {
                       _cityFilter = null;
@@ -366,7 +375,6 @@ class _VendorsPageState extends ConsumerState<VendorsPage> {
                       foregroundColor: AppColors.textSecondary,
                     ),
                   ),
-                ],
               ],
             ),
           ),
@@ -457,6 +465,8 @@ class _VendorsTable extends StatelessWidget {
     required this.onToggle,
   });
 
+  static const double _minTableWidth = 800;
+
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -470,42 +480,61 @@ class _VendorsTable extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // Header
-            Container(
-              color: AppColors.background,
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              child: const Row(
-                children: [
-                  _HeaderCell('Name', flex: 3),
-                  _HeaderCell('Phone', flex: 2),
-                  _HeaderCell('Email', flex: 3),
-                  _HeaderCell('City', flex: 2),
-                  _HeaderCell('Status', flex: 2),
-                  _HeaderCell('Rating', flex: 1),
-                  _HeaderCell('Created', flex: 2),
-                  _HeaderCell('Actions', flex: 2, align: TextAlign.center),
-                ],
-              ),
-            ),
-            const Divider(height: 1),
-            // Rows
             Expanded(
-              child: ListView.separated(
-                itemCount: vendors.length,
-                separatorBuilder: (_, idx) => const Divider(height: 1),
-                itemBuilder: (ctx, i) {
-                  final v = vendors[i];
-                  return _VendorRow(
-                    vendor: v,
-                    onEdit: () => onEdit(v),
-                    onDelete: () => onDelete(v),
-                    onToggle: () => onToggle(v),
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final tableWidth = constraints.maxWidth < _minTableWidth
+                      ? _minTableWidth
+                      : constraints.maxWidth;
+                  return SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: SizedBox(
+                      width: tableWidth,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Container(
+                            color: AppColors.background,
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 16, vertical: 12),
+                            child: const Row(
+                              children: [
+                                _HeaderCell('Name', flex: 3),
+                                _HeaderCell('Phone', flex: 2),
+                                _HeaderCell('Email', flex: 3),
+                                _HeaderCell('City', flex: 2),
+                                _HeaderCell('Status', flex: 2),
+                                _HeaderCell('Rating', flex: 1),
+                                _HeaderCell('Created', flex: 2),
+                                _HeaderCell('Actions', flex: 2,
+                                    align: TextAlign.center),
+                              ],
+                            ),
+                          ),
+                          const Divider(height: 1),
+                          Expanded(
+                            child: ListView.separated(
+                              itemCount: vendors.length,
+                              separatorBuilder: (_, idx) =>
+                                  const Divider(height: 1),
+                              itemBuilder: (ctx, i) {
+                                final v = vendors[i];
+                                return _VendorRow(
+                                  vendor: v,
+                                  onEdit: () => onEdit(v),
+                                  onDelete: () => onDelete(v),
+                                  onToggle: () => onToggle(v),
+                                );
+                              },
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                   );
                 },
               ),
             ),
-            // Footer
             Container(
               color: AppColors.background,
               padding: const EdgeInsets.symmetric(

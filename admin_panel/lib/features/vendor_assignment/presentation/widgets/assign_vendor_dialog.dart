@@ -135,9 +135,10 @@ class _AssignVendorDialogState extends ConsumerState<AssignVendorDialog> {
         widget.booking.status != 'pending';
 
     return Dialog(
+      insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      child: SizedBox(
-        width: 540,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 540),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,

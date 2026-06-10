@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import '../../../../core/theme/app_theme.dart';
+
 import '../../../../features/auth/application/providers/auth_provider.dart';
 import '../../application/providers/dashboard_providers.dart';
 import '../../../categories/application/providers/categories_providers.dart';
@@ -67,32 +68,39 @@ class _WelcomeBanner extends StatelessWidget {
         ),
         borderRadius: BorderRadius.circular(16),
       ),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  '$greeting, $displayName 👋',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 22,
-                    fontWeight: FontWeight.w700,
-                  ),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final showIcon = constraints.maxWidth > 480;
+          return Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '$greeting, $displayName 👋',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: constraints.maxWidth < 400 ? 17 : 22,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    const Text(
+                      'Welcome to DODO BOOKER Admin Panel. Manage your platform from here.',
+                      style: TextStyle(color: Color(0xFFB0C4DE), fontSize: 14),
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 6),
-                const Text(
-                  'Welcome to DODO BOOKER Admin Panel. Manage your platform from here.',
-                  style: TextStyle(color: Color(0xFFB0C4DE), fontSize: 14),
-                ),
+              ),
+              if (showIcon) ...[
+                const SizedBox(width: 16),
+                const Icon(Icons.rocket_launch_rounded,
+                    size: 56, color: Color(0xFF4A90D9)),
               ],
-            ),
-          ),
-          const SizedBox(width: 16),
-          const Icon(Icons.rocket_launch_rounded,
-              size: 56, color: Color(0xFF4A90D9)),
-        ],
+            ],
+          );
+        },
       ),
     );
   }
@@ -161,9 +169,9 @@ class _StatsSection extends ConsumerWidget {
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        final cols = constraints.maxWidth > 1100
+        final cols = constraints.maxWidth > AppBreakpoints.tablet
             ? 6
-            : constraints.maxWidth > 700
+            : constraints.maxWidth > AppBreakpoints.mobile
                 ? 3
                 : 2;
         return GridView.count(
@@ -271,7 +279,7 @@ class _AnalyticsRow extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        final wide = constraints.maxWidth > 800;
+        final wide = constraints.maxWidth > AppBreakpoints.mobile;
         if (wide) {
           return Row(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -562,7 +570,7 @@ class _RecentActivitySection extends ConsumerWidget {
         const SizedBox(height: 16),
         LayoutBuilder(
           builder: (context, constraints) {
-            final wide = constraints.maxWidth > 900;
+            final wide = constraints.maxWidth > AppBreakpoints.mobile;
             if (wide) {
               return const Row(
                 crossAxisAlignment: CrossAxisAlignment.start,

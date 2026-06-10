@@ -1,5 +1,11 @@
 import 'package:flutter/material.dart';
 
+/// Responsive breakpoints used across the admin panel.
+class AppBreakpoints {
+  static const double mobile = 768;
+  static const double tablet = 1024;
+}
+
 class AppColors {
   static const Color primary = Color(0xFF1E3A5F);
   static const Color primaryLight = Color(0xFF2D5282);

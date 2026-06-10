@@ -9,26 +9,44 @@ class DashboardShell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      body: Row(
-        children: [
-          // ── Fixed sidebar ──────────────────────────────────────────────────
-          const SidebarNav(),
-
-          // ── Main content area ──────────────────────────────────────────────
-          Expanded(
-            child: Column(
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isDesktop = constraints.maxWidth > AppBreakpoints.tablet;
+        if (isDesktop) {
+          return Scaffold(
+            backgroundColor: AppColors.background,
+            body: Row(
               children: [
-                const TopHeader(),
+                // Persistent sidebar on desktop
+                const SizedBox(width: 250, child: SidebarNav()),
                 Expanded(
-                  child: child,
+                  child: Column(
+                    children: [
+                      const TopHeader(),
+                      Expanded(child: child),
+                    ],
+                  ),
                 ),
               ],
             ),
+          );
+        }
+
+        // Tablet / Mobile — collapsible drawer
+        return Scaffold(
+          backgroundColor: AppColors.background,
+          drawer: const Drawer(
+            width: 250,
+            child: SidebarNav(),
           ),
-        ],
-      ),
+          body: Column(
+            children: [
+              const TopHeader(showHamburger: true),
+              Expanded(child: child),
+            ],
+          ),
+        );
+      },
     );
   }
 }

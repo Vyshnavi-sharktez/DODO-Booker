@@ -462,6 +462,8 @@ class _CustomersTable extends StatelessWidget {
     required this.onToggleActive,
   });
 
+  static const double _minTableWidth = 720;
+
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -475,41 +477,61 @@ class _CustomersTable extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // Header row
-            Container(
-              color: AppColors.background,
-              padding: const EdgeInsets.symmetric(
-                  horizontal: 16, vertical: 12),
-              child: const Row(
-                children: [
-                  SizedBox(width: 48),
-                  _HCell('Customer', flex: 4),
-                  _HCell('Phone', flex: 3),
-                  _HCell('Email', flex: 4),
-                  _HCell('Status', flex: 2),
-                  _HCell('Joined', flex: 2),
-                  _HCell('Actions', flex: 2, align: TextAlign.center),
-                ],
-              ),
-            ),
-            const Divider(height: 1),
-            // Data rows
             Expanded(
-              child: ListView.separated(
-                itemCount: customers.length,
-                separatorBuilder: (ctx, i) => const Divider(height: 1),
-                itemBuilder: (ctx, i) {
-                  return _CustomerRow(
-                    customer: customers[i],
-                    onViewDetails: () => onViewDetails(customers[i]),
-                    onEdit: () => onEdit(customers[i]),
-                    onToggleActive: () =>
-                        onToggleActive(customers[i]),
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final tableWidth = constraints.maxWidth < _minTableWidth
+                      ? _minTableWidth
+                      : constraints.maxWidth;
+                  return SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: SizedBox(
+                      width: tableWidth,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Container(
+                            color: AppColors.background,
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 16, vertical: 12),
+                            child: const Row(
+                              children: [
+                                SizedBox(width: 48),
+                                _HCell('Customer', flex: 4),
+                                _HCell('Phone', flex: 3),
+                                _HCell('Email', flex: 4),
+                                _HCell('Status', flex: 2),
+                                _HCell('Joined', flex: 2),
+                                _HCell('Actions', flex: 2,
+                                    align: TextAlign.center),
+                              ],
+                            ),
+                          ),
+                          const Divider(height: 1),
+                          Expanded(
+                            child: ListView.separated(
+                              itemCount: customers.length,
+                              separatorBuilder: (ctx, i) =>
+                                  const Divider(height: 1),
+                              itemBuilder: (ctx, i) {
+                                return _CustomerRow(
+                                  customer: customers[i],
+                                  onViewDetails: () =>
+                                      onViewDetails(customers[i]),
+                                  onEdit: () => onEdit(customers[i]),
+                                  onToggleActive: () =>
+                                      onToggleActive(customers[i]),
+                                );
+                              },
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                   );
                 },
               ),
             ),
-            // Footer
             Container(
               color: AppColors.background,
               padding: const EdgeInsets.symmetric(

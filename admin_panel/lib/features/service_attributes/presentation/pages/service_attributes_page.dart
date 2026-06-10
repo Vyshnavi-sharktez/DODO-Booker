@@ -197,47 +197,59 @@ class _ServiceAttributesPageState
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // ── Header ────────────────────────────────────────────────────────
-          Row(
-            children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+          // ── Responsive Header ─────────────────────────────────────────────
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final narrow = constraints.maxWidth < 600;
+              return Flex(
+                direction: narrow ? Axis.vertical : Axis.horizontal,
+                crossAxisAlignment: narrow
+                    ? CrossAxisAlignment.start
+                    : CrossAxisAlignment.center,
                 children: [
-                  Text(
-                    'Service Attributes',
-                    style: TextStyle(
-                      fontSize: 22,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.textPrimary,
-                    ),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Service Attributes',
+                        style: TextStyle(
+                          fontSize: 22,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.textPrimary,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        'Define configurable attributes for each service',
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: AppColors.textSecondary,
+                        ),
+                      ),
+                    ],
                   ),
-                  const SizedBox(height: 2),
-                  Text(
-                    'Define configurable attributes for each service',
-                    style: TextStyle(
-                      fontSize: 13,
-                      color: AppColors.textSecondary,
+                  if (narrow) const SizedBox(height: 12) else const Spacer(),
+                  FilledButton.icon(
+                    onPressed: _selectedServiceId != null ? _openCreate : null,
+                    icon: const Icon(Icons.add_rounded, size: 18),
+                    label: const Text('New Attribute'),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: AppColors.primary,
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 20, vertical: 12),
                     ),
                   ),
                 ],
-              ),
-              const Spacer(),
-              FilledButton.icon(
-                onPressed: _selectedServiceId != null ? _openCreate : null,
-                icon: const Icon(Icons.add_rounded, size: 18),
-                label: const Text('New Attribute'),
-                style: FilledButton.styleFrom(
-                  backgroundColor: AppColors.primary,
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 20, vertical: 12),
-                ),
-              ),
-            ],
+              );
+            },
           ),
           const SizedBox(height: 20),
 
           // ── Service selector ──────────────────────────────────────────────
-          Row(
+          Wrap(
+            spacing: 12,
+            runSpacing: 8,
+            crossAxisAlignment: WrapCrossAlignment.center,
             children: [
               Text(
                 'Service:',
@@ -247,9 +259,9 @@ class _ServiceAttributesPageState
                   color: AppColors.textSecondary,
                 ),
               ),
-              const SizedBox(width: 12),
-              SizedBox(
-                width: 320,
+              ConstrainedBox(
+                constraints: const BoxConstraints(
+                    minWidth: 200, maxWidth: 360),
                 child: servicesState.isLoading
                     ? const LinearProgressIndicator()
                     : DropdownButtonFormField<String>(
@@ -275,8 +287,7 @@ class _ServiceAttributesPageState
                         isExpanded: true,
                       ),
               ),
-              if (_selectedServiceId != null) ...[
-                const SizedBox(width: 12),
+              if (_selectedServiceId != null)
                 IconButton(
                   onPressed: () => ref
                       .read(serviceAttributesNotifierProvider.notifier)
@@ -285,7 +296,6 @@ class _ServiceAttributesPageState
                   tooltip: 'Refresh',
                   visualDensity: VisualDensity.compact,
                 ),
-              ],
             ],
           ),
           const SizedBox(height: 20),
@@ -365,6 +375,8 @@ class _AttributesTable extends StatelessWidget {
     required this.onManageOptions,
   });
 
+  static const double _minTableWidth = 550;
+
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -378,41 +390,60 @@ class _AttributesTable extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // Header
-            Container(
-              color: AppColors.background,
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              child: const Row(
-                children: [
-                  _HeaderCell('Attribute Name', flex: 4),
-                  _HeaderCell('Field Type', flex: 2),
-                  _HeaderCell('Required', flex: 2),
-                  _HeaderCell('Options', flex: 2),
-                  _HeaderCell('Actions', flex: 3, align: TextAlign.center),
-                ],
-              ),
-            ),
-            const Divider(height: 1),
-            // Rows
             Expanded(
-              child: ListView.separated(
-                itemCount: attributes.length,
-                separatorBuilder: (_, i) => const Divider(height: 1),
-                itemBuilder: (ctx, i) {
-                  final attr = attributes[i];
-                  return _AttributeRow(
-                    attribute: attr,
-                    onEdit: () => onEdit(attr),
-                    onDelete: () => onDelete(attr),
-                    onManageOptions: attr.hasOptions
-                        ? () => onManageOptions(attr)
-                        : null,
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final tableWidth = constraints.maxWidth < _minTableWidth
+                      ? _minTableWidth
+                      : constraints.maxWidth;
+                  return SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: SizedBox(
+                      width: tableWidth,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Container(
+                            color: AppColors.background,
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 16, vertical: 12),
+                            child: const Row(
+                              children: [
+                                _HeaderCell('Attribute Name', flex: 4),
+                                _HeaderCell('Field Type', flex: 2),
+                                _HeaderCell('Required', flex: 2),
+                                _HeaderCell('Options', flex: 2),
+                                _HeaderCell('Actions', flex: 3,
+                                    align: TextAlign.center),
+                              ],
+                            ),
+                          ),
+                          const Divider(height: 1),
+                          Expanded(
+                            child: ListView.separated(
+                              itemCount: attributes.length,
+                              separatorBuilder: (_, i) =>
+                                  const Divider(height: 1),
+                              itemBuilder: (ctx, i) {
+                                final attr = attributes[i];
+                                return _AttributeRow(
+                                  attribute: attr,
+                                  onEdit: () => onEdit(attr),
+                                  onDelete: () => onDelete(attr),
+                                  onManageOptions: attr.hasOptions
+                                      ? () => onManageOptions(attr)
+                                      : null,
+                                );
+                              },
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                   );
                 },
               ),
             ),
-            // Footer
             Container(
               color: AppColors.background,
               padding: const EdgeInsets.symmetric(

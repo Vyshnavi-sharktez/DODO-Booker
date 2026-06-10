@@ -104,6 +104,12 @@ const _navItems = <_NavItem>[
     requiredPermission: 'notification.view',
   ),
   _NavItem(
+    label: 'CMS & SEO',
+    icon: Icons.web_rounded,
+    route: '/dashboard/cms',
+    requiredPermission: 'cms.manage',
+  ),
+  _NavItem(
     label: 'Settings',
     icon: Icons.settings_rounded,
     route: '/dashboard/settings',
@@ -125,7 +131,6 @@ class SidebarNav extends ConsumerWidget {
     }).toList();
 
     return Container(
-      width: 250,
       color: AppColors.sidebarBg,
       child: Column(
         children: [

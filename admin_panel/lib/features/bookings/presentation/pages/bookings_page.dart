@@ -176,44 +176,56 @@ class _BookingsPageState extends ConsumerState<BookingsPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // ── Header ────────────────────────────────────────────────────────
-          Row(
-            children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+          // ── Responsive Header ─────────────────────────────────────────────
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final narrow = constraints.maxWidth < 600;
+              return Flex(
+                direction: narrow ? Axis.vertical : Axis.horizontal,
+                crossAxisAlignment: narrow
+                    ? CrossAxisAlignment.start
+                    : CrossAxisAlignment.center,
                 children: [
-                  Text(
-                    'Bookings',
-                    style: TextStyle(
-                      fontSize: 22,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.textPrimary,
-                    ),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Bookings',
+                        style: TextStyle(
+                          fontSize: 22,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.textPrimary,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        'Manage the full booking lifecycle',
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: AppColors.textSecondary,
+                        ),
+                      ),
+                    ],
                   ),
-                  const SizedBox(height: 2),
-                  Text(
-                    'Manage the full booking lifecycle',
-                    style: TextStyle(
-                      fontSize: 13,
-                      color: AppColors.textSecondary,
-                    ),
+                  if (narrow) const SizedBox(height: 12) else const Spacer(),
+                  OutlinedButton.icon(
+                    onPressed: () => ref
+                        .read(bookingsNotifierProvider.notifier)
+                        .refresh(),
+                    icon: const Icon(Icons.refresh_rounded, size: 16),
+                    label: const Text('Refresh'),
                   ),
                 ],
-              ),
-              const Spacer(),
-              OutlinedButton.icon(
-                onPressed: () => ref
-                    .read(bookingsNotifierProvider.notifier)
-                    .refresh(),
-                icon: const Icon(Icons.refresh_rounded, size: 16),
-                label: const Text('Refresh'),
-              ),
-            ],
+              );
+            },
           ),
           const SizedBox(height: 20),
 
           // ── Search + Filters ──────────────────────────────────────────────
-          Row(
+          Wrap(
+            spacing: 12,
+            runSpacing: 8,
+            crossAxisAlignment: WrapCrossAlignment.center,
             children: [
               // Search
               SizedBox(
@@ -238,7 +250,6 @@ class _BookingsPageState extends ConsumerState<BookingsPage> {
                   onChanged: (v) => setState(() => _searchQuery = v.trim()),
                 ),
               ),
-              const SizedBox(width: 12),
 
               // Status filter
               SizedBox(
@@ -269,7 +280,6 @@ class _BookingsPageState extends ConsumerState<BookingsPage> {
                   onChanged: (v) => setState(() => _statusFilter = v),
                 ),
               ),
-              const SizedBox(width: 12),
 
               // Date filter
               InkWell(
@@ -305,8 +315,7 @@ class _BookingsPageState extends ConsumerState<BookingsPage> {
               ),
 
               // Clear filters
-              if (_hasFilters) ...[
-                const SizedBox(width: 8),
+              if (_hasFilters)
                 TextButton.icon(
                   onPressed: () => setState(() {
                     _statusFilter = null;
@@ -318,7 +327,6 @@ class _BookingsPageState extends ConsumerState<BookingsPage> {
                     foregroundColor: AppColors.textSecondary,
                   ),
                 ),
-              ],
             ],
           ),
           const SizedBox(height: 20),
@@ -423,40 +431,45 @@ class _BookingsTable extends ConsumerWidget {
           children: [
             // Scrollable table
             Expanded(
-              child: SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: SizedBox(
-                  width: 1180,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      // Header
-                      _TableHeader(),
-                      const Divider(height: 1),
-                      // Rows
-                      Expanded(
-                        child: ListView.separated(
-                          itemCount: bookings.length,
-                          separatorBuilder: (_, idx) =>
-                              const Divider(height: 1),
-                          itemBuilder: (ctx, i) {
-                            final b = bookings[i];
-                            final vendor = vendors
-                                .where((v) => v.id == b.vendorId)
-                                .firstOrNull;
-                            return _BookingRow(
-                              booking: b,
-                              vendorName: vendor?.businessName,
-                              onView: () => onView(b),
-                              onEdit: () => onEdit(b),
-                              onDelete: () => onDelete(b),
-                            );
-                          },
-                        ),
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final tableWidth = constraints.maxWidth < 1180
+                      ? 1180.0
+                      : constraints.maxWidth;
+                  return SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: SizedBox(
+                      width: tableWidth,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          _TableHeader(),
+                          const Divider(height: 1),
+                          Expanded(
+                            child: ListView.separated(
+                              itemCount: bookings.length,
+                              separatorBuilder: (_, idx) =>
+                                  const Divider(height: 1),
+                              itemBuilder: (ctx, i) {
+                                final b = bookings[i];
+                                final vendor = vendors
+                                    .where((v) => v.id == b.vendorId)
+                                    .firstOrNull;
+                                return _BookingRow(
+                                  booking: b,
+                                  vendorName: vendor?.businessName,
+                                  onView: () => onView(b),
+                                  onEdit: () => onEdit(b),
+                                  onDelete: () => onDelete(b),
+                                );
+                              },
+                            ),
+                          ),
+                        ],
                       ),
-                    ],
-                  ),
-                ),
+                    ),
+                  );
+                },
               ),
             ),
             // Footer
