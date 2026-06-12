@@ -1,0 +1,12 @@
+export 'banner_model.dart';
+export 'profile_model.dart';
+export 'category_model.dart';
+export 'subcategory_model.dart';
+export 'faq_model.dart';
+export 'addon_model.dart';
+export 'service_model.dart';
+export 'address_model.dart';
+export 'time_slot_model.dart';
+export 'booking_model.dart';
+export 'booking_status_event.dart';
+export 'my_booking_model.dart';
