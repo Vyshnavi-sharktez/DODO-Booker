@@ -8,7 +8,6 @@ class CategoryFormDialog extends StatefulWidget {
   final Future<void> Function({
     required String name,
     required String slug,
-    String? icon,
     String? imageUrl,
     String? description,
     required int sortOrder,
@@ -29,7 +28,6 @@ class _CategoryFormDialogState extends State<CategoryFormDialog> {
   final _formKey = GlobalKey<FormState>();
   late final TextEditingController _name;
   late final TextEditingController _slug;
-  late final TextEditingController _icon;
   late final TextEditingController _imageUrl;
   late final TextEditingController _description;
   late final TextEditingController _sortOrder;
@@ -43,7 +41,6 @@ class _CategoryFormDialogState extends State<CategoryFormDialog> {
     final e = widget.existing;
     _name = TextEditingController(text: e?.name ?? '');
     _slug = TextEditingController(text: e?.slug ?? '');
-    _icon = TextEditingController(text: e?.icon ?? '');
     _imageUrl = TextEditingController(text: e?.imageUrl ?? '');
     _description = TextEditingController(text: e?.description ?? '');
     _sortOrder = TextEditingController(text: (e?.sortOrder ?? 0).toString());
@@ -55,7 +52,6 @@ class _CategoryFormDialogState extends State<CategoryFormDialog> {
   void dispose() {
     _name.dispose();
     _slug.dispose();
-    _icon.dispose();
     _imageUrl.dispose();
     _description.dispose();
     _sortOrder.dispose();
@@ -85,7 +81,6 @@ class _CategoryFormDialogState extends State<CategoryFormDialog> {
       await widget.onSave(
         name: _name.text.trim(),
         slug: _slug.text.trim(),
-        icon: _icon.text.trim().isEmpty ? null : _icon.text.trim(),
         imageUrl:
             _imageUrl.text.trim().isEmpty ? null : _imageUrl.text.trim(),
         description: _description.text.trim().isEmpty
@@ -210,34 +205,19 @@ class _CategoryFormDialogState extends State<CategoryFormDialog> {
                       ),
                       const SizedBox(height: 16),
 
-                      // Icon + Sort Order row
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Expanded(
-                            child: TextFormField(
-                              controller: _icon,
-                              decoration: const InputDecoration(
-                                labelText: 'Icon',
-                                hintText: 'e.g. 🔧 or icon name',
-                              ),
-                            ),
+                      // Sort Order
+                      SizedBox(
+                        width: 120,
+                        child: TextFormField(
+                          controller: _sortOrder,
+                          decoration: const InputDecoration(
+                            labelText: 'Sort Order',
                           ),
-                          const SizedBox(width: 16),
-                          SizedBox(
-                            width: 120,
-                            child: TextFormField(
-                              controller: _sortOrder,
-                              decoration: const InputDecoration(
-                                labelText: 'Sort Order',
-                              ),
-                              keyboardType: TextInputType.number,
-                              inputFormatters: [
-                                FilteringTextInputFormatter.digitsOnly,
-                              ],
-                            ),
-                          ),
-                        ],
+                          keyboardType: TextInputType.number,
+                          inputFormatters: [
+                            FilteringTextInputFormatter.digitsOnly,
+                          ],
+                        ),
                       ),
                       const SizedBox(height: 16),
 

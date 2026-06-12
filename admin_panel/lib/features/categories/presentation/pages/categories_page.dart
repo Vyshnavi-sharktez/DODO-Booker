@@ -41,7 +41,6 @@ class _CategoriesPageState extends ConsumerState<CategoriesPage> {
         onSave: ({
           required name,
           required slug,
-          icon,
           imageUrl,
           description,
           required sortOrder,
@@ -50,7 +49,6 @@ class _CategoriesPageState extends ConsumerState<CategoriesPage> {
           await ref.read(categoriesNotifierProvider.notifier).createCategory(
                 name: name,
                 slug: slug,
-                icon: icon,
                 imageUrl: imageUrl,
                 description: description,
                 sortOrder: sortOrder,
@@ -75,7 +73,6 @@ class _CategoriesPageState extends ConsumerState<CategoriesPage> {
         onSave: ({
           required name,
           required slug,
-          icon,
           imageUrl,
           description,
           required sortOrder,
@@ -87,7 +84,6 @@ class _CategoriesPageState extends ConsumerState<CategoriesPage> {
                 category.id,
                 name: name,
                 slug: slug,
-                icon: icon,
                 imageUrl: imageUrl,
                 description: description,
                 sortOrder: sortOrder,
@@ -461,27 +457,17 @@ class _CategoryRow extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       child: Row(
         children: [
-          // Name + icon
+          // Name
           Expanded(
             flex: 3,
-            child: Row(
-              children: [
-                if (category.icon != null && category.icon!.isNotEmpty) ...[
-                  Text(category.icon!, style: const TextStyle(fontSize: 16)),
-                  const SizedBox(width: 8),
-                ],
-                Expanded(
-                  child: Text(
-                    category.name,
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w500,
-                      color: AppColors.textPrimary,
-                    ),
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-              ],
+            child: Text(
+              category.name,
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+                color: AppColors.textPrimary,
+              ),
+              overflow: TextOverflow.ellipsis,
             ),
           ),
 

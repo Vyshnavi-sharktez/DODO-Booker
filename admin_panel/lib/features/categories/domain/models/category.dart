@@ -2,7 +2,6 @@ class Category {
   final String id;
   final String name;
   final String slug;
-  final String? icon;
   final String? imageUrl;
   final String? description;
   final int sortOrder;
@@ -14,7 +13,6 @@ class Category {
     required this.id,
     required this.name,
     required this.slug,
-    this.icon,
     this.imageUrl,
     this.description,
     required this.sortOrder,
@@ -28,7 +26,6 @@ class Category {
       id: map['id'] as String,
       name: map['name'] as String? ?? '',
       slug: map['slug'] as String? ?? '',
-      icon: map['icon'] as String?,
       imageUrl: map['image_url'] as String?,
       description: map['description'] as String?,
       sortOrder: map['sort_order'] as int? ?? 0,
@@ -45,7 +42,6 @@ class Category {
   Category copyWith({
     String? name,
     String? slug,
-    String? icon,
     String? imageUrl,
     String? description,
     int? sortOrder,
@@ -55,7 +51,6 @@ class Category {
       id: id,
       name: name ?? this.name,
       slug: slug ?? this.slug,
-      icon: icon ?? this.icon,
       imageUrl: imageUrl ?? this.imageUrl,
       description: description ?? this.description,
       sortOrder: sortOrder ?? this.sortOrder,

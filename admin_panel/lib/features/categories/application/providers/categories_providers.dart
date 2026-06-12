@@ -24,7 +24,6 @@ class CategoriesNotifier extends StateNotifier<AsyncValue<List<Category>>> {
   Future<void> createCategory({
     required String name,
     required String slug,
-    String? icon,
     String? imageUrl,
     String? description,
     required int sortOrder,
@@ -33,7 +32,6 @@ class CategoriesNotifier extends StateNotifier<AsyncValue<List<Category>>> {
     await _repo.createCategory(
       name: name,
       slug: slug,
-      icon: icon,
       imageUrl: imageUrl,
       description: description,
       sortOrder: sortOrder,
@@ -46,7 +44,6 @@ class CategoriesNotifier extends StateNotifier<AsyncValue<List<Category>>> {
     String id, {
     required String name,
     required String slug,
-    String? icon,
     String? imageUrl,
     String? description,
     required int sortOrder,
@@ -56,7 +53,6 @@ class CategoriesNotifier extends StateNotifier<AsyncValue<List<Category>>> {
       id,
       name: name,
       slug: slug,
-      icon: icon,
       imageUrl: imageUrl,
       description: description,
       sortOrder: sortOrder,

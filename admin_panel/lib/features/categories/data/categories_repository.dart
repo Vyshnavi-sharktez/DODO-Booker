@@ -20,7 +20,6 @@ class CategoriesRepository {
   Future<Category> createCategory({
     required String name,
     required String slug,
-    String? icon,
     String? imageUrl,
     String? description,
     required int sortOrder,
@@ -31,7 +30,6 @@ class CategoriesRepository {
         .insert({
           'name': name,
           'slug': slug,
-          if (icon != null && icon.isNotEmpty) 'icon': icon,
           if (imageUrl != null && imageUrl.isNotEmpty) 'image_url': imageUrl,
           if (description != null && description.isNotEmpty)
             'description': description,
@@ -47,7 +45,6 @@ class CategoriesRepository {
     String id, {
     required String name,
     required String slug,
-    String? icon,
     String? imageUrl,
     String? description,
     required int sortOrder,
@@ -58,7 +55,6 @@ class CategoriesRepository {
         .update({
           'name': name,
           'slug': slug,
-          'icon': icon?.isNotEmpty == true ? icon : null,
           'image_url': imageUrl?.isNotEmpty == true ? imageUrl : null,
           'description': description?.isNotEmpty == true ? description : null,
           'sort_order': sortOrder,
