@@ -8,9 +8,7 @@ final settingsRepositoryProvider = Provider<SettingsRepository>(
 );
 
 class SettingsNotifier extends StateNotifier<VendorSettings> {
-  SettingsNotifier(this._repo) : super(const VendorSettings());
-
-  final SettingsRepository _repo;
+  SettingsNotifier(SettingsRepository _) : super(const VendorSettings());
 
   Future<void> load(String vendorId) async {}
 

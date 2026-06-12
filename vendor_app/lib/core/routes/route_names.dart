@@ -1,5 +1,6 @@
 abstract final class RouteNames {
   static const String login = 'login';
+  static const String otp = 'otp';
   static const String dashboard = 'dashboard';
   static const String bookings = 'bookings';
   static const String wallet = 'wallet';
@@ -10,6 +11,7 @@ abstract final class RouteNames {
 
 abstract final class RoutePaths {
   static const String login = '/login';
+  static const String otp = '/otp';
   static const String dashboard = '/dashboard';
   static const String bookings = '/bookings';
   static const String wallet = '/wallet';
