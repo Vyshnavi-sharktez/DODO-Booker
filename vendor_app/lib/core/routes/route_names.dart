@@ -1,0 +1,19 @@
+abstract final class RouteNames {
+  static const String login = 'login';
+  static const String dashboard = 'dashboard';
+  static const String bookings = 'bookings';
+  static const String wallet = 'wallet';
+  static const String services = 'services';
+  static const String profile = 'profile';
+  static const String settings = 'settings';
+}
+
+abstract final class RoutePaths {
+  static const String login = '/login';
+  static const String dashboard = '/dashboard';
+  static const String bookings = '/bookings';
+  static const String wallet = '/wallet';
+  static const String services = '/services';
+  static const String profile = '/profile';
+  static const String settings = '/settings';
+}
