@@ -129,8 +129,16 @@ class _VendorAssignmentPageState
               booking.vendorId.isNotEmpty ? booking.vendorId : null;
           final previousVendorName =
               previousVendorId != null ? _vendorName(previousVendorId) : '';
+          final isFirstAssignment = previousVendorId == null;
 
-          // Update booking.
+          debugPrint(
+            '[DODO][VendorAssignment] Assignment detected: '
+            'booking #${booking.bookingNumber} → vendor $vendorName'
+            '${isFirstAssignment ? '' : ' (reassignment from $previousVendorName)'}',
+          );
+
+          // Update booking — the DB trigger fires here and creates the
+          // customer notification automatically.
           await ref
               .read(bookingsNotifierProvider.notifier)
               .updateBooking(
@@ -153,6 +161,10 @@ class _VendorAssignmentPageState
                       'Booking #${booking.bookingNumber} has been assigned to you.',
                   notificationType: 'booking',
                 );
+            debugPrint(
+              '[DODO][VendorAssignment] Notification created: '
+              'vendor $vendorId notified for booking #${booking.bookingNumber}',
+            );
           } catch (_) {
             // Notification failure must not block assignment.
           }

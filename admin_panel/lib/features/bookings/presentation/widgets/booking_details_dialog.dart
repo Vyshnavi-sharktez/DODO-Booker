@@ -148,6 +148,37 @@ class BookingDetailsDialog extends ConsumerWidget {
                               .format(booking.updatedAt!)
                           : '—',
                     ),
+                    const SizedBox(height: 20),
+
+                    _SectionLabel('Review'),
+                    const SizedBox(height: 12),
+                    if (booking.review != null) ...[
+                      _InfoRow(
+                        'Rating',
+                        '${booking.review!.rating} / 5',
+                      ),
+                      _StarRatingRow(rating: booking.review!.rating),
+                      const SizedBox(height: 8),
+                      _InfoRow('Review Text', booking.review!.reviewText),
+                      _InfoRow(
+                        'Submitted',
+                        booking.review!.createdAt != null
+                            ? DateFormat('dd MMM yyyy, hh:mm a')
+                                .format(booking.review!.createdAt!)
+                            : '—',
+                      ),
+                    ] else
+                      Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 4),
+                        child: Text(
+                          'No review submitted',
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: AppColors.textSecondary,
+                            fontStyle: FontStyle.italic,
+                          ),
+                        ),
+                      ),
                   ],
                 ),
               ),
@@ -196,6 +227,45 @@ class _SectionLabel extends StatelessWidget {
         fontWeight: FontWeight.w700,
         color: AppColors.textSecondary,
         letterSpacing: 1.0,
+      ),
+    );
+  }
+}
+
+class _StarRatingRow extends StatelessWidget {
+  final int rating;
+  const _StarRatingRow({required this.rating});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        children: [
+          SizedBox(
+            width: 130,
+            child: Text(
+              'Stars',
+              style: TextStyle(
+                fontSize: 13,
+                color: AppColors.textSecondary,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: List.generate(5, (i) {
+              return Icon(
+                i < rating ? Icons.star_rounded : Icons.star_outline_rounded,
+                size: 18,
+                color: i < rating
+                    ? const Color(0xFFD69E2E)
+                    : AppColors.textSecondary.withValues(alpha: 0.3),
+              );
+            }),
+          ),
+        ],
       ),
     );
   }

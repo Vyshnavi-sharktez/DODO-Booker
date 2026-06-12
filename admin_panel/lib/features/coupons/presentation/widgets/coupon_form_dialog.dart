@@ -19,7 +19,7 @@ class CouponFormDialog extends StatefulWidget {
     required String discountType,
     required double discountValue,
     double? minOrderAmount,
-    double? minDiscountAmount,
+    double? maxDiscountAmount,
     int? usageLimit,
     DateTime? validFrom,
     DateTime? validTo,
@@ -38,7 +38,7 @@ class _CouponFormDialogState extends State<CouponFormDialog> {
   late final TextEditingController _description;
   late final TextEditingController _discountValue;
   late final TextEditingController _minOrderAmount;
-  late final TextEditingController _minDiscountAmount;
+  late final TextEditingController _maxDiscountAmount;
   late final TextEditingController _usageLimit;
   late String _discountType;
   late DateTime? _validFrom;
@@ -60,9 +60,9 @@ class _CouponFormDialogState extends State<CouponFormDialog> {
           ? e!.minOrderAmount!.toStringAsFixed(2)
           : '',
     );
-    _minDiscountAmount = TextEditingController(
-      text: e?.minDiscountAmount != null
-          ? e!.minDiscountAmount!.toStringAsFixed(2)
+    _maxDiscountAmount = TextEditingController(
+      text: e?.maxDiscountAmount != null
+          ? e!.maxDiscountAmount!.toStringAsFixed(2)
           : '',
     );
     _usageLimit = TextEditingController(
@@ -80,7 +80,7 @@ class _CouponFormDialogState extends State<CouponFormDialog> {
     _description.dispose();
     _discountValue.dispose();
     _minOrderAmount.dispose();
-    _minDiscountAmount.dispose();
+    _maxDiscountAmount.dispose();
     _usageLimit.dispose();
     super.dispose();
   }
@@ -124,9 +124,9 @@ class _CouponFormDialogState extends State<CouponFormDialog> {
         minOrderAmount: _minOrderAmount.text.trim().isEmpty
             ? null
             : double.tryParse(_minOrderAmount.text.trim()),
-        minDiscountAmount: _minDiscountAmount.text.trim().isEmpty
+        maxDiscountAmount: _maxDiscountAmount.text.trim().isEmpty
             ? null
-            : double.tryParse(_minDiscountAmount.text.trim()),
+            : double.tryParse(_maxDiscountAmount.text.trim()),
         usageLimit: limitText.isEmpty ? null : int.tryParse(limitText),
         validFrom: _validFrom,
         validTo: _validTo,
@@ -350,10 +350,10 @@ class _CouponFormDialogState extends State<CouponFormDialog> {
                         children: [
                           Expanded(
                             child: TextFormField(
-                              controller: _minDiscountAmount,
+                              controller: _maxDiscountAmount,
                               decoration: const InputDecoration(
-                                labelText: 'Min Discount Amount',
-                                hintText: 'Min Discount Amount',
+                                labelText: 'Max Discount Amount',
+                                hintText: 'Max Discount Amount',
                                 prefixIcon:
                                     Icon(Icons.price_check_rounded),
                                 helperText: 'Optional',

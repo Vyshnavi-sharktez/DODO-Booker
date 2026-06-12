@@ -1,3 +1,30 @@
+import 'package:flutter/foundation.dart';
+
+class BookingReview {
+  final String id;
+  final int rating;
+  final String reviewText;
+  final DateTime? createdAt;
+
+  const BookingReview({
+    required this.id,
+    required this.rating,
+    required this.reviewText,
+    this.createdAt,
+  });
+
+  factory BookingReview.fromMap(Map<String, dynamic> map) {
+    return BookingReview(
+      id: map['id'] as String,
+      rating: (map['rating'] as int?) ?? 0,
+      reviewText: map['review_text'] as String? ?? '',
+      createdAt: map['created_at'] != null
+          ? DateTime.tryParse(map['created_at'] as String)
+          : null,
+    );
+  }
+}
+
 class Booking {
   final String id;
   final String bookingNumber;
@@ -12,6 +39,7 @@ class Booking {
   final String? notes;
   final DateTime? createdAt;
   final DateTime? updatedAt;
+  final BookingReview? review;
 
   const Booking({
     required this.id,
@@ -27,9 +55,24 @@ class Booking {
     this.notes,
     this.createdAt,
     this.updatedAt,
+    this.review,
   });
 
   factory Booking.fromMap(Map<String, dynamic> map) {
+    BookingReview? review;
+    final reviewData = map['customer_reviews'];
+    if (reviewData is List && reviewData.isNotEmpty) {
+      review = BookingReview.fromMap(reviewData.first as Map<String, dynamic>);
+    } else if (reviewData is Map<String, dynamic>) {
+      review = BookingReview.fromMap(reviewData);
+    }
+
+    final bookingNum = map['booking_number'] ?? map['id'];
+    debugPrint(
+      '[DODO][Bookings] Review status resolved: booking $bookingNum — '
+      '${review != null ? 'reviewed (${review.rating}★)' : 'not reviewed'}',
+    );
+
     return Booking(
       id: map['id'] as String,
       bookingNumber: map['booking_number'] as String? ?? '',
@@ -50,6 +93,7 @@ class Booking {
       updatedAt: map['updated_at'] != null
           ? DateTime.tryParse(map['updated_at'] as String)
           : null,
+      review: review,
     );
   }
 
@@ -73,6 +117,7 @@ class Booking {
       notes: notes ?? this.notes,
       createdAt: createdAt,
       updatedAt: updatedAt,
+      review: review,
     );
   }
 }

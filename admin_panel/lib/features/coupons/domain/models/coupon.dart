@@ -5,7 +5,7 @@ class Coupon {
   final String discountType;
   final double discountValue;
   final double? minOrderAmount;
-  final double? minDiscountAmount;
+  final double? maxDiscountAmount;
   final int? usageLimit;
   final int usedCount;
   final DateTime? validFrom;
@@ -21,7 +21,7 @@ class Coupon {
     required this.discountType,
     required this.discountValue,
     this.minOrderAmount,
-    this.minDiscountAmount,
+    this.maxDiscountAmount,
     this.usageLimit,
     this.usedCount = 0,
     this.validFrom,
@@ -49,7 +49,7 @@ class Coupon {
       discountType: map['discount_type'] as String? ?? 'percentage',
       discountValue: (map['discount_value'] as num?)?.toDouble() ?? 0.0,
       minOrderAmount: (map['min_order_amount'] as num?)?.toDouble(),
-      minDiscountAmount: (map['min_discount_amount'] as num?)?.toDouble(),
+      maxDiscountAmount: (map['max_discount_amount'] as num?)?.toDouble(),
       usageLimit: map['usage_limit'] as int?,
       usedCount: map['used_count'] as int? ?? 0,
       validFrom: map['valid_from'] != null
@@ -74,7 +74,7 @@ class Coupon {
     String? discountType,
     double? discountValue,
     double? minOrderAmount,
-    double? minDiscountAmount,
+    double? maxDiscountAmount,
     int? usageLimit,
     int? usedCount,
     DateTime? validFrom,
@@ -88,7 +88,7 @@ class Coupon {
       discountType: discountType ?? this.discountType,
       discountValue: discountValue ?? this.discountValue,
       minOrderAmount: minOrderAmount ?? this.minOrderAmount,
-      minDiscountAmount: minDiscountAmount ?? this.minDiscountAmount,
+      maxDiscountAmount: maxDiscountAmount ?? this.maxDiscountAmount,
       usageLimit: usageLimit ?? this.usageLimit,
       usedCount: usedCount ?? this.usedCount,
       validFrom: validFrom ?? this.validFrom,

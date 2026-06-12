@@ -43,6 +43,8 @@ class _BookingsPageState extends ConsumerState<BookingsPage> {
   String _searchQuery = '';
   String? _statusFilter;
   DateTime? _dateFilter;
+  String? _reviewStatusFilter; // 'reviewed' | 'not_reviewed' | null
+  int? _ratingFilter;           // 1–5 | null
 
   @override
   void dispose() {
@@ -70,11 +72,24 @@ class _BookingsPageState extends ConsumerState<BookingsPage> {
             d.day == _dateFilter!.day;
       }).toList();
     }
+    if (_reviewStatusFilter == 'reviewed') {
+      result = result.where((b) => b.review != null).toList();
+    } else if (_reviewStatusFilter == 'not_reviewed') {
+      result = result.where((b) => b.review == null).toList();
+    }
+    if (_ratingFilter != null) {
+      result = result
+          .where((b) => b.review?.rating == _ratingFilter)
+          .toList();
+    }
     return result;
   }
 
   bool get _hasFilters =>
-      _statusFilter != null || _dateFilter != null;
+      _statusFilter != null ||
+      _dateFilter != null ||
+      _reviewStatusFilter != null ||
+      _ratingFilter != null;
 
   Future<void> _pickDateFilter() async {
     final picked = await showDatePicker(
@@ -314,12 +329,67 @@ class _BookingsPageState extends ConsumerState<BookingsPage> {
                 ),
               ),
 
+              // Review status filter
+              SizedBox(
+                width: 170,
+                child: DropdownButtonFormField<String>(
+                  // ignore: deprecated_member_use
+                  value: _reviewStatusFilter,
+                  decoration: const InputDecoration(
+                    hintText: 'All Reviews',
+                    prefixIcon: Icon(Icons.rate_review_rounded, size: 18),
+                    contentPadding:
+                        EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  ),
+                  isExpanded: true,
+                  items: const [
+                    DropdownMenuItem(value: null, child: Text('All Reviews')),
+                    DropdownMenuItem(
+                        value: 'reviewed', child: Text('Reviewed')),
+                    DropdownMenuItem(
+                        value: 'not_reviewed', child: Text('Not Reviewed')),
+                  ],
+                  onChanged: (v) =>
+                      setState(() => _reviewStatusFilter = v),
+                ),
+              ),
+
+              // Rating filter
+              SizedBox(
+                width: 150,
+                child: DropdownButtonFormField<int>(
+                  // ignore: deprecated_member_use
+                  value: _ratingFilter,
+                  decoration: const InputDecoration(
+                    hintText: 'All Ratings',
+                    prefixIcon: Icon(Icons.star_rounded, size: 18),
+                    contentPadding:
+                        EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  ),
+                  isExpanded: true,
+                  items: [
+                    const DropdownMenuItem(
+                        value: null, child: Text('All Ratings')),
+                    ...List.generate(
+                      5,
+                      (i) => DropdownMenuItem(
+                        value: i + 1,
+                        child: Text('${i + 1} Star${i > 0 ? 's' : ''}'),
+                      ),
+                    ),
+                  ],
+                  onChanged: (v) => setState(() => _ratingFilter = v),
+                ),
+              ),
+
               // Clear filters
               if (_hasFilters)
                 TextButton.icon(
                   onPressed: () => setState(() {
                     _statusFilter = null;
                     _dateFilter = null;
+                    _reviewStatusFilter = null;
+                    _ratingFilter = null;
                   }),
                   icon: const Icon(Icons.filter_alt_off_rounded, size: 16),
                   label: const Text('Clear'),
@@ -433,8 +503,8 @@ class _BookingsTable extends ConsumerWidget {
             Expanded(
               child: LayoutBuilder(
                 builder: (context, constraints) {
-                  final tableWidth = constraints.maxWidth < 1180
-                      ? 1180.0
+                  final tableWidth = constraints.maxWidth < 1430
+                      ? 1430.0
                       : constraints.maxWidth;
                   return SingleChildScrollView(
                     scrollDirection: Axis.horizontal,
@@ -509,6 +579,8 @@ class _TableHeader extends StatelessWidget {
           _Cell('Discount', width: 90, header: true, align: TextAlign.right),
           _Cell('Total', width: 100, header: true, align: TextAlign.right),
           _Cell('Created', width: 110, header: true),
+          _Cell('Review', width: 110, header: true),
+          _Cell('Rating', width: 110, header: true),
           _Cell('Actions', width: 110, header: true, align: TextAlign.center),
         ],
       ),
@@ -579,6 +651,18 @@ class _BookingRow extends StatelessWidget {
           _Cell(createdStr, width: 110),
           SizedBox(
             width: 110,
+            child: _ReviewStatusBadge(reviewed: booking.review != null),
+          ),
+          SizedBox(
+            width: 110,
+            child: booking.review != null
+                ? _StarRating(rating: booking.review!.rating)
+                : Text('—',
+                    style: TextStyle(
+                        fontSize: 13, color: AppColors.textSecondary)),
+          ),
+          SizedBox(
+            width: 110,
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
@@ -611,6 +695,8 @@ class _BookingRow extends StatelessWidget {
     );
   }
 }
+
+// ── Reusable widgets ───────────────────────────────────────────────────────────
 
 class _Cell extends StatelessWidget {
   final String text;
@@ -703,6 +789,64 @@ class _StatusBadge extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+class _ReviewStatusBadge extends StatelessWidget {
+  final bool reviewed;
+  const _ReviewStatusBadge({required this.reviewed});
+
+  @override
+  Widget build(BuildContext context) {
+    final color = reviewed
+        ? const Color(0xFF38A169)
+        : AppColors.textSecondary;
+    final bg = reviewed
+        ? const Color(0xFFF0FFF4)
+        : AppColors.background;
+    final label = reviewed ? 'Reviewed' : 'Not Reviewed';
+
+    return FittedBox(
+      fit: BoxFit.scaleDown,
+      alignment: Alignment.centerLeft,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
+        decoration: BoxDecoration(
+          color: bg,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: color.withValues(alpha: 0.3)),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 11,
+            color: color,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _StarRating extends StatelessWidget {
+  final int rating;
+  const _StarRating({required this.rating});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: List.generate(5, (i) {
+        return Icon(
+          i < rating ? Icons.star_rounded : Icons.star_outline_rounded,
+          size: 14,
+          color: i < rating
+              ? const Color(0xFFD69E2E)
+              : AppColors.textSecondary.withValues(alpha: 0.4),
+        );
+      }),
     );
   }
 }
