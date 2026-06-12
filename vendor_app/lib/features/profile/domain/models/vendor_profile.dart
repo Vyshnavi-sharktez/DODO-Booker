@@ -2,69 +2,54 @@ class VendorProfile {
   const VendorProfile({
     required this.id,
     required this.businessName,
-    required this.ownerName,
+    this.ownerName,
     required this.phone,
     this.email,
-    this.city,
     this.address,
-    this.profileImageUrl,
-    this.rating = 0.0,
-    this.isActive = true,
+    this.city,
+    required this.status,
+    required this.isActive,
+    this.rating,
+    required this.walletBalance,
     this.createdAt,
+    this.updatedAt,
   });
 
   final String id;
   final String businessName;
-  final String ownerName;
+  final String? ownerName;
   final String phone;
   final String? email;
-  final String? city;
   final String? address;
-  final String? profileImageUrl;
-  final double rating;
+  final String? city;
+  final String status;
   final bool isActive;
+  final double? rating;
+  final double walletBalance;
   final DateTime? createdAt;
+  final DateTime? updatedAt;
 
   factory VendorProfile.fromMap(Map<String, dynamic> map) {
     return VendorProfile(
       id: map['id'] as String,
       businessName: map['business_name'] as String? ?? '',
-      ownerName: map['owner_name'] as String? ?? '',
+      ownerName: map['owner_name'] as String?,
       phone: map['phone'] as String? ?? '',
       email: map['email'] as String?,
-      city: map['city'] as String?,
       address: map['address'] as String?,
-      profileImageUrl: map['profile_image_url'] as String?,
-      rating: (map['rating'] as num?)?.toDouble() ?? 0.0,
+      city: map['city'] as String?,
+      status: map['status'] as String? ?? 'active',
       isActive: map['is_active'] as bool? ?? true,
-      createdAt: map['created_at'] != null
-          ? DateTime.tryParse(map['created_at'] as String)
-          : null,
+      rating: (map['rating'] as num?)?.toDouble(),
+      walletBalance: (map['wallet_balance'] as num?)?.toDouble() ?? 0.0,
+      createdAt: _parseDate(map['created_at']),
+      updatedAt: _parseDate(map['updated_at']),
     );
   }
 
-  VendorProfile copyWith({
-    String? businessName,
-    String? ownerName,
-    String? phone,
-    String? email,
-    String? city,
-    String? address,
-    String? profileImageUrl,
-    bool? isActive,
-  }) {
-    return VendorProfile(
-      id: id,
-      businessName: businessName ?? this.businessName,
-      ownerName: ownerName ?? this.ownerName,
-      phone: phone ?? this.phone,
-      email: email ?? this.email,
-      city: city ?? this.city,
-      address: address ?? this.address,
-      profileImageUrl: profileImageUrl ?? this.profileImageUrl,
-      rating: rating,
-      isActive: isActive ?? this.isActive,
-      createdAt: createdAt,
-    );
+  static DateTime? _parseDate(dynamic value) {
+    if (value == null) return null;
+    if (value is DateTime) return value;
+    return DateTime.tryParse(value.toString());
   }
 }
