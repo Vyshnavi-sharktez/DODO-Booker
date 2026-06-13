@@ -9,6 +9,7 @@ import '../../features/dashboard/presentation/pages/dashboard_page.dart';
 import '../../features/bookings/presentation/pages/bookings_page.dart';
 import '../../features/wallet/presentation/pages/wallet_page.dart';
 import '../../features/services/presentation/pages/services_page.dart';
+import '../../features/services/presentation/pages/add_service_page.dart';
 import '../../features/profile/presentation/pages/profile_page.dart';
 import '../../features/settings/presentation/pages/settings_page.dart';
 
@@ -58,6 +59,11 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: RoutePaths.services,
         name: RouteNames.services,
         builder: (context, state) => const ServicesPage(),
+      ),
+      GoRoute(
+        path: RoutePaths.addService,
+        name: RouteNames.addService,
+        builder: (context, state) => const AddServicePage(),
       ),
       GoRoute(
         path: RoutePaths.profile,
