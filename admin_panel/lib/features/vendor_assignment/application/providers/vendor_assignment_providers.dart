@@ -47,3 +47,8 @@ final inProgressBookingsCountProvider = Provider<int>((ref) {
   final bookings = ref.watch(bookingsNotifierProvider).valueOrNull ?? [];
   return bookings.where((b) => b.status == 'in_progress').length;
 });
+
+final rejectedBookingsCountProvider = Provider<int>((ref) {
+  final bookings = ref.watch(bookingsNotifierProvider).valueOrNull ?? [];
+  return bookings.where((b) => b.status == 'rejected').length;
+});

@@ -16,6 +16,8 @@ const _typeColors = <String, Color>{
   'system': Color(0xFF718096),
   'promotion': Color(0xFFDD6B20),
   'reminder': Color(0xFF805AD5),
+  'vendor_started': Color(0xFF2C7A7B),
+  'vendor_rejected': Color(0xFFC53030),
 };
 
 const _userTypeColors = <String, Color>{

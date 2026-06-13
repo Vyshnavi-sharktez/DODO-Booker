@@ -18,7 +18,7 @@ final _currency = NumberFormat.currency(symbol: '₹', decimalDigits: 0);
 
 // ── Status filter ─────────────────────────────────────────────────────────────
 
-enum _AssignFilter { all, pending, assigned, inProgress }
+enum _AssignFilter { all, pending, assigned, inProgress, rejected }
 
 const _statusBadgeData = <String, (String, Color, Color)>{
   'pending': ('Pending', Color(0xFFF6E05E), Color(0xFF744210)),
@@ -26,6 +26,7 @@ const _statusBadgeData = <String, (String, Color, Color)>{
   'in_progress': ('In Progress', Color(0xFF9AE6B4), Color(0xFF1C4532)),
   'completed': ('Completed', Color(0xFFC6F6D5), Color(0xFF276749)),
   'cancelled': ('Cancelled', Color(0xFFFED7D7), Color(0xFF742A2A)),
+  'rejected': ('Rejected', Color(0xFFFEB2B2), Color(0xFF742A2A)),
 };
 
 // ── Page ──────────────────────────────────────────────────────────────────────
@@ -70,17 +71,21 @@ class _VendorAssignmentPageState
     if (vendorId.isEmpty) return '';
     final vendors = ref.read(vendorsNotifierProvider).valueOrNull ?? [];
     final match = vendors.where((v) => v.id == vendorId);
-    if (match.isEmpty) return vendorId.length > 8 ? '${vendorId.substring(0, 8)}…' : vendorId;
+    if (match.isEmpty) {
+      return vendorId.length > 8 ? '${vendorId.substring(0, 8)}…' : vendorId;
+    }
     return match.first.businessName;
   }
 
   List<Booking> _applyFilters(List<Booking> all) {
-    // Only show bookings that are actionable (not completed/cancelled).
+    // Show actionable bookings: pending, assigned, in_progress, and rejected
+    // (admin can reassign rejected bookings).
     var result = all
         .where((b) =>
             b.status == 'pending' ||
             b.status == 'assigned' ||
-            b.status == 'in_progress')
+            b.status == 'in_progress' ||
+            b.status == 'rejected')
         .toList();
 
     if (_searchQuery.isNotEmpty) {
@@ -97,6 +102,8 @@ class _VendorAssignmentPageState
         result = result.where((b) => b.status == 'assigned').toList();
       case _AssignFilter.inProgress:
         result = result.where((b) => b.status == 'in_progress').toList();
+      case _AssignFilter.rejected:
+        result = result.where((b) => b.status == 'rejected').toList();
       case _AssignFilter.all:
         break;
     }
@@ -156,9 +163,12 @@ class _VendorAssignmentPageState
                 .createNotification(
                   userType: 'vendor',
                   userId: vendorId,
-                  title: 'New Booking Assigned',
-                  message:
-                      'Booking #${booking.bookingNumber} has been assigned to you.',
+                  title: booking.status == 'rejected'
+                      ? 'Booking Reassigned to You'
+                      : 'New Booking Assigned',
+                  message: booking.status == 'rejected'
+                      ? 'Booking #${booking.bookingNumber} has been reassigned to you.'
+                      : 'Booking #${booking.bookingNumber} has been assigned to you.',
                   notificationType: 'booking',
                 );
             debugPrint(
@@ -221,6 +231,7 @@ class _VendorAssignmentPageState
     final unassigned = ref.watch(unassignedBookingsCountProvider);
     final assigned = ref.watch(assignedBookingsCountProvider);
     final inProgress = ref.watch(inProgressBookingsCountProvider);
+    final rejected = ref.watch(rejectedBookingsCountProvider);
 
     return Padding(
       padding: const EdgeInsets.all(24),
@@ -250,48 +261,36 @@ class _VendorAssignmentPageState
           const SizedBox(height: 16),
 
           // ── Stats row ─────────────────────────────────────────────────────
-          bookingsState.when(
-            loading: () => const SizedBox.shrink(),
-            error: (e, st) => const SizedBox.shrink(),
-            data: (all) {
-              final total = all
-                  .where((b) =>
-                      b.status == 'pending' ||
-                      b.status == 'assigned' ||
-                      b.status == 'in_progress')
-                  .length;
-              return Row(
-                children: [
-                  _StatCard(
-                    label: 'Actionable',
-                    value: '$total',
-                    icon: Icons.assignment_rounded,
-                    color: AppColors.primary,
-                  ),
-                  const SizedBox(width: 12),
-                  _StatCard(
-                    label: 'Unassigned',
-                    value: '$unassigned',
-                    icon: Icons.assignment_late_rounded,
-                    color: const Color(0xFFDD6B20),
-                  ),
-                  const SizedBox(width: 12),
-                  _StatCard(
-                    label: 'Assigned',
-                    value: '$assigned',
-                    icon: Icons.assignment_ind_rounded,
-                    color: const Color(0xFF3182CE),
-                  ),
-                  const SizedBox(width: 12),
-                  _StatCard(
-                    label: 'In Progress',
-                    value: '$inProgress',
-                    icon: Icons.pending_actions_rounded,
-                    color: AppColors.success,
-                  ),
-                ],
-              );
-            },
+          Row(
+            children: [
+              _StatCard(
+                label: 'Unassigned',
+                value: '$unassigned',
+                icon: Icons.assignment_late_rounded,
+                color: const Color(0xFFDD6B20),
+              ),
+              const SizedBox(width: 12),
+              _StatCard(
+                label: 'Assigned',
+                value: '$assigned',
+                icon: Icons.assignment_ind_rounded,
+                color: const Color(0xFF3182CE),
+              ),
+              const SizedBox(width: 12),
+              _StatCard(
+                label: 'In Progress',
+                value: '$inProgress',
+                icon: Icons.pending_actions_rounded,
+                color: AppColors.success,
+              ),
+              const SizedBox(width: 12),
+              _StatCard(
+                label: 'Rejected',
+                value: '$rejected',
+                icon: Icons.cancel_outlined,
+                color: AppColors.error,
+              ),
+            ],
           ),
           const SizedBox(height: 16),
 
@@ -353,6 +352,13 @@ class _VendorAssignmentPageState
                 onTap: () => setState(
                     () => _filter = _AssignFilter.inProgress),
               ),
+              _Chip(
+                label: 'Rejected',
+                selected: _filter == _AssignFilter.rejected,
+                color: AppColors.error,
+                onTap: () =>
+                    setState(() => _filter = _AssignFilter.rejected),
+              ),
             ],
           ),
           const SizedBox(height: 16),
@@ -391,17 +397,19 @@ class _VendorAssignmentPageState
                 ),
               ),
               data: (all) {
-                final filtered = _applyFilters(all);
-                if (all
+                final actionable = all
                     .where((b) =>
                         b.status == 'pending' ||
                         b.status == 'assigned' ||
-                        b.status == 'in_progress')
-                    .isEmpty) {
+                        b.status == 'in_progress' ||
+                        b.status == 'rejected')
+                    .toList();
+                final filtered = _applyFilters(all);
+
+                if (actionable.isEmpty) {
                   return const _EmptyState(
                     message: 'No bookings require attention',
-                    sub:
-                        'All bookings are completed or cancelled.',
+                    sub: 'All bookings are completed or cancelled.',
                   );
                 }
                 if (filtered.isEmpty) {
@@ -579,7 +587,7 @@ class _AssignmentTable extends StatelessWidget {
                   _HCell('Amount', flex: 2),
                   _HCell('Service Date', flex: 2),
                   _HCell('Status', flex: 2),
-                  _HCell('Assigned Vendor', flex: 3),
+                  _HCell('Vendor / Reason', flex: 3),
                   _HCell('Actions', flex: 2, align: TextAlign.center),
                 ],
               ),
@@ -671,6 +679,7 @@ class _BookingAssignRow extends StatelessWidget {
     final serviceDateStr =
         b.serviceDate != null ? _dateFmt.format(b.serviceDate!) : '—';
     final isUnassigned = b.vendorId.isEmpty || b.status == 'pending';
+    final isRejected = b.status == 'rejected';
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
@@ -746,11 +755,15 @@ class _BookingAssignRow extends StatelessWidget {
             ),
           ),
 
-          // Vendor
+          // Vendor name + rejection reason (if rejected)
           Expanded(
             flex: 3,
-            child: isUnassigned
-                ? Row(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (isUnassigned)
+                  Row(
                     children: [
                       Container(
                         width: 7,
@@ -773,7 +786,8 @@ class _BookingAssignRow extends StatelessWidget {
                       ),
                     ],
                   )
-                : Text(
+                else
+                  Text(
                     vendorName,
                     style: const TextStyle(
                       fontSize: 13,
@@ -782,6 +796,29 @@ class _BookingAssignRow extends StatelessWidget {
                     ),
                     overflow: TextOverflow.ellipsis,
                   ),
+                if (isRejected &&
+                    b.rejectionReason != null &&
+                    b.rejectionReason!.isNotEmpty)
+                  Text(
+                    'Reason: ${b.rejectionReason}',
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: AppColors.error,
+                      fontStyle: FontStyle.italic,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                if (isRejected && b.rejectedAt != null)
+                  Text(
+                    'At: ${_dateFmt.format(b.rejectedAt!)}',
+                    style: TextStyle(
+                      fontSize: 10,
+                      color: AppColors.textSecondary,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+              ],
+            ),
           ),
 
           // Actions
@@ -791,7 +828,11 @@ class _BookingAssignRow extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Tooltip(
-                  message: isUnassigned ? 'Assign Vendor' : 'Reassign Vendor',
+                  message: isUnassigned
+                      ? 'Assign Vendor'
+                      : isRejected
+                          ? 'Reassign Vendor'
+                          : 'Reassign Vendor',
                   child: TextButton.icon(
                     onPressed: onAssign,
                     icon: Icon(
@@ -805,9 +846,11 @@ class _BookingAssignRow extends StatelessWidget {
                       style: const TextStyle(fontSize: 12),
                     ),
                     style: TextButton.styleFrom(
-                      foregroundColor: isUnassigned
-                          ? AppColors.primary
-                          : AppColors.accent,
+                      foregroundColor: isRejected
+                          ? AppColors.error
+                          : isUnassigned
+                              ? AppColors.primary
+                              : AppColors.accent,
                       padding: const EdgeInsets.symmetric(
                           horizontal: 8, vertical: 4),
                       visualDensity: VisualDensity.compact,

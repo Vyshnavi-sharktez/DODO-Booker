@@ -12,6 +12,7 @@ class BookingStatusBadge extends StatelessWidget {
         'in_progress' => AppColors.statusInProgress,
         'completed' => AppColors.statusCompleted,
         'cancelled' => AppColors.statusCancelled,
+        'rejected' => AppColors.error,
         _ => AppColors.textHint,
       };
 

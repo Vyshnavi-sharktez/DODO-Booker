@@ -40,6 +40,8 @@ class Booking {
   final DateTime? createdAt;
   final DateTime? updatedAt;
   final BookingReview? review;
+  final String? rejectionReason;
+  final DateTime? rejectedAt;
 
   const Booking({
     required this.id,
@@ -56,6 +58,8 @@ class Booking {
     this.createdAt,
     this.updatedAt,
     this.review,
+    this.rejectionReason,
+    this.rejectedAt,
   });
 
   factory Booking.fromMap(Map<String, dynamic> map) {
@@ -94,6 +98,10 @@ class Booking {
           ? DateTime.tryParse(map['updated_at'] as String)
           : null,
       review: review,
+      rejectionReason: map['rejection_reason'] as String?,
+      rejectedAt: map['rejected_at'] != null
+          ? DateTime.tryParse(map['rejected_at'] as String)
+          : null,
     );
   }
 
@@ -118,6 +126,8 @@ class Booking {
       createdAt: createdAt,
       updatedAt: updatedAt,
       review: review,
+      rejectionReason: rejectionReason,
+      rejectedAt: rejectedAt,
     );
   }
 }

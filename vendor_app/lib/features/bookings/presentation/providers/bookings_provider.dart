@@ -1,33 +1,42 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/network/supabase_client_provider.dart';
-import '../../data/bookings_repository.dart';
+import '../../../auth/presentation/providers/auth_controller.dart';
+import '../../data/datasources/bookings_remote_datasource.dart';
+import '../../data/repositories/bookings_repository_impl.dart';
 import '../../domain/models/booking.dart';
+import '../../domain/repositories/i_bookings_repository.dart';
+import '../../domain/usecases/get_vendor_bookings_usecase.dart';
+import '../../domain/usecases/reject_booking_usecase.dart';
+import '../../domain/usecases/update_booking_status_usecase.dart';
 
-final bookingsRepositoryProvider = Provider<BookingsRepository>(
-  (ref) => BookingsRepository(ref.watch(supabaseClientProvider)),
+// ── DI chain ─────────────────────────────────────────────────────────────────
+
+final bookingsDatasourceProvider = Provider<BookingsRemoteDatasource>(
+  (ref) => BookingsRemoteDatasource(ref.watch(supabaseClientProvider)),
 );
 
-class BookingsNotifier extends StateNotifier<AsyncValue<List<Booking>>> {
-  BookingsNotifier(this._repo) : super(const AsyncValue.loading());
-
-  final BookingsRepository _repo;
-
-  Future<void> load(String vendorId) async {
-    state = const AsyncValue.loading();
-    state = await AsyncValue.guard(
-      () => _repo.fetchVendorBookings(vendorId),
-    );
-  }
-
-  Future<void> updateStatus(String bookingId, String status) async {}
-}
-
-final bookingsNotifierProvider =
-    StateNotifierProvider<BookingsNotifier, AsyncValue<List<Booking>>>(
-  (ref) => BookingsNotifier(ref.watch(bookingsRepositoryProvider)),
+final bookingsRepositoryProvider = Provider<IBookingsRepository>(
+  (ref) => BookingsRepositoryImpl(ref.watch(bookingsDatasourceProvider)),
 );
 
-final bookingDetailProvider =
-    FutureProvider.family<Booking, String>((ref, bookingId) {
-  return ref.watch(bookingsRepositoryProvider).fetchBookingById(bookingId);
+final getVendorBookingsUseCaseProvider = Provider<GetVendorBookingsUseCase>(
+  (ref) => GetVendorBookingsUseCase(ref.watch(bookingsRepositoryProvider)),
+);
+
+final updateBookingStatusUseCaseProvider = Provider<UpdateBookingStatusUseCase>(
+  (ref) => UpdateBookingStatusUseCase(ref.watch(bookingsRepositoryProvider)),
+);
+
+final rejectBookingUseCaseProvider = Provider<RejectBookingUseCase>(
+  (ref) => RejectBookingUseCase(ref.watch(bookingsRepositoryProvider)),
+);
+
+// ── Live bookings (Supabase) ──────────────────────────────────────────────────
+// Includes rejected bookings because vendor_id is preserved on rejection.
+
+final vendorBookingsProvider =
+    FutureProvider.autoDispose<List<Booking>>((ref) {
+  final user = ref.watch(currentVendorUserProvider);
+  if (user == null) return Future.value([]);
+  return ref.read(getVendorBookingsUseCaseProvider).call(user.id);
 });

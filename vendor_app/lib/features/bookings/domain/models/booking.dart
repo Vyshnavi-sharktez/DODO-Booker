@@ -14,6 +14,8 @@ class Booking {
     this.customerPhone,
     this.discountAmount = 0.0,
     this.createdAt,
+    this.rejectionReason,
+    this.rejectedAt,
   });
 
   final String id;
@@ -30,6 +32,8 @@ class Booking {
   final String? customerPhone;
   final double discountAmount;
   final DateTime? createdAt;
+  final String? rejectionReason;
+  final DateTime? rejectedAt;
 
   factory Booking.fromMap(Map<String, dynamic> map) {
     return Booking(
@@ -47,6 +51,10 @@ class Booking {
       notes: map['notes'] as String?,
       createdAt: map['created_at'] != null
           ? DateTime.tryParse(map['created_at'] as String)
+          : null,
+      rejectionReason: map['rejection_reason'] as String?,
+      rejectedAt: map['rejected_at'] != null
+          ? DateTime.tryParse(map['rejected_at'] as String)
           : null,
     );
   }
@@ -67,6 +75,8 @@ class Booking {
       customerName: customerName,
       customerPhone: customerPhone,
       createdAt: createdAt,
+      rejectionReason: rejectionReason,
+      rejectedAt: rejectedAt,
     );
   }
 }
