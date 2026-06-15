@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../application/providers/vendors_providers.dart';
@@ -438,6 +439,8 @@ class _VendorsPageState extends ConsumerState<VendorsPage> {
                   onEdit: _openEdit,
                   onDelete: _confirmDelete,
                   onToggle: _toggle,
+                  onViewDetails: (v) =>
+                      context.go('/dashboard/vendors/${v.id}'),
                 );
               },
             ),
@@ -456,6 +459,7 @@ class _VendorsTable extends StatelessWidget {
   final void Function(Vendor) onEdit;
   final void Function(Vendor) onDelete;
   final void Function(Vendor) onToggle;
+  final void Function(Vendor) onViewDetails;
 
   const _VendorsTable({
     required this.vendors,
@@ -463,6 +467,7 @@ class _VendorsTable extends StatelessWidget {
     required this.onEdit,
     required this.onDelete,
     required this.onToggle,
+    required this.onViewDetails,
   });
 
   static const double _minTableWidth = 800;
@@ -524,6 +529,7 @@ class _VendorsTable extends StatelessWidget {
                                   onEdit: () => onEdit(v),
                                   onDelete: () => onDelete(v),
                                   onToggle: () => onToggle(v),
+                                  onViewDetails: () => onViewDetails(v),
                                 );
                               },
                             ),
@@ -585,12 +591,14 @@ class _VendorRow extends StatelessWidget {
   final VoidCallback onEdit;
   final VoidCallback onDelete;
   final VoidCallback onToggle;
+  final VoidCallback onViewDetails;
 
   const _VendorRow({
     required this.vendor,
     required this.onEdit,
     required this.onDelete,
     required this.onToggle,
+    required this.onViewDetails,
   });
 
   static String _initials(String name) {
@@ -750,6 +758,13 @@ class _VendorRow extends StatelessWidget {
                     activeThumbColor: AppColors.success,
                     materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                   ),
+                ),
+                IconButton(
+                  onPressed: onViewDetails,
+                  icon: Icon(Icons.open_in_new_rounded,
+                      size: 16, color: AppColors.primary),
+                  tooltip: 'View Details',
+                  visualDensity: VisualDensity.compact,
                 ),
                 IconButton(
                   onPressed: onEdit,

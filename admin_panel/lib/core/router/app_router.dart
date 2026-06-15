@@ -14,6 +14,7 @@ import '../../features/sub_categories/presentation/pages/sub_categories_page.dar
 import '../../features/services/presentation/pages/services_page.dart';
 import '../../features/service_attributes/presentation/pages/service_attributes_page.dart';
 import '../../features/vendors/presentation/pages/vendors_page.dart';
+import '../../features/vendors/presentation/pages/vendor_details_page.dart';
 import '../../features/bookings/presentation/pages/bookings_page.dart';
 import '../../features/customers/presentation/pages/customers_page.dart';
 import '../../features/coupons/presentation/pages/coupons_page.dart';
@@ -181,6 +182,15 @@ final routerProvider = Provider<GoRouter>((ref) {
             name: 'vendors',
             pageBuilder: (context, state) => const NoTransitionPage(
               child: VendorsPage(),
+            ),
+          ),
+          GoRoute(
+            path: '/dashboard/vendors/:vendorId',
+            name: 'vendorDetails',
+            pageBuilder: (context, state) => NoTransitionPage(
+              child: VendorDetailsPage(
+                vendorId: state.pathParameters['vendorId']!,
+              ),
             ),
           ),
           GoRoute(
