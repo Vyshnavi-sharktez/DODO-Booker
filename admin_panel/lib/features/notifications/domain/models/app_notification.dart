@@ -8,6 +8,8 @@ class AppNotification {
   final String notificationType;
   final bool isRead;
   final DateTime? createdAt;
+  final String? entityType;
+  final String? entityId;
 
   const AppNotification({
     required this.id,
@@ -18,6 +20,8 @@ class AppNotification {
     required this.notificationType,
     required this.isRead,
     this.createdAt,
+    this.entityType,
+    this.entityId,
   });
 
   factory AppNotification.fromMap(Map<String, dynamic> map) {
@@ -32,6 +36,8 @@ class AppNotification {
       createdAt: map['created_at'] != null
           ? DateTime.tryParse(map['created_at'] as String)
           : null,
+      entityType: map['entity_type'] as String?,
+      entityId: map['entity_id'] as String?,
     );
   }
 
@@ -45,6 +51,8 @@ class AppNotification {
       notificationType: notificationType,
       isRead: isRead ?? this.isRead,
       createdAt: createdAt,
+      entityType: entityType,
+      entityId: entityId,
     );
   }
 }

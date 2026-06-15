@@ -56,27 +56,71 @@ class BookingsService {
   }
 
   Future<MyBookingModel?> fetchBookingById(String id) async {
-    debugPrint('[DODO][Bookings] fetchBookingById($id)');
+    debugPrint('[NOTIF][Customer] fetchBookingById — id=$id');
     final data = await _client
         .from('bookings')
         .select(_bookingSelect)
         .eq('id', id)
         .maybeSingle();
+    debugPrint('[NOTIF][Customer] Supabase result — ${data == null ? "null (no row)" : "found id=${data['id']}"}');
     if (data == null) return null;
-    final b = MyBookingModel.fromJson(data);
-    debugPrint('[DODO][Bookings] Service loaded: ${b.serviceName}');
-    debugPrint('[DODO][Bookings] Address loaded: ${b.address.city.isNotEmpty ? b.address.city : b.address.line1}');
-    return b;
+    return MyBookingModel.fromJson(data);
   }
 
   Future<bool> cancelBooking(String bookingId) async {
     debugPrint('[DODO][Booking] Cancel requested for bookingId=$bookingId');
+
+    // Fetch metadata needed for notifications before updating.
+    Map<String, dynamic>? meta;
+    try {
+      meta = await _client
+          .from('bookings')
+          .select('vendor_id, booking_number')
+          .eq('id', bookingId)
+          .maybeSingle();
+    } catch (_) {}
+
     debugPrint('[DODO][Booking] Updating booking status');
     await _client.from('bookings').update({
       'status': 'cancelled',
       'cancelled_at': DateTime.now().toUtc().toIso8601String(),
     }).eq('id', bookingId);
     debugPrint('[DODO][Booking] Booking cancelled successfully');
+
+    // Notify admin and vendor (if assigned) — non-fatal.
+    final vendorId = meta?['vendor_id'] as String?;
+    final bookingNum = meta?['booking_number'] as String? ?? '';
+    final ref = bookingNum.isNotEmpty
+        ? '#$bookingNum'
+        : '#${bookingId.length > 8 ? bookingId.substring(0, 8) : bookingId}';
+
+    try {
+      await _client.from('notifications').insert({
+        'user_type': 'admin',
+        'user_id': 'admin',
+        'title': 'Booking Cancelled',
+        'message': 'Customer cancelled booking $ref.',
+        'notification_type': 'booking_cancelled',
+        'is_read': false,
+        'entity_type': 'booking',
+        'entity_id': bookingId,
+      });
+      if (vendorId != null && vendorId.isNotEmpty) {
+        await _client.from('notifications').insert({
+          'user_type': 'vendor',
+          'user_id': vendorId,
+          'title': 'Booking Cancelled',
+          'message': 'Booking $ref has been cancelled.',
+          'notification_type': 'booking_cancelled',
+          'is_read': false,
+          'entity_type': 'booking',
+          'entity_id': bookingId,
+        });
+      }
+    } catch (e) {
+      debugPrint('[DODO][Booking] Warning: cancel notifications failed (non-fatal): $e');
+    }
+
     return true;
   }
 }

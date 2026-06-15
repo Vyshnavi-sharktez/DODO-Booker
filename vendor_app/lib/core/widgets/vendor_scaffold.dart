@@ -1,14 +1,16 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../constants/app_colors.dart';
 import '../routes/route_names.dart';
+import '../../features/notifications/presentation/providers/notifications_provider.dart';
 
 /// Shared scaffold for all authenticated pages.
 ///
-/// Wraps [child] with a top [AppBar] and a persistent [NavigationBar].
-/// The current tab is derived from the live GoRouter location so no external
-/// state is needed — each page simply passes its own title and body.
-class VendorScaffold extends StatelessWidget {
+/// Wraps [child] with a top [AppBar] containing a persistent notification bell
+/// and a [NavigationBar] at the bottom. The current tab is derived from the
+/// live GoRouter location — no external state needed.
+class VendorScaffold extends ConsumerWidget {
   const VendorScaffold({
     super.key,
     required this.title,
@@ -54,16 +56,22 @@ class VendorScaffold extends StatelessWidget {
   ];
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final location = GoRouterState.of(context).matchedLocation;
-    // clamp so -1 (no match) falls back to Dashboard (index 0)
     final currentIndex =
         _tabs.indexWhere((t) => t.path == location).clamp(0, _tabs.length - 1);
+    final unreadCount = ref.watch(vendorUnreadCountProvider);
 
     return Scaffold(
       appBar: AppBar(
         title: Text(title),
-        actions: actions,
+        actions: [
+          ...?actions,
+          _NotificationBell(
+            unreadCount: unreadCount,
+            onTap: () => context.go(RoutePaths.notifications),
+          ),
+        ],
       ),
       body: child,
       bottomNavigationBar: NavigationBar(
@@ -87,6 +95,59 @@ class VendorScaffold extends StatelessWidget {
     );
   }
 }
+
+// ── Notification bell with badge ──────────────────────────────────────────────
+
+class _NotificationBell extends StatelessWidget {
+  const _NotificationBell({
+    required this.unreadCount,
+    required this.onTap,
+  });
+
+  final int unreadCount;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        IconButton(
+          icon: const Icon(Icons.notifications_outlined),
+          tooltip: 'Notifications',
+          onPressed: onTap,
+        ),
+        if (unreadCount > 0)
+          Positioned(
+            top: 8,
+            right: 8,
+            child: IgnorePointer(
+              child: Container(
+                constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
+                padding: const EdgeInsets.symmetric(horizontal: 4),
+                decoration: BoxDecoration(
+                  color: AppColors.error,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  unreadCount > 99 ? '99+' : '$unreadCount',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w700,
+                    height: 1.6,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+// ── Nav tab descriptor ────────────────────────────────────────────────────────
 
 class _NavTab {
   const _NavTab({

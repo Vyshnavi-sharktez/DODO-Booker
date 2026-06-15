@@ -5,6 +5,7 @@ import '../../../core/widgets/app_modal_dialog.dart';
 import '../../../models/my_booking_model.dart';
 import '../services/bookings_providers.dart';
 import '../widgets/booking_status_timeline.dart';
+import '../../notifications/services/notification_providers.dart';
 import '../../reviews/services/review_providers.dart';
 import '../../reviews/widgets/review_modal.dart';
 
@@ -108,6 +109,7 @@ class _BookingDetailsScreenState extends ConsumerState<BookingDetailsScreen> {
       if (!mounted) return;
       ref.invalidate(myBookingsProvider);
       ref.invalidate(bookingByIdProvider(b.id));
+      ref.invalidate(notificationsProvider);
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Booking cancelled successfully'),

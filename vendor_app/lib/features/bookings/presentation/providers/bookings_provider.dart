@@ -40,3 +40,10 @@ final vendorBookingsProvider =
   if (user == null) return Future.value([]);
   return ref.read(getVendorBookingsUseCaseProvider).call(user.id);
 });
+
+/// Fetches a single booking by ID — used for deep-link navigation from notifications.
+/// Returns null if the booking no longer exists or is inaccessible.
+final bookingDetailProvider =
+    FutureProvider.autoDispose.family<Booking?, String>((ref, bookingId) {
+  return ref.read(bookingsRepositoryProvider).getBookingById(bookingId);
+});

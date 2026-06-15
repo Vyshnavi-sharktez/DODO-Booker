@@ -22,6 +22,8 @@ class NotificationsRepository {
     required String title,
     required String message,
     required String notificationType,
+    String? entityType,
+    String? entityId,
   }) async {
     final data = await _supabase
         .from('notifications')
@@ -32,6 +34,8 @@ class NotificationsRepository {
           'message': message,
           'notification_type': notificationType,
           'is_read': false,
+          'entity_type': ?entityType,
+          'entity_id': ?entityId,
         })
         .select()
         .single();

@@ -94,18 +94,36 @@ class _BookingCardState extends ConsumerState<BookingCard> {
           .call(widget.booking.id, targetStatus);
       if (mounted) setState(() => _processed = true);
 
-      // Notify admin when the vendor starts the service — failure must not
-      // block the status update.
+      // Notifications — fire-and-forget; must not block the status update.
       if (targetStatus == 'in_progress') {
-        ref
-            .read(bookingsRepositoryProvider)
-            .createAdminNotification(
-              title: 'Vendor Started Service',
-              message:
-                  'Vendor $_vendorName started work on booking $_bookingRef.',
-              notificationType: 'vendor_started',
-            )
-            .ignore();
+        ref.read(bookingsRepositoryProvider).createAdminNotification(
+          title: 'Vendor Started Service',
+          message: 'Vendor $_vendorName started work on booking $_bookingRef.',
+          notificationType: 'vendor_started',
+          entityId: widget.booking.id,
+        ).ignore();
+        ref.read(bookingsRepositoryProvider).createCustomerNotification(
+          customerId: widget.booking.customerId,
+          title: 'Service Started',
+          message: 'Your service is now in progress.',
+          notificationType: 'vendor_started',
+          entityId: widget.booking.id,
+        ).ignore();
+      }
+      if (targetStatus == 'completed') {
+        ref.read(bookingsRepositoryProvider).createAdminNotification(
+          title: 'Booking Completed',
+          message: 'Vendor $_vendorName completed booking $_bookingRef.',
+          notificationType: 'booking_completed',
+          entityId: widget.booking.id,
+        ).ignore();
+        ref.read(bookingsRepositoryProvider).createCustomerNotification(
+          customerId: widget.booking.customerId,
+          title: 'Service Completed',
+          message: 'Your service has been completed successfully.',
+          notificationType: 'booking_completed',
+          entityId: widget.booking.id,
+        ).ignore();
       }
 
       ref.invalidate(vendorBookingsProvider);
@@ -151,17 +169,22 @@ class _BookingCardState extends ConsumerState<BookingCard> {
           );
       if (mounted) setState(() => _processed = true);
 
-      // Notify admin of rejection with the reason — failure must not block.
-      ref
-          .read(bookingsRepositoryProvider)
-          .createAdminNotification(
-            title: 'Vendor Rejected Booking',
-            message:
-                'Vendor $_vendorName rejected booking $_bookingRef.\n'
-                'Reason: $reason',
-            notificationType: 'vendor_rejected',
-          )
-          .ignore();
+      // Notifications — fire-and-forget; must not block the rejection.
+      ref.read(bookingsRepositoryProvider).createAdminNotification(
+        title: 'Vendor Rejected Booking',
+        message: 'Vendor $_vendorName rejected booking $_bookingRef.\n'
+            'Reason: $reason',
+        notificationType: 'vendor_rejected',
+        entityId: widget.booking.id,
+      ).ignore();
+      ref.read(bookingsRepositoryProvider).createCustomerNotification(
+        customerId: widget.booking.customerId,
+        title: 'Vendor Reassignment Required',
+        message: 'Your assigned vendor is unavailable. '
+            'A new provider will be assigned shortly.',
+        notificationType: 'vendor_rejected',
+        entityId: widget.booking.id,
+      ).ignore();
 
       ref.invalidate(vendorBookingsProvider);
       if (mounted) {

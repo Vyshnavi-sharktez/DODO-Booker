@@ -29,6 +29,8 @@ class NotificationsNotifier
     required String title,
     required String message,
     required String notificationType,
+    String? entityType,
+    String? entityId,
   }) async {
     final created = await _repo.createNotification(
       userType: userType,
@@ -36,6 +38,8 @@ class NotificationsNotifier
       title: title,
       message: message,
       notificationType: notificationType,
+      entityType: entityType,
+      entityId: entityId,
     );
     final current = state.valueOrNull ?? [];
     state = AsyncValue.data([created, ...current]);

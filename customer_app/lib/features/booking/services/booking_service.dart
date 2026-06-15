@@ -108,6 +108,38 @@ class BookingService {
       }
     }
 
+    // ── Notify admin of new booking ──────────────────────────────────────────
+    try {
+      await _client.from('notifications').insert({
+        'user_type': 'admin',
+        'user_id': 'admin',
+        'title': 'New Booking Received',
+        'message': 'A new booking has been created.',
+        'notification_type': 'booking_created',
+        'is_read': false,
+        'entity_type': 'booking',
+        'entity_id': bookingId,
+      });
+    } catch (e) {
+      debugPrint('[DODO][Booking] Warning: admin booking_created notification failed (non-fatal): $e');
+    }
+
+    // ── Notify customer of their new booking ─────────────────────────────────
+    try {
+      await _client.from('notifications').insert({
+        'user_type': 'customer',
+        'user_id': customerId,
+        'title': 'Booking Created',
+        'message': 'Your booking has been created successfully.',
+        'notification_type': 'booking_created',
+        'is_read': false,
+        'entity_type': 'booking',
+        'entity_id': bookingId,
+      });
+    } catch (e) {
+      debugPrint('[DODO][Booking] Warning: customer booking_created notification failed (non-fatal): $e');
+    }
+
     debugPrint('[DODO][Booking] Booking flow complete — id=$bookingId');
 
     return BookingModel(

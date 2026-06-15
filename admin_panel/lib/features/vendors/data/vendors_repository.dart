@@ -72,7 +72,7 @@ class VendorsRepository {
           'status': status,
           'is_active': isActive,
           'rating': rating,
-          if (walletBalance != null) 'wallet_balance': walletBalance,
+          'wallet_balance': ?walletBalance,
         })
         .eq('id', id)
         .select()

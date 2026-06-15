@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../application/providers/notifications_providers.dart';
@@ -225,6 +226,16 @@ class _NotificationsPageState extends ConsumerState<NotificationsPage> {
               backgroundColor: AppColors.error),
         );
       }
+    }
+  }
+
+  void _handleNavigate(AppNotification n) {
+    debugPrint('[NOTIF][Admin] tapped — entity_type=${n.entityType}, entity_id=${n.entityId}');
+    if (n.entityType == 'booking' && n.entityId != null) {
+      if (!n.isRead) _toggleRead(n);
+      final route = '/dashboard/vendor-assignment?bookingId=${n.entityId}';
+      debugPrint('[NOTIF][Admin] navigating → $route');
+      context.go(route);
     }
   }
 
@@ -638,6 +649,7 @@ class _NotificationsPageState extends ConsumerState<NotificationsPage> {
                   },
                   onToggleRead: _toggleRead,
                   onDelete: _confirmDelete,
+                  onNavigate: _handleNavigate,
                 );
               },
             ),
@@ -706,6 +718,7 @@ class _NotificationsTable extends StatelessWidget {
   final void Function(bool selectAll) onSelectAll;
   final void Function(AppNotification) onToggleRead;
   final void Function(AppNotification) onDelete;
+  final void Function(AppNotification) onNavigate;
 
   const _NotificationsTable({
     required this.notifications,
@@ -715,6 +728,7 @@ class _NotificationsTable extends StatelessWidget {
     required this.onSelectAll,
     required this.onToggleRead,
     required this.onDelete,
+    required this.onNavigate,
   });
 
   static const double _minTableWidth = 750;
@@ -795,6 +809,7 @@ class _NotificationsTable extends StatelessWidget {
                                       onSelectionChanged(n.id, v),
                                   onToggleRead: () => onToggleRead(n),
                                   onDelete: () => onDelete(n),
+                                  onNavigate: () => onNavigate(n),
                                 );
                               },
                             ),
@@ -857,6 +872,7 @@ class _NotificationRow extends StatelessWidget {
   final void Function(bool) onSelectionChanged;
   final VoidCallback onToggleRead;
   final VoidCallback onDelete;
+  final VoidCallback onNavigate;
 
   const _NotificationRow({
     required this.notification,
@@ -864,6 +880,7 @@ class _NotificationRow extends StatelessWidget {
     required this.onSelectionChanged,
     required this.onToggleRead,
     required this.onDelete,
+    required this.onNavigate,
   });
 
   @override
@@ -1027,6 +1044,14 @@ class _NotificationRow extends StatelessWidget {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
+                if (n.entityType == 'booking' && n.entityId != null)
+                  IconButton(
+                    onPressed: onNavigate,
+                    icon: const Icon(Icons.open_in_new_rounded, size: 16),
+                    tooltip: 'View Booking',
+                    color: AppColors.primary,
+                    visualDensity: VisualDensity.compact,
+                  ),
                 Tooltip(
                   message: n.isRead ? 'Mark as Unread' : 'Mark as Read',
                   child: IconButton(

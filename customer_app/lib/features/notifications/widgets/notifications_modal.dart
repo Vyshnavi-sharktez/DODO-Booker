@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/widgets/app_modal_dialog.dart';
+import '../../../routes/app_router.dart';
 import '../models/notification_model.dart';
 import '../services/notification_providers.dart';
 
@@ -31,6 +33,20 @@ class _NotificationsModalState extends ConsumerState<NotificationsModal> {
     }
   }
 
+  void _handleTap(NotificationModel n) {
+    debugPrint('[NOTIF][Customer] tapped — entity_type=${n.entityType}, entity_id=${n.entityId}');
+    _markRead(n);
+    if (n.entityType == 'booking' && n.entityId != null) {
+      // Capture the router BEFORE pop — after pop() this widget is unmounted
+      // and context.go() on a stale context silently no-ops.
+      final router = GoRouter.of(context);
+      final route = AppRoutes.notificationBooking.replaceFirst(':id', n.entityId!);
+      debugPrint('[NOTIF][Customer] navigating → $route');
+      Navigator.of(context).pop();
+      router.go(route);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final notificationsAsync = ref.watch(notificationsProvider);
@@ -48,7 +64,7 @@ class _NotificationsModalState extends ConsumerState<NotificationsModal> {
             : _NotificationList(
                 notifications: notifications,
                 isRead: _isRead,
-                onTap: _markRead,
+                onTap: _handleTap,
               ),
       ),
     );
@@ -60,7 +76,7 @@ class _NotificationsModalState extends ConsumerState<NotificationsModal> {
 class _NotificationList extends StatelessWidget {
   final List<NotificationModel> notifications;
   final bool Function(NotificationModel) isRead;
-  final Future<void> Function(NotificationModel) onTap;
+  final void Function(NotificationModel) onTap;
 
   const _NotificationList({
     required this.notifications,

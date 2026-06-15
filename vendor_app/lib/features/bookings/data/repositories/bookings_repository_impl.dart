@@ -17,6 +17,13 @@ class BookingsRepositoryImpl implements IBookingsRepository {
   }
 
   @override
+  Future<Booking?> getBookingById(String bookingId) async {
+    final row = await _datasource.fetchBookingById(bookingId);
+    if (row == null) return null;
+    return Booking.fromMap(row);
+  }
+
+  @override
   Future<void> updateBookingStatus(String bookingId, String newStatus) {
     if (!_validProgressTargets.contains(newStatus)) {
       throw ArgumentError(
@@ -46,10 +53,28 @@ class BookingsRepositoryImpl implements IBookingsRepository {
     required String title,
     required String message,
     required String notificationType,
+    required String entityId,
   }) =>
       _datasource.createAdminNotification(
         title: title,
         message: message,
         notificationType: notificationType,
+        entityId: entityId,
+      );
+
+  @override
+  Future<void> createCustomerNotification({
+    required String customerId,
+    required String title,
+    required String message,
+    required String notificationType,
+    required String entityId,
+  }) =>
+      _datasource.createCustomerNotification(
+        customerId: customerId,
+        title: title,
+        message: message,
+        notificationType: notificationType,
+        entityId: entityId,
       );
 }

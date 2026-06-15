@@ -7,6 +7,8 @@ class NotificationModel {
   final String? notificationType;
   final bool isRead;
   final DateTime createdAt;
+  final String? entityType;
+  final String? entityId;
 
   const NotificationModel({
     required this.id,
@@ -17,6 +19,8 @@ class NotificationModel {
     this.notificationType,
     required this.isRead,
     required this.createdAt,
+    this.entityType,
+    this.entityId,
   });
 
   factory NotificationModel.fromJson(Map<String, dynamic> json) {
@@ -29,6 +33,8 @@ class NotificationModel {
       notificationType: json['notification_type'] as String?,
       isRead: json['is_read'] as bool? ?? false,
       createdAt: DateTime.parse(json['created_at'] as String),
+      entityType: json['entity_type'] as String?,
+      entityId: json['entity_id'] as String?,
     );
   }
 }

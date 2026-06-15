@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../features/auth/application/providers/auth_provider.dart';
@@ -77,7 +78,7 @@ class _VendorAssignmentPageState
     return match.first.businessName;
   }
 
-  List<Booking> _applyFilters(List<Booking> all) {
+  List<Booking> _applyFilters(List<Booking> all, {String? focusId}) {
     // Show actionable bookings: pending, assigned, in_progress, and rejected
     // (admin can reassign rejected bookings).
     var result = all
@@ -107,6 +108,16 @@ class _VendorAssignmentPageState
       case _AssignFilter.all:
         break;
     }
+
+    // Bubble the focused booking to the top of the list.
+    if (focusId != null) {
+      result.sort((a, b) => a.id == focusId
+          ? -1
+          : b.id == focusId
+              ? 1
+              : 0);
+    }
+
     return result;
   }
 
@@ -156,27 +167,50 @@ class _VendorAssignmentPageState
                 notes: notes,
               );
 
-          // Create notification for vendor.
+          // Vendor notification.
           try {
             await ref
                 .read(notificationsNotifierProvider.notifier)
                 .createNotification(
                   userType: 'vendor',
                   userId: vendorId,
-                  title: booking.status == 'rejected'
-                      ? 'Booking Reassigned to You'
-                      : 'New Booking Assigned',
-                  message: booking.status == 'rejected'
-                      ? 'Booking #${booking.bookingNumber} has been reassigned to you.'
-                      : 'Booking #${booking.bookingNumber} has been assigned to you.',
-                  notificationType: 'booking',
+                  title: 'New Booking Assigned',
+                  message:
+                      'You have been assigned booking #${booking.bookingNumber}.',
+                  notificationType:
+                      isFirstAssignment ? 'vendor_assigned' : 'vendor_reassigned',
+                  entityType: 'booking',
+                  entityId: booking.id,
                 );
             debugPrint(
-              '[DODO][VendorAssignment] Notification created: '
+              '[DODO][VendorAssignment] Vendor notification created: '
               'vendor $vendorId notified for booking #${booking.bookingNumber}',
             );
           } catch (_) {
             // Notification failure must not block assignment.
+          }
+
+          // Customer notification — always created in code with entity data so
+          // the deep-link works. A DB trigger may also fire for the first
+          // assignment and create a duplicate without entity data; that trigger
+          // should be removed from Supabase to eliminate the duplicate.
+          try {
+            await ref
+                .read(notificationsNotifierProvider.notifier)
+                .createNotification(
+                  userType: 'customer',
+                  userId: booking.customerId,
+                  title: isFirstAssignment ? 'Vendor Assigned' : 'Vendor Reassigned',
+                  message: isFirstAssignment
+                      ? 'A service provider has been assigned to your booking.'
+                      : 'A new service provider has been assigned to your booking.',
+                  notificationType:
+                      isFirstAssignment ? 'vendor_assigned' : 'vendor_reassigned',
+                  entityType: 'booking',
+                  entityId: booking.id,
+                );
+          } catch (_) {
+            // Non-fatal.
           }
 
           // Record in-memory history entry.
@@ -232,6 +266,11 @@ class _VendorAssignmentPageState
     final assigned = ref.watch(assignedBookingsCountProvider);
     final inProgress = ref.watch(inProgressBookingsCountProvider);
     final rejected = ref.watch(rejectedBookingsCountProvider);
+
+    // Read deep-link focus booking ID from query params (e.g. ?bookingId=uuid).
+    final focusBookingId = GoRouterState.of(context)
+        .uri
+        .queryParameters['bookingId'];
 
     return Padding(
       padding: const EdgeInsets.all(24),
@@ -404,7 +443,8 @@ class _VendorAssignmentPageState
                         b.status == 'in_progress' ||
                         b.status == 'rejected')
                     .toList();
-                final filtered = _applyFilters(all);
+                final filtered =
+                    _applyFilters(all, focusId: focusBookingId);
 
                 if (actionable.isEmpty) {
                   return const _EmptyState(
@@ -418,13 +458,66 @@ class _VendorAssignmentPageState
                     sub: 'Try adjusting your search or filter.',
                   );
                 }
-                return _AssignmentTable(
-                  bookings: filtered,
-                  totalCount: all.length,
-                  customerNameResolver: _customerName,
-                  vendorNameResolver: _vendorName,
-                  onAssign: _openAssignDialog,
-                  onHistory: _openHistoryDialog,
+
+                // Focus banner — shown when navigating from a notification.
+                final focusedBooking = focusBookingId != null
+                    ? all.where((b) => b.id == focusBookingId).firstOrNull
+                    : null;
+
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    if (focusedBooking != null) ...[
+                      Container(
+                        margin: const EdgeInsets.only(bottom: 12),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 14, vertical: 10),
+                        decoration: BoxDecoration(
+                          color: AppColors.primary.withValues(alpha: 0.08),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(
+                            color: AppColors.primary.withValues(alpha: 0.3),
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(Icons.info_outline_rounded,
+                                size: 16, color: AppColors.primary),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                'Viewing booking #${focusedBooking.bookingNumber} from notification',
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  color: AppColors.primary,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.close_rounded, size: 16),
+                              color: AppColors.primary,
+                              visualDensity: VisualDensity.compact,
+                              tooltip: 'Dismiss',
+                              onPressed: () =>
+                                  context.go('/dashboard/vendor-assignment'),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                    Expanded(
+                      child: _AssignmentTable(
+                        bookings: filtered,
+                        totalCount: all.length,
+                        focusBookingId: focusBookingId,
+                        customerNameResolver: _customerName,
+                        vendorNameResolver: _vendorName,
+                        onAssign: _openAssignDialog,
+                        onHistory: _openHistoryDialog,
+                      ),
+                    ),
+                  ],
                 );
               },
             ),
@@ -548,6 +641,7 @@ class _Chip extends StatelessWidget {
 class _AssignmentTable extends StatelessWidget {
   final List<Booking> bookings;
   final int totalCount;
+  final String? focusBookingId;
   final String Function(String) customerNameResolver;
   final String Function(String) vendorNameResolver;
   final void Function(Booking) onAssign;
@@ -556,6 +650,7 @@ class _AssignmentTable extends StatelessWidget {
   const _AssignmentTable({
     required this.bookings,
     required this.totalCount,
+    this.focusBookingId,
     required this.customerNameResolver,
     required this.vendorNameResolver,
     required this.onAssign,
@@ -606,6 +701,7 @@ class _AssignmentTable extends StatelessWidget {
                         customerNameResolver(bookings[i].customerId),
                     vendorName:
                         vendorNameResolver(bookings[i].vendorId),
+                    isFocused: bookings[i].id == focusBookingId,
                     onAssign: () => onAssign(bookings[i]),
                     onHistory: () => onHistory(bookings[i]),
                   );
@@ -660,6 +756,7 @@ class _BookingAssignRow extends StatelessWidget {
   final Booking booking;
   final String customerName;
   final String vendorName;
+  final bool isFocused;
   final VoidCallback onAssign;
   final VoidCallback onHistory;
 
@@ -667,6 +764,7 @@ class _BookingAssignRow extends StatelessWidget {
     required this.booking,
     required this.customerName,
     required this.vendorName,
+    required this.isFocused,
     required this.onAssign,
     required this.onHistory,
   });
@@ -681,7 +779,11 @@ class _BookingAssignRow extends StatelessWidget {
     final isUnassigned = b.vendorId.isEmpty || b.status == 'pending';
     final isRejected = b.status == 'rejected';
 
-    return Padding(
+    return ColoredBox(
+      color: isFocused
+          ? AppColors.primary.withValues(alpha: 0.06)
+          : Colors.transparent,
+      child: Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
       child: Row(
         children: [
@@ -869,6 +971,7 @@ class _BookingAssignRow extends StatelessWidget {
           ),
         ],
       ),
+    ),
     );
   }
 }

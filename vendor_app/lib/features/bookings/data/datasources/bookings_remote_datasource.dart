@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class BookingsRemoteDatasource {
@@ -20,14 +21,24 @@ class BookingsRemoteDatasource {
     return List<Map<String, dynamic>>.from(data as List);
   }
 
+  Future<Map<String, dynamic>?> fetchBookingById(String bookingId) async {
+    debugPrint('[NOTIF][Vendor] fetchBookingById — id=$bookingId');
+    final result = await _client
+        .from('bookings')
+        .select(_select)
+        .eq('id', bookingId)
+        .maybeSingle();
+    debugPrint('[NOTIF][Vendor] Supabase result — ${result == null ? "null (no row)" : "found id=${result['id']}"}');
+    return result;
+  }
+
   Future<void> updateBookingStatus(
     String bookingId,
     String newStatus,
   ) async {
     await _client
         .from('bookings')
-        .update({'status': newStatus})
-        .eq('id', bookingId);
+        .update({'status': newStatus}).eq('id', bookingId);
   }
 
   // vendor_id is intentionally NOT set to null — the vendor retains ownership
@@ -47,6 +58,7 @@ class BookingsRemoteDatasource {
     required String title,
     required String message,
     required String notificationType,
+    required String entityId,
   }) async {
     await _client.from('notifications').insert({
       'user_type': 'admin',
@@ -55,6 +67,27 @@ class BookingsRemoteDatasource {
       'message': message,
       'notification_type': notificationType,
       'is_read': false,
+      'entity_type': 'booking',
+      'entity_id': entityId,
+    });
+  }
+
+  Future<void> createCustomerNotification({
+    required String customerId,
+    required String title,
+    required String message,
+    required String notificationType,
+    required String entityId,
+  }) async {
+    await _client.from('notifications').insert({
+      'user_type': 'customer',
+      'user_id': customerId,
+      'title': title,
+      'message': message,
+      'notification_type': notificationType,
+      'is_read': false,
+      'entity_type': 'booking',
+      'entity_id': entityId,
     });
   }
 }

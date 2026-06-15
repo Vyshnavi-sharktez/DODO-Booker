@@ -7,10 +7,12 @@ import '../../features/auth/presentation/providers/auth_controller.dart';
 import '../../features/auth/presentation/providers/auth_state.dart';
 import '../../features/dashboard/presentation/pages/dashboard_page.dart';
 import '../../features/bookings/presentation/pages/bookings_page.dart';
+import '../../features/bookings/presentation/pages/booking_detail_page.dart';
 import '../../features/wallet/presentation/pages/wallet_page.dart';
 import '../../features/services/presentation/pages/services_page.dart';
 import '../../features/services/presentation/pages/add_service_page.dart';
 import '../../features/profile/presentation/pages/profile_page.dart';
+import '../../features/notifications/presentation/pages/notifications_page.dart';
 import '../../features/settings/presentation/pages/settings_page.dart';
 
 final routerProvider = Provider<GoRouter>((ref) {
@@ -51,6 +53,13 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (context, state) => const BookingsPage(),
       ),
       GoRoute(
+        path: RoutePaths.bookingDetail,
+        name: RouteNames.bookingDetail,
+        builder: (context, state) => BookingDetailPage(
+          bookingId: state.pathParameters['id']!,
+        ),
+      ),
+      GoRoute(
         path: RoutePaths.wallet,
         name: RouteNames.wallet,
         builder: (context, state) => const WalletPage(),
@@ -64,6 +73,11 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: RoutePaths.addService,
         name: RouteNames.addService,
         builder: (context, state) => const AddServicePage(),
+      ),
+      GoRoute(
+        path: RoutePaths.notifications,
+        name: RouteNames.notifications,
+        builder: (context, state) => const NotificationsPage(),
       ),
       GoRoute(
         path: RoutePaths.profile,
