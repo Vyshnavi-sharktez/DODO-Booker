@@ -173,6 +173,20 @@ class _VendorFormDialogState extends State<VendorFormDialog> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
+                      // Profile photo (read-only in admin)
+                      if (widget.existing?.profileImageUrl != null) ...[
+                        Center(
+                          child: CircleAvatar(
+                            radius: 40,
+                            backgroundImage: NetworkImage(
+                              widget.existing!.profileImageUrl!,
+                            ),
+                            onBackgroundImageError: (err, st) {},
+                          ),
+                        ),
+                        const SizedBox(height: 20),
+                      ],
+
                       // Business Name + Owner Name
                       Row(
                         crossAxisAlignment: CrossAxisAlignment.start,

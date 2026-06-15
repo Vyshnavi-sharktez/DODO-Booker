@@ -11,6 +11,7 @@ class VendorProfile {
     required this.isActive,
     this.rating,
     required this.walletBalance,
+    this.profileImageUrl,
     this.createdAt,
     this.updatedAt,
   });
@@ -26,6 +27,7 @@ class VendorProfile {
   final bool isActive;
   final double? rating;
   final double walletBalance;
+  final String? profileImageUrl;
   final DateTime? createdAt;
   final DateTime? updatedAt;
 
@@ -42,6 +44,7 @@ class VendorProfile {
       isActive: map['is_active'] as bool? ?? true,
       rating: (map['rating'] as num?)?.toDouble(),
       walletBalance: (map['wallet_balance'] as num?)?.toDouble() ?? 0.0,
+      profileImageUrl: map['profile_image_url'] as String?,
       createdAt: _parseDate(map['created_at']),
       updatedAt: _parseDate(map['updated_at']),
     );

@@ -10,6 +10,7 @@ class Vendor {
   final bool isActive;
   final double? rating;
   final double walletBalance;
+  final String? profileImageUrl;
   final DateTime? createdAt;
   final DateTime? updatedAt;
 
@@ -25,6 +26,7 @@ class Vendor {
     required this.isActive,
     this.rating,
     this.walletBalance = 0.0,
+    this.profileImageUrl,
     this.createdAt,
     this.updatedAt,
   });
@@ -42,6 +44,7 @@ class Vendor {
       isActive: map['is_active'] as bool? ?? false,
       rating: (map['rating'] as num?)?.toDouble(),
       walletBalance: (map['wallet_balance'] as num?)?.toDouble() ?? 0.0,
+      profileImageUrl: map['profile_image_url'] as String?,
       createdAt: map['created_at'] != null
           ? DateTime.tryParse(map['created_at'] as String)
           : null,

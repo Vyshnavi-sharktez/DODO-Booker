@@ -9,6 +9,7 @@ abstract final class RouteNames {
   static const String addService = 'addService';
   static const String notifications = 'notifications';
   static const String profile = 'profile';
+  static const String documents = 'documents';
   static const String settings = 'settings';
 }
 
@@ -23,5 +24,6 @@ abstract final class RoutePaths {
   static const String addService = '/services/add';
   static const String notifications = '/notifications';
   static const String profile = '/profile';
+  static const String documents = '/documents';
   static const String settings = '/settings';
 }

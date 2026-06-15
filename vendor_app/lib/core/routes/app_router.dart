@@ -12,6 +12,7 @@ import '../../features/wallet/presentation/pages/wallet_page.dart';
 import '../../features/services/presentation/pages/services_page.dart';
 import '../../features/services/presentation/pages/add_service_page.dart';
 import '../../features/profile/presentation/pages/profile_page.dart';
+import '../../features/documents/presentation/pages/documents_page.dart';
 import '../../features/notifications/presentation/pages/notifications_page.dart';
 import '../../features/settings/presentation/pages/settings_page.dart';
 
@@ -50,7 +51,11 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: RoutePaths.bookings,
         name: RouteNames.bookings,
-        builder: (context, state) => const BookingsPage(),
+        builder: (context, state) {
+          final tab =
+              int.tryParse(state.uri.queryParameters['tab'] ?? '') ?? 0;
+          return BookingsPage(initialTabIndex: tab);
+        },
       ),
       GoRoute(
         path: RoutePaths.bookingDetail,
@@ -83,6 +88,11 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: RoutePaths.profile,
         name: RouteNames.profile,
         builder: (context, state) => const ProfilePage(),
+      ),
+      GoRoute(
+        path: RoutePaths.documents,
+        name: RouteNames.documents,
+        builder: (context, state) => const DocumentsPage(),
       ),
       GoRoute(
         path: RoutePaths.settings,

@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/network/supabase_client_provider.dart';
 import '../../../auth/presentation/providers/auth_controller.dart';
@@ -7,6 +8,7 @@ import '../../domain/models/vendor_profile.dart';
 import '../../domain/repositories/i_profile_repository.dart';
 import '../../domain/usecases/get_vendor_profile_usecase.dart';
 import '../../domain/usecases/update_vendor_profile_usecase.dart';
+import '../../domain/usecases/upload_profile_photo_usecase.dart';
 
 final profileDatasourceProvider = Provider<ProfileRemoteDatasource>((ref) {
   return ProfileRemoteDatasource(ref.watch(supabaseClientProvider));
@@ -24,8 +26,13 @@ final updateVendorProfileUseCaseProvider = Provider<UpdateVendorProfileUseCase>(
   return UpdateVendorProfileUseCase(ref.watch(profileRepositoryProvider));
 });
 
+final uploadProfilePhotoUseCaseProvider = Provider<UploadProfilePhotoUseCase>((ref) {
+  return UploadProfilePhotoUseCase(ref.watch(profileRepositoryProvider));
+});
+
 final vendorProfileProvider = FutureProvider<VendorProfile?>((ref) async {
   final user = ref.watch(currentVendorUserProvider);
+  debugPrint('[PROFILE-PROVIDER] user=${user == null ? "NULL" : '"${user.phone}" id=${user.id}'}');
   if (user == null) return null;
   return ref.read(getVendorProfileUseCaseProvider)(user.phone);
 });

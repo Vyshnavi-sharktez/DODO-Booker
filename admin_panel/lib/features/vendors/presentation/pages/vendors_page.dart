@@ -593,6 +593,13 @@ class _VendorRow extends StatelessWidget {
     required this.onToggle,
   });
 
+  static String _initials(String name) {
+    final parts = name.trim().split(RegExp(r'\s+'));
+    if (parts.isEmpty || parts.first.isEmpty) return '?';
+    if (parts.length == 1) return parts[0][0].toUpperCase();
+    return '${parts[0][0]}${parts[1][0]}'.toUpperCase();
+  }
+
   @override
   Widget build(BuildContext context) {
     final createdStr = vendor.createdAt != null
@@ -603,31 +610,42 @@ class _VendorRow extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       child: Row(
         children: [
-          // Business Name + Owner Name
+          // Avatar + Business Name + Owner Name
           Expanded(
             flex: 3,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+            child: Row(
               children: [
-                Text(
-                  vendor.businessName,
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w500,
-                    color: AppColors.textPrimary,
-                  ),
-                  overflow: TextOverflow.ellipsis,
+                _VendorAvatar(
+                  imageUrl: vendor.profileImageUrl,
+                  initials: _initials(vendor.businessName),
                 ),
-                if (vendor.ownerName != null &&
-                    vendor.ownerName!.isNotEmpty)
-                  Text(
-                    vendor.ownerName!,
-                    style: TextStyle(
-                      fontSize: 11,
-                      color: AppColors.textSecondary,
-                    ),
-                    overflow: TextOverflow.ellipsis,
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        vendor.businessName,
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w500,
+                          color: AppColors.textPrimary,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      if (vendor.ownerName != null &&
+                          vendor.ownerName!.isNotEmpty)
+                        Text(
+                          vendor.ownerName!,
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: AppColors.textSecondary,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                    ],
                   ),
+                ),
               ],
             ),
           ),
@@ -752,6 +770,32 @@ class _VendorRow extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _VendorAvatar extends StatelessWidget {
+  const _VendorAvatar({required this.imageUrl, required this.initials});
+  final String? imageUrl;
+  final String initials;
+
+  @override
+  Widget build(BuildContext context) {
+    return CircleAvatar(
+      radius: 18,
+      backgroundColor: AppColors.primaryLight,
+      backgroundImage: imageUrl != null ? NetworkImage(imageUrl!) : null,
+      onBackgroundImageError: imageUrl != null ? (err, st) {} : null,
+      child: imageUrl == null
+          ? Text(
+              initials,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.bold,
+                color: AppColors.primary,
+              ),
+            )
+          : null,
     );
   }
 }

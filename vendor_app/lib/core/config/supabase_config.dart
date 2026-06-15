@@ -5,3 +5,5 @@ abstract final class SupabaseConfig {
   static const String anonKey =
       'sb_publishable_6jGP7zViURbDBG-PiwsoJg_7FQSfeWz';
 }
+
+

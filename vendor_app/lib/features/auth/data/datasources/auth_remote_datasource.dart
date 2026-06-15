@@ -55,11 +55,26 @@ class AuthRemoteDatasource {
   // Fetches the vendor row from the vendors table by phone.
 
   Future<Map<String, dynamic>?> getVendorByPhone(String phone) async {
-    return _client
-        .from('vendors')
-        .select()
-        .eq('phone', phone)
-        .maybeSingle();
+    debugPrint('[AUTH] getVendorByPhone — value   : "$phone"');
+    debugPrint('[AUTH] getVendorByPhone — length  : ${phone.length}');
+    debugPrint('[AUTH] getVendorByPhone — codeUnits: ${phone.codeUnits}');
+    try {
+      final rows = await _client
+          .from('vendors')
+          .select()
+          .eq('phone', phone)
+          .limit(1);
+      debugPrint('[AUTH] getVendorByPhone — rowCount : ${rows.length}');
+      if (rows.isEmpty) {
+        debugPrint('[AUTH] getVendorByPhone — result  : NULL (no match)');
+        return null;
+      }
+      debugPrint('[AUTH] getVendorByPhone — result  : FOUND id=${rows.first['id']}');
+      return rows.first;
+    } catch (e) {
+      debugPrint('[AUTH] getVendorByPhone — EXCEPTION: $e');
+      rethrow;
+    }
   }
 
   // ── Session ──────────────────────────────────────────────────────────────────

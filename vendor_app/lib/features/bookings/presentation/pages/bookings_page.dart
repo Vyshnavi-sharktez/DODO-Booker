@@ -9,7 +9,9 @@ import '../providers/bookings_provider.dart';
 import '../widgets/booking_card.dart';
 
 class BookingsPage extends ConsumerStatefulWidget {
-  const BookingsPage({super.key});
+  const BookingsPage({super.key, this.initialTabIndex = 0});
+
+  final int initialTabIndex;
 
   @override
   ConsumerState<BookingsPage> createState() => _BookingsPageState();
@@ -25,12 +27,17 @@ class _BookingsPageState extends ConsumerState<BookingsPage>
     'Completed',
     'Rejected',
     'Cancelled',
+    'Today',
   ];
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: _tabs.length, vsync: this);
+    _tabController = TabController(
+      length: _tabs.length,
+      vsync: this,
+      initialIndex: widget.initialTabIndex.clamp(0, _tabs.length - 1),
+    );
   }
 
   @override
@@ -75,6 +82,7 @@ class _BookingsPageState extends ConsumerState<BookingsPage>
                   _buildBookingsList(bookings, 'completed'),
                   _buildBookingsList(bookings, 'rejected'),
                   _buildBookingsList(bookings, 'cancelled'),
+                  _buildTodayList(bookings),
                 ],
               ),
             ),
@@ -97,7 +105,34 @@ class _BookingsPageState extends ConsumerState<BookingsPage>
     );
   }
 
+  Widget _buildTodayList(List<Booking> bookings) {
+    final now = DateTime.now();
+    final filtered = bookings.where((b) {
+      final d = b.serviceDate;
+      return d != null &&
+          d.year == now.year &&
+          d.month == now.month &&
+          d.day == now.day;
+    }).toList();
+    if (filtered.isEmpty) return _emptyState('today');
+    return RefreshIndicator(
+      onRefresh: () async => ref.invalidate(vendorBookingsProvider),
+      child: ListView.builder(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        itemCount: filtered.length,
+        itemBuilder: (_, i) => BookingCard(booking: filtered[i]),
+      ),
+    );
+  }
+
   Widget _emptyState(String status) {
+    if (status == 'today') {
+      return const EmptyStateView(
+        icon: Icons.today_outlined,
+        title: 'No bookings today',
+        subtitle: 'Bookings scheduled for today will appear here.',
+      );
+    }
     final label = status.replaceAll('_', ' ');
     final subtitle = switch (status) {
       'assigned' => 'New bookings will appear here once assigned to you.',

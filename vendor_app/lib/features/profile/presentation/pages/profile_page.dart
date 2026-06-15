@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import '../../../../core/constants/app_colors.dart';
+import '../../../../core/routes/route_names.dart';
 import '../../../../core/widgets/vendor_scaffold.dart';
 import '../../domain/models/vendor_profile.dart';
 import '../providers/profile_provider.dart';
@@ -210,6 +212,45 @@ class _ProfileBody extends StatelessWidget {
                 value: DateFormat('d MMM yyyy').format(profile.updatedAt!),
               ),
           ],
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                child: Text(
+                  'Verification',
+                  style: Theme.of(context)
+                      .textTheme
+                      .labelLarge
+                      ?.copyWith(color: AppColors.primary),
+                ),
+              ),
+              Card(
+                elevation: 0,
+                color: AppColors.surface,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  side: const BorderSide(color: AppColors.border),
+                ),
+                child: ListTile(
+                  leading: const Icon(
+                    Icons.description_outlined,
+                    color: AppColors.primary,
+                  ),
+                  title: const Text('My Documents'),
+                  subtitle: const Text('Aadhaar, PAN, GST, Business License'),
+                  trailing: const Icon(
+                    Icons.chevron_right_rounded,
+                    color: AppColors.textSecondary,
+                  ),
+                  onTap: () => context.push(RoutePaths.documents),
+                ),
+              ),
+            ],
+          ),
         ),
         const SizedBox(height: 16),
       ],
