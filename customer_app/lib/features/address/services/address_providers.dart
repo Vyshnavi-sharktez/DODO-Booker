@@ -31,6 +31,8 @@ class AddressNotifier
     required String city,
     required String province,
     required String pincode,
+    double? latitude,
+    double? longitude,
   }) async {
     final isDefault = (state.valueOrNull ?? []).isEmpty;
     final address = await _service.createAddress(
@@ -41,6 +43,8 @@ class AddressNotifier
       state: province,
       pincode: pincode,
       isDefault: isDefault,
+      latitude: latitude,
+      longitude: longitude,
     );
     final current = state.valueOrNull ?? [];
     state = AsyncValue.data([...current, address]);
@@ -55,6 +59,8 @@ class AddressNotifier
     required String city,
     required String province,
     required String pincode,
+    double? latitude,
+    double? longitude,
   }) async {
     final updated = await _service.updateAddress(
       id,
@@ -64,6 +70,8 @@ class AddressNotifier
       city: city,
       state: province,
       pincode: pincode,
+      latitude: latitude,
+      longitude: longitude,
     );
     final current = state.valueOrNull ?? [];
     state = AsyncValue.data(

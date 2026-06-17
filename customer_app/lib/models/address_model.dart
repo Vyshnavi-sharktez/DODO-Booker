@@ -7,6 +7,8 @@ class AddressModel {
   final String state;
   final String pincode;
   final bool isDefault;
+  final double? latitude;
+  final double? longitude;
 
   const AddressModel({
     required this.id,
@@ -17,6 +19,8 @@ class AddressModel {
     required this.state,
     required this.pincode,
     this.isDefault = false,
+    this.latitude,
+    this.longitude,
   });
 
   String get fullAddress {
@@ -25,6 +29,8 @@ class AddressModel {
   }
 
   String get shortAddress => '$line1, $city';
+
+  bool get hasCoordinates => latitude != null && longitude != null;
 
   factory AddressModel.fromJson(Map<String, dynamic> json) {
     return AddressModel(
@@ -36,6 +42,34 @@ class AddressModel {
       state: json['state'] as String,
       pincode: json['pincode'] as String,
       isDefault: (json['is_default'] as bool?) ?? false,
+      latitude: (json['latitude'] as num?)?.toDouble(),
+      longitude: (json['longitude'] as num?)?.toDouble(),
+    );
+  }
+
+  AddressModel copyWith({
+    String? id,
+    String? label,
+    String? line1,
+    String? line2,
+    String? city,
+    String? state,
+    String? pincode,
+    bool? isDefault,
+    double? latitude,
+    double? longitude,
+  }) {
+    return AddressModel(
+      id: id ?? this.id,
+      label: label ?? this.label,
+      line1: line1 ?? this.line1,
+      line2: line2 ?? this.line2,
+      city: city ?? this.city,
+      state: state ?? this.state,
+      pincode: pincode ?? this.pincode,
+      isDefault: isDefault ?? this.isDefault,
+      latitude: latitude ?? this.latitude,
+      longitude: longitude ?? this.longitude,
     );
   }
 }

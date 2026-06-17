@@ -57,6 +57,8 @@ class CheckoutService {
           'total_amount': totalAmount,
           'address': address.fullAddress,
           'notes': slot.label,
+          'latitude': ?address.latitude,
+          'longitude': ?address.longitude,
         })
         .select()
         .single();

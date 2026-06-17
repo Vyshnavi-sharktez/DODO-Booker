@@ -27,6 +27,8 @@ class VendorsRepository {
     required bool isActive,
     double? rating,
     double walletBalance = 0.0,
+    double? latitude,
+    double? longitude,
   }) async {
     final data = await _supabase
         .from('vendors')
@@ -41,6 +43,8 @@ class VendorsRepository {
           'is_active': isActive,
           'rating': rating,
           'wallet_balance': walletBalance,
+          'latitude': ?latitude,
+          'longitude': ?longitude,
         })
         .select()
         .single();
@@ -59,6 +63,8 @@ class VendorsRepository {
     required bool isActive,
     double? rating,
     double? walletBalance,
+    double? latitude,
+    double? longitude,
   }) async {
     final data = await _supabase
         .from('vendors')
@@ -73,6 +79,8 @@ class VendorsRepository {
           'is_active': isActive,
           'rating': rating,
           'wallet_balance': ?walletBalance,
+          'latitude': ?latitude,
+          'longitude': ?longitude,
         })
         .eq('id', id)
         .select()

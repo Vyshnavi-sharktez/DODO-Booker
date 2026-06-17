@@ -1,6 +1,9 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:geolocator/geolocator.dart';
 import '../../../../core/constants/app_colors.dart';
+import '../../../../core/services/nominatim_service.dart';
 import '../../../auth/presentation/providers/auth_controller.dart';
 import '../../domain/models/vendor_profile.dart';
 import '../providers/profile_provider.dart';
@@ -21,6 +24,11 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
   late final TextEditingController _cityCtrl;
   late final TextEditingController _addressCtrl;
 
+  double? _latitude;
+  double? _longitude;
+  bool _isLocating = false;
+  String? _locationError;
+
   @override
   void initState() {
     super.initState();
@@ -31,6 +39,8 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
     _emailCtrl = TextEditingController(text: widget.profile.email ?? '');
     _cityCtrl = TextEditingController(text: widget.profile.city ?? '');
     _addressCtrl = TextEditingController(text: widget.profile.address ?? '');
+    _latitude = widget.profile.latitude;
+    _longitude = widget.profile.longitude;
   }
 
   @override
@@ -41,6 +51,67 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
     _cityCtrl.dispose();
     _addressCtrl.dispose();
     super.dispose();
+  }
+
+  Future<void> _useCurrentLocation() async {
+    setState(() {
+      _isLocating = true;
+      _locationError = null;
+    });
+    try {
+      final enabled = await Geolocator.isLocationServiceEnabled();
+      if (!enabled) {
+        setState(() => _locationError =
+            'Location services are disabled. Please enable GPS.');
+        await Geolocator.openLocationSettings();
+        return;
+      }
+      var perm = await Geolocator.checkPermission();
+      if (perm == LocationPermission.denied) {
+        perm = await Geolocator.requestPermission();
+      }
+      if (perm == LocationPermission.denied) {
+        setState(() => _locationError = 'Location permission denied.');
+        return;
+      }
+      if (perm == LocationPermission.deniedForever) {
+        setState(
+            () => _locationError = 'Location permission permanently denied.');
+        await Geolocator.openAppSettings();
+        return;
+      }
+      final pos = await Geolocator.getCurrentPosition(
+        locationSettings:
+            const LocationSettings(accuracy: LocationAccuracy.high),
+      ).timeout(const Duration(seconds: 10));
+      try {
+        final addr = await NominatimService()
+            .reverseGeocode(pos.latitude, pos.longitude);
+        if (addr.city?.isNotEmpty ?? false) {
+          _cityCtrl.text = addr.city!;
+        }
+        if (addr.line1?.isNotEmpty ?? false) {
+          _addressCtrl.text = addr.line1!;
+        }
+      } catch (_) {
+        // Geocoding failed — coordinates still captured, fill fields manually
+      }
+      setState(() {
+        _latitude = pos.latitude;
+        _longitude = pos.longitude;
+        _locationError = null;
+      });
+    } on TimeoutException {
+      setState(() => _locationError = 'Location request timed out. Try again.');
+    } on LocationServiceDisabledException {
+      setState(
+          () => _locationError = 'Location services are disabled. Enable GPS.');
+      await Geolocator.openLocationSettings();
+    } catch (_) {
+      setState(() => _locationError = 'Could not get location. Try again.');
+    } finally {
+      if (mounted) setState(() => _isLocating = false);
+    }
   }
 
   void _submit() {
@@ -56,6 +127,8 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
         'city': _cityCtrl.text.trim(),
         'address': _addressCtrl.text.trim(),
         'updated_at': DateTime.now().toIso8601String(),
+        'latitude': ?_latitude,
+        'longitude': ?_longitude,
       },
     );
   }
@@ -145,6 +218,57 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
                       ? 'Address is required'
                       : null,
                 ),
+                const SizedBox(height: 12),
+
+                // Use My Location
+                OutlinedButton.icon(
+                  onPressed:
+                      (_isLocating || isSaving) ? null : _useCurrentLocation,
+                  icon: _isLocating
+                      ? const SizedBox.square(
+                          dimension: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.my_location_rounded),
+                  label: Text(_isLocating ? 'Locating…' : 'Use My Location'),
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                  ),
+                ),
+                if (_locationError != null) ...[
+                  const SizedBox(height: 6),
+                  Text(
+                    _locationError!,
+                    style: TextStyle(fontSize: 12, color: AppColors.error),
+                  ),
+                ],
+                if (_latitude != null && _longitude != null) ...[
+                  const SizedBox(height: 6),
+                  Row(
+                    children: [
+                      Icon(Icons.location_on_rounded,
+                          size: 14, color: AppColors.success),
+                      const SizedBox(width: 4),
+                      Expanded(
+                        child: Text(
+                          'Pinned: ${_latitude!.toStringAsFixed(5)}, '
+                          '${_longitude!.toStringAsFixed(5)}',
+                          style: TextStyle(
+                              fontSize: 12, color: AppColors.success),
+                        ),
+                      ),
+                      GestureDetector(
+                        onTap: () =>
+                            setState(() {
+                              _latitude = null;
+                              _longitude = null;
+                            }),
+                        child: Icon(Icons.close_rounded,
+                            size: 14, color: AppColors.textSecondary),
+                      ),
+                    ],
+                  ),
+                ],
                 const SizedBox(height: 32),
                 FilledButton.icon(
                   onPressed: isSaving ? null : _submit,

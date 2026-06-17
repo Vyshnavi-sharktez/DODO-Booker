@@ -13,6 +13,8 @@ class Vendor {
   final String? profileImageUrl;
   final DateTime? createdAt;
   final DateTime? updatedAt;
+  final double? latitude;
+  final double? longitude;
 
   const Vendor({
     required this.id,
@@ -29,6 +31,8 @@ class Vendor {
     this.profileImageUrl,
     this.createdAt,
     this.updatedAt,
+    this.latitude,
+    this.longitude,
   });
 
   factory Vendor.fromMap(Map<String, dynamic> map) {
@@ -51,6 +55,8 @@ class Vendor {
       updatedAt: map['updated_at'] != null
           ? DateTime.tryParse(map['updated_at'] as String)
           : null,
+      latitude: (map['latitude'] as num?)?.toDouble(),
+      longitude: (map['longitude'] as num?)?.toDouble(),
     );
   }
 
@@ -65,6 +71,8 @@ class Vendor {
     bool? isActive,
     double? rating,
     double? walletBalance,
+    double? latitude,
+    double? longitude,
   }) {
     return Vendor(
       id: id,
@@ -80,6 +88,8 @@ class Vendor {
       walletBalance: walletBalance ?? this.walletBalance,
       createdAt: createdAt,
       updatedAt: updatedAt,
+      latitude: latitude ?? this.latitude,
+      longitude: longitude ?? this.longitude,
     );
   }
 }

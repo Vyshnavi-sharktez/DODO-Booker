@@ -44,6 +44,8 @@ class Booking {
   final String? rejectionReason;
   final DateTime? rejectedAt;
   final List<BookingItem> items;
+  final double? latitude;
+  final double? longitude;
 
   const Booking({
     required this.id,
@@ -63,6 +65,8 @@ class Booking {
     this.rejectionReason,
     this.rejectedAt,
     this.items = const [],
+    this.latitude,
+    this.longitude,
   });
 
   factory Booking.fromMap(Map<String, dynamic> map) {
@@ -111,6 +115,8 @@ class Booking {
           ? DateTime.tryParse(map['rejected_at'] as String)
           : null,
       items: items,
+      latitude: (map['latitude'] as num?)?.toDouble(),
+      longitude: (map['longitude'] as num?)?.toDouble(),
     );
   }
 
@@ -138,6 +144,8 @@ class Booking {
       rejectionReason: rejectionReason,
       rejectedAt: rejectedAt,
       items: items,
+      latitude: latitude,
+      longitude: longitude,
     );
   }
 }

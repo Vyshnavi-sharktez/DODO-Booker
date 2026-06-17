@@ -32,6 +32,8 @@ class VendorsNotifier extends StateNotifier<AsyncValue<List<Vendor>>> {
     required bool isActive,
     double? rating,
     double walletBalance = 0.0,
+    double? latitude,
+    double? longitude,
   }) async {
     await _repo.createVendor(
       businessName: businessName,
@@ -44,6 +46,8 @@ class VendorsNotifier extends StateNotifier<AsyncValue<List<Vendor>>> {
       isActive: isActive,
       rating: rating,
       walletBalance: walletBalance,
+      latitude: latitude,
+      longitude: longitude,
     );
     await _load();
   }
@@ -60,6 +64,8 @@ class VendorsNotifier extends StateNotifier<AsyncValue<List<Vendor>>> {
     required bool isActive,
     double? rating,
     double? walletBalance,
+    double? latitude,
+    double? longitude,
   }) async {
     await _repo.updateVendor(
       id,
@@ -73,6 +79,8 @@ class VendorsNotifier extends StateNotifier<AsyncValue<List<Vendor>>> {
       isActive: isActive,
       rating: rating,
       walletBalance: walletBalance,
+      latitude: latitude,
+      longitude: longitude,
     );
     await _load();
   }

@@ -42,6 +42,8 @@ class AddressService {
     required String state,
     required String pincode,
     bool isDefault = false,
+    double? latitude,
+    double? longitude,
   }) async {
     final customerId = await _getCustomerId();
     final payload = {
@@ -54,6 +56,8 @@ class AddressService {
       'state': state,
       'pincode': pincode,
       'is_default': isDefault,
+      'latitude': ?latitude,
+      'longitude': ?longitude,
     };
     debugPrint('[DODO][Address] Insert payload: $payload');
     final data = await _client
@@ -61,7 +65,7 @@ class AddressService {
         .insert(payload)
         .select()
         .single();
-    debugPrint('[DODO][Address] Insert success: id=${data['id']}');
+    debugPrint('[DODO][Address] Insert success: id=${data['id']} lat=$latitude lng=$longitude');
     return AddressModel.fromJson(data);
   }
 
@@ -73,8 +77,10 @@ class AddressService {
     required String city,
     required String state,
     required String pincode,
+    double? latitude,
+    double? longitude,
   }) async {
-    debugPrint('[DODO][Address] Updating address: id=$id');
+    debugPrint('[DODO][Address] Updating address: id=$id lat=$latitude lng=$longitude');
     final data = await _client
         .from('customer_addresses')
         .update({
@@ -85,6 +91,8 @@ class AddressService {
           'city': city,
           'state': state,
           'pincode': pincode,
+          'latitude': ?latitude,
+          'longitude': ?longitude,
         })
         .eq('id', id)
         .select()

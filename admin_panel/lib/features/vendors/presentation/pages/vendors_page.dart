@@ -83,6 +83,8 @@ class _VendorsPageState extends ConsumerState<VendorsPage> {
           required isActive,
           rating,
           walletBalance,
+          latitude,
+          longitude,
         }) async {
           await ref.read(vendorsNotifierProvider.notifier).createVendor(
                 businessName: businessName,
@@ -95,6 +97,8 @@ class _VendorsPageState extends ConsumerState<VendorsPage> {
                 isActive: isActive,
                 rating: rating,
                 walletBalance: walletBalance ?? 0.0,
+                latitude: latitude,
+                longitude: longitude,
               );
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
@@ -123,6 +127,8 @@ class _VendorsPageState extends ConsumerState<VendorsPage> {
           required isActive,
           rating,
           walletBalance,
+          latitude,
+          longitude,
         }) async {
           await ref.read(vendorsNotifierProvider.notifier).updateVendor(
                 vendor.id,
@@ -136,6 +142,8 @@ class _VendorsPageState extends ConsumerState<VendorsPage> {
                 isActive: isActive,
                 rating: rating,
                 walletBalance: walletBalance,
+                latitude: latitude,
+                longitude: longitude,
               );
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(

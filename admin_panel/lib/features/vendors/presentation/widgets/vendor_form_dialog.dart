@@ -1,7 +1,12 @@
+import 'dart:async';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:geolocator/geolocator.dart';
+import '../../../../core/services/nominatim_service.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../domain/models/vendor.dart';
+import 'vendor_location_picker_dialog.dart';
 
 const _statusOptions = [
   ('pending', 'Pending'),
@@ -23,6 +28,8 @@ class VendorFormDialog extends StatefulWidget {
     required bool isActive,
     double? rating,
     double? walletBalance,
+    double? latitude,
+    double? longitude,
   }) onSave;
 
   const VendorFormDialog({
@@ -48,6 +55,10 @@ class _VendorFormDialogState extends State<VendorFormDialog> {
   late String _status;
   late bool _isActive;
   bool _saving = false;
+  double? _latitude;
+  double? _longitude;
+  bool _isLocating = false;
+  String? _locationError;
 
   @override
   void initState() {
@@ -67,6 +78,8 @@ class _VendorFormDialogState extends State<VendorFormDialog> {
     );
     _status = e?.status ?? 'pending';
     _isActive = e?.isActive ?? false;
+    _latitude = e?.latitude;
+    _longitude = e?.longitude;
   }
 
   @override
@@ -80,6 +93,81 @@ class _VendorFormDialogState extends State<VendorFormDialog> {
     _rating.dispose();
     _walletBalance.dispose();
     super.dispose();
+  }
+
+  Future<void> _useCurrentLocation() async {
+    setState(() {
+      _isLocating = true;
+      _locationError = null;
+    });
+    try {
+      final enabled = await Geolocator.isLocationServiceEnabled();
+      if (!enabled) {
+        setState(() => _locationError = 'Location services are disabled.');
+        return;
+      }
+      var perm = await Geolocator.checkPermission();
+      if (perm == LocationPermission.denied) {
+        perm = await Geolocator.requestPermission();
+      }
+      if (perm == LocationPermission.denied) {
+        setState(() => _locationError = 'Location permission denied.');
+        return;
+      }
+      if (perm == LocationPermission.deniedForever) {
+        setState(() => _locationError = kIsWeb
+            ? 'Location blocked. Enable it in your browser site settings and reload.'
+            : 'Location permission permanently denied. Enable it in app settings.');
+        return;
+      }
+      final pos = await Geolocator.getCurrentPosition(
+        locationSettings:
+            const LocationSettings(accuracy: LocationAccuracy.high),
+      ).timeout(const Duration(seconds: 10));
+      try {
+        final addr = await NominatimService()
+            .reverseGeocode(pos.latitude, pos.longitude);
+        if (addr.city?.isNotEmpty ?? false) {
+          _city.text = addr.city!;
+        }
+        if (addr.line1?.isNotEmpty ?? false) {
+          _address.text = addr.line1!;
+        }
+      } catch (_) {
+        // Geocoding failed — coordinates still captured
+      }
+      setState(() {
+        _latitude = pos.latitude;
+        _longitude = pos.longitude;
+        _locationError = null;
+      });
+    } on TimeoutException {
+      setState(() => _locationError = 'Location request timed out. Try again.');
+    } on LocationServiceDisabledException {
+      setState(() => _locationError = 'Location services are disabled.');
+    } catch (e) {
+      setState(() => _locationError = 'Could not get location.');
+    } finally {
+      if (mounted) setState(() => _isLocating = false);
+    }
+  }
+
+  Future<void> _pickOnMap() async {
+    final result = await showDialog<VendorLocationPickerResult>(
+      context: context,
+      builder: (_) => VendorLocationPickerDialog(
+        initialLatitude: _latitude,
+        initialLongitude: _longitude,
+      ),
+    );
+    if (result == null || !mounted) return;
+    setState(() {
+      _latitude = result.latitude;
+      _longitude = result.longitude;
+      _locationError = null;
+      if (result.city?.isNotEmpty ?? false) _city.text = result.city!;
+      if (result.address?.isNotEmpty ?? false) _address.text = result.address!;
+    });
   }
 
   Future<void> _submit() async {
@@ -99,6 +187,8 @@ class _VendorFormDialogState extends State<VendorFormDialog> {
         isActive: _isActive,
         rating: ratingText.isEmpty ? null : double.tryParse(ratingText),
         walletBalance: walletText.isEmpty ? null : double.tryParse(walletText),
+        latitude: _latitude,
+        longitude: _longitude,
       );
       if (mounted) Navigator.of(context).pop();
     } catch (e) {
@@ -333,6 +423,72 @@ class _VendorFormDialogState extends State<VendorFormDialog> {
                         maxLines: 2,
                         textCapitalization: TextCapitalization.sentences,
                       ),
+                      const SizedBox(height: 12),
+
+                      // Location buttons
+                      Row(
+                        children: [
+                          OutlinedButton.icon(
+                            onPressed: (_isLocating || _saving)
+                                ? null
+                                : _useCurrentLocation,
+                            icon: _isLocating
+                                ? const SizedBox.square(
+                                    dimension: 14,
+                                    child: CircularProgressIndicator(
+                                        strokeWidth: 2),
+                                  )
+                                : const Icon(Icons.my_location_rounded,
+                                    size: 16),
+                            label: Text(
+                              _isLocating ? 'Locating…' : 'Use Current Location',
+                              style: const TextStyle(fontSize: 13),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          OutlinedButton.icon(
+                            onPressed: _saving ? null : _pickOnMap,
+                            icon: const Icon(Icons.map_outlined, size: 16),
+                            label: const Text(
+                              'Pick on Map',
+                              style: TextStyle(fontSize: 13),
+                            ),
+                          ),
+                        ],
+                      ),
+                      if (_locationError != null) ...[
+                        const SizedBox(height: 6),
+                        Text(
+                          _locationError!,
+                          style: TextStyle(
+                              fontSize: 12, color: AppColors.error),
+                        ),
+                      ],
+                      if (_latitude != null && _longitude != null) ...[
+                        const SizedBox(height: 6),
+                        Row(
+                          children: [
+                            Icon(Icons.location_on_rounded,
+                                size: 14, color: AppColors.success),
+                            const SizedBox(width: 4),
+                            Text(
+                              '${_latitude!.toStringAsFixed(5)}, '
+                              '${_longitude!.toStringAsFixed(5)}',
+                              style: TextStyle(
+                                  fontSize: 12, color: AppColors.success),
+                            ),
+                            const SizedBox(width: 8),
+                            InkWell(
+                              onTap: () => setState(() {
+                                _latitude = null;
+                                _longitude = null;
+                              }),
+                              child: Icon(Icons.close_rounded,
+                                  size: 14, color: AppColors.textSecondary),
+                            ),
+                          ],
+                        ),
+                      ],
                       const SizedBox(height: 16),
 
                       // Rating + Wallet Balance

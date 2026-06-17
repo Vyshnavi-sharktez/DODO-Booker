@@ -14,6 +14,8 @@ class VendorProfile {
     this.profileImageUrl,
     this.createdAt,
     this.updatedAt,
+    this.latitude,
+    this.longitude,
   });
 
   final String id;
@@ -30,6 +32,8 @@ class VendorProfile {
   final String? profileImageUrl;
   final DateTime? createdAt;
   final DateTime? updatedAt;
+  final double? latitude;
+  final double? longitude;
 
   factory VendorProfile.fromMap(Map<String, dynamic> map) {
     return VendorProfile(
@@ -47,6 +51,8 @@ class VendorProfile {
       profileImageUrl: map['profile_image_url'] as String?,
       createdAt: _parseDate(map['created_at']),
       updatedAt: _parseDate(map['updated_at']),
+      latitude: (map['latitude'] as num?)?.toDouble(),
+      longitude: (map['longitude'] as num?)?.toDouble(),
     );
   }
 
