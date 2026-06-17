@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../models/service_model.dart';
 import '../widgets/service_image_carousel.dart';
@@ -8,6 +9,9 @@ import '../widgets/faq_section.dart';
 import '../../booking/utils/booking_gate.dart';
 import '../../wishlist/widgets/heart_button.dart';
 import '../../reviews/widgets/service_reviews_section.dart';
+import '../../cart/providers/cart_provider.dart';
+import '../../auth/providers/auth_provider.dart';
+import '../../auth/utils/auth_modal_gate.dart';
 
 class ServiceDetailsScreen extends ConsumerWidget {
   final ServiceModel service;
@@ -203,6 +207,54 @@ class _BookingBar extends ConsumerWidget {
 
   const _BookingBar({required this.service});
 
+  Future<void> _addToCart(BuildContext context, WidgetRef ref) async {
+    // ── Auth guard ───────────────────────────────────────────────────────────
+    if (!ref.read(isAuthenticatedProvider)) {
+      final proceed = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16)),
+          title: const Text('Login Required'),
+          content: const Text(
+              'Please log in to add items to your cart.'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(ctx).pop(true),
+              child: const Text('Login'),
+            ),
+          ],
+        ),
+      );
+      if (!context.mounted || proceed != true) return;
+
+      final authed = await requireAuth(context, ref);
+      if (!context.mounted || !authed) return;
+    }
+
+    // ── Add item ─────────────────────────────────────────────────────────────
+    ref.read(cartProvider.notifier).addToCart(service);
+
+    // ── Feedback ─────────────────────────────────────────────────────────────
+    if (!context.mounted) return;
+    final currentPath = GoRouterState.of(context).uri.path;
+    if (currentPath == '/cart') return; // already visible — no snackbar needed
+
+    ScaffoldMessenger.of(context)
+      ..clearSnackBars()
+      ..showSnackBar(
+        const SnackBar(
+          content: Text('Added to cart'),
+          duration: Duration(seconds: 2),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final tt = Theme.of(context).textTheme;
@@ -243,7 +295,17 @@ class _BookingBar extends ConsumerWidget {
               ),
             ],
           ),
-          const SizedBox(width: 16),
+          const SizedBox(width: 12),
+          OutlinedButton.icon(
+            onPressed: () => _addToCart(context, ref),
+            icon: const Icon(Icons.shopping_cart_outlined, size: 16),
+            label: const Text('Add'),
+            style: OutlinedButton.styleFrom(
+              minimumSize: const Size(0, 48),
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+            ),
+          ),
+          const SizedBox(width: 8),
           Expanded(
             child: FilledButton(
               onPressed: () => launchBookingFlow(context, ref, service),

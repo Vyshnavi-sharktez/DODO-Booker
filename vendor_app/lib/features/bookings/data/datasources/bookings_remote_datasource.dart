@@ -5,10 +5,18 @@ class BookingsRemoteDatasource {
   const BookingsRemoteDatasource(this._client);
   final SupabaseClient _client;
 
-  static const _select =
-      'id, booking_number, customer_id, vendor_id, service_date, '
-      'status, subtotal, discount_amount, total_amount, '
-      'address, notes, created_at, rejection_reason, rejected_at';
+  static const _select = '''
+    id, booking_number, customer_id, vendor_id, service_date,
+    status, subtotal, discount_amount, total_amount,
+    address, notes, created_at, rejection_reason, rejected_at,
+    booking_items(
+      service_id,
+      quantity,
+      unit_price,
+      total_price,
+      services(id, name)
+    )
+  ''';
 
   Future<List<Map<String, dynamic>>> fetchVendorBookings(
     String vendorId,

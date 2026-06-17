@@ -1,4 +1,5 @@
 import 'address_model.dart';
+import 'booking_item.dart';
 import 'booking_status_event.dart';
 
 class BookingStatus {
@@ -55,6 +56,7 @@ class MyBookingModel {
   final String serviceName;
   final String? categoryName;
   final String? subcategoryName;
+  final List<BookingItem> items;
   final AddressModel address;
   final DateTime scheduledDate;
   final String timeSlot;
@@ -73,6 +75,7 @@ class MyBookingModel {
     required this.serviceName,
     this.categoryName,
     this.subcategoryName,
+    this.items = const [],
     required this.address,
     required this.scheduledDate,
     required this.timeSlot,
@@ -106,11 +109,14 @@ class MyBookingModel {
   factory MyBookingModel.fromJson(Map<String, dynamic> json) {
     final createdAtStr = json['created_at'] as String;
 
-    // ── Service info from booking_items join ──────────────────────────────
-    final items = json['booking_items'] as List<dynamic>?;
-    final firstItem = (items?.isNotEmpty ?? false)
-        ? items![0] as Map<String, dynamic>?
-        : null;
+    // ── Parse all booking_items ───────────────────────────────────────────
+    final rawItems = json['booking_items'] as List<dynamic>? ?? [];
+    final bookingItems = rawItems
+        .map((e) => BookingItem.fromJson(e as Map<String, dynamic>))
+        .toList();
+
+    final firstItem =
+        rawItems.isNotEmpty ? rawItems[0] as Map<String, dynamic> : null;
     final serviceData = firstItem?['services'] as Map<String, dynamic>?;
     final categoryData = serviceData?['categories'] as Map<String, dynamic>?;
     final subCategoryData =
@@ -120,11 +126,23 @@ class MyBookingModel {
     final serviceId = serviceData?['id'] as String? ??
         (json['service_id'] as String?) ??
         json['id'] as String;
-    final serviceName = serviceData?['name'] as String? ??
-        _serviceNameFromNotes(notes) ??
-        '';
 
-    // ── Time slot from notes: "Service Name · 10:00 AM" ──────────────────
+    // For multi-item bookings: "AC Service + 2 more"
+    final String serviceName;
+    if (bookingItems.isEmpty) {
+      serviceName = _serviceNameFromNotes(notes) ?? '';
+    } else if (bookingItems.length == 1) {
+      serviceName = bookingItems.first.serviceName.isNotEmpty
+          ? bookingItems.first.serviceName
+          : (_serviceNameFromNotes(notes) ?? '');
+    } else {
+      final first = bookingItems.first.serviceName;
+      serviceName = first.isNotEmpty
+          ? '$first + ${bookingItems.length - 1} more'
+          : '${bookingItems.length} services';
+    }
+
+    // ── Time slot from notes: "Service Name · 10:00 AM" or just the slot ─
     final timeSlot =
         (json['time_slot'] as String?) ?? _timeSlotFromNotes(notes) ?? '';
 
@@ -140,6 +158,7 @@ class MyBookingModel {
       serviceName: serviceName,
       categoryName: categoryData?['name'] as String?,
       subcategoryName: subCategoryData?['name'] as String?,
+      items: bookingItems,
       address: address,
       scheduledDate: DateTime.parse(
         ((json['scheduled_date'] ?? json['service_date']) as String?) ??

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/widgets/app_modal_dialog.dart';
+import '../../../models/booking_item.dart';
 import '../../../models/my_booking_model.dart';
 import '../services/bookings_providers.dart';
 import '../widgets/booking_status_timeline.dart';
@@ -341,13 +342,35 @@ class _ServiceInfoCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final items = booking.items;
+
+    // Multi-service: list each booking item
+    if (items.length > 1) {
+      return _SectionCard(
+        title: 'SERVICES (${items.length})',
+        children: [
+          for (int i = 0; i < items.length; i++) ...[
+            _BookingItemRow(item: items[i], index: i + 1),
+            if (i < items.length - 1)
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 6),
+                child: Divider(height: 0),
+              ),
+          ],
+        ],
+      );
+    }
+
+    // Single service: original display
     return _SectionCard(
       title: 'SERVICE INFORMATION',
       children: [
         _DetailRow(
           icon: Icons.home_repair_service_rounded,
           label: 'Service',
-          value: booking.serviceName,
+          value: items.isNotEmpty && items.first.serviceName.isNotEmpty
+              ? items.first.serviceName
+              : booking.serviceName,
         ),
         if (booking.categoryName != null)
           _DetailRow(
@@ -361,6 +384,76 @@ class _ServiceInfoCard extends StatelessWidget {
             label: 'Subcategory',
             value: booking.subcategoryName!,
           ),
+      ],
+    );
+  }
+}
+
+class _BookingItemRow extends StatelessWidget {
+  final BookingItem item;
+  final int index;
+
+  const _BookingItemRow({required this.item, required this.index});
+
+  @override
+  Widget build(BuildContext context) {
+    final tt = Theme.of(context).textTheme;
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          width: 24,
+          height: 24,
+          decoration: BoxDecoration(
+            color: AppColors.primaryLight,
+            borderRadius: BorderRadius.circular(6),
+          ),
+          child: Center(
+            child: Text(
+              '$index',
+              style: tt.labelSmall?.copyWith(
+                color: AppColors.primary,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                item.serviceName.isNotEmpty ? item.serviceName : 'Service',
+                style: tt.bodySmall?.copyWith(fontWeight: FontWeight.w600),
+              ),
+              if (item.categoryName != null)
+                Text(
+                  item.categoryName!,
+                  style: tt.labelSmall
+                      ?.copyWith(color: AppColors.textSecondary),
+                ),
+            ],
+          ),
+        ),
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            Text(
+              '₹${item.totalPrice.toStringAsFixed(0)}',
+              style: tt.bodySmall?.copyWith(
+                fontWeight: FontWeight.w700,
+                color: AppColors.textPrimary,
+              ),
+            ),
+            if (item.quantity > 1)
+              Text(
+                '${item.quantity} × ₹${item.unitPrice.toStringAsFixed(0)}',
+                style:
+                    tt.labelSmall?.copyWith(color: AppColors.textHint),
+              ),
+          ],
+        ),
       ],
     );
   }

@@ -24,6 +24,7 @@ import '../../features/pricing_engine/presentation/pages/pricing_engine_page.dar
 import '../../features/vendor_settlement/presentation/pages/vendor_settlement_page.dart';
 import '../../features/cms/presentation/pages/cms_pages_page.dart';
 import '../../features/settings/presentation/pages/settings_page.dart';
+import '../../features/marketing/presentation/pages/abandoned_carts_page.dart';
 import '../../shared/pages/unauthorized_page.dart';
 import '../rbac/permission_guard.dart';
 
@@ -240,6 +241,13 @@ final routerProvider = Provider<GoRouter>((ref) {
             name: 'vendorSettlement',
             pageBuilder: (context, state) => const NoTransitionPage(
               child: VendorSettlementPage(),
+            ),
+          ),
+          GoRoute(
+            path: '/dashboard/abandoned-carts',
+            name: 'abandonedCarts',
+            pageBuilder: (context, state) => const NoTransitionPage(
+              child: AbandonedCartsPage(),
             ),
           ),
           GoRoute(

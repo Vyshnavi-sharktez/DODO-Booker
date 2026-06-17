@@ -12,6 +12,9 @@ class BookingsService {
     *,
     booking_items(
       service_id,
+      quantity,
+      unit_price,
+      total_price,
       services(
         id,
         name,

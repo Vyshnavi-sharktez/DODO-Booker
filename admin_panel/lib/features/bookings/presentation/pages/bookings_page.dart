@@ -5,6 +5,7 @@ import '../../../../core/theme/app_theme.dart';
 import '../../../vendors/application/providers/vendors_providers.dart';
 import '../../application/providers/bookings_providers.dart';
 import '../../domain/models/booking.dart';
+import '../../domain/models/booking_item.dart';
 import '../widgets/booking_details_dialog.dart';
 import '../widgets/booking_edit_dialog.dart';
 
@@ -503,8 +504,8 @@ class _BookingsTable extends ConsumerWidget {
             Expanded(
               child: LayoutBuilder(
                 builder: (context, constraints) {
-                  final tableWidth = constraints.maxWidth < 1430
-                      ? 1430.0
+                  final tableWidth = constraints.maxWidth < 1590
+                      ? 1590.0
                       : constraints.maxWidth;
                   return SingleChildScrollView(
                     scrollDirection: Axis.horizontal,
@@ -575,6 +576,7 @@ class _TableHeader extends StatelessWidget {
           _Cell('Vendor', width: 140, header: true),
           _Cell('Service Date', width: 110, header: true),
           _Cell('Status', width: 120, header: true),
+          _Cell('Services', width: 160, header: true),
           _Cell('Subtotal', width: 90, header: true, align: TextAlign.right),
           _Cell('Discount', width: 90, header: true, align: TextAlign.right),
           _Cell('Total', width: 100, header: true, align: TextAlign.right),
@@ -637,6 +639,10 @@ class _BookingRow extends StatelessWidget {
           SizedBox(
             width: 120,
             child: _StatusBadge(status: booking.status),
+          ),
+          SizedBox(
+            width: 160,
+            child: _ServicesCell(items: booking.items),
           ),
           _Cell(_currency.format(booking.subtotal),
               width: 90, align: TextAlign.right),
@@ -847,6 +853,62 @@ class _StarRating extends StatelessWidget {
               : AppColors.textSecondary.withValues(alpha: 0.4),
         );
       }),
+    );
+  }
+}
+
+// ── Services cell for the table ───────────────────────────────────────────────
+
+class _ServicesCell extends StatelessWidget {
+  final List<BookingItem> items;
+  const _ServicesCell({required this.items});
+
+  @override
+  Widget build(BuildContext context) {
+    if (items.isEmpty) {
+      return Text('—',
+          style: TextStyle(fontSize: 13, color: AppColors.textSecondary));
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (items.length > 1)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 2),
+            child: Container(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              decoration: BoxDecoration(
+                color: const Color(0xFFEBF8FF),
+                borderRadius: BorderRadius.circular(4),
+              ),
+              child: Text(
+                '${items.length} services',
+                style: const TextStyle(
+                  fontSize: 10,
+                  fontWeight: FontWeight.w700,
+                  color: Color(0xFF3182CE),
+                ),
+              ),
+            ),
+          ),
+        ...items.take(2).map(
+              (item) => Text(
+                item.serviceName.isNotEmpty ? item.serviceName : '—',
+                style: TextStyle(
+                    fontSize: 12, color: AppColors.textPrimary),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+        if (items.length > 2)
+          Text(
+            '+${items.length - 2} more',
+            style:
+                TextStyle(fontSize: 11, color: AppColors.textSecondary),
+          ),
+      ],
     );
   }
 }

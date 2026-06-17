@@ -98,6 +98,12 @@ const _navItems = <_NavItem>[
     requiredPermission: 'coupon.view',
   ),
   _NavItem(
+    label: 'Abandoned Carts',
+    icon: Icons.shopping_cart_outlined,
+    route: '/dashboard/abandoned-carts',
+    requiredPermission: 'customer.view',
+  ),
+  _NavItem(
     label: 'Notifications',
     icon: Icons.notifications_rounded,
     route: '/dashboard/notifications',

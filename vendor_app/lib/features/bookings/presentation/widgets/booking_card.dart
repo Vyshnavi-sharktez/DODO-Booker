@@ -4,6 +4,7 @@ import '../../../../core/constants/app_colors.dart';
 import '../../../../core/utils/date_utils.dart';
 import '../../../../core/utils/format_utils.dart';
 import '../../domain/models/booking.dart';
+import '../../domain/models/booking_item.dart';
 import '../../../auth/presentation/providers/auth_controller.dart';
 import '../providers/bookings_provider.dart';
 import 'booking_status_badge.dart';
@@ -251,7 +252,9 @@ class _BookingCardState extends ConsumerState<BookingCard> {
             ),
             const SizedBox(height: 12),
 
-            if (widget.booking.notes != null &&
+            if (widget.booking.items.isNotEmpty)
+              _ServicesBlock(items: widget.booking.items)
+            else if (widget.booking.notes != null &&
                 widget.booking.notes!.isNotEmpty)
               _InfoRow(
                 icon: Icons.home_repair_service_outlined,
@@ -462,6 +465,73 @@ class _InfoRow extends StatelessWidget {
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
                     color: AppColors.textSecondary,
                   ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// Renders all booking items as labelled rows with icon.
+class _ServicesBlock extends StatelessWidget {
+  const _ServicesBlock({required this.items});
+  final List<BookingItem> items;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(Icons.home_repair_service_outlined,
+              size: 16, color: AppColors.textHint),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (items.length > 1)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 4),
+                    child: Text(
+                      '${items.length} services',
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        color: AppColors.primary,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                ...items.map(
+                  (item) => Padding(
+                    padding: const EdgeInsets.only(bottom: 2),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            item.displayLabel,
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: AppColors.textSecondary,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          '₹${item.totalPrice.toStringAsFixed(0)}',
+                          style: theme.textTheme.labelSmall?.copyWith(
+                            color: AppColors.textPrimary,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
         ],

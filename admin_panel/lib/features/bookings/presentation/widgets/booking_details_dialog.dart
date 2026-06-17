@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../vendors/application/providers/vendors_providers.dart';
 import '../../domain/models/booking.dart';
+import '../../domain/models/booking_item.dart';
 
 const _statusConfig = <String, (String, Color, Color)>{
   'pending': ('Pending', Color(0xFFDD6B20), Color(0xFFFEEBC8)),
@@ -118,6 +119,15 @@ class BookingDetailsDialog extends ConsumerWidget {
                     if (booking.notes != null && booking.notes!.isNotEmpty)
                       _InfoRow('Notes', booking.notes!),
                     const SizedBox(height: 20),
+
+                    if (booking.items.isNotEmpty) ...[
+                      _SectionLabel(
+                          'Services (${booking.items.length})'),
+                      const SizedBox(height: 12),
+                      ...booking.items.map((item) =>
+                          _ServiceItemRow(item: item, currency: _currency)),
+                      const SizedBox(height: 20),
+                    ],
 
                     _SectionLabel('Financials'),
                     const SizedBox(height: 12),
@@ -264,6 +274,62 @@ class _StarRatingRow extends StatelessWidget {
                     : AppColors.textSecondary.withValues(alpha: 0.3),
               );
             }),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ServiceItemRow extends StatelessWidget {
+  final BookingItem item;
+  final NumberFormat currency;
+
+  const _ServiceItemRow({required this.item, required this.currency});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 5),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const SizedBox(
+            width: 130,
+            child: Row(
+              children: [
+                Icon(Icons.check_circle_outline_rounded,
+                    size: 14, color: Color(0xFF38A169)),
+                SizedBox(width: 6),
+              ],
+            ),
+          ),
+          Expanded(
+            child: Text(
+              item.serviceName.isNotEmpty ? item.serviceName : '—',
+              style: const TextStyle(
+                  fontSize: 14, color: AppColors.textPrimary),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text(
+                currency.format(item.totalPrice),
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.textPrimary,
+                ),
+              ),
+              if (item.quantity > 1)
+                Text(
+                  '${item.quantity} × ${currency.format(item.unitPrice)}',
+                  style: TextStyle(
+                      fontSize: 11, color: AppColors.textSecondary),
+                ),
+            ],
           ),
         ],
       ),

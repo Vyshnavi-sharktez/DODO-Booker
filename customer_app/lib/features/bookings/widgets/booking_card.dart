@@ -71,7 +71,43 @@ class BookingCard extends StatelessWidget {
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),
-                        if (booking.subcategoryName != null)
+                        if (booking.items.length > 1) ...[
+                          Padding(
+                            padding: const EdgeInsets.only(top: 2),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: AppColors.primaryLight,
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: Text(
+                                '${booking.items.length} services',
+                                style: tt.labelSmall?.copyWith(
+                                  color: AppColors.primary,
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 3),
+                          ...booking.items.take(2).map(
+                                (item) => Text(
+                                  item.serviceName,
+                                  style: tt.labelSmall?.copyWith(
+                                      color: AppColors.textSecondary),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                          if (booking.items.length > 2)
+                            Text(
+                              '+${booking.items.length - 2} more',
+                              style: tt.labelSmall
+                                  ?.copyWith(color: AppColors.textHint),
+                            ),
+                        ] else if (booking.subcategoryName != null)
                           Text(
                             booking.subcategoryName!,
                             style: tt.labelSmall?.copyWith(

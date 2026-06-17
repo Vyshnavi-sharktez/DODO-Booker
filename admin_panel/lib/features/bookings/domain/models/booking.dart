@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'booking_item.dart';
 
 class BookingReview {
   final String id;
@@ -42,6 +43,7 @@ class Booking {
   final BookingReview? review;
   final String? rejectionReason;
   final DateTime? rejectedAt;
+  final List<BookingItem> items;
 
   const Booking({
     required this.id,
@@ -60,6 +62,7 @@ class Booking {
     this.review,
     this.rejectionReason,
     this.rejectedAt,
+    this.items = const [],
   });
 
   factory Booking.fromMap(Map<String, dynamic> map) {
@@ -76,6 +79,11 @@ class Booking {
       '[DODO][Bookings] Review status resolved: booking $bookingNum — '
       '${review != null ? 'reviewed (${review.rating}★)' : 'not reviewed'}',
     );
+
+    final rawItems = map['booking_items'] as List<dynamic>? ?? [];
+    final items = rawItems
+        .map((e) => BookingItem.fromMap(e as Map<String, dynamic>))
+        .toList();
 
     return Booking(
       id: map['id'] as String,
@@ -102,6 +110,7 @@ class Booking {
       rejectedAt: map['rejected_at'] != null
           ? DateTime.tryParse(map['rejected_at'] as String)
           : null,
+      items: items,
     );
   }
 
@@ -128,6 +137,7 @@ class Booking {
       review: review,
       rejectionReason: rejectionReason,
       rejectedAt: rejectedAt,
+      items: items,
     );
   }
 }

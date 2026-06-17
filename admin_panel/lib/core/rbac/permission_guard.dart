@@ -29,6 +29,7 @@ const Map<String, String> routePermissions = {
   '/vendors': 'vendor.view',
   '/bookings': 'booking.view',
   '/customers': 'customer.view',
+  '/abandoned-carts': 'customer.view',
   '/coupons': 'coupon.view',
   '/notifications': 'notification.view',
   '/vendor-assignment': 'booking.view',

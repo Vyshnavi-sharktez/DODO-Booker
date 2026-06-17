@@ -7,3 +7,4 @@ abstract final class SupabaseConfig {
 }
 
 
+

@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/widgets/app_modal_dialog.dart';
 import '../providers/auth_provider.dart';
+import '../../cart/providers/cart_provider.dart';
 
 /// OTP verification modal. Takes the phone string returned by [OtpLoginModal].
 /// Pops with `true` on successful verification, or null if dismissed.
@@ -93,6 +94,8 @@ class _OtpVerificationModalState extends ConsumerState<OtpVerificationModal> {
       if (!mounted) return;
       // Persist reactive auth state so subsequent Book Now skips the flow.
       ref.read(authNotifierProvider.notifier).setAuthenticated(true);
+      // Merge Supabase cart with local cart (fire-and-forget).
+      unawaited(ref.read(cartProvider.notifier).loadFromRemote());
       Navigator.of(context).pop(true);
     } catch (e) {
       if (!mounted) return;

@@ -13,6 +13,8 @@ import '../features/bookings/screens/booking_details_screen.dart';
 import '../features/profile/screens/edit_profile_screen.dart';
 import '../features/wishlist/screens/wishlist_screen.dart';
 import '../features/notifications/screens/notification_booking_screen.dart';
+import '../features/cart/screens/cart_screen.dart';
+import '../features/cart/screens/checkout_screen.dart';
 import '../models/booking_model.dart';
 import '../models/category_model.dart';
 import '../models/subcategory_model.dart';
@@ -33,6 +35,8 @@ class AppRoutes {
   static const String address = '/address';
   static const String editProfile = '/edit-profile';
   static const String wishlist = '/wishlist';
+  static const String cart = '/cart';
+  static const String checkout = '/cart/checkout';
 }
 
 final appRouter = GoRouter(
@@ -140,6 +144,16 @@ final appRouter = GoRouter(
     GoRoute(
       path: AppRoutes.wishlist,
       builder: (context, state) => const WishlistScreen(),
+    ),
+
+    GoRoute(
+      path: AppRoutes.cart,
+      builder: (context, state) => const CartScreen(),
+    ),
+
+    GoRoute(
+      path: AppRoutes.checkout,
+      builder: (context, state) => const CheckoutScreen(),
     ),
   ],
 );

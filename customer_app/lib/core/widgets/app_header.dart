@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import '../constants/app_colors.dart';
 import 'app_modal_dialog.dart';
 import '../../features/notifications/widgets/notifications_modal.dart';
 import '../../features/notifications/services/notification_providers.dart';
 import '../../features/profile/services/profile_providers.dart';
+import '../../features/cart/providers/cart_provider.dart';
 
 /// Persistent DODO BOOKER header used as the [Scaffold.appBar] across the
 /// main navigation shell. Implements [PreferredSizeWidget] so Flutter can
@@ -74,6 +76,8 @@ class _WideRow extends StatelessWidget {
           child: const NotificationsModal(),
         )),
         const SizedBox(width: 8),
+        const _CartButton(),
+        const SizedBox(width: 8),
         _ProfileAvatar(onTap: onProfileTap),
       ],
     );
@@ -104,6 +108,8 @@ class _MobileRow extends StatelessWidget {
             // TODO: open search
           },
         ),
+        const SizedBox(width: 4),
+        const _CartButton(),
         const SizedBox(width: 4),
         _NotifButton(onTap: () => AppModalDialog.show(
           context: context,
@@ -257,6 +263,68 @@ class _NotifButton extends ConsumerWidget {
                   decoration: const BoxDecoration(
                     color: AppColors.error,
                     shape: BoxShape.circle,
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ── Cart button with badge ────────────────────────────────────────────────────
+
+class _CartButton extends ConsumerWidget {
+  const _CartButton();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final count = ref.watch(cartItemCountProvider);
+
+    return GestureDetector(
+      onTap: () {
+        ScaffoldMessenger.of(context).clearSnackBars();
+        context.go('/cart');
+      },
+      child: Container(
+        width: 38,
+        height: 38,
+        decoration: BoxDecoration(
+          color: AppColors.surfaceVariant,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: AppColors.border, width: 0.8),
+        ),
+        child: Stack(
+          alignment: Alignment.center,
+          clipBehavior: Clip.none,
+          children: [
+            const Icon(
+              Icons.shopping_cart_outlined,
+              size: 20,
+              color: AppColors.textPrimary,
+            ),
+            if (count > 0)
+              Positioned(
+                top: 4,
+                right: 4,
+                child: Container(
+                  width: 16,
+                  height: 16,
+                  decoration: const BoxDecoration(
+                    color: AppColors.error,
+                    shape: BoxShape.circle,
+                  ),
+                  child: Center(
+                    child: Text(
+                      count > 9 ? '9+' : '$count',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 9,
+                        fontWeight: FontWeight.w700,
+                        height: 1,
+                      ),
+                    ),
                   ),
                 ),
               ),

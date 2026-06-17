@@ -7,6 +7,7 @@ export 'addon_model.dart';
 export 'service_model.dart';
 export 'address_model.dart';
 export 'time_slot_model.dart';
+export 'booking_item.dart';
 export 'booking_model.dart';
 export 'booking_status_event.dart';
 export 'my_booking_model.dart';
