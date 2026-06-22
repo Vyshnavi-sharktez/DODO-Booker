@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:geolocator/geolocator.dart';
 import '../../../../core/constants/app_colors.dart';
+import '../../../../core/screens/map_picker_screen.dart';
 import '../../../../core/services/nominatim_service.dart';
 import '../../../auth/presentation/providers/auth_controller.dart';
 import '../../domain/models/vendor_profile.dart';
@@ -114,6 +115,26 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
     }
   }
 
+  Future<void> _pickOnMap() async {
+    final result = await Navigator.of(context).push<MapPickerResult>(
+      MaterialPageRoute(
+        builder: (_) => MapPickerScreen(
+          initialLatitude: _latitude,
+          initialLongitude: _longitude,
+        ),
+        fullscreenDialog: true,
+      ),
+    );
+    if (result == null || !mounted) return;
+    setState(() {
+      _locationError = null;
+      _latitude = result.latitude;
+      _longitude = result.longitude;
+      if (result.line1?.isNotEmpty ?? false) _addressCtrl.text = result.line1!;
+      if (result.city?.isNotEmpty ?? false) _cityCtrl.text = result.city!;
+    });
+  }
+
   void _submit() {
     if (!_formKey.currentState!.validate()) return;
     final user = ref.read(currentVendorUserProvider);
@@ -220,20 +241,48 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
                 ),
                 const SizedBox(height: 12),
 
-                // Use My Location
-                OutlinedButton.icon(
-                  onPressed:
-                      (_isLocating || isSaving) ? null : _useCurrentLocation,
-                  icon: _isLocating
-                      ? const SizedBox.square(
-                          dimension: 16,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Icon(Icons.my_location_rounded),
-                  label: Text(_isLocating ? 'Locating…' : 'Use My Location'),
-                  style: OutlinedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                  ),
+                // Location buttons row
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: (_isLocating || isSaving)
+                            ? null
+                            : _useCurrentLocation,
+                        icon: _isLocating
+                            ? const SizedBox.square(
+                                dimension: 14,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  valueColor: AlwaysStoppedAnimation(
+                                      AppColors.primary),
+                                ),
+                              )
+                            : const Icon(Icons.my_location_rounded, size: 16),
+                        label: Text(
+                          _isLocating ? 'Locating…' : 'Use My Location',
+                          style: const TextStyle(fontSize: 13),
+                        ),
+                        style: OutlinedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: isSaving ? null : _pickOnMap,
+                        icon: const Icon(Icons.map_outlined, size: 16),
+                        label: const Text(
+                          'Pick on Map',
+                          style: TextStyle(fontSize: 13),
+                        ),
+                        style: OutlinedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
                 if (_locationError != null) ...[
                   const SizedBox(height: 6),
@@ -246,23 +295,26 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
                   const SizedBox(height: 6),
                   Row(
                     children: [
-                      Icon(Icons.location_on_rounded,
-                          size: 14, color: AppColors.success),
+                      const Icon(Icons.check_circle_outline_rounded,
+                          size: 13, color: Color(0xFF2E7D32)),
                       const SizedBox(width: 4),
                       Expanded(
                         child: Text(
-                          'Pinned: ${_latitude!.toStringAsFixed(5)}, '
-                          '${_longitude!.toStringAsFixed(5)}',
-                          style: TextStyle(
-                              fontSize: 12, color: AppColors.success),
+                          'Location pinned  '
+                          '(${_latitude!.toStringAsFixed(5)}, '
+                          '${_longitude!.toStringAsFixed(5)})',
+                          style: const TextStyle(
+                            fontSize: 11,
+                            color: Color(0xFF2E7D32),
+                            fontWeight: FontWeight.w500,
+                          ),
                         ),
                       ),
                       GestureDetector(
-                        onTap: () =>
-                            setState(() {
-                              _latitude = null;
-                              _longitude = null;
-                            }),
+                        onTap: () => setState(() {
+                          _latitude = null;
+                          _longitude = null;
+                        }),
                         child: Icon(Icons.close_rounded,
                             size: 14, color: AppColors.textSecondary),
                       ),

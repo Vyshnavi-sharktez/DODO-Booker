@@ -44,22 +44,28 @@ class CheckoutService {
     final serviceDate = date.toIso8601String().substring(0, 10);
 
     debugPrint('[DODO][Checkout] subtotal=₹$subtotal  tax=₹$tax  discount=₹$discountAmount  total=₹$totalAmount');
+    debugPrint('[DODO][Checkout] Address object — id=${address.id}  lat=${address.latitude}  lng=${address.longitude}  full="${address.fullAddress}"');
+    debugPrint('[DODO][Checkout] Booking payload — lat=${address.latitude}  lng=${address.longitude}');
 
     // ── INSERT bookings row ──────────────────────────────────────────────────
+    final payload = {
+      'customer_id': customerId,
+      'service_date': serviceDate,
+      'status': 'pending',
+      'subtotal': subtotal,
+      'discount_amount': discountAmount,
+      'total_amount': totalAmount,
+      'address': address.fullAddress,
+      'notes': slot.label,
+      'latitude': ?address.latitude,
+      'longitude': ?address.longitude,
+    };
+    debugPrint('BOOKING LAT=${address.latitude}');
+    debugPrint('BOOKING LNG=${address.longitude}');
+    debugPrint('BOOKING PAYLOAD=$payload');
     final bookingData = await _client
         .from('bookings')
-        .insert({
-          'customer_id': customerId,
-          'service_date': serviceDate,
-          'status': 'pending',
-          'subtotal': subtotal,
-          'discount_amount': discountAmount,
-          'total_amount': totalAmount,
-          'address': address.fullAddress,
-          'notes': slot.label,
-          'latitude': ?address.latitude,
-          'longitude': ?address.longitude,
-        })
+        .insert(payload)
         .select()
         .single();
 

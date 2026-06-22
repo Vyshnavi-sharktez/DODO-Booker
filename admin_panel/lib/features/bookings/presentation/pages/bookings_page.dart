@@ -7,7 +7,7 @@ import '../../application/providers/bookings_providers.dart';
 import '../../domain/models/booking.dart';
 import '../../domain/models/booking_item.dart';
 import '../widgets/booking_details_dialog.dart';
-import '../widgets/booking_edit_dialog.dart';
+import '../widgets/booking_assignment_dialog.dart';
 
 // ── Status display config ─────────────────────────────────────────────────────
 
@@ -113,7 +113,7 @@ class _BookingsPageState extends ConsumerState<BookingsPage> {
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (_) => BookingEditDialog(
+      builder: (_) => BookingAssignmentDialog(
         booking: booking,
         onSave: ({
           required vendorId,

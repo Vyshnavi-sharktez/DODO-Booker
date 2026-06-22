@@ -11,7 +11,7 @@ import '../../../notifications/application/providers/notifications_providers.dar
 import '../../../vendors/application/providers/vendors_providers.dart';
 import '../../application/providers/vendor_assignment_providers.dart';
 import '../../domain/models/assignment_entry.dart';
-import '../widgets/assign_vendor_dialog.dart';
+import '../../../bookings/presentation/widgets/booking_assignment_dialog.dart';
 import '../widgets/assignment_history_dialog.dart';
 
 final _dateFmt = DateFormat('dd MMM yyyy');
@@ -124,30 +124,24 @@ class _VendorAssignmentPageState
   // ── Actions ────────────────────────────────────────────────────────────────
 
   void _openAssignDialog(Booking booking) {
-    final customerName = _customerName(booking.customerId);
-    final currentVendorName =
-        booking.vendorId.isNotEmpty ? _vendorName(booking.vendorId) : '';
-    final adminUser = ref.read(currentAdminUserProvider);
-
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (_) => AssignVendorDialog(
+      builder: (_) => BookingAssignmentDialog(
         booking: booking,
-        customerName: customerName,
-        currentVendorName: currentVendorName,
-        onAssign: ({
+        onSave: ({
           required vendorId,
-          required vendorName,
           required serviceDate,
           required status,
           notes,
         }) async {
+          final vendorName = _vendorName(vendorId);
           final previousVendorId =
               booking.vendorId.isNotEmpty ? booking.vendorId : null;
           final previousVendorName =
               previousVendorId != null ? _vendorName(previousVendorId) : '';
           final isFirstAssignment = previousVendorId == null;
+          final adminUser = ref.read(currentAdminUserProvider);
 
           debugPrint(
             '[DODO][VendorAssignment] Assignment detected: '

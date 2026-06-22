@@ -50,6 +50,27 @@ class VendorDetailRepository {
     }
   }
 
+  /// Fetches all service areas across all vendors in a single query.
+  /// Returns a map keyed by vendor_id for O(1) lookups during assignment.
+  Future<Map<String, List<VendorServiceArea>>> fetchAllServiceAreas() async {
+    try {
+      final rows = await _supabase
+          .from('vendor_service_areas')
+          .select('id, vendor_id, city, area, pincode, radius_km');
+      final result = <String, List<VendorServiceArea>>{};
+      for (final r in rows as List<dynamic>) {
+        final map = r as Map<String, dynamic>;
+        final vendorId = map['vendor_id'] as String;
+        result
+            .putIfAbsent(vendorId, () => [])
+            .add(VendorServiceArea.fromMap(map));
+      }
+      return result;
+    } catch (_) {
+      return {};
+    }
+  }
+
   Future<VendorBookingStats> fetchBookingStats(String vendorId) async {
     final rows = await _supabase
         .from('bookings')

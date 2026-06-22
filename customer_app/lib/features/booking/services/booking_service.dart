@@ -47,7 +47,7 @@ class BookingService {
   }) async {
     debugPrint('[DODO][Booking] createBooking started');
     debugPrint('[DODO][Booking] Service: ${service.name} (id=${service.id})');
-    debugPrint('[DODO][Booking] Address: ${address.fullAddress}');
+    debugPrint('[DODO][Booking] Address object — id=${address.id}  lat=${address.latitude}  lng=${address.longitude}  full="${address.fullAddress}"');
     debugPrint('[DODO][Booking] Date: ${date.toIso8601String().substring(0, 10)}');
     debugPrint('[DODO][Booking] Slot: ${slot.label}');
 
@@ -65,19 +65,26 @@ class BookingService {
     }
 
     // ── INSERT into bookings ─────────────────────────────────────────────────
+    debugPrint('[DODO][Booking] Booking payload — lat=${address.latitude}  lng=${address.longitude}');
     debugPrint('[DODO][Booking] Inserting into bookings table');
+    final payload = {
+      'customer_id': customerId,
+      'service_date': serviceDate,
+      'status': 'pending',
+      'subtotal': subtotal,
+      'discount_amount': discountAmount,
+      'total_amount': totalAmount,
+      'address': address.fullAddress,
+      'notes': '${service.name} · ${slot.label}',
+      'latitude': ?address.latitude,
+      'longitude': ?address.longitude,
+    };
+    debugPrint('BOOKING LAT=${address.latitude}');
+    debugPrint('BOOKING LNG=${address.longitude}');
+    debugPrint('BOOKING PAYLOAD=$payload');
     final bookingData = await _client
         .from('bookings')
-        .insert({
-          'customer_id': customerId,
-          'service_date': serviceDate,
-          'status': 'pending',
-          'subtotal': subtotal,
-          'discount_amount': discountAmount,
-          'total_amount': totalAmount,
-          'address': address.fullAddress,
-          'notes': '${service.name} · ${slot.label}',
-        })
+        .insert(payload)
         .select()
         .single();
 

@@ -190,6 +190,13 @@ class _AddressFormModalState extends ConsumerState<AddressFormModal> {
 
   Future<void> _save() async {
     if (!(_formKey.currentState?.validate() ?? false)) return;
+    if (_latitude == null || _longitude == null) {
+      setState(() {
+        _error =
+            'Please use Current Location or Pick on Map before saving.';
+      });
+      return;
+    }
     setState(() {
       _isLoading = true;
       _error = null;

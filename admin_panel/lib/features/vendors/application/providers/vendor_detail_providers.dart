@@ -32,6 +32,15 @@ final vendorServiceAreasProvider =
   },
 );
 
+/// All service areas across all vendors — used by BookingAssignmentDialog
+/// for client-side distance ranking without per-vendor round-trips.
+final allVendorServiceAreasProvider =
+    FutureProvider<Map<String, List<VendorServiceArea>>>((ref) {
+  return ref
+      .watch(vendorDetailRepositoryProvider)
+      .fetchAllServiceAreas();
+});
+
 final vendorBookingStatsProvider =
     FutureProvider.autoDispose.family<VendorBookingStats, String>(
   (ref, vendorId) {
