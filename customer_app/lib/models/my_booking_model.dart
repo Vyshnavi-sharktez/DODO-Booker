@@ -7,6 +7,7 @@ class BookingStatus {
   static const String assigned = 'assigned';
   static const String accepted = 'accepted';
   static const String enRoute = 'en_route';
+  static const String inProgress = 'in_progress';
   static const String started = 'started';
   static const String completed = 'completed';
   static const String closed = 'closed';
@@ -17,7 +18,7 @@ class BookingStatus {
     (assigned, 'Vendor Assigned'),
     (accepted, 'Vendor Accepted'),
     (enRoute, 'Technician En Route'),
-    (started, 'Service Started'),
+    (inProgress, 'Service In Progress'),
     (completed, 'Service Completed'),
     (closed, 'Booking Closed'),
   ];
@@ -35,7 +36,9 @@ class BookingStatus {
     DateTime base,
   ) {
     final stages = orderedStages;
-    final currentIdx = stages.indexWhere((s) => s.$1 == currentStatus);
+    // 'started' is the vendor-app equivalent of admin's 'in_progress'; treat them identically.
+    final lookupStatus = currentStatus == started ? inProgress : currentStatus;
+    final currentIdx = stages.indexWhere((s) => s.$1 == lookupStatus);
 
     return List.generate(stages.length, (i) {
       final (status, label) = stages[i];
@@ -95,7 +98,9 @@ class MyBookingModel {
       status == BookingStatus.accepted;
 
   bool get isOngoing =>
-      status == BookingStatus.enRoute || status == BookingStatus.started;
+      status == BookingStatus.enRoute ||
+      status == BookingStatus.inProgress ||
+      status == BookingStatus.started;
 
   bool get isCompleted =>
       status == BookingStatus.completed || status == BookingStatus.closed;
@@ -172,8 +177,8 @@ class MyBookingModel {
       totalAmount: (json['total_amount'] as num?)?.toDouble() ?? 0.0,
       status: json['status'] as String,
       createdAt: DateTime.parse(createdAtStr),
-      vendorName: json['vendor_name'] as String?,
-      vendorPhone: json['vendor_phone'] as String?,
+      vendorName: (json['vendors'] as Map<String, dynamic>?)?['business_name'] as String?,
+      vendorPhone: (json['vendors'] as Map<String, dynamic>?)?['phone'] as String?,
       timeline: (json['timeline'] as List<dynamic>?)
               ?.map((e) =>
                   BookingStatusEvent.fromJson(e as Map<String, dynamic>))

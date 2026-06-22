@@ -186,6 +186,7 @@ class _StatusBanner extends StatelessWidget {
         return (const Color(0xFF00ACC1), 'Vendor confirmed your booking', Icons.thumb_up_rounded);
       case BookingStatus.enRoute:
         return (const Color(0xFF5C6BC0), 'Technician is on the way', Icons.directions_bike_rounded);
+      case BookingStatus.inProgress:
       case BookingStatus.started:
         return (const Color(0xFFFF6D00), 'Service is in progress', Icons.construction_rounded);
       case BookingStatus.completed:

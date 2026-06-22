@@ -7,9 +7,10 @@ class BookingsService {
   static const _phoneKey = 'dodo_auth_phone';
   final _client = Supabase.instance.client;
 
-  // Nested select: joins booking_items → services → categories / sub_categories
+  // Nested select: joins vendors + booking_items → services → categories / sub_categories
   static const _bookingSelect = '''
     *,
+    vendors(business_name, phone),
     booking_items(
       service_id,
       quantity,

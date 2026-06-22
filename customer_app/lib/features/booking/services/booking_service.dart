@@ -32,7 +32,27 @@ class BookingService {
     debugPrint('[DODO][Booking] fetchAvailableSlots($dateStr) → mock');
     await Future.delayed(const Duration(milliseconds: 400));
     final hash = dateStr.codeUnits.fold(0, (a, b) => a + b);
-    return _buildSlots(hash);
+    final slots = _buildSlots(hash);
+
+    // Same-day filtering: hide slots within 1-hour lead time of current time.
+    final now = DateTime.now();
+    final todayStr = '${now.year}-'
+        '${now.month.toString().padLeft(2, '0')}-'
+        '${now.day.toString().padLeft(2, '0')}';
+    if (dateStr == todayStr) {
+      final cutoff = now.add(const Duration(hours: 1));
+      final cutoffMinutes = cutoff.hour * 60 + cutoff.minute;
+      debugPrint(
+        '[DODO][Booking] same-day filter: now=${now.hour}:${now.minute.toString().padLeft(2, '0')} '
+        'cutoff=${cutoff.hour}:${cutoff.minute.toString().padLeft(2, '0')} '
+        '($cutoffMinutes min)',
+      );
+      return slots
+          .where((s) => _slotMinutes(s.label) >= cutoffMinutes)
+          .toList();
+    }
+
+    return slots;
   }
 
   // ── Create booking ──────────────────────────────────────────────────────────
@@ -203,4 +223,16 @@ List<TimeSlotModel> _buildSlots(int hash) {
       isAvailable: !unavailableIndices.contains(i),
     );
   });
+}
+
+/// Parses a slot label ("07:00 AM" / "01:00 PM") → minutes since midnight.
+int _slotMinutes(String label) {
+  final parts = label.split(' ');       // ["07:00", "AM"]
+  final timeParts = parts[0].split(':'); // ["07", "00"]
+  var hour = int.parse(timeParts[0]);
+  final minute = int.parse(timeParts[1]);
+  final isPm = parts[1] == 'PM';
+  if (isPm && hour != 12) hour += 12;
+  if (!isPm && hour == 12) hour = 0;   // 12:00 AM → midnight
+  return hour * 60 + minute;
 }
