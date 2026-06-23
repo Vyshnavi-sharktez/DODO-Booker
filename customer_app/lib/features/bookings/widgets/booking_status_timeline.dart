@@ -17,7 +17,6 @@ class BookingStatusTimeline extends StatelessWidget {
         status: BookingStatus.cancelled,
         label: 'Cancelled',
         isReached: true,
-        timestamp: booking.createdAt.add(const Duration(hours: 1)),
       ));
     }
 
@@ -131,64 +130,49 @@ class _TimelineStep extends StatelessWidget {
 
           const SizedBox(width: 10),
 
-          // Right: label + timestamp
+          // Right: label
           Expanded(
             child: Padding(
               padding: EdgeInsets.only(bottom: isLast ? 0 : 18),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+              child: Row(
                 children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          event.label,
-                          style: tt.bodySmall?.copyWith(
-                            fontWeight: reached
-                                ? FontWeight.w700
-                                : FontWeight.w400,
-                            color: reached
-                                ? (isCancelledStep
-                                    ? AppColors.error
-                                    : isActive
-                                        ? AppColors.primary
-                                        : AppColors.textPrimary)
-                                : AppColors.textHint,
-                          ),
-                        ),
-                      ),
-                      if (isActive)
-                        Container(
-                          margin: const EdgeInsets.only(left: 8),
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 7,
-                            vertical: 2,
-                          ),
-                          decoration: BoxDecoration(
-                            color: AppColors.primaryLight,
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          child: Text(
-                            'Now',
-                            style: tt.labelSmall?.copyWith(
-                              color: AppColors.primary,
-                              fontWeight: FontWeight.w700,
-                              fontSize: 10,
-                            ),
-                          ),
-                        ),
-                    ],
-                  ),
-                  if (event.timestamp != null) ...[
-                    const SizedBox(height: 2),
-                    Text(
-                      _formatTimestamp(event.timestamp!),
-                      style: tt.labelSmall?.copyWith(
-                        color: AppColors.textHint,
-                        fontSize: 11,
+                  Expanded(
+                    child: Text(
+                      event.label,
+                      style: tt.bodySmall?.copyWith(
+                        fontWeight: reached
+                            ? FontWeight.w700
+                            : FontWeight.w400,
+                        color: reached
+                            ? (isCancelledStep
+                                ? AppColors.error
+                                : isActive
+                                    ? AppColors.primary
+                                    : AppColors.textPrimary)
+                            : AppColors.textHint,
                       ),
                     ),
-                  ],
+                  ),
+                  if (isActive)
+                    Container(
+                      margin: const EdgeInsets.only(left: 8),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 7,
+                        vertical: 2,
+                      ),
+                      decoration: BoxDecoration(
+                        color: AppColors.primaryLight,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Text(
+                        'Now',
+                        style: tt.labelSmall?.copyWith(
+                          color: AppColors.primary,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 10,
+                        ),
+                      ),
+                    ),
                 ],
               ),
             ),
@@ -198,14 +182,4 @@ class _TimelineStep extends StatelessWidget {
     );
   }
 
-  String _formatTimestamp(DateTime dt) {
-    const months = [
-      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
-    ];
-    final h = dt.hour > 12 ? dt.hour - 12 : (dt.hour == 0 ? 12 : dt.hour);
-    final m = dt.minute.toString().padLeft(2, '0');
-    final period = dt.hour >= 12 ? 'PM' : 'AM';
-    return '${dt.day} ${months[dt.month - 1]}  ·  $h:$m $period';
-  }
 }
