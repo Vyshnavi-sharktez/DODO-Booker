@@ -78,7 +78,7 @@ class _BookingsPageState extends ConsumerState<BookingsPage>
                 controller: _tabController,
                 children: [
                   _buildBookingsList(bookings, 'assigned'),
-                  _buildBookingsList(bookings, 'in_progress'),
+                  _buildBookingsList(bookings, 'in_progress', 'awaiting_verification'),
                   _buildBookingsList(bookings, 'completed'),
                   _buildBookingsList(bookings, 'rejected'),
                   _buildBookingsList(bookings, 'cancelled'),
@@ -92,8 +92,13 @@ class _BookingsPageState extends ConsumerState<BookingsPage>
     );
   }
 
-  Widget _buildBookingsList(List<Booking> bookings, String status) {
-    final filtered = bookings.where((b) => b.status == status).toList();
+  Widget _buildBookingsList(List<Booking> bookings, String status,
+      [String? additionalStatus]) {
+    final filtered = bookings
+        .where((b) =>
+            b.status == status ||
+            (additionalStatus != null && b.status == additionalStatus))
+        .toList();
     if (filtered.isEmpty) return _emptyState(status);
     return RefreshIndicator(
       onRefresh: () async => ref.invalidate(vendorBookingsProvider),

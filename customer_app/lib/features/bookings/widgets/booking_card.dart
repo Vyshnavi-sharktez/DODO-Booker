@@ -223,8 +223,6 @@ class BookingCard extends StatelessWidget {
       return (const Color(0xFFFF6D00), 'In Progress');
     case BookingStatus.completed:
       return (AppColors.success, 'Completed');
-    case BookingStatus.closed:
-      return (AppColors.textSecondary, 'Closed');
     case BookingStatus.cancelled:
       return (AppColors.error, 'Cancelled');
     default:

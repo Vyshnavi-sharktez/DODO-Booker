@@ -31,8 +31,7 @@ class BookingService {
   Future<List<TimeSlotModel>> fetchAvailableSlots(String dateStr) async {
     debugPrint('[DODO][Booking] fetchAvailableSlots($dateStr) → mock');
     await Future.delayed(const Duration(milliseconds: 400));
-    final hash = dateStr.codeUnits.fold(0, (a, b) => a + b);
-    final slots = _buildSlots(hash);
+    final slots = _buildSlots();
 
     // Same-day filtering: hide slots within 1-hour lead time of current time.
     final now = DateTime.now();
@@ -190,9 +189,7 @@ class BookingService {
 
 // ── Slot builder ───────────────────────────────────────────────────────────────
 
-List<TimeSlotModel> _buildSlots(int hash) {
-  final unavailableIndices = {hash % 3, (hash + 5) % 7, (hash + 11) % 15};
-
+List<TimeSlotModel> _buildSlots() {
   final raw = [
     // Morning
     ('ts_m1', '07:00 AM', SlotPeriod.morning),
@@ -220,7 +217,7 @@ List<TimeSlotModel> _buildSlots(int hash) {
       id: id,
       label: label,
       period: period,
-      isAvailable: !unavailableIndices.contains(i),
+      isAvailable: true,
     );
   });
 }

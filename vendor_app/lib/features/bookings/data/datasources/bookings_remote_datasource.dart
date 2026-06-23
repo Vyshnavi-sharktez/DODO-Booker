@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -9,6 +11,7 @@ class BookingsRemoteDatasource {
     id, booking_number, customer_id, vendor_id, service_date,
     status, subtotal, discount_amount, total_amount,
     address, notes, created_at, rejection_reason, rejected_at,
+    completion_otp, otp_verified_at,
     booking_items(
       service_id,
       quantity,
@@ -60,6 +63,84 @@ class BookingsRemoteDatasource {
       'rejection_reason': rejectionReason,
       'rejected_at': DateTime.now().toIso8601String(),
     }).eq('id', bookingId);
+  }
+
+  Future<void> initiateCompletion(String bookingId) async {
+    final otp = (100000 + Random().nextInt(900000)).toString();
+    await _client.from('bookings').update({
+      'status': 'awaiting_verification',
+      'completion_otp': otp,
+    }).eq('id', bookingId);
+  }
+
+  // Returns true and sets status=completed when OTP matches; false otherwise.
+  Future<bool> verifyCompletionOtp(String bookingId, String otp) async {
+    debugPrint('[OTP][DS] ══════════ verifyCompletionOtp() START ══════════');
+    debugPrint('[OTP][DS] bookingId : $bookingId');
+    debugPrint('[OTP][DS] otp passed: "$otp"  len=${otp.length}  codeUnits=${otp.codeUnits}');
+
+    // ── Step 1: Fetch stored OTP and current status ───────────────────────────
+    debugPrint('[OTP][DS] Step 1 → SELECT completion_otp, status FROM bookings WHERE id=?');
+    final row = await _client
+        .from('bookings')
+        .select('completion_otp, status')
+        .eq('id', bookingId)
+        .single();
+
+    final stored = row['completion_otp'] as String?;
+    final currentStatus = row['status'] as String?;
+    debugPrint('[OTP][DS] Step 1 result: completion_otp="$stored"  status="$currentStatus"');
+    if (stored != null) {
+      debugPrint('[OTP][DS]   stored codeUnits: ${stored.codeUnits}');
+      debugPrint('[OTP][DS]   stored.trim()   : "${stored.trim()}"');
+    } else {
+      debugPrint('[OTP][DS]   ⚠️  completion_otp is NULL in DB — initiation may have failed');
+    }
+
+    // ── Step 2: Compare OTPs ──────────────────────────────────────────────────
+    final storedTrimmed = stored?.trim() ?? '';
+    final enteredTrimmed = otp.trim();
+    final match = storedTrimmed == enteredTrimmed;
+    debugPrint('[OTP][DS] Step 2 → compare:');
+    debugPrint('[OTP][DS]   stored (trimmed) : "$storedTrimmed"');
+    debugPrint('[OTP][DS]   entered (trimmed): "$enteredTrimmed"');
+    debugPrint('[OTP][DS]   match            : $match');
+
+    if (stored == null || !match) {
+      debugPrint('[OTP][DS] Step 2 → MISMATCH or null — returning false');
+      return false;
+    }
+    debugPrint('[OTP][DS] Step 2 → MATCH ✓');
+
+    // ── Step 3: UPDATE + select to detect RLS-silenced 0-row updates ─────────
+    // Without .select(), a blocked UPDATE returns HTTP 200 with [] — no error.
+    // Adding .select() lets us check whether a row was actually modified.
+    debugPrint('[OTP][DS] Step 3 → UPDATE bookings SET status=completed, otp_verified_at=now() WHERE id=?');
+    final updated = await _client
+        .from('bookings')
+        .update({
+          'status': 'completed',
+          'otp_verified_at': DateTime.now().toUtc().toIso8601String(),
+        })
+        .eq('id', bookingId)
+        .select('id, status, otp_verified_at');
+
+    debugPrint('[OTP][DS] Step 3 result: rowsReturned=${updated.length}  data=$updated');
+
+    if (updated.isEmpty) {
+      // UPDATE returned 0 rows. Two possible causes:
+      //   (a) RLS policy blocks this vendor from updating this booking's status.
+      //   (b) The booking id no longer exists (deleted between steps 1 and 3).
+      // Check Supabase → Authentication → Policies → bookings table UPDATE policy.
+      debugPrint('[OTP][DS] ⚠️  UPDATE affected 0 rows — RLS likely blocking the update');
+      debugPrint('[OTP][DS]    Check: Supabase Dashboard → Table Editor → bookings → Policies → UPDATE');
+      return false;
+    }
+
+    final newStatus = updated.first['status'] as String?;
+    debugPrint('[OTP][DS] ✓ UPDATE succeeded — newStatus="$newStatus"');
+    debugPrint('[OTP][DS] ══════════ verifyCompletionOtp() DONE → true ══════════');
+    return true;
   }
 
   Future<void> createAdminNotification({

@@ -60,11 +60,22 @@ class SelectDatetimeScreen extends ConsumerWidget {
           slotsAsync.when(
             loading: () => const _SlotsSkeleton(),
             error: (e, _) => const _SlotsError(),
-            data: (slots) => _SlotsGrid(
-              slots: slots,
-              selectedSlot: selectedSlot,
-              onSlotSelected: onSlotSelected,
-            ),
+            data: (slots) {
+              if (slots.isEmpty) {
+                return _NoSlotsState(
+                  onSelectTomorrow: () {
+                    onDateChanged(
+                      selectedDate.add(const Duration(days: 1)),
+                    );
+                  },
+                );
+              }
+              return _SlotsGrid(
+                slots: slots,
+                selectedSlot: selectedSlot,
+                onSlotSelected: onSlotSelected,
+              );
+            },
           ),
 
           const SizedBox(height: 40),
@@ -189,6 +200,52 @@ class _SlotsError extends StatelessWidget {
         child: Text(
           'Could not load time slots. Please try again.',
           textAlign: TextAlign.center,
+        ),
+      ),
+    );
+  }
+}
+
+class _NoSlotsState extends StatelessWidget {
+  final VoidCallback onSelectTomorrow;
+
+  const _NoSlotsState({required this.onSelectTomorrow});
+
+  @override
+  Widget build(BuildContext context) {
+    final tt = Theme.of(context).textTheme;
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+      child: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.schedule_rounded,
+              size: 52,
+              color: AppColors.textHint,
+            ),
+            const SizedBox(height: 14),
+            Text(
+              'No slots available today',
+              style: tt.titleSmall?.copyWith(
+                color: AppColors.textPrimary,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'All time slots have passed.\nPlease select another date.',
+              textAlign: TextAlign.center,
+              style: tt.bodySmall?.copyWith(color: AppColors.textSecondary),
+            ),
+            const SizedBox(height: 20),
+            FilledButton.icon(
+              onPressed: onSelectTomorrow,
+              icon: const Icon(Icons.arrow_forward_rounded, size: 16),
+              label: const Text("View Tomorrow's Slots"),
+            ),
+          ],
         ),
       ),
     );

@@ -10,6 +10,7 @@ class BookingStatusBadge extends StatelessWidget {
         'pending' => AppColors.statusPending,
         'assigned' => AppColors.statusAssigned,
         'in_progress' => AppColors.statusInProgress,
+        'awaiting_verification' => AppColors.warning,
         'completed' => AppColors.statusCompleted,
         'cancelled' => AppColors.statusCancelled,
         'rejected' => AppColors.error,

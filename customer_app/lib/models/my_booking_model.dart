@@ -9,8 +9,8 @@ class BookingStatus {
   static const String enRoute = 'en_route';
   static const String inProgress = 'in_progress';
   static const String started = 'started';
+  static const String awaitingVerification = 'awaiting_verification';
   static const String completed = 'completed';
-  static const String closed = 'closed';
   static const String cancelled = 'cancelled';
 
   static const List<(String, String)> orderedStages = [
@@ -19,8 +19,8 @@ class BookingStatus {
     (accepted, 'Vendor Accepted'),
     (enRoute, 'Technician En Route'),
     (inProgress, 'Service In Progress'),
+    (awaitingVerification, 'OTP Verification'),
     (completed, 'Service Completed'),
-    (closed, 'Booking Closed'),
   ];
 
   static String labelFor(String status) {
@@ -36,7 +36,7 @@ class BookingStatus {
     DateTime base,
   ) {
     final stages = orderedStages;
-    // 'started' is the vendor-app equivalent of admin's 'in_progress'; treat them identically.
+    // 'started' is the vendor-app alias for 'in_progress'; treat identically.
     final lookupStatus = currentStatus == started ? inProgress : currentStatus;
     final currentIdx = stages.indexWhere((s) => s.$1 == lookupStatus);
 
@@ -47,7 +47,11 @@ class BookingStatus {
       return BookingStatusEvent(
         status: status,
         label: label,
-        timestamp: isReached ? base.add(Duration(hours: i * 2)) : null,
+        isReached: isReached,
+        // Only the first step (Booking Placed) uses the real createdAt timestamp.
+        // Other steps have no persisted timestamp yet, so we show reached state
+        // without a fake time.
+        timestamp: isReached && i == 0 ? base : null,
       );
     });
   }
@@ -70,6 +74,7 @@ class MyBookingModel {
   final DateTime createdAt;
   final String? vendorName;
   final String? vendorPhone;
+  final String? completionOtp;
   final List<BookingStatusEvent> timeline;
 
   const MyBookingModel({
@@ -89,6 +94,7 @@ class MyBookingModel {
     required this.createdAt,
     this.vendorName,
     this.vendorPhone,
+    this.completionOtp,
     this.timeline = const [],
   });
 
@@ -100,10 +106,10 @@ class MyBookingModel {
   bool get isOngoing =>
       status == BookingStatus.enRoute ||
       status == BookingStatus.inProgress ||
-      status == BookingStatus.started;
+      status == BookingStatus.started ||
+      status == BookingStatus.awaitingVerification;
 
-  bool get isCompleted =>
-      status == BookingStatus.completed || status == BookingStatus.closed;
+  bool get isCompleted => status == BookingStatus.completed;
 
   bool get isCancelled => status == BookingStatus.cancelled;
 
@@ -179,6 +185,7 @@ class MyBookingModel {
       createdAt: DateTime.parse(createdAtStr),
       vendorName: (json['vendors'] as Map<String, dynamic>?)?['business_name'] as String?,
       vendorPhone: (json['vendors'] as Map<String, dynamic>?)?['phone'] as String?,
+      completionOtp: json['completion_otp'] as String?,
       timeline: (json['timeline'] as List<dynamic>?)
               ?.map((e) =>
                   BookingStatusEvent.fromJson(e as Map<String, dynamic>))

@@ -16,9 +16,17 @@ class BookingStatusTimeline extends StatelessWidget {
       events.add(BookingStatusEvent(
         status: BookingStatus.cancelled,
         label: 'Cancelled',
+        isReached: true,
         timestamp: booking.createdAt.add(const Duration(hours: 1)),
       ));
     }
+
+    // The last reached non-cancelled step is the "active" (current) step.
+    final lastReachedIdx = booking.isCancelled
+        ? -1
+        : events.lastIndexWhere(
+            (e) => e.isReached && e.status != BookingStatus.cancelled,
+          );
 
     return Column(
       children: List.generate(events.length, (i) {
@@ -28,6 +36,7 @@ class BookingStatusTimeline extends StatelessWidget {
           event: event,
           isLast: isLast,
           isCancelledStep: event.status == BookingStatus.cancelled,
+          isActive: i == lastReachedIdx,
         );
       }),
     );
@@ -38,21 +47,31 @@ class _TimelineStep extends StatelessWidget {
   final BookingStatusEvent event;
   final bool isLast;
   final bool isCancelledStep;
+  final bool isActive;
 
   const _TimelineStep({
     required this.event,
     required this.isLast,
     required this.isCancelledStep,
+    required this.isActive,
   });
 
   Color get _dotColor {
     if (isCancelledStep) return AppColors.error;
+    if (isActive) return AppColors.primary;
     if (event.isReached) return AppColors.success;
     return AppColors.border;
   }
 
+  // Line after this step: green if fully completed, gray otherwise.
   Color get _lineColor =>
-      event.isReached ? AppColors.success : AppColors.border;
+      event.isReached && !isActive ? AppColors.success : AppColors.border;
+
+  IconData get _dotIcon {
+    if (isCancelledStep) return Icons.close_rounded;
+    if (isActive) return Icons.radio_button_checked_rounded;
+    return Icons.check_rounded;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -68,10 +87,10 @@ class _TimelineStep extends StatelessWidget {
             width: 32,
             child: Column(
               children: [
-                // Dot
+                // Dot — slightly larger for the active step
                 Container(
-                  width: 24,
-                  height: 24,
+                  width: isActive ? 26 : 24,
+                  height: isActive ? 26 : 24,
                   decoration: BoxDecoration(
                     color: reached ? _dotColor : AppColors.surface,
                     shape: BoxShape.circle,
@@ -79,13 +98,20 @@ class _TimelineStep extends StatelessWidget {
                       color: _dotColor,
                       width: reached ? 0 : 2,
                     ),
+                    boxShadow: isActive
+                        ? [
+                            BoxShadow(
+                              color: AppColors.primary.withAlpha(60),
+                              blurRadius: 6,
+                              spreadRadius: 1,
+                            ),
+                          ]
+                        : null,
                   ),
                   child: reached
                       ? Icon(
-                          isCancelledStep
-                              ? Icons.close_rounded
-                              : Icons.check_rounded,
-                          size: 14,
+                          _dotIcon,
+                          size: isActive ? 15 : 14,
                           color: Colors.white,
                         )
                       : null,
@@ -108,21 +134,50 @@ class _TimelineStep extends StatelessWidget {
           // Right: label + timestamp
           Expanded(
             child: Padding(
-              padding: EdgeInsets.only(bottom: isLast ? 0 : 16),
+              padding: EdgeInsets.only(bottom: isLast ? 0 : 18),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    event.label,
-                    style: tt.bodySmall?.copyWith(
-                      fontWeight:
-                          reached ? FontWeight.w700 : FontWeight.w400,
-                      color: reached
-                          ? (isCancelledStep
-                              ? AppColors.error
-                              : AppColors.textPrimary)
-                          : AppColors.textHint,
-                    ),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          event.label,
+                          style: tt.bodySmall?.copyWith(
+                            fontWeight: reached
+                                ? FontWeight.w700
+                                : FontWeight.w400,
+                            color: reached
+                                ? (isCancelledStep
+                                    ? AppColors.error
+                                    : isActive
+                                        ? AppColors.primary
+                                        : AppColors.textPrimary)
+                                : AppColors.textHint,
+                          ),
+                        ),
+                      ),
+                      if (isActive)
+                        Container(
+                          margin: const EdgeInsets.only(left: 8),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 7,
+                            vertical: 2,
+                          ),
+                          decoration: BoxDecoration(
+                            color: AppColors.primaryLight,
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Text(
+                            'Now',
+                            style: tt.labelSmall?.copyWith(
+                              color: AppColors.primary,
+                              fontWeight: FontWeight.w700,
+                              fontSize: 10,
+                            ),
+                          ),
+                        ),
+                    ],
                   ),
                   if (event.timestamp != null) ...[
                     const SizedBox(height: 2),

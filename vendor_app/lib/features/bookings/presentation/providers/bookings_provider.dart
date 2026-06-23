@@ -6,8 +6,10 @@ import '../../data/repositories/bookings_repository_impl.dart';
 import '../../domain/models/booking.dart';
 import '../../domain/repositories/i_bookings_repository.dart';
 import '../../domain/usecases/get_vendor_bookings_usecase.dart';
+import '../../domain/usecases/initiate_completion_usecase.dart';
 import '../../domain/usecases/reject_booking_usecase.dart';
 import '../../domain/usecases/update_booking_status_usecase.dart';
+import '../../domain/usecases/verify_completion_otp_usecase.dart';
 
 // ── DI chain ─────────────────────────────────────────────────────────────────
 
@@ -29,6 +31,14 @@ final updateBookingStatusUseCaseProvider = Provider<UpdateBookingStatusUseCase>(
 
 final rejectBookingUseCaseProvider = Provider<RejectBookingUseCase>(
   (ref) => RejectBookingUseCase(ref.watch(bookingsRepositoryProvider)),
+);
+
+final initiateCompletionUseCaseProvider = Provider<InitiateCompletionUseCase>(
+  (ref) => InitiateCompletionUseCase(ref.watch(bookingsRepositoryProvider)),
+);
+
+final verifyCompletionOtpUseCaseProvider = Provider<VerifyCompletionOtpUseCase>(
+  (ref) => VerifyCompletionOtpUseCase(ref.watch(bookingsRepositoryProvider)),
 );
 
 // ── Live bookings (Supabase) ──────────────────────────────────────────────────

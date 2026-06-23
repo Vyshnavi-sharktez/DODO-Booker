@@ -6,9 +6,9 @@ class BookingsRepositoryImpl implements IBookingsRepository {
   const BookingsRepositoryImpl(this._datasource);
   final BookingsRemoteDatasource _datasource;
 
-  // Only forward-progress targets are valid via updateBookingStatus.
-  // Rejection goes through rejectBooking(); cancellation is admin-only.
-  static const _validProgressTargets = {'in_progress', 'completed'};
+  // Only "Start Service" (assigned→in_progress) goes through updateBookingStatus.
+  // Completion requires OTP: use initiateCompletion + verifyCompletionOtp instead.
+  static const _validProgressTargets = {'in_progress'};
 
   @override
   Future<List<Booking>> getVendorBookings(String vendorId) async {
@@ -47,6 +47,14 @@ class BookingsRepositoryImpl implements IBookingsRepository {
       rejectionReason: rejectionReason,
     );
   }
+
+  @override
+  Future<void> initiateCompletion(String bookingId) =>
+      _datasource.initiateCompletion(bookingId);
+
+  @override
+  Future<bool> verifyCompletionOtp(String bookingId, String otp) =>
+      _datasource.verifyCompletionOtp(bookingId, otp);
 
   @override
   Future<void> createAdminNotification({

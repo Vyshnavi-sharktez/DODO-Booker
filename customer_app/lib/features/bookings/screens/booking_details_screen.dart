@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/widgets/app_modal_dialog.dart';
@@ -24,8 +25,19 @@ class _BookingDetailsScreenState extends ConsumerState<BookingDetailsScreen> {
   bool _isCancelling = false;
 
   @override
+  void initState() {
+    super.initState();
+    // Force a re-fetch every time this screen opens so the customer always
+    // sees the latest vendor assignment and status from the server.
+    Future.microtask(() {
+      if (mounted) ref.invalidate(bookingByIdProvider(widget.booking.id));
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final booking = widget.booking;
+    final bookingAsync = ref.watch(bookingByIdProvider(widget.booking.id));
+    final booking = bookingAsync.valueOrNull ?? widget.booking;
     final reviewAsync = booking.canReview
         ? ref.watch(bookingReviewProvider(booking.id))
         : null;
@@ -57,7 +69,9 @@ class _BookingDetailsScreenState extends ConsumerState<BookingDetailsScreen> {
             child: Column(
               children: [
                 _StatusBanner(booking: booking),
-                const SizedBox(height: 8),
+                if (booking.status == BookingStatus.awaitingVerification &&
+                    booking.completionOtp != null)
+                  _OtpDisplayCard(otp: booking.completionOtp!),
                 _BookingInfoCard(booking: booking),
                 _ServiceInfoCard(booking: booking),
                 _AddressCard(booking: booking),
@@ -156,19 +170,50 @@ class _StatusBanner extends StatelessWidget {
   Widget build(BuildContext context) {
     final (color, label, icon) = _bannerMeta(booking.status);
     return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 20),
-      color: color.withAlpha(25),
+      margin: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: color.withAlpha(18),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: color.withAlpha(55)),
+      ),
       child: Row(
         children: [
-          Icon(icon, color: color, size: 22),
-          const SizedBox(width: 10),
-          Text(
-            label,
-            style: TextStyle(
-              color: color,
-              fontWeight: FontWeight.w700,
-              fontSize: 15,
+          Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              color: color.withAlpha(30),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(icon, color: color, size: 20),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              label,
+              style: TextStyle(
+                color: color,
+                fontWeight: FontWeight.w700,
+                fontSize: 14,
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+            decoration: BoxDecoration(
+              color: color.withAlpha(35),
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Text(
+              BookingStatus.labelFor(booking.status),
+              style: TextStyle(
+                color: color,
+                fontSize: 11,
+                fontWeight: FontWeight.w800,
+                letterSpacing: 0.3,
+              ),
             ),
           ),
         ],
@@ -189,10 +234,10 @@ class _StatusBanner extends StatelessWidget {
       case BookingStatus.inProgress:
       case BookingStatus.started:
         return (const Color(0xFFFF6D00), 'Service is in progress', Icons.construction_rounded);
+      case BookingStatus.awaitingVerification:
+        return (AppColors.warning, 'Share OTP with vendor to complete service', Icons.lock_clock_rounded);
       case BookingStatus.completed:
         return (AppColors.success, 'Service completed successfully', Icons.check_circle_rounded);
-      case BookingStatus.closed:
-        return (AppColors.textSecondary, 'Booking is closed', Icons.lock_rounded);
       case BookingStatus.cancelled:
         return (AppColors.error, 'This booking was cancelled', Icons.cancel_rounded);
       default:
@@ -488,42 +533,98 @@ class _VendorCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final tt = Theme.of(context).textTheme;
     final hasVendor = booking.vendorName != null;
+
     return _SectionCard(
       title: 'ASSIGNED VENDOR',
-      children: hasVendor
-          ? [
-              _DetailRow(
-                icon: Icons.store_rounded,
-                label: 'Vendor',
-                value: booking.vendorName!,
+      children: [
+        if (hasVendor)
+          Row(
+            children: [
+              Container(
+                width: 46,
+                height: 46,
+                decoration: const BoxDecoration(
+                  color: AppColors.primaryLight,
+                  shape: BoxShape.circle,
+                ),
+                child: Center(
+                  child: Text(
+                    booking.vendorName![0].toUpperCase(),
+                    style: const TextStyle(
+                      color: AppColors.primary,
+                      fontWeight: FontWeight.w800,
+                      fontSize: 20,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      booking.vendorName!,
+                      style: tt.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    if (booking.vendorPhone != null)
+                      Text(
+                        booking.vendorPhone!,
+                        style: tt.bodySmall?.copyWith(
+                          color: AppColors.textSecondary,
+                        ),
+                      ),
+                  ],
+                ),
               ),
               if (booking.vendorPhone != null)
-                _DetailRow(
-                  icon: Icons.phone_rounded,
-                  label: 'Contact',
-                  value: booking.vendorPhone!,
-                ),
-            ]
-          : [
-              Row(
-                children: [
-                  const Icon(
-                    Icons.pending_rounded,
-                    size: 16,
-                    color: AppColors.textHint,
+                Container(
+                  decoration: const BoxDecoration(
+                    color: AppColors.primaryLight,
+                    shape: BoxShape.circle,
                   ),
-                  const SizedBox(width: 8),
-                  Text(
-                    'Vendor assignment in progress…',
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: AppColors.textHint,
-                          fontStyle: FontStyle.italic,
+                  child: IconButton(
+                    icon: const Icon(Icons.phone_rounded, size: 18),
+                    color: AppColors.primary,
+                    tooltip: 'Copy phone number',
+                    onPressed: () {
+                      Clipboard.setData(
+                        ClipboardData(text: booking.vendorPhone!),
+                      );
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Phone number copied to clipboard'),
+                          duration: Duration(seconds: 2),
                         ),
+                      );
+                    },
                   ),
-                ],
+                ),
+            ],
+          )
+        else
+          Row(
+            children: [
+              const Icon(
+                Icons.pending_rounded,
+                size: 16,
+                color: AppColors.textHint,
+              ),
+              const SizedBox(width: 8),
+              Text(
+                'Vendor assignment in progress…',
+                style: tt.bodySmall?.copyWith(
+                  color: AppColors.textHint,
+                  fontStyle: FontStyle.italic,
+                ),
               ),
             ],
+          ),
+      ],
     );
   }
 }
@@ -643,6 +744,108 @@ class _PaymentRow extends StatelessWidget {
                 : tt.bodySmall?.copyWith(fontWeight: FontWeight.w500),
           ),
         ],
+      ),
+    );
+  }
+}
+
+// ── Action buttons ─────────────────────────────────────────────────────────────
+
+// ── OTP Display Card (awaiting_verification) ──────────────────────────────────
+
+class _OtpDisplayCard extends StatelessWidget {
+  final String otp;
+
+  const _OtpDisplayCard({required this.otp});
+
+  @override
+  Widget build(BuildContext context) {
+    final tt = Theme.of(context).textTheme;
+    return Card(
+      margin: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(
+                  Icons.lock_clock_rounded,
+                  size: 18,
+                  color: AppColors.warning,
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  'SERVICE COMPLETION OTP',
+                  style: tt.labelMedium?.copyWith(
+                    color: AppColors.textSecondary,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 0.5,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            // Digit boxes
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: otp.split('').map((digit) {
+                return Container(
+                  width: 44,
+                  height: 54,
+                  margin: const EdgeInsets.symmetric(horizontal: 4),
+                  decoration: BoxDecoration(
+                    color: AppColors.warning.withAlpha(18),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                      color: AppColors.warning.withAlpha(80),
+                      width: 2,
+                    ),
+                  ),
+                  child: Center(
+                    child: Text(
+                      digit,
+                      style: tt.headlineMedium?.copyWith(
+                        color: AppColors.textPrimary,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                  ),
+                );
+              }).toList(),
+            ),
+            const SizedBox(height: 14),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              decoration: BoxDecoration(
+                color: AppColors.warning.withAlpha(15),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Icon(
+                    Icons.warning_amber_rounded,
+                    size: 16,
+                    color: AppColors.warning,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Share this OTP only after service is completed.',
+                      style: tt.bodySmall?.copyWith(
+                        color: AppColors.textPrimary,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

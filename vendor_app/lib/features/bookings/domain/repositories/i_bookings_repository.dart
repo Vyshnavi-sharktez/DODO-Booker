@@ -8,6 +8,8 @@ abstract class IBookingsRepository {
     required String bookingId,
     required String rejectionReason,
   });
+  Future<void> initiateCompletion(String bookingId);
+  Future<bool> verifyCompletionOtp(String bookingId, String otp);
   Future<void> createAdminNotification({
     required String title,
     required String message,
