@@ -12,7 +12,7 @@ import '../../auth/utils/auth_modal_gate.dart';
 import '../../address/screens/address_screen.dart';
 import '../../wishlist/screens/wishlist_screen.dart';
 import 'settings_screen.dart';
-
+import 'package:customer_app/features/bookings/modals/my_bookings_modal.dart';
 class ProfileScreen extends ConsumerWidget {
   const ProfileScreen({super.key});
 
@@ -45,9 +45,8 @@ class ProfileScreen extends ConsumerWidget {
           constraints: const BoxConstraints(maxWidth: 680),
           child: profileAsync.when(
             loading: () => const _ProfileSkeleton(),
-            error: (e, _) => _ProfileError(
-              onRetry: () => ref.invalidate(profileProvider),
-            ),
+            error: (e, _) =>
+                _ProfileError(onRetry: () => ref.invalidate(profileProvider)),
             data: (profile) => _ProfileBody(profile: profile),
           ),
         ),
@@ -126,10 +125,33 @@ class _ProfileBody extends ConsumerWidget {
                   ),
                 ),
               ),
+              const SizedBox(height: 12),
+
+              _FloatingCard(
+                child: ProfileMenuTile(
+                  icon: Icons.receipt_long_rounded,
+                  iconColor: Colors.blue,
+                  title: 'My Bookings',
+                  subtitle: 'View and manage your bookings',
+                  onTap: () => _openResponsive(
+                    context,
+                    desktopModal: () => PageSheet.show(
+                      context,
+                      title: 'My Bookings',
+                      child: const MyBookingsModal(),
+                    ),
+                    mobileRoute: () => Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => const MyBookingsModal(),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
 
               // ── Preferences section ───────────────────────────────────
               const _SectionLabel('Preferences'),
-
+              
               _FloatingCard(
                 child: ProfileMenuTile(
                   icon: Icons.settings_rounded,
@@ -144,9 +166,7 @@ class _ProfileBody extends ConsumerWidget {
                       child: const SettingsScreen(inModal: true),
                     ),
                     mobileRoute: () => Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) => const SettingsScreen(),
-                      ),
+                      MaterialPageRoute(builder: (_) => const SettingsScreen()),
                     ),
                   ),
                 ),
@@ -195,10 +215,7 @@ class _FloatingCard extends StatelessWidget {
           ),
         ],
       ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(16),
-        child: child,
-      ),
+      child: ClipRRect(borderRadius: BorderRadius.circular(16), child: child),
     );
   }
 }
@@ -216,10 +233,10 @@ class _SectionLabel extends StatelessWidget {
       child: Text(
         text.toUpperCase(),
         style: Theme.of(context).textTheme.labelSmall?.copyWith(
-              color: AppColors.textHint,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 1.2,
-            ),
+          color: AppColors.textHint,
+          fontWeight: FontWeight.w700,
+          letterSpacing: 1.2,
+        ),
       ),
     );
   }
@@ -300,8 +317,10 @@ class _ProfileCard extends StatelessWidget {
               style: OutlinedButton.styleFrom(
                 foregroundColor: AppColors.textPrimary,
                 side: const BorderSide(color: AppColors.border, width: 1.5),
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 28, vertical: 11),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 28,
+                  vertical: 11,
+                ),
                 minimumSize: Size.zero,
                 textStyle: const TextStyle(
                   fontSize: 13,
@@ -334,10 +353,7 @@ class _AvatarWidget extends StatelessWidget {
       decoration: BoxDecoration(
         shape: BoxShape.circle,
         color: AppColors.textPrimary,
-        border: Border.all(
-          color: AppColors.gold.withAlpha(180),
-          width: 2.5,
-        ),
+        border: Border.all(color: AppColors.gold.withAlpha(180), width: 2.5),
       ),
       child: profile.imageUrl != null
           ? ClipOval(
@@ -527,18 +543,18 @@ class _ProfileError extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(Icons.error_outline_rounded,
-              size: 48, color: AppColors.textHint),
+          const Icon(
+            Icons.error_outline_rounded,
+            size: 48,
+            color: AppColors.textHint,
+          ),
           const SizedBox(height: 12),
           Text(
             'Could not load profile',
             style: Theme.of(context).textTheme.titleMedium,
           ),
           const SizedBox(height: 16),
-          FilledButton(
-            onPressed: onRetry,
-            child: const Text('Retry'),
-          ),
+          FilledButton(onPressed: onRetry, child: const Text('Retry')),
         ],
       ),
     );
