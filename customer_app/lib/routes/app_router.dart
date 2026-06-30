@@ -22,6 +22,9 @@ import '../features/cart/screens/cart_screen.dart';
 import '../features/cart/screens/checkout_screen.dart';
 import '../features/search/screens/search_screen.dart';
 import '../features/category/screens/category_screen.dart';
+import '../features/info/screens/contact_screen.dart';
+import '../features/info/screens/help_screen.dart';
+import '../features/info/screens/refund_policy_screen.dart';
 import '../models/booking_model.dart';
 import '../models/category_model.dart';
 import '../models/subcategory_model.dart';
@@ -49,6 +52,9 @@ class AppRoutes {
   static const String profile = '/profile';
   static const String categories = '/categories';
   static const String categoryServices = '/category-services/:categoryId';
+  static const String contact = '/contact';
+  static const String help = '/help';
+  static const String refundPolicy = '/refund-policy';
 }
 
 final appRouter = GoRouter(
@@ -203,6 +209,21 @@ final appRouter = GoRouter(
           body: Center(child: Text('Category not found')),
         );
       },
+    ),
+
+    GoRoute(
+      path: AppRoutes.contact,
+      builder: (context, state) => const ContactScreen(),
+    ),
+
+    GoRoute(
+      path: AppRoutes.help,
+      builder: (context, state) => const HelpScreen(),
+    ),
+
+    GoRoute(
+      path: AppRoutes.refundPolicy,
+      builder: (context, state) => const RefundPolicyScreen(),
     ),
   ],
 );

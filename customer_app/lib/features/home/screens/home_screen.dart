@@ -14,6 +14,7 @@ import '../widgets/home_header_section.dart';
 import '../widgets/service_selection_modal.dart';
 import '../widgets/special_offers_section.dart';
 import '../widgets/trending_services_section.dart';
+import '../widgets/footer_section.dart';
 import '../widgets/why_dodo_section.dart';
 
 class HomeScreen extends ConsumerWidget {
@@ -62,8 +63,8 @@ class HomeScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final homeBanners      = ref.watch(homeBannersProvider);
     final featuredCategories = ref.watch(featuredCategoriesProvider);
-    final featuredServices = ref.watch(featuredServicesProvider);
-    final popularServices  = ref.watch(popularServicesProvider);
+    // final featuredServices = ref.watch(featuredServicesProvider);
+    // final popularServices  = ref.watch(popularServicesProvider);
     final trendingServices = ref.watch(trendingServicesProvider);
     final newServices      = ref.watch(newServicesProvider);
     final reviews          = ref.watch(homeReviewsProvider);
@@ -176,7 +177,11 @@ class HomeScreen extends ConsumerWidget {
                     const SliverToBoxAdapter(child: SizedBox(height: 32)),
                     const SliverToBoxAdapter(child: WhyDodoSection()),
 
-                    const SliverToBoxAdapter(child: SizedBox(height: 64)),
+                    // ── Site footer ────────────────────────────────────
+                    const SliverToBoxAdapter(child: SizedBox(height: 48)),
+                    const SliverToBoxAdapter(child: FooterSection()),
+
+                    const SliverToBoxAdapter(child: SizedBox(height: 32)),
                   ],
                 ),
               ),
