@@ -23,7 +23,7 @@ class _DocumentsPageState extends ConsumerState<DocumentsPage> {
 
   Future<void> _showUploadDialog(
     BuildContext context,
-    Set<String> uploadedTypes,
+    List<DocumentTypeModel> availableTypes,
   ) async {
     final vendor = ref.read(currentVendorUserProvider);
     if (vendor == null) return;
@@ -32,7 +32,7 @@ class _DocumentsPageState extends ConsumerState<DocumentsPage> {
     final uploaded = await showDialog<bool>(
       context: context,
       builder: (_) => UploadDocumentDialog(
-        uploadedTypes: uploadedTypes,
+        availableTypes: availableTypes,
         onUpload: (documentType, bytes, contentType, customDocumentName) =>
             ref.read(uploadDocumentUseCaseProvider)(
           vendorId: vendor.id,
@@ -126,10 +126,15 @@ class _DocumentsPageState extends ConsumerState<DocumentsPage> {
   @override
   Widget build(BuildContext context) {
     final asyncDocs = ref.watch(vendorDocumentsProvider);
+    final asyncTypes = ref.watch(documentTypesProvider);
+
     final docs = asyncDocs.valueOrNull ?? const [];
-    final uploadedTypes = {for (final d in docs) d.documentType};
-    final hasAvailableTypes =
-        DocumentType.values.any((t) => !uploadedTypes.contains(t.value));
+    // Fall back to the hardcoded list while the DB fetch is in-flight or fails.
+    final types = asyncTypes.valueOrNull ?? DocumentTypeModel.fallbackList;
+
+    final uploadedTypeIds = {for (final d in docs) d.documentType};
+    final availableTypes =
+        types.where((t) => !uploadedTypeIds.contains(t.id)).toList();
 
     return Scaffold(
       appBar: AppBar(
@@ -146,13 +151,14 @@ class _DocumentsPageState extends ConsumerState<DocumentsPage> {
         children: [
           if (asyncDocs.hasError)
             _ErrorBanner(onRetry: () => ref.refresh(vendorDocumentsProvider)),
-          if (hasAvailableTypes)
+          if (availableTypes.isNotEmpty)
             Padding(
               padding: const EdgeInsets.only(bottom: 20),
               child: SizedBox(
                 width: double.infinity,
                 child: OutlinedButton.icon(
-                  onPressed: () => _showUploadDialog(context, uploadedTypes),
+                  onPressed: () =>
+                      _showUploadDialog(context, availableTypes),
                   style: OutlinedButton.styleFrom(
                     padding: const EdgeInsets.symmetric(vertical: 14),
                     side: BorderSide(
@@ -178,12 +184,18 @@ class _DocumentsPageState extends ConsumerState<DocumentsPage> {
               ),
             ),
             ...docs.map(
-              (doc) => DocumentTile(
-                document: doc,
-                isReplacing: _replacingTypes.contains(doc.documentType),
-                onReplace: () => _replace(doc),
-                onView: () => _viewDocument(doc.documentUrl),
-              ),
+              (doc) {
+                final docType = types
+                    .where((t) => t.id == doc.documentType)
+                    .firstOrNull;
+                return DocumentTile(
+                  document: doc,
+                  docType: docType,
+                  isReplacing: _replacingTypes.contains(doc.documentType),
+                  onReplace: () => _replace(doc),
+                  onView: () => _viewDocument(doc.documentUrl),
+                );
+              },
             ),
           ],
         ],

@@ -92,11 +92,14 @@ class VendorsNotifier extends StateNotifier<AsyncValue<List<Vendor>>> {
 
   Future<void> toggleActive(String id, {required bool currentIsActive}) async {
     final newIsActive = !currentIsActive;
+    final newStatus = newIsActive ? 'active' : 'inactive';
     final current = state.valueOrNull;
     if (current != null) {
       state = AsyncValue.data(
         current
-            .map((v) => v.id == id ? v.copyWith(isActive: newIsActive) : v)
+            .map((v) => v.id == id
+                ? v.copyWith(isActive: newIsActive, status: newStatus)
+                : v)
             .toList(),
       );
     }

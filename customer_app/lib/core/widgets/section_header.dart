@@ -15,13 +15,19 @@ class SectionHeader extends StatelessWidget {
       children: [
         Text(title, style: theme.textTheme.titleLarge),
         if (onSeeAll != null)
-          GestureDetector(
-            onTap: onSeeAll,
-            child: Text(
-              'See All',
-              style: theme.textTheme.bodyMedium?.copyWith(
-                color: AppColors.primary,
-                fontWeight: FontWeight.w600,
+          MouseRegion(
+            cursor: SystemMouseCursors.click,
+            child: GestureDetector(
+              onTap: onSeeAll,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 2),
+                child: Text(
+                  'See All',
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: AppColors.gold,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
               ),
             ),
           ),

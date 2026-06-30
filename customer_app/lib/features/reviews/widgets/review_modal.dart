@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/widgets/app_modal_dialog.dart';
+import '../../../core/widgets/clickable.dart';
 import '../models/review_model.dart';
 import '../services/review_providers.dart';
 
@@ -113,6 +114,7 @@ class _ReviewForm extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
 
     return Column(
@@ -123,14 +125,14 @@ class _ReviewForm extends StatelessWidget {
           'Your Rating',
           style: tt.labelMedium?.copyWith(
             fontWeight: FontWeight.w700,
-            color: AppColors.textSecondary,
+            color: cs.onSurfaceVariant,
           ),
         ),
         const SizedBox(height: 10),
         Row(
           children: List.generate(5, (i) {
             final filled = i < selectedRating;
-            return GestureDetector(
+            return Clickable(
               onTap: () => onRatingChanged(i + 1),
               child: Padding(
                 padding: const EdgeInsets.only(right: 6),
@@ -156,7 +158,7 @@ class _ReviewForm extends StatelessWidget {
           'Your Review',
           style: tt.labelMedium?.copyWith(
             fontWeight: FontWeight.w700,
-            color: AppColors.textSecondary,
+            color: cs.onSurfaceVariant,
           ),
         ),
         const SizedBox(height: 8),
@@ -204,6 +206,7 @@ class _ExistingReviewBody extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
     final months = [
       'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
@@ -226,12 +229,12 @@ class _ExistingReviewBody extends StatelessWidget {
           }),
         ),
         const SizedBox(height: 4),
-        Text(date, style: tt.labelSmall?.copyWith(color: AppColors.textHint)),
+        Text(date, style: tt.labelSmall?.copyWith(color: cs.onSurface.withAlpha(120))),
         const SizedBox(height: 12),
         if (review.reviewText.isNotEmpty)
           Text(
             review.reviewText,
-            style: tt.bodyMedium?.copyWith(color: AppColors.textPrimary, height: 1.5),
+            style: tt.bodyMedium?.copyWith(color: cs.onSurface, height: 1.5),
           ),
         const SizedBox(height: 16),
         Container(

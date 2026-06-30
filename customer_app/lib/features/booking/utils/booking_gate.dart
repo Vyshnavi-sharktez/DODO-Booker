@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/widgets/app_modal_dialog.dart';
+import '../../../core/widgets/page_sheet.dart';
 import '../../../features/auth/providers/auth_provider.dart';
 import '../../../features/auth/widgets/otp_login_modal.dart';
 import '../../../features/auth/widgets/otp_verification_modal.dart';
@@ -10,6 +11,7 @@ import '../../../models/service_model.dart';
 import '../modals/address_modal.dart';
 import '../modals/datetime_modal.dart';
 import '../modals/booking_summary_modal.dart';
+import '../modals/booking_flow_modal.dart';
 import '../modals/payment_modal.dart';
 import '../services/booking_providers.dart';
 import '../services/coupon_providers.dart';
@@ -54,6 +56,18 @@ Future<void> launchBookingFlow(
     final saved = await profileFuture;
     if (!context.mounted || saved != true) return;
   }
+
+  // ── Desktop: booking modal — matches Profile dialog design system ────────────
+  if (MediaQuery.of(context).size.width >= 768) {
+    await PageSheet.show(
+      context,
+      title: service.name,
+      child: BookingFlowModal(service: service),
+    );
+    return;
+  }
+
+  // ── Mobile: sequential AppModalDialog flow ────────────────────────────────────
 
   // ── Step 3: Address ───────────────────────────────────────────────────────
   final addressFuture = AppModalDialog.show(

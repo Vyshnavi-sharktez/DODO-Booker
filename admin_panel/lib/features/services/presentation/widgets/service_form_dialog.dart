@@ -1,20 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../../../core/theme/app_theme.dart';
-import '../../../categories/domain/models/category.dart';
-import '../../../sub_categories/domain/models/sub_category.dart';
 import '../../domain/models/service.dart';
 
 class ServiceFormDialog extends StatefulWidget {
   final Service? existing;
-  final List<Category> categories;
-  final List<SubCategory> allSubCategories;
+  final String categoryId;
+  final String categoryName;
+  final String subCategoryId;
+  final String subCategoryName;
   final Future<void> Function({
     required String categoryId,
     required String subCategoryId,
     required String name,
     required String slug,
-    String? description,
     required double basePrice,
     required int estimatedDuration,
     String? imageUrl,
@@ -24,8 +23,10 @@ class ServiceFormDialog extends StatefulWidget {
   const ServiceFormDialog({
     super.key,
     this.existing,
-    required this.categories,
-    required this.allSubCategories,
+    required this.categoryId,
+    required this.categoryName,
+    required this.subCategoryId,
+    required this.subCategoryName,
     required this.onSave,
   });
 
@@ -37,13 +38,10 @@ class _ServiceFormDialogState extends State<ServiceFormDialog> {
   final _formKey = GlobalKey<FormState>();
   late final TextEditingController _name;
   late final TextEditingController _slug;
-  late final TextEditingController _description;
   late final TextEditingController _basePrice;
   late final TextEditingController _estimatedDuration;
   late final TextEditingController _imageUrl;
   late bool _isActive;
-  String? _selectedCategoryId;
-  String? _selectedSubCategoryId;
   bool _saving = false;
   bool _slugEdited = false;
 
@@ -53,7 +51,6 @@ class _ServiceFormDialogState extends State<ServiceFormDialog> {
     final e = widget.existing;
     _name = TextEditingController(text: e?.name ?? '');
     _slug = TextEditingController(text: e?.slug ?? '');
-    _description = TextEditingController(text: e?.description ?? '');
     _basePrice = TextEditingController(
       text: e != null ? e.basePrice.toStringAsFixed(2) : '',
     );
@@ -62,10 +59,6 @@ class _ServiceFormDialogState extends State<ServiceFormDialog> {
     );
     _imageUrl = TextEditingController(text: e?.imageUrl ?? '');
     _isActive = e?.isActive ?? true;
-    _selectedCategoryId =
-        e?.categoryId.isNotEmpty == true ? e!.categoryId : null;
-    _selectedSubCategoryId =
-        e?.subCategoryId.isNotEmpty == true ? e!.subCategoryId : null;
     _slugEdited = e != null;
   }
 
@@ -73,18 +66,10 @@ class _ServiceFormDialogState extends State<ServiceFormDialog> {
   void dispose() {
     _name.dispose();
     _slug.dispose();
-    _description.dispose();
     _basePrice.dispose();
     _estimatedDuration.dispose();
     _imageUrl.dispose();
     super.dispose();
-  }
-
-  List<SubCategory> get _filteredSubCategories {
-    if (_selectedCategoryId == null) return [];
-    return widget.allSubCategories
-        .where((s) => s.categoryId == _selectedCategoryId)
-        .toList();
   }
 
   void _onNameChanged(String value) {
@@ -108,13 +93,10 @@ class _ServiceFormDialogState extends State<ServiceFormDialog> {
     setState(() => _saving = true);
     try {
       await widget.onSave(
-        categoryId: _selectedCategoryId!,
-        subCategoryId: _selectedSubCategoryId!,
+        categoryId: widget.categoryId,
+        subCategoryId: widget.subCategoryId,
         name: _name.text.trim(),
         slug: _slug.text.trim(),
-        description: _description.text.trim().isEmpty
-            ? null
-            : _description.text.trim(),
         basePrice: double.parse(_basePrice.text.trim()),
         estimatedDuration: int.tryParse(_estimatedDuration.text.trim()) ?? 0,
         imageUrl: _imageUrl.text.trim().isEmpty ? null : _imageUrl.text.trim(),
@@ -138,7 +120,6 @@ class _ServiceFormDialogState extends State<ServiceFormDialog> {
   @override
   Widget build(BuildContext context) {
     final isEdit = widget.existing != null;
-    final subCats = _filteredSubCategories;
 
     return Dialog(
       insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
@@ -195,64 +176,17 @@ class _ServiceFormDialogState extends State<ServiceFormDialog> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // Category dropdown
-                      DropdownButtonFormField<String>(
-                        // ignore: deprecated_member_use
-                        value: _selectedCategoryId,
-                        decoration: const InputDecoration(
-                          labelText: 'Category *',
-                          hintText: 'Select a category',
-                        ),
-                        items: widget.categories
-                            .map(
-                              (c) => DropdownMenuItem(
-                                value: c.id,
-                                child: Text(c.name),
-                              ),
-                            )
-                            .toList(),
-                        onChanged: (v) {
-                          setState(() {
-                            _selectedCategoryId = v;
-                            // Reset sub-category when category changes
-                            final stillValid = subCats
-                                .any((s) => s.id == _selectedSubCategoryId);
-                            if (!stillValid) _selectedSubCategoryId = null;
-                          });
-                        },
-                        validator: (v) =>
-                            v == null ? 'Please select a category' : null,
-                        isExpanded: true,
+                      // Parent context — read-only
+                      _ContextRow(
+                        label: 'Category',
+                        name: widget.categoryName,
+                        icon: Icons.folder_rounded,
                       ),
-                      const SizedBox(height: 16),
-
-                      // Sub Category dropdown
-                      DropdownButtonFormField<String>(
-                        // ignore: deprecated_member_use
-                        value: _selectedSubCategoryId,
-                        decoration: InputDecoration(
-                          labelText: 'Sub Category *',
-                          hintText: _selectedCategoryId == null
-                              ? 'Select a category first'
-                              : subCats.isEmpty
-                                  ? 'No sub categories for this category'
-                                  : 'Select a sub category',
-                        ),
-                        items: subCats
-                            .map(
-                              (s) => DropdownMenuItem(
-                                value: s.id,
-                                child: Text(s.name),
-                              ),
-                            )
-                            .toList(),
-                        onChanged: subCats.isEmpty
-                            ? null
-                            : (v) =>
-                                setState(() => _selectedSubCategoryId = v),
-                        validator: (v) =>
-                            v == null ? 'Please select a sub category' : null,
-                        isExpanded: true,
+                      const SizedBox(height: 8),
+                      _ContextRow(
+                        label: 'Sub Category',
+                        name: widget.subCategoryName,
+                        icon: Icons.folder_open_rounded,
                       ),
                       const SizedBox(height: 16),
 
@@ -287,17 +221,6 @@ class _ServiceFormDialogState extends State<ServiceFormDialog> {
                           }
                           return null;
                         },
-                      ),
-                      const SizedBox(height: 16),
-
-                      // Description
-                      TextFormField(
-                        controller: _description,
-                        decoration: const InputDecoration(
-                          labelText: 'Description',
-                          hintText: 'Brief description of this service',
-                        ),
-                        maxLines: 3,
                       ),
                       const SizedBox(height: 16),
 
@@ -456,6 +379,58 @@ class _ServiceFormDialogState extends State<ServiceFormDialog> {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _ContextRow extends StatelessWidget {
+  final String label;
+  final String name;
+  final IconData icon;
+
+  const _ContextRow({
+    required this.label,
+    required this.name,
+    required this.icon,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: AppColors.primary.withValues(alpha: 0.05),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: AppColors.primary.withValues(alpha: 0.18)),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, size: 16, color: AppColors.primary),
+          const SizedBox(width: 8),
+          Text(
+            '$label:',
+            style: TextStyle(
+              fontSize: 12,
+              color: AppColors.textSecondary,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text(
+              name,
+              style: const TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: AppColors.textPrimary,
+              ),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          const SizedBox(width: 4),
+          Icon(Icons.lock_outline, size: 13, color: AppColors.textSecondary),
+        ],
       ),
     );
   }

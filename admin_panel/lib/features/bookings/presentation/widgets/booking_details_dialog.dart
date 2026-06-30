@@ -2,16 +2,25 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import '../../../../core/theme/app_theme.dart';
+import '../../../dodo_teams/application/providers/dodo_teams_providers.dart';
 import '../../../vendors/application/providers/vendors_providers.dart';
 import '../../domain/models/booking.dart';
 import '../../domain/models/booking_item.dart';
 
 const _statusConfig = <String, (String, Color, Color)>{
-  'pending': ('Pending', Color(0xFFDD6B20), Color(0xFFFEEBC8)),
-  'assigned': ('Assigned', Color(0xFF3182CE), Color(0xFFEBF8FF)),
+  'pending':     ('Pending',     Color(0xFFDD6B20), Color(0xFFFEEBC8)),
+  'assigned':    ('Assigned',    Color(0xFF3182CE), Color(0xFFEBF8FF)),
+  'accepted':    ('Accepted',    Color(0xFF2C7A7B), Color(0xFFE6FFFA)),
+  'on_the_way':  ('On The Way',  Color(0xFF4A6FA5), Color(0xFFEBF4FF)),
+  'arrived':     ('Arrived',     Color(0xFF6B46C1), Color(0xFFF3E8FF)),
   'in_progress': ('In Progress', Color(0xFF805AD5), Color(0xFFFAF5FF)),
-  'completed': ('Completed', Color(0xFF38A169), Color(0xFFF0FFF4)),
-  'cancelled': ('Cancelled', Color(0xFFE53E3E), Color(0xFFFFF5F5)),
+  'completed':   ('Completed',   Color(0xFF38A169), Color(0xFFF0FFF4)),
+  'rejected':    ('Rejected',    Color(0xFFC05621), Color(0xFFFEEBC8)),
+  'cancelled':   ('Cancelled',   Color(0xFFE53E3E), Color(0xFFFFF5F5)),
+};
+
+const _cancellableStatuses = {
+  'pending', 'assigned', 'accepted', 'on_the_way', 'arrived', 'in_progress',
 };
 
 final _currency = NumberFormat.currency(symbol: '₹', decimalDigits: 2);
@@ -19,14 +28,29 @@ final _dateFmt = DateFormat('dd MMM yyyy');
 
 class BookingDetailsDialog extends ConsumerWidget {
   final Booking booking;
+  final VoidCallback? onAssign;
+  final VoidCallback? onCancel;
 
-  const BookingDetailsDialog({super.key, required this.booking});
+  const BookingDetailsDialog({
+    super.key,
+    required this.booking,
+    this.onAssign,
+    this.onCancel,
+  });
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final vendors = ref.watch(vendorsNotifierProvider).valueOrNull ?? [];
+    final teams = ref.watch(dodoTeamsNotifierProvider).valueOrNull ?? [];
     final vendor = vendors.where((v) => v.id == booking.vendorId).firstOrNull;
-    final vendorLabel = vendor?.businessName ?? _truncateId(booking.vendorId);
+    final team = teams.where((t) => t.id == booking.dodoTeamId).firstOrNull;
+
+    final assignedToLabel = switch (booking.assignmentType) {
+      'External Vendor' =>
+        vendor?.businessName ?? _truncateId(booking.vendorId),
+      'DODO Team' => team?.teamName ?? _truncateId(booking.dodoTeamId),
+      _ => 'Unassigned',
+    };
 
     final statusCfg = _statusConfig[booking.status];
     final statusLabel = statusCfg?.$1 ?? booking.status;
@@ -104,8 +128,8 @@ class BookingDetailsDialog extends ConsumerWidget {
                     _InfoRow('Booking Number', booking.bookingNumber),
                     _InfoRow('Customer ID', _truncateId(booking.customerId),
                         tooltip: booking.customerId),
-                    _InfoRow('Vendor', vendorLabel,
-                        tooltip: booking.vendorId),
+                    _InfoRow('Assignment Type', booking.assignmentType),
+                    _InfoRow('Assigned To', assignedToLabel),
                     _InfoRow(
                       'Service Date',
                       booking.serviceDate != null
@@ -200,16 +224,50 @@ class BookingDetailsDialog extends ConsumerWidget {
               decoration: BoxDecoration(
                 border: Border(top: BorderSide(color: AppColors.border)),
               ),
-              child: Align(
-                alignment: Alignment.centerRight,
-                child: OutlinedButton(
-                  onPressed: () => Navigator.of(context).pop(),
-                  style: OutlinedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 24, vertical: 12),
+              child: Row(
+                children: [
+                  if (onCancel != null &&
+                      _cancellableStatuses.contains(booking.status))
+                    OutlinedButton.icon(
+                      onPressed: onCancel,
+                      icon: const Icon(Icons.cancel_outlined, size: 16),
+                      label: const Text('Cancel Booking'),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: AppColors.error,
+                        side: BorderSide(color: AppColors.error),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 16, vertical: 12),
+                      ),
+                    ),
+                  const Spacer(),
+                  if (onAssign != null)
+                    FilledButton.icon(
+                      onPressed: onAssign,
+                      icon: Icon(
+                        booking.isUnassigned
+                            ? Icons.assignment_ind_rounded
+                            : Icons.swap_horiz_rounded,
+                        size: 16,
+                      ),
+                      label: Text(
+                        booking.isUnassigned ? 'Assign' : 'Reassign',
+                      ),
+                      style: FilledButton.styleFrom(
+                        backgroundColor: AppColors.primary,
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 20, vertical: 12),
+                      ),
+                    ),
+                  if (onAssign != null) const SizedBox(width: 10),
+                  OutlinedButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 24, vertical: 12),
+                    ),
+                    child: const Text('Close'),
                   ),
-                  child: const Text('Close'),
-                ),
+                ],
               ),
             ),
           ],

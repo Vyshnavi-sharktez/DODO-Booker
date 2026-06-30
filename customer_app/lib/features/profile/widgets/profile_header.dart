@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../core/constants/app_colors.dart';
+import '../../../core/widgets/clickable.dart';
 import '../../../models/profile_model.dart';
 
 class ProfileHeader extends StatelessWidget {
@@ -36,7 +37,7 @@ class ProfileHeader extends StatelessWidget {
                 alignment: Alignment.bottomRight,
                 children: [
                   _Avatar(profile: profile),
-                  GestureDetector(
+                  Clickable(
                     onTap: onEditTap,
                     child: Container(
                       padding: const EdgeInsets.all(6),

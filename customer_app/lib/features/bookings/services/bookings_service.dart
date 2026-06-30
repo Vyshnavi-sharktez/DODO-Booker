@@ -7,10 +7,10 @@ class BookingsService {
   static const _phoneKey = 'dodo_auth_phone';
   final _client = Supabase.instance.client;
 
-  // Nested select: joins vendors + booking_items → services → categories / sub_categories
+  // Nested select: booking_items → services → categories / sub_categories
+  // vendors join intentionally omitted — no FK constraint on bookings.vendor_id
   static const _bookingSelect = '''
     *,
-    vendors(business_name, phone),
     booking_items(
       service_id,
       quantity,
@@ -26,37 +26,54 @@ class BookingsService {
   ''';
 
   Future<String> _getCustomerId() async {
-    final phone = (await SharedPreferences.getInstance()).getString(_phoneKey);
-    if (phone == null) throw Exception('Not authenticated');
-    debugPrint('[DODO][Bookings] Current phone: $phone');
-    final row = await _client
-        .from('customers')
-        .select('id')
-        .eq('phone', phone)
-        .single();
-    final customerId = row['id'] as String;
-    debugPrint('[DODO][Bookings] Customer ID: $customerId');
-    return customerId;
+    try {
+      final phone = (await SharedPreferences.getInstance()).getString(_phoneKey);
+      if (phone == null) throw Exception('Not authenticated');
+      debugPrint('[DODO][Bookings] Current phone: $phone');
+      final row = await _client
+          .from('customers')
+          .select('id')
+          .eq('phone', phone)
+          .single();
+      final customerId = row['id'] as String;
+      debugPrint('[DODO][Bookings] Customer ID: $customerId');
+      return customerId;
+    } catch (e, st) {
+      debugPrint('================ BOOKINGS ERROR ================');
+      debugPrint(e.toString());
+      debugPrint(st.toString());
+      debugPrint('================================================');
+      rethrow;
+    }
   }
 
   Future<List<MyBookingModel>> fetchMyBookings() async {
-    final customerId = await _getCustomerId();
-    debugPrint('[DODO][Bookings] Querying bookings for customer_id=$customerId');
-    final data = await _client
-        .from('bookings')
-        .select(_bookingSelect)
-        .eq('customer_id', customerId)
-        .order('created_at', ascending: false);
-    final rows = data as List;
-    debugPrint('[DODO][Bookings] Rows returned: ${rows.length}');
-    final bookings = rows
-        .map((e) => MyBookingModel.fromJson(e as Map<String, dynamic>))
-        .toList();
-    for (final b in bookings) {
-      debugPrint('[DODO][Bookings] Service loaded: ${b.serviceName}');
-      debugPrint('[DODO][Bookings] Address loaded: ${b.address.city.isNotEmpty ? b.address.city : b.address.line1}');
+    try {
+      final customerId = await _getCustomerId();
+      debugPrint('[DODO][Bookings] Querying bookings for customer_id=$customerId');
+      debugPrint('[DODO][Bookings] Select clause:\n$_bookingSelect');
+      final data = await _client
+          .from('bookings')
+          .select(_bookingSelect)
+          .eq('customer_id', customerId)
+          .order('created_at', ascending: false);
+      final rows = data as List;
+      debugPrint('[DODO][Bookings] Rows returned: ${rows.length}');
+      final bookings = rows
+          .map((e) => MyBookingModel.fromJson(e as Map<String, dynamic>))
+          .toList();
+      for (final b in bookings) {
+        debugPrint('[DODO][Bookings] Service loaded: ${b.serviceName}');
+        debugPrint('[DODO][Bookings] Address loaded: ${b.address.city.isNotEmpty ? b.address.city : b.address.line1}');
+      }
+      return bookings;
+    } catch (e, st) {
+      debugPrint('================ BOOKINGS ERROR ================');
+      debugPrint(e.toString());
+      debugPrint(st.toString());
+      debugPrint('================================================');
+      rethrow;
     }
-    return bookings;
   }
 
   Future<MyBookingModel?> fetchBookingById(String id) async {

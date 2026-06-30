@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../core/constants/app_colors.dart';
+import '../../../core/widgets/clickable.dart';
 import '../../../models/subcategory_model.dart';
 
 class SubcategoryCard extends StatelessWidget {
@@ -77,18 +78,19 @@ class SubcategoryCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final cs = theme.colorScheme;
     final idx = colorIndex % _bgColors.length;
     final accent = _accentColors[idx];
     final bg = _bgColors[idx];
 
-    return GestureDetector(
+    return Clickable(
       onTap: onTap,
       child: Container(
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
-          color: AppColors.surface,
+          color: cs.surface,
           borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: AppColors.border, width: 0.8),
+          border: Border.all(color: cs.outline.withAlpha(80), width: 0.8),
           boxShadow: const [
             BoxShadow(
               color: Color(0x06000000),
@@ -129,7 +131,7 @@ class SubcategoryCard extends StatelessWidget {
               Text(
                 subcategory.description!,
                 style: theme.textTheme.bodySmall?.copyWith(
-                  color: AppColors.textHint,
+                  color: cs.onSurface.withAlpha(120),
                 ),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,

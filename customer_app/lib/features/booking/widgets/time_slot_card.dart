@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../core/constants/app_colors.dart';
+import '../../../core/widgets/clickable.dart';
 import '../../../models/time_slot_model.dart';
 
 class TimeSlotCard extends StatelessWidget {
@@ -18,7 +19,7 @@ class TimeSlotCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final available = slot.isAvailable;
 
-    return GestureDetector(
+    return Clickable(
       onTap: available ? onTap : null,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 180),

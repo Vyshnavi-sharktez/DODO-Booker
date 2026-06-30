@@ -1,17 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../../../core/theme/app_theme.dart';
-import '../../../categories/domain/models/category.dart';
 import '../../domain/models/sub_category.dart';
 
 class SubCategoryFormDialog extends StatefulWidget {
   final SubCategory? existing;
-  final List<Category> categories;
+  final String categoryId;
+  final String categoryName;
   final Future<void> Function({
     required String categoryId,
     required String name,
     required String slug,
-    String? description,
     required int sortOrder,
     required bool isActive,
   }) onSave;
@@ -19,7 +18,8 @@ class SubCategoryFormDialog extends StatefulWidget {
   const SubCategoryFormDialog({
     super.key,
     this.existing,
-    required this.categories,
+    required this.categoryId,
+    required this.categoryName,
     required this.onSave,
   });
 
@@ -31,10 +31,8 @@ class _SubCategoryFormDialogState extends State<SubCategoryFormDialog> {
   final _formKey = GlobalKey<FormState>();
   late final TextEditingController _name;
   late final TextEditingController _slug;
-  late final TextEditingController _description;
   late final TextEditingController _sortOrder;
   late bool _isActive;
-  String? _selectedCategoryId;
   bool _saving = false;
   bool _slugEdited = false;
 
@@ -44,12 +42,8 @@ class _SubCategoryFormDialogState extends State<SubCategoryFormDialog> {
     final e = widget.existing;
     _name = TextEditingController(text: e?.name ?? '');
     _slug = TextEditingController(text: e?.slug ?? '');
-    _description = TextEditingController(text: e?.description ?? '');
     _sortOrder = TextEditingController(text: (e?.sortOrder ?? 0).toString());
     _isActive = e?.isActive ?? true;
-    _selectedCategoryId = e?.categoryId.isNotEmpty == true
-        ? e!.categoryId
-        : null;
     _slugEdited = e != null;
   }
 
@@ -57,7 +51,6 @@ class _SubCategoryFormDialogState extends State<SubCategoryFormDialog> {
   void dispose() {
     _name.dispose();
     _slug.dispose();
-    _description.dispose();
     _sortOrder.dispose();
     super.dispose();
   }
@@ -83,12 +76,9 @@ class _SubCategoryFormDialogState extends State<SubCategoryFormDialog> {
     setState(() => _saving = true);
     try {
       await widget.onSave(
-        categoryId: _selectedCategoryId!,
+        categoryId: widget.categoryId,
         name: _name.text.trim(),
         slug: _slug.text.trim(),
-        description: _description.text.trim().isEmpty
-            ? null
-            : _description.text.trim(),
         sortOrder: int.tryParse(_sortOrder.text.trim()) ?? 0,
         isActive: _isActive,
       );
@@ -164,27 +154,11 @@ class _SubCategoryFormDialogState extends State<SubCategoryFormDialog> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // Category dropdown
-                      DropdownButtonFormField<String>(
-                        // ignore: deprecated_member_use
-                        value: _selectedCategoryId,
-                        decoration: const InputDecoration(
-                          labelText: 'Parent Category *',
-                          hintText: 'Select a category',
-                        ),
-                        items: widget.categories
-                            .map(
-                              (c) => DropdownMenuItem(
-                                value: c.id,
-                                child: Text(c.name),
-                              ),
-                            )
-                            .toList(),
-                        onChanged: (v) =>
-                            setState(() => _selectedCategoryId = v),
-                        validator: (v) =>
-                            v == null ? 'Please select a category' : null,
-                        isExpanded: true,
+                      // Parent category — read-only context
+                      _ContextRow(
+                        label: 'Category',
+                        name: widget.categoryName,
+                        icon: Icons.folder_rounded,
                       ),
                       const SizedBox(height: 16),
 
@@ -219,17 +193,6 @@ class _SubCategoryFormDialogState extends State<SubCategoryFormDialog> {
                           }
                           return null;
                         },
-                      ),
-                      const SizedBox(height: 16),
-
-                      // Description
-                      TextFormField(
-                        controller: _description,
-                        decoration: const InputDecoration(
-                          labelText: 'Description',
-                          hintText: 'Brief description of this sub category',
-                        ),
-                        maxLines: 3,
                       ),
                       const SizedBox(height: 16),
 
@@ -335,6 +298,58 @@ class _SubCategoryFormDialogState extends State<SubCategoryFormDialog> {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _ContextRow extends StatelessWidget {
+  final String label;
+  final String name;
+  final IconData icon;
+
+  const _ContextRow({
+    required this.label,
+    required this.name,
+    required this.icon,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: AppColors.primary.withValues(alpha: 0.05),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: AppColors.primary.withValues(alpha: 0.18)),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, size: 16, color: AppColors.primary),
+          const SizedBox(width: 8),
+          Text(
+            '$label:',
+            style: TextStyle(
+              fontSize: 12,
+              color: AppColors.textSecondary,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text(
+              name,
+              style: const TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: AppColors.textPrimary,
+              ),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          const SizedBox(width: 4),
+          Icon(Icons.lock_outline, size: 13, color: AppColors.textSecondary),
+        ],
       ),
     );
   }

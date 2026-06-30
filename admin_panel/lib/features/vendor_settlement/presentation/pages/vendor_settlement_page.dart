@@ -2,14 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import '../../../../core/theme/app_theme.dart';
-import '../../../../features/vendors/application/providers/vendors_providers.dart';
-import '../../../../features/vendors/domain/models/vendor.dart';
+import '../../../../core/widgets/clickable.dart';
 import '../../application/providers/vendor_settlement_providers.dart';
-import '../../domain/models/vendor_settlement.dart';
+import '../../domain/models/vendor_earnings_summary.dart';
 import '../widgets/settlement_create_dialog.dart';
 import '../widgets/settlement_history_dialog.dart';
 
-enum _WalletFilter { all, withBalance, withoutBalance }
+enum _SettlementFilter { all, pendingPayment, settled, noEarnings }
 
 class VendorSettlementPage extends ConsumerStatefulWidget {
   const VendorSettlementPage({super.key});
@@ -21,10 +20,9 @@ class VendorSettlementPage extends ConsumerStatefulWidget {
 
 class _VendorSettlementPageState extends ConsumerState<VendorSettlementPage> {
   final _searchCtrl = TextEditingController();
-  _WalletFilter _filter = _WalletFilter.all;
+  _SettlementFilter _filter = _SettlementFilter.all;
 
   static final _moneyFmt = NumberFormat('#,##0.00', 'en_IN');
-  static final _dateFmt = DateFormat('dd MMM yyyy, hh:mm a');
 
   @override
   void dispose() {
@@ -32,58 +30,59 @@ class _VendorSettlementPageState extends ConsumerState<VendorSettlementPage> {
     super.dispose();
   }
 
-  List<Vendor> _applyFilters(List<Vendor> vendors) {
+  List<VendorEarningsSummary> _applyFilters(
+      List<VendorEarningsSummary> summaries) {
     final query = _searchCtrl.text.trim().toLowerCase();
-    return vendors.where((v) {
+    return summaries.where((s) {
       final matchesSearch = query.isEmpty ||
-          v.businessName.toLowerCase().contains(query) ||
-          v.city.toLowerCase().contains(query) ||
-          (v.ownerName?.toLowerCase().contains(query) ?? false);
+          s.vendorName.toLowerCase().contains(query) ||
+          (s.ownerName?.toLowerCase().contains(query) ?? false);
 
       final matchesFilter = switch (_filter) {
-        _WalletFilter.all => true,
-        _WalletFilter.withBalance => v.walletBalance > 0,
-        _WalletFilter.withoutBalance => v.walletBalance <= 0,
+        _SettlementFilter.all => true,
+        _SettlementFilter.pendingPayment =>
+          s.settlementStatus == SettlementStatus.pendingPayment,
+        _SettlementFilter.settled =>
+          s.settlementStatus == SettlementStatus.settled,
+        _SettlementFilter.noEarnings =>
+          s.settlementStatus == SettlementStatus.noEarnings,
       };
 
       return matchesSearch && matchesFilter;
     }).toList();
   }
 
-  Future<void> _openSettleDialog(Vendor vendor) async {
+  Future<void> _openSettleDialog(VendorEarningsSummary summary) async {
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (_) => SettlementCreateDialog(vendor: vendor),
+      builder: (_) => SettlementCreateDialog(summary: summary),
     );
     if (confirmed == true && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(
-            'Settlement processed for ${vendor.businessName}',
-          ),
+          content: Text('Settlement recorded for ${summary.vendorName}'),
           backgroundColor: AppColors.success,
         ),
       );
     }
   }
 
-  void _openHistoryDialog(Vendor vendor) {
+  void _openHistoryDialog(VendorEarningsSummary summary) {
     showDialog<void>(
       context: context,
       builder: (_) => SettlementHistoryDialog(
-        vendorId: vendor.id,
-        vendorName: vendor.businessName,
+        vendorId: summary.vendorId,
+        vendorName: summary.vendorName,
       ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    final vendorsAsync = ref.watch(vendorsNotifierProvider);
-    final totalBalance = ref.watch(totalWalletBalanceProvider);
-    final vendorsWithBalance = ref.watch(vendorsWithBalanceCountProvider);
-    final totalSettled = ref.watch(totalSettledAmountProvider);
-    final sessionHistory = ref.watch(vendorSettlementHistoryProvider);
+    final summariesAsync = ref.watch(vendorSettlementNotifierProvider);
+    final totalPending = ref.watch(totalPendingSettlementProvider);
+    final awaitingCount = ref.watch(vendorsAwaitingPaymentCountProvider);
+    final monthStatsAsync = ref.watch(thisMonthSettlementStatsProvider);
 
     return Padding(
       padding: const EdgeInsets.all(28),
@@ -91,148 +90,210 @@ class _VendorSettlementPageState extends ConsumerState<VendorSettlementPage> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // ── Stats ──────────────────────────────────────────────────────────
-          _StatsRow(
-            totalBalance: totalBalance,
-            vendorsWithBalance: vendorsWithBalance,
-            totalSettled: totalSettled,
-            sessionCount: sessionHistory.length,
+          Row(
+            children: [
+              Expanded(
+                child: _StatCard(
+                  label: 'Total Pending Settlement',
+                  value: '₹${_moneyFmt.format(totalPending)}',
+                  icon: Icons.pending_actions_rounded,
+                  color: AppColors.warning,
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: _StatCard(
+                  label: 'Vendors Awaiting Payment',
+                  value: awaitingCount.toString(),
+                  icon: Icons.store_rounded,
+                  color: AppColors.error,
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: monthStatsAsync.when(
+                  loading: () => const _StatCard(
+                    label: 'Settled This Month',
+                    value: '…',
+                    icon: Icons.payments_rounded,
+                    color: AppColors.success,
+                  ),
+                  error: (_, __) => const _StatCard(
+                    label: 'Settled This Month',
+                    value: '—',
+                    icon: Icons.payments_rounded,
+                    color: AppColors.success,
+                  ),
+                  data: (stats) => _StatCard(
+                    label: 'Settled This Month',
+                    value: '₹${_moneyFmt.format(stats.$1)}',
+                    icon: Icons.payments_rounded,
+                    color: AppColors.success,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: monthStatsAsync.when(
+                  loading: () => const _StatCard(
+                    label: 'Settlements This Month',
+                    value: '…',
+                    icon: Icons.receipt_long_rounded,
+                    color: AppColors.primary,
+                  ),
+                  error: (_, __) => const _StatCard(
+                    label: 'Settlements This Month',
+                    value: '—',
+                    icon: Icons.receipt_long_rounded,
+                    color: AppColors.primary,
+                  ),
+                  data: (stats) => _StatCard(
+                    label: 'Settlements This Month',
+                    value: stats.$2.toString(),
+                    icon: Icons.receipt_long_rounded,
+                    color: AppColors.primary,
+                  ),
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: 24),
 
-          // ── Vendor Wallets Section ─────────────────────────────────────────
-          Container(
-            decoration: BoxDecoration(
-              color: AppColors.surface,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: AppColors.border),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Section header + filter bar
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 18, 20, 14),
-                  child: Row(
-                    children: [
-                      const Text(
-                        'Vendor Wallets',
-                        style: TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w700,
-                          color: AppColors.textPrimary,
+          // ── Vendor Settlements Table ───────────────────────────────────────
+          Expanded(
+            child: Container(
+              decoration: BoxDecoration(
+                color: AppColors.surface,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: AppColors.border),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 18, 20, 14),
+                    child: Row(
+                      children: [
+                        const Text(
+                          'Vendor Settlements',
+                          style: TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.textPrimary,
+                          ),
                         ),
-                      ),
-                      const Spacer(),
-                      // Search
-                      SizedBox(
-                        width: 220,
-                        height: 36,
-                        child: TextField(
-                          controller: _searchCtrl,
-                          onChanged: (_) => setState(() {}),
-                          decoration: InputDecoration(
-                            hintText: 'Search vendor…',
-                            prefixIcon: const Icon(Icons.search, size: 18),
-                            contentPadding:
-                                const EdgeInsets.symmetric(vertical: 0),
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(8),
-                              borderSide:
-                                  const BorderSide(color: AppColors.border),
-                            ),
-                            enabledBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(8),
-                              borderSide:
-                                  const BorderSide(color: AppColors.border),
+                        const Spacer(),
+                        SizedBox(
+                          width: 220,
+                          height: 36,
+                          child: TextField(
+                            controller: _searchCtrl,
+                            onChanged: (_) => setState(() {}),
+                            decoration: InputDecoration(
+                              hintText: 'Search vendor…',
+                              prefixIcon: const Icon(Icons.search, size: 18),
+                              contentPadding:
+                                  const EdgeInsets.symmetric(vertical: 0),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(8),
+                                borderSide:
+                                    const BorderSide(color: AppColors.border),
+                              ),
+                              enabledBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(8),
+                                borderSide:
+                                    const BorderSide(color: AppColors.border),
+                              ),
                             ),
                           ),
                         ),
-                      ),
-                      const SizedBox(width: 12),
-                      // Filter chips
-                      _FilterChip(
-                        label: 'All',
-                        selected: _filter == _WalletFilter.all,
-                        onTap: () =>
-                            setState(() => _filter = _WalletFilter.all),
-                      ),
-                      const SizedBox(width: 6),
-                      _FilterChip(
-                        label: 'With Balance',
-                        selected: _filter == _WalletFilter.withBalance,
-                        onTap: () =>
-                            setState(() => _filter = _WalletFilter.withBalance),
-                      ),
-                      const SizedBox(width: 6),
-                      _FilterChip(
-                        label: 'Zero Balance',
-                        selected: _filter == _WalletFilter.withoutBalance,
-                        onTap: () => setState(
-                            () => _filter = _WalletFilter.withoutBalance),
-                      ),
-                    ],
-                  ),
-                ),
-                const Divider(height: 1, color: AppColors.border),
-
-                // Table
-                vendorsAsync.when(
-                  loading: () => const Padding(
-                    padding: EdgeInsets.all(48),
-                    child: Center(child: CircularProgressIndicator()),
-                  ),
-                  error: (e, _) => Padding(
-                    padding: const EdgeInsets.all(48),
-                    child: Center(
-                      child: Text(
-                        'Error loading vendors: $e',
-                        style:
-                            const TextStyle(color: AppColors.error),
-                      ),
+                        const SizedBox(width: 12),
+                        _FilterChip(
+                          label: 'All',
+                          selected: _filter == _SettlementFilter.all,
+                          onTap: () =>
+                              setState(() => _filter = _SettlementFilter.all),
+                        ),
+                        const SizedBox(width: 6),
+                        _FilterChip(
+                          label: 'Pending',
+                          selected:
+                              _filter == _SettlementFilter.pendingPayment,
+                          onTap: () => setState(
+                              () => _filter = _SettlementFilter.pendingPayment),
+                        ),
+                        const SizedBox(width: 6),
+                        _FilterChip(
+                          label: 'Settled',
+                          selected: _filter == _SettlementFilter.settled,
+                          onTap: () => setState(
+                              () => _filter = _SettlementFilter.settled),
+                        ),
+                        const SizedBox(width: 6),
+                        _FilterChip(
+                          label: 'No Earnings',
+                          selected: _filter == _SettlementFilter.noEarnings,
+                          onTap: () => setState(
+                              () => _filter = _SettlementFilter.noEarnings),
+                        ),
+                        const SizedBox(width: 12),
+                        IconButton(
+                          tooltip: 'Refresh',
+                          onPressed: () => ref
+                              .read(vendorSettlementNotifierProvider.notifier)
+                              .refresh(),
+                          icon: const Icon(Icons.refresh_rounded, size: 20),
+                          color: AppColors.textSecondary,
+                        ),
+                      ],
                     ),
                   ),
-                  data: (vendors) {
-                    final filtered = _applyFilters(vendors);
-                    if (filtered.isEmpty) {
-                      return const Padding(
-                        padding: EdgeInsets.symmetric(vertical: 48),
-                        child: Center(
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(
-                                Icons.account_balance_wallet_outlined,
-                                size: 40,
-                                color: AppColors.border,
-                              ),
-                              SizedBox(height: 12),
-                              Text(
-                                'No vendors found',
-                                style: TextStyle(
-                                    color: AppColors.textSecondary),
-                              ),
-                            ],
-                          ),
-                        ),
-                      );
-                    }
-                    return _VendorTable(
-                      vendors: filtered,
-                      onSettle: _openSettleDialog,
-                      onHistory: _openHistoryDialog,
-                    );
-                  },
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 24),
+                  const Divider(height: 1, color: AppColors.border),
 
-          // ── Settlement History Section ─────────────────────────────────────
-          _SettlementHistorySection(
-            history: sessionHistory,
-            moneyFmt: _moneyFmt,
-            dateFmt: _dateFmt,
+                  Expanded(
+                    child: summariesAsync.when(
+                      loading: () => const Center(
+                        child: CircularProgressIndicator(),
+                      ),
+                      error: (e, _) => Center(
+                        child: Text(
+                          'Error loading data: $e',
+                          style: const TextStyle(color: AppColors.error),
+                        ),
+                      ),
+                      data: (summaries) {
+                        final filtered = _applyFilters(summaries);
+                        if (filtered.isEmpty) {
+                          return const Center(
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  Icons.payments_outlined,
+                                  size: 40,
+                                  color: AppColors.border,
+                                ),
+                                SizedBox(height: 12),
+                                Text(
+                                  'No vendors found',
+                                  style: TextStyle(
+                                      color: AppColors.textSecondary),
+                                ),
+                              ],
+                            ),
+                          );
+                        }
+                        return _VendorTable(
+                          summaries: filtered,
+                          onSettle: _openSettleDialog,
+                          onHistory: _openHistoryDialog,
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ),
         ],
       ),
@@ -240,65 +301,176 @@ class _VendorSettlementPageState extends ConsumerState<VendorSettlementPage> {
   }
 }
 
-// ── Stats Row ──────────────────────────────────────────────────────────────────
+// ── Vendor Table ───────────────────────────────────────────────────────────────
 
-class _StatsRow extends StatelessWidget {
-  const _StatsRow({
-    required this.totalBalance,
-    required this.vendorsWithBalance,
-    required this.totalSettled,
-    required this.sessionCount,
+class _VendorTable extends StatelessWidget {
+  const _VendorTable({
+    required this.summaries,
+    required this.onSettle,
+    required this.onHistory,
   });
-  final double totalBalance;
-  final int vendorsWithBalance;
-  final double totalSettled;
-  final int sessionCount;
+  final List<VendorEarningsSummary> summaries;
+  final void Function(VendorEarningsSummary) onSettle;
+  final void Function(VendorEarningsSummary) onHistory;
 
   static final _fmt = NumberFormat('#,##0.00', 'en_IN');
+  static final _dateFmt = DateFormat('dd MMM yyyy');
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Expanded(
-          child: _StatCard(
-            label: 'Total Wallet Balance',
-            value: '₹${_fmt.format(totalBalance)}',
-            icon: Icons.account_balance_wallet_rounded,
-            color: AppColors.success,
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: SingleChildScrollView(
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            minWidth: MediaQuery.of(context).size.width - 112,
+          ),
+          child: Table(
+            columnWidths: const {
+              0: FlexColumnWidth(3),
+              1: FlexColumnWidth(1.5),
+              2: FlexColumnWidth(2),
+              3: FlexColumnWidth(2),
+              4: FlexColumnWidth(1.6),
+              5: FlexColumnWidth(2),
+            },
+            children: [
+              const TableRow(
+                decoration: BoxDecoration(color: AppColors.background),
+                children: [
+                  _TableHeader('Vendor'),
+                  _TableHeader('Completed Jobs'),
+                  _TableHeader('Pending Settlement'),
+                  _TableHeader('Last Settlement'),
+                  _TableHeader('Status'),
+                  _TableHeader('Actions'),
+                ],
+              ),
+              for (final s in summaries)
+                TableRow(
+                  decoration: const BoxDecoration(
+                    border: Border(
+                      bottom:
+                          BorderSide(color: AppColors.border, width: 0.5),
+                    ),
+                  ),
+                  children: [
+                    // Vendor
+                    Padding(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 14),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            s.vendorName,
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w600,
+                              fontSize: 13,
+                              color: AppColors.textPrimary,
+                            ),
+                          ),
+                          if (s.ownerName?.isNotEmpty == true)
+                            Text(
+                              s.ownerName!,
+                              style: const TextStyle(
+                                fontSize: 11,
+                                color: AppColors.textSecondary,
+                              ),
+                            ),
+                          if (!s.isActive)
+                            Text(
+                              'Inactive',
+                              style: TextStyle(
+                                fontSize: 10,
+                                color:
+                                    AppColors.error.withValues(alpha: 0.8),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                    // Completed Jobs
+                    Padding(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 14),
+                      child: Text(
+                        s.completedJobs.toString(),
+                        style: const TextStyle(fontSize: 13),
+                      ),
+                    ),
+                    // Pending Settlement
+                    Padding(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 14),
+                      child: Text(
+                        '₹${_fmt.format(s.pendingSettlement)}',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700,
+                          color: s.pendingSettlement > 0
+                              ? AppColors.warning
+                              : AppColors.textSecondary,
+                        ),
+                      ),
+                    ),
+                    // Last Settlement
+                    Padding(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 14),
+                      child: Text(
+                        s.lastSettlementAt != null
+                            ? _dateFmt.format(s.lastSettlementAt!)
+                            : '—',
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: AppColors.textSecondary,
+                        ),
+                      ),
+                    ),
+                    // Status badge
+                    Padding(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 14),
+                      child: _StatusBadge(status: s.settlementStatus),
+                    ),
+                    // Actions
+                    Padding(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 10),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          _ActionButton(
+                            label: 'Settle',
+                            icon: Icons.payments_rounded,
+                            color: AppColors.success,
+                            enabled: s.pendingSettlement > 0,
+                            onTap: () => onSettle(s),
+                          ),
+                          const SizedBox(width: 8),
+                          _ActionButton(
+                            label: 'History',
+                            icon: Icons.history_rounded,
+                            color: AppColors.primary,
+                            enabled: true,
+                            onTap: () => onHistory(s),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+            ],
           ),
         ),
-        const SizedBox(width: 16),
-        Expanded(
-          child: _StatCard(
-            label: 'Vendors with Balance',
-            value: vendorsWithBalance.toString(),
-            icon: Icons.store_rounded,
-            color: AppColors.primary,
-          ),
-        ),
-        const SizedBox(width: 16),
-        Expanded(
-          child: _StatCard(
-            label: 'Settled This Session',
-            value: '₹${_fmt.format(totalSettled)}',
-            icon: Icons.payments_rounded,
-            color: const Color(0xFF805AD5),
-          ),
-        ),
-        const SizedBox(width: 16),
-        Expanded(
-          child: _StatCard(
-            label: 'Settlements This Session',
-            value: sessionCount.toString(),
-            icon: Icons.receipt_long_rounded,
-            color: AppColors.accent,
-          ),
-        ),
-      ],
+      ),
     );
   }
 }
+
+// ── Stats card ─────────────────────────────────────────────────────────────────
 
 class _StatCard extends StatelessWidget {
   const _StatCard({
@@ -362,145 +534,39 @@ class _StatCard extends StatelessWidget {
   }
 }
 
-// ── Vendor Table ───────────────────────────────────────────────────────────────
+// ── Status badge ───────────────────────────────────────────────────────────────
 
-class _VendorTable extends StatelessWidget {
-  const _VendorTable({
-    required this.vendors,
-    required this.onSettle,
-    required this.onHistory,
-  });
-  final List<Vendor> vendors;
-  final void Function(Vendor) onSettle;
-  final void Function(Vendor) onHistory;
-
-  static final _fmt = NumberFormat('#,##0.00', 'en_IN');
+class _StatusBadge extends StatelessWidget {
+  const _StatusBadge({required this.status});
+  final SettlementStatus status;
 
   @override
   Widget build(BuildContext context) {
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      child: ConstrainedBox(
-        constraints: BoxConstraints(
-          minWidth: MediaQuery.of(context).size.width - 112,
-        ),
-        child: Table(
-          columnWidths: const {
-            0: FlexColumnWidth(3),
-            1: FlexColumnWidth(2),
-            2: FlexColumnWidth(1.5),
-            3: FlexColumnWidth(2),
-            4: FlexColumnWidth(2),
-          },
-          children: [
-            TableRow(
-              decoration: const BoxDecoration(color: AppColors.background),
-              children: const [
-                _TableHeader('Vendor'),
-                _TableHeader('City'),
-                _TableHeader('Status'),
-                _TableHeader('Wallet Balance'),
-                _TableHeader('Actions'),
-              ],
-            ),
-            for (final vendor in vendors)
-              TableRow(
-                decoration: const BoxDecoration(
-                  border: Border(
-                    bottom: BorderSide(color: AppColors.border, width: 0.5),
-                  ),
-                ),
-                children: [
-                  // Vendor name + owner
-                  Padding(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 16, vertical: 14),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          vendor.businessName,
-                          style: const TextStyle(
-                            fontWeight: FontWeight.w600,
-                            fontSize: 13,
-                            color: AppColors.textPrimary,
-                          ),
-                        ),
-                        if (vendor.ownerName?.isNotEmpty == true)
-                          Text(
-                            vendor.ownerName!,
-                            style: const TextStyle(
-                              fontSize: 11,
-                              color: AppColors.textSecondary,
-                            ),
-                          ),
-                      ],
-                    ),
-                  ),
-                  // City
-                  Padding(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 16, vertical: 14),
-                    child: Text(
-                      vendor.city,
-                      style: const TextStyle(
-                          fontSize: 13, color: AppColors.textSecondary),
-                    ),
-                  ),
-                  // Status
-                  Padding(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 16, vertical: 14),
-                    child: _StatusBadge(isActive: vendor.isActive),
-                  ),
-                  // Wallet Balance
-                  Padding(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 16, vertical: 14),
-                    child: Text(
-                      '₹${_fmt.format(vendor.walletBalance)}',
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w700,
-                        color: vendor.walletBalance > 0
-                            ? AppColors.success
-                            : AppColors.textSecondary,
-                      ),
-                    ),
-                  ),
-                  // Actions
-                  Padding(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 12, vertical: 10),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        _ActionButton(
-                          label: 'Settle',
-                          icon: Icons.payments_rounded,
-                          color: AppColors.success,
-                          enabled: vendor.walletBalance > 0,
-                          onTap: () => onSettle(vendor),
-                        ),
-                        const SizedBox(width: 8),
-                        _ActionButton(
-                          label: 'History',
-                          icon: Icons.history_rounded,
-                          color: AppColors.primary,
-                          enabled: true,
-                          onTap: () => onHistory(vendor),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-          ],
+    final (label, color) = switch (status) {
+      SettlementStatus.noEarnings => ('No Earnings', AppColors.textSecondary),
+      SettlementStatus.settled => ('Settled', AppColors.success),
+      SettlementStatus.pendingPayment => ('Pending Payment', AppColors.warning),
+    };
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          fontSize: 11,
+          fontWeight: FontWeight.w600,
+          color: color,
         ),
       ),
     );
   }
 }
+
+// ── Table helpers ──────────────────────────────────────────────────────────────
 
 class _TableHeader extends StatelessWidget {
   const _TableHeader(this.text);
@@ -517,31 +583,6 @@ class _TableHeader extends StatelessWidget {
           fontWeight: FontWeight.w600,
           color: AppColors.textSecondary,
           letterSpacing: 0.5,
-        ),
-      ),
-    );
-  }
-}
-
-class _StatusBadge extends StatelessWidget {
-  const _StatusBadge({required this.isActive});
-  final bool isActive;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-      decoration: BoxDecoration(
-        color: (isActive ? AppColors.success : AppColors.textSecondary)
-            .withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Text(
-        isActive ? 'Active' : 'Inactive',
-        style: TextStyle(
-          fontSize: 11,
-          fontWeight: FontWeight.w600,
-          color: isActive ? AppColors.success : AppColors.textSecondary,
         ),
       ),
     );
@@ -580,7 +621,7 @@ class _ActionButtonState extends State<_ActionButton> {
       cursor: widget.enabled
           ? SystemMouseCursors.click
           : SystemMouseCursors.forbidden,
-      child: GestureDetector(
+      child: Clickable(
         onTap: widget.enabled ? widget.onTap : null,
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 120),
@@ -615,178 +656,6 @@ class _ActionButtonState extends State<_ActionButton> {
   }
 }
 
-// ── Settlement History Section ────────────────────────────────────────────────
-
-class _SettlementHistorySection extends StatelessWidget {
-  const _SettlementHistorySection({
-    required this.history,
-    required this.moneyFmt,
-    required this.dateFmt,
-  });
-  final List<VendorSettlement> history;
-  final NumberFormat moneyFmt;
-  final DateFormat dateFmt;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.border),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(20, 18, 20, 14),
-            child: Row(
-              children: [
-                const Text(
-                  'Settlement History',
-                  style: TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.textPrimary,
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                  decoration: BoxDecoration(
-                    color: AppColors.primary.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Text(
-                    'This Session · ${history.length}',
-                    style: const TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w600,
-                      color: AppColors.primary,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const Divider(height: 1, color: AppColors.border),
-
-          if (history.isEmpty)
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: 40),
-              child: Center(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      Icons.receipt_long_outlined,
-                      size: 40,
-                      color: AppColors.border,
-                    ),
-                    SizedBox(height: 12),
-                    Text(
-                      'No settlements processed in this session',
-                      style: TextStyle(color: AppColors.textSecondary),
-                    ),
-                  ],
-                ),
-              ),
-            )
-          else
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Table(
-                columnWidths: const {
-                  0: FixedColumnWidth(200),
-                  1: FixedColumnWidth(140),
-                  2: FixedColumnWidth(220),
-                  3: FixedColumnWidth(220),
-                  4: FixedColumnWidth(120),
-                },
-                children: [
-                  const TableRow(
-                    decoration: BoxDecoration(color: AppColors.background),
-                    children: [
-                      _TableHeader('Vendor'),
-                      _TableHeader('Amount'),
-                      _TableHeader('Balance Change'),
-                      _TableHeader('Date'),
-                      _TableHeader('Settled By'),
-                    ],
-                  ),
-                  for (final entry in history)
-                    TableRow(
-                      decoration: const BoxDecoration(
-                        border: Border(
-                          bottom: BorderSide(
-                            color: AppColors.border,
-                            width: 0.5,
-                          ),
-                        ),
-                      ),
-                      children: [
-                        Padding(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 16, vertical: 12),
-                          child: Text(
-                            entry.vendorName,
-                            style: const TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                        ),
-                        Padding(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 16, vertical: 12),
-                          child: Text(
-                            '₹${moneyFmt.format(entry.amount)}',
-                            style: const TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w700,
-                              color: AppColors.success,
-                            ),
-                          ),
-                        ),
-                        Padding(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 16, vertical: 12),
-                          child: Text(
-                            '₹${moneyFmt.format(entry.balanceBefore)} → ₹${moneyFmt.format(entry.balanceAfter)}',
-                            style: const TextStyle(
-                              fontSize: 12,
-                              color: AppColors.textSecondary,
-                            ),
-                          ),
-                        ),
-                        Padding(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 16, vertical: 12),
-                          child: Text(
-                            dateFmt.format(entry.settledAt),
-                            style: const TextStyle(fontSize: 12),
-                          ),
-                        ),
-                        Padding(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 16, vertical: 12),
-                          child: Text(
-                            entry.settledBy,
-                            style: const TextStyle(fontSize: 12),
-                          ),
-                        ),
-                      ],
-                    ),
-                ],
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-}
-
 // ── Filter chip ────────────────────────────────────────────────────────────────
 
 class _FilterChip extends StatelessWidget {
@@ -801,7 +670,7 @@ class _FilterChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
+    return Clickable(
       onTap: onTap,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 150),
@@ -819,8 +688,7 @@ class _FilterChip extends StatelessWidget {
           label,
           style: TextStyle(
             fontSize: 12,
-            fontWeight:
-                selected ? FontWeight.w600 : FontWeight.w400,
+            fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
             color: selected ? AppColors.primary : AppColors.textSecondary,
           ),
         ),

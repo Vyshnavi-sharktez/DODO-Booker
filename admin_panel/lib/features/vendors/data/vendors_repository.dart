@@ -95,7 +95,10 @@ class VendorsRepository {
   Future<void> updateActive(String id, {required bool isActive}) async {
     await _supabase
         .from('vendors')
-        .update({'is_active': isActive})
+        .update({
+          'is_active': isActive,
+          'status': isActive ? 'active' : 'inactive',
+        })
         .eq('id', id);
   }
 }

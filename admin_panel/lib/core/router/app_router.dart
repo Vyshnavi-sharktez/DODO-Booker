@@ -14,16 +14,14 @@ import '../../features/sub_categories/presentation/pages/sub_categories_page.dar
 import '../../features/services/presentation/pages/services_page.dart';
 import '../../features/service_attributes/presentation/pages/service_attributes_page.dart';
 import '../../features/vendors/presentation/pages/vendors_page.dart';
+import '../../features/dodo_teams/presentation/pages/dodo_teams_page.dart';
 import '../../features/vendors/presentation/pages/vendor_details_page.dart';
 import '../../features/bookings/presentation/pages/bookings_page.dart';
 import '../../features/customers/presentation/pages/customers_page.dart';
 import '../../features/coupons/presentation/pages/coupons_page.dart';
-import '../../features/notifications/presentation/pages/notifications_page.dart';
-import '../../features/vendor_assignment/presentation/pages/vendor_assignment_page.dart';
-import '../../features/pricing_engine/presentation/pages/pricing_engine_page.dart';
 import '../../features/vendor_settlement/presentation/pages/vendor_settlement_page.dart';
-import '../../features/cms/presentation/pages/cms_pages_page.dart';
 import '../../features/settings/presentation/pages/settings_page.dart';
+import '../../features/catalog/presentation/pages/catalog_page.dart';
 import '../../features/marketing/presentation/pages/abandoned_carts_page.dart';
 import '../../shared/pages/unauthorized_page.dart';
 import '../rbac/permission_guard.dart';
@@ -151,6 +149,13 @@ final routerProvider = Provider<GoRouter>((ref) {
             ),
           ),
           GoRoute(
+            path: '/dashboard/catalog',
+            name: 'catalog',
+            pageBuilder: (context, state) => const NoTransitionPage(
+              child: CatalogPage(),
+            ),
+          ),
+          GoRoute(
             path: '/dashboard/categories',
             name: 'categories',
             pageBuilder: (context, state) => const NoTransitionPage(
@@ -160,22 +165,31 @@ final routerProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: '/dashboard/sub-categories',
             name: 'subCategories',
-            pageBuilder: (context, state) => const NoTransitionPage(
-              child: SubCategoriesPage(),
+            pageBuilder: (context, state) => NoTransitionPage(
+              child: SubCategoriesPage(
+                filterCategoryId:
+                    state.uri.queryParameters['categoryId'],
+              ),
             ),
           ),
           GoRoute(
             path: '/dashboard/services',
             name: 'services',
-            pageBuilder: (context, state) => const NoTransitionPage(
-              child: ServicesPage(),
+            pageBuilder: (context, state) => NoTransitionPage(
+              child: ServicesPage(
+                filterSubCategoryId:
+                    state.uri.queryParameters['subCategoryId'],
+              ),
             ),
           ),
           GoRoute(
             path: '/dashboard/service-attributes',
             name: 'serviceAttributes',
-            pageBuilder: (context, state) => const NoTransitionPage(
-              child: ServiceAttributesPage(),
+            pageBuilder: (context, state) => NoTransitionPage(
+              child: ServiceAttributesPage(
+                filterServiceId:
+                    state.uri.queryParameters['serviceId'],
+              ),
             ),
           ),
           GoRoute(
@@ -183,6 +197,13 @@ final routerProvider = Provider<GoRouter>((ref) {
             name: 'vendors',
             pageBuilder: (context, state) => const NoTransitionPage(
               child: VendorsPage(),
+            ),
+          ),
+          GoRoute(
+            path: '/dashboard/dodo-teams',
+            name: 'dodoTeams',
+            pageBuilder: (context, state) => const NoTransitionPage(
+              child: DodoTeamsPage(),
             ),
           ),
           GoRoute(
@@ -216,27 +237,6 @@ final routerProvider = Provider<GoRouter>((ref) {
             ),
           ),
           GoRoute(
-            path: '/dashboard/pricing-engine',
-            name: 'pricingEngine',
-            pageBuilder: (context, state) => const NoTransitionPage(
-              child: PricingEnginePage(),
-            ),
-          ),
-          GoRoute(
-            path: '/dashboard/vendor-assignment',
-            name: 'vendorAssignment',
-            pageBuilder: (context, state) => const NoTransitionPage(
-              child: VendorAssignmentPage(),
-            ),
-          ),
-          GoRoute(
-            path: '/dashboard/notifications',
-            name: 'notifications',
-            pageBuilder: (context, state) => const NoTransitionPage(
-              child: NotificationsPage(),
-            ),
-          ),
-          GoRoute(
             path: '/dashboard/vendor-settlement',
             name: 'vendorSettlement',
             pageBuilder: (context, state) => const NoTransitionPage(
@@ -248,13 +248,6 @@ final routerProvider = Provider<GoRouter>((ref) {
             name: 'abandonedCarts',
             pageBuilder: (context, state) => const NoTransitionPage(
               child: AbandonedCartsPage(),
-            ),
-          ),
-          GoRoute(
-            path: '/dashboard/cms',
-            name: 'cms',
-            pageBuilder: (context, state) => const NoTransitionPage(
-              child: CmsPagesPage(),
             ),
           ),
           GoRoute(

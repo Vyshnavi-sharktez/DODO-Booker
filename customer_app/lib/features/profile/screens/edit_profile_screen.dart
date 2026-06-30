@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/constants/app_colors.dart';
+import '../../../core/widgets/clickable.dart';
 import '../services/profile_providers.dart';
 import '../../../models/profile_model.dart';
 
@@ -316,7 +317,7 @@ class _AvatarPicker extends StatelessWidget {
             ),
           ),
         ),
-        GestureDetector(
+        Clickable(
           onTap: () {
             // TODO: image picker
             ScaffoldMessenger.of(context).showSnackBar(

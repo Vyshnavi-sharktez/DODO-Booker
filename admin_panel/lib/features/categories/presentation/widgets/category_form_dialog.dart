@@ -9,7 +9,6 @@ class CategoryFormDialog extends StatefulWidget {
     required String name,
     required String slug,
     String? imageUrl,
-    String? description,
     required int sortOrder,
     required bool isActive,
   }) onSave;
@@ -29,7 +28,6 @@ class _CategoryFormDialogState extends State<CategoryFormDialog> {
   late final TextEditingController _name;
   late final TextEditingController _slug;
   late final TextEditingController _imageUrl;
-  late final TextEditingController _description;
   late final TextEditingController _sortOrder;
   late bool _isActive;
   bool _saving = false;
@@ -42,7 +40,6 @@ class _CategoryFormDialogState extends State<CategoryFormDialog> {
     _name = TextEditingController(text: e?.name ?? '');
     _slug = TextEditingController(text: e?.slug ?? '');
     _imageUrl = TextEditingController(text: e?.imageUrl ?? '');
-    _description = TextEditingController(text: e?.description ?? '');
     _sortOrder = TextEditingController(text: (e?.sortOrder ?? 0).toString());
     _isActive = e?.isActive ?? true;
     _slugEdited = e != null;
@@ -53,7 +50,6 @@ class _CategoryFormDialogState extends State<CategoryFormDialog> {
     _name.dispose();
     _slug.dispose();
     _imageUrl.dispose();
-    _description.dispose();
     _sortOrder.dispose();
     super.dispose();
   }
@@ -83,9 +79,6 @@ class _CategoryFormDialogState extends State<CategoryFormDialog> {
         slug: _slug.text.trim(),
         imageUrl:
             _imageUrl.text.trim().isEmpty ? null : _imageUrl.text.trim(),
-        description: _description.text.trim().isEmpty
-            ? null
-            : _description.text.trim(),
         sortOrder: int.tryParse(_sortOrder.text.trim()) ?? 0,
         isActive: _isActive,
       );
@@ -191,17 +184,6 @@ class _CategoryFormDialogState extends State<CategoryFormDialog> {
                           }
                           return null;
                         },
-                      ),
-                      const SizedBox(height: 16),
-
-                      // Description
-                      TextFormField(
-                        controller: _description,
-                        decoration: const InputDecoration(
-                          labelText: 'Description',
-                          hintText: 'Brief description of this category',
-                        ),
-                        maxLines: 3,
                       ),
                       const SizedBox(height: 16),
 

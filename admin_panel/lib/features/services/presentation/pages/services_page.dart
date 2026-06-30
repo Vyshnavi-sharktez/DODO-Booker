@@ -1,17 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../categories/application/providers/categories_providers.dart';
-import '../../../categories/domain/models/category.dart';
 import '../../../sub_categories/application/providers/sub_categories_providers.dart';
-import '../../../sub_categories/domain/models/sub_category.dart';
 import '../../application/providers/services_providers.dart';
 import '../../domain/models/service.dart';
 import '../widgets/service_form_dialog.dart';
 
 class ServicesPage extends ConsumerStatefulWidget {
-  const ServicesPage({super.key});
+  /// When non-null, only services belonging to this sub-category are shown.
+  final String? filterSubCategoryId;
+
+  const ServicesPage({super.key, this.filterSubCategoryId});
 
   @override
   ConsumerState<ServicesPage> createState() => _ServicesPageState();
@@ -35,48 +37,102 @@ class _ServicesPageState extends ConsumerState<ServicesPage> {
         .toList();
   }
 
-  List<Category> _categoriesForDialog() {
-    final all = ref.read(categoriesNotifierProvider).valueOrNull ?? [];
-    return all.where((c) => c.isActive).toList();
-  }
-
-  List<Category> _categoriesForEdit(Service service) {
-    final all = ref.read(categoriesNotifierProvider).valueOrNull ?? [];
-    final active = all.where((c) => c.isActive).toList();
-    final current = all.where((c) => c.id == service.categoryId).toList();
-    return [
-      ...current,
-      ...active.where((c) => c.id != service.categoryId),
-    ];
-  }
-
-  List<SubCategory> _allSubCategories() {
-    return ref.read(subCategoriesNotifierProvider).valueOrNull ?? [];
-  }
-
   void _openCreate() {
-    final cats = _categoriesForDialog();
-    if (cats.isEmpty) {
+    final filterSubId = widget.filterSubCategoryId;
+    if (filterSubId != null) {
+      final subs = ref.read(subCategoriesNotifierProvider).valueOrNull ?? [];
+      final cats = ref.read(categoriesNotifierProvider).valueOrNull ?? [];
+      final sub = subs.where((s) => s.id == filterSubId).firstOrNull;
+      final cat = sub != null
+          ? cats.where((c) => c.id == sub.categoryId).firstOrNull
+          : null;
+      _openCreateWithSubCategory(
+        subCategoryId: filterSubId,
+        subCategoryName: sub?.name ?? '',
+        categoryId: sub?.categoryId ?? '',
+        categoryName: cat?.name ?? '',
+      );
+    } else {
+      _pickSubCategoryThenCreate();
+    }
+  }
+
+  void _pickSubCategoryThenCreate() {
+    final subs = ref.read(subCategoriesNotifierProvider).valueOrNull ?? [];
+    final cats = ref.read(categoriesNotifierProvider).valueOrNull ?? [];
+    if (subs.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content:
-              Text('No active categories found. Create a category first.'),
+          content: Text('No sub categories found. Create a sub category first.'),
         ),
       );
       return;
     }
+    String? picked;
+    showDialog<String>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setLocal) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          title: const Text('Select Sub Category'),
+          content: DropdownButtonFormField<String>(
+            // ignore: deprecated_member_use
+            value: picked,
+            decoration: const InputDecoration(hintText: 'Choose a sub category'),
+            items: subs
+                .map((s) => DropdownMenuItem(value: s.id, child: Text(s.name)))
+                .toList(),
+            onChanged: (v) => setLocal(() => picked = v),
+            isExpanded: true,
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: picked == null
+                  ? null
+                  : () => Navigator.of(ctx).pop(picked),
+              child: const Text('Continue'),
+            ),
+          ],
+        ),
+      ),
+    ).then((subId) {
+      if (subId == null || !mounted) return;
+      final sub = subs.where((s) => s.id == subId).firstOrNull;
+      final cat = sub != null
+          ? cats.where((c) => c.id == sub.categoryId).firstOrNull
+          : null;
+      _openCreateWithSubCategory(
+        subCategoryId: subId,
+        subCategoryName: sub?.name ?? '',
+        categoryId: sub?.categoryId ?? '',
+        categoryName: cat?.name ?? '',
+      );
+    });
+  }
+
+  void _openCreateWithSubCategory({
+    required String subCategoryId,
+    required String subCategoryName,
+    required String categoryId,
+    required String categoryName,
+  }) {
     showDialog(
       context: context,
       barrierDismissible: false,
       builder: (_) => ServiceFormDialog(
-        categories: cats,
-        allSubCategories: _allSubCategories(),
+        categoryId: categoryId,
+        categoryName: categoryName,
+        subCategoryId: subCategoryId,
+        subCategoryName: subCategoryName,
         onSave: ({
           required categoryId,
           required subCategoryId,
           required name,
           required slug,
-          description,
           required basePrice,
           required estimatedDuration,
           imageUrl,
@@ -87,7 +143,6 @@ class _ServicesPageState extends ConsumerState<ServicesPage> {
                 subCategoryId: subCategoryId,
                 name: name,
                 slug: slug,
-                description: description,
                 basePrice: basePrice,
                 estimatedDuration: estimatedDuration,
                 imageUrl: imageUrl,
@@ -104,20 +159,24 @@ class _ServicesPageState extends ConsumerState<ServicesPage> {
   }
 
   void _openEdit(Service service) {
-    final cats = _categoriesForEdit(service);
+    final subs = ref.read(subCategoriesNotifierProvider).valueOrNull ?? [];
+    final cats = ref.read(categoriesNotifierProvider).valueOrNull ?? [];
+    final sub = subs.where((s) => s.id == service.subCategoryId).firstOrNull;
+    final cat = cats.where((c) => c.id == service.categoryId).firstOrNull;
     showDialog(
       context: context,
       barrierDismissible: false,
       builder: (_) => ServiceFormDialog(
         existing: service,
-        categories: cats,
-        allSubCategories: _allSubCategories(),
+        categoryId: service.categoryId,
+        categoryName: cat?.name ?? '',
+        subCategoryId: service.subCategoryId,
+        subCategoryName: sub?.name ?? '',
         onSave: ({
           required categoryId,
           required subCategoryId,
           required name,
           required slug,
-          description,
           required basePrice,
           required estimatedDuration,
           imageUrl,
@@ -129,7 +188,6 @@ class _ServicesPageState extends ConsumerState<ServicesPage> {
                 subCategoryId: subCategoryId,
                 name: name,
                 slug: slug,
-                description: description,
                 basePrice: basePrice,
                 estimatedDuration: estimatedDuration,
                 imageUrl: imageUrl,
@@ -146,6 +204,91 @@ class _ServicesPageState extends ConsumerState<ServicesPage> {
   }
 
   Future<void> _confirmDelete(Service service) async {
+    int attrCount;
+    try {
+      attrCount = await ref
+          .read(servicesRepositoryProvider)
+          .countAttributes(service.id);
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+                'Unable to validate service deletion. Please try again.'),
+          ),
+        );
+      }
+      return;
+    }
+    if (!mounted) return;
+
+    if (attrCount > 0) {
+      showDialog(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12)),
+          title: const Text('Delete Service?'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'This service cannot be deleted because it still contains:',
+                style: TextStyle(
+                    fontSize: 14, color: AppColors.textPrimary),
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Container(
+                    width: 6,
+                    height: 6,
+                    margin: const EdgeInsets.only(right: 10),
+                    decoration: BoxDecoration(
+                      color: AppColors.textSecondary,
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                  Text(
+                    '$attrCount Service Attribute${attrCount == 1 ? '' : 's'}',
+                    style: const TextStyle(
+                      fontSize: 14,
+                      color: AppColors.textPrimary,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'You must remove these attributes before deleting this service.',
+                style: TextStyle(
+                    fontSize: 13, color: AppColors.textSecondary),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () {
+                Navigator.of(ctx).pop();
+                context.go(
+                    '/dashboard/service-attributes?serviceId=${service.id}');
+              },
+              style: FilledButton.styleFrom(
+                  backgroundColor: AppColors.primary),
+              child: const Text('View Service Attributes'),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
+
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -210,7 +353,13 @@ class _ServicesPageState extends ConsumerState<ServicesPage> {
   Widget build(BuildContext context) {
     // Pre-load so dropdowns are ready when dialogs open
     ref.watch(categoriesNotifierProvider);
-    ref.watch(subCategoriesNotifierProvider);
+    final subCategoriesState = ref.watch(subCategoriesNotifierProvider);
+    final filteredSubCategoryName = widget.filterSubCategoryId != null
+        ? subCategoriesState.valueOrNull
+            ?.where((s) => s.id == widget.filterSubCategoryId)
+            .firstOrNull
+            ?.name
+        : null;
 
     final state = ref.watch(servicesNotifierProvider);
 
@@ -242,7 +391,9 @@ class _ServicesPageState extends ConsumerState<ServicesPage> {
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        'Manage bookable services',
+                        filteredSubCategoryName != null
+                            ? 'Showing services for "$filteredSubCategoryName"'
+                            : 'Manage bookable services',
                         style: TextStyle(
                           fontSize: 13,
                           color: AppColors.textSecondary,
@@ -326,10 +477,18 @@ class _ServicesPageState extends ConsumerState<ServicesPage> {
                 ),
               ),
               data: (all) {
-                final filtered = _applySearch(all);
-                if (all.isEmpty) {
+                final bySub = widget.filterSubCategoryId != null
+                    ? all
+                        .where((s) =>
+                            s.subCategoryId == widget.filterSubCategoryId)
+                        .toList()
+                    : all;
+                final filtered = _applySearch(bySub);
+                if (bySub.isEmpty) {
                   return _EmptyState(
-                    message: 'No services yet',
+                    message: filteredSubCategoryName != null
+                        ? 'No services in "$filteredSubCategoryName"'
+                        : 'No services yet',
                     sub: 'Click "New Service" to add your first one.',
                     onAdd: _openCreate,
                   );

@@ -3,7 +3,6 @@ class Category {
   final String name;
   final String slug;
   final String? imageUrl;
-  final String? description;
   final int sortOrder;
   final bool isActive;
   final DateTime? createdAt;
@@ -14,7 +13,6 @@ class Category {
     required this.name,
     required this.slug,
     this.imageUrl,
-    this.description,
     required this.sortOrder,
     required this.isActive,
     this.createdAt,
@@ -27,7 +25,6 @@ class Category {
       name: map['name'] as String? ?? '',
       slug: map['slug'] as String? ?? '',
       imageUrl: map['image_url'] as String?,
-      description: map['description'] as String?,
       sortOrder: map['sort_order'] as int? ?? 0,
       isActive: map['is_active'] as bool? ?? true,
       createdAt: map['created_at'] != null
@@ -43,7 +40,6 @@ class Category {
     String? name,
     String? slug,
     String? imageUrl,
-    String? description,
     int? sortOrder,
     bool? isActive,
   }) {
@@ -52,7 +48,6 @@ class Category {
       name: name ?? this.name,
       slug: slug ?? this.slug,
       imageUrl: imageUrl ?? this.imageUrl,
-      description: description ?? this.description,
       sortOrder: sortOrder ?? this.sortOrder,
       isActive: isActive ?? this.isActive,
       createdAt: createdAt,

@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../models/subcategory_model.dart';
 import '../../../models/service_model.dart';
 import '../services/service_providers.dart';
 import '../widgets/service_card.dart';
+import '../utils/service_detail_launcher.dart';
 
 class ServicesScreen extends ConsumerStatefulWidget {
   final SubcategoryModel subcategory;
@@ -120,10 +120,7 @@ class _ServicesScreenState extends ConsumerState<ServicesScreen> {
                     itemCount: filtered.length,
                     itemBuilder: (_, i) => ServiceCard(
                       service: filtered[i],
-                      onTap: () => context.push(
-                        '/service-detail/${filtered[i].id}',
-                        extra: filtered[i],
-                      ),
+                      onTap: () => openServiceDetail(context, filtered[i]),
                     ),
                   ),
                 );

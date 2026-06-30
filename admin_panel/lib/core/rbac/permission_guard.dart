@@ -22,20 +22,18 @@ final hasAnyPermissionProvider =
 
 const Map<String, String> routePermissions = {
   '/rbac': 'rbac.manage',
+  '/catalog': 'category.view',
   '/categories': 'category.view',
   '/sub-categories': 'category.view',
   '/services': 'service.view',
   '/service-attributes': 'service.view',
   '/vendors': 'vendor.view',
+  '/dodo-teams': 'dodo_team.view',
   '/bookings': 'booking.view',
   '/customers': 'customer.view',
   '/abandoned-carts': 'customer.view',
   '/coupons': 'coupon.view',
-  '/notifications': 'notification.view',
-  '/vendor-assignment': 'booking.view',
-  '/pricing-engine': 'service.view',
   '/vendor-settlement': 'vendor.view',
-  '/cms': 'cms.manage',
   '/settings': 'settings.manage',
 };
 

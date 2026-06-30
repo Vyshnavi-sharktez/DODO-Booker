@@ -43,42 +43,144 @@ class _CategoryScreenState extends ConsumerState<CategoryScreen> {
     } catch (_) {}
   }
 
+  static int _cols(double width) {
+    if (width < 480) return 2;
+    if (width < 768) return 3;
+    if (width < 1100) return 4;
+    return 5;
+  }
+
+  static double _hPad(double width) {
+    if (width < 600) return 16;
+    if (width < 900) return 24;
+    return 32;
+  }
+
+  Widget _buildGrid(List<CategoryModel> categories, int cols, double hPad) {
+    return SliverPadding(
+      padding: EdgeInsets.fromLTRB(hPad, 8, hPad, 48),
+      sliver: SliverGrid(
+        delegate: SliverChildBuilderDelegate(
+          (context, index) {
+            final cat = categories[index];
+            return CategoryCard(
+              category: cat,
+              colorIndex: index,
+              onTap: () => context.push('/subcategory/${cat.id}', extra: cat),
+            );
+          },
+          childCount: categories.length,
+        ),
+        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: cols,
+          childAspectRatio: 0.75,
+          crossAxisSpacing: 14,
+          mainAxisSpacing: 14,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildContent(
+    AsyncValue<List<CategoryModel>> async,
+    int cols,
+    double hPad,
+  ) {
+    return async.when(
+      loading: () => _buildSkeleton(cols, hPad),
+      error: (e, _) => SliverFillRemaining(
+        child: _ErrorState(onRetry: _refresh),
+      ),
+      data: (all) {
+        final list = _filtered(all);
+        if (list.isEmpty) {
+          return SliverFillRemaining(
+            child: _EmptyState(
+              isSearch: _query.isNotEmpty,
+              onClear: _searchController.clear,
+            ),
+          );
+        }
+        return _buildGrid(list, cols, hPad);
+      },
+    );
+  }
+
+  Widget _buildSkeleton(int cols, double hPad) {
+    return SliverPadding(
+      padding: EdgeInsets.fromLTRB(hPad, 8, hPad, 48),
+      sliver: SliverGrid(
+        delegate: SliverChildBuilderDelegate(
+          (context, index) => Container(
+            decoration: BoxDecoration(
+              color: AppColors.shimmerBase,
+              borderRadius: BorderRadius.circular(20),
+            ),
+          ),
+          childCount: 10,
+        ),
+        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: cols,
+          childAspectRatio: 0.75,
+          crossAxisSpacing: 14,
+          mainAxisSpacing: 14,
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final async = ref.watch(categoriesProvider);
+    final width = MediaQuery.of(context).size.width;
+    final cols = _cols(width);
+    final hPad = _hPad(width);
 
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
-        title: const Text('Categories'),
-        bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(68),
-          child: _SearchBar(controller: _searchController),
-        ),
+        title: const Text('Services'),
+        backgroundColor: AppColors.background,
+        foregroundColor: AppColors.textPrimary,
+        elevation: 0,
+        scrolledUnderElevation: 1,
+        surfaceTintColor: Colors.transparent,
       ),
-      body: RefreshIndicator(
-        color: AppColors.primary,
-        onRefresh: _refresh,
-        child: async.when(
-          loading: () => const _CategorySkeleton(),
-          error: (e, _) => _ErrorState(onRetry: _refresh),
-          data: (all) {
-            final list = _filtered(all);
-            if (list.isEmpty) {
-              return _EmptyState(
-                isSearch: _query.isNotEmpty,
-                onClear: () => _searchController.clear(),
-              );
-            }
-            return _CategoryGrid(categories: list);
-          },
+      body: Align(
+        alignment: Alignment.topCenter,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 1280),
+          child: RefreshIndicator(
+            color: AppColors.primary,
+            onRefresh: _refresh,
+            child: ScrollConfiguration(
+              behavior:
+                  ScrollConfiguration.of(context).copyWith(scrollbars: false),
+              child: CustomScrollView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                slivers: [
+                  // ── Search bar ─────────────────────────────────────────
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding:
+                          EdgeInsets.fromLTRB(hPad, 16, hPad, 8),
+                      child: _SearchBar(controller: _searchController),
+                    ),
+                  ),
+
+                  // ── Category grid / states ─────────────────────────────
+                  _buildContent(async, cols, hPad),
+                ],
+              ),
+            ),
+          ),
         ),
       ),
     );
   }
 }
 
-// ── Search bar (inside AppBar bottom) ─────────────────────────────────────────
+// ── Inline search bar ─────────────────────────────────────────────────────────
 
 class _SearchBar extends StatelessWidget {
   final TextEditingController controller;
@@ -86,109 +188,38 @@ class _SearchBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-      child: TextField(
-        controller: controller,
-        textInputAction: TextInputAction.search,
-        decoration: InputDecoration(
-          hintText: 'Search categories...',
-          prefixIcon: const Icon(Icons.search_rounded, size: 20),
-          suffixIcon: ValueListenableBuilder<TextEditingValue>(
-            valueListenable: controller,
-            builder: (_, value, _) {
-              if (value.text.isEmpty) return const SizedBox.shrink();
-              return IconButton(
-                icon: const Icon(Icons.clear_rounded, size: 18),
-                onPressed: controller.clear,
-              );
-            },
-          ),
-          contentPadding: const EdgeInsets.symmetric(vertical: 10),
-        ),
-      ),
-    );
-  }
-}
-
-// ── Responsive grid ───────────────────────────────────────────────────────────
-
-class _CategoryGrid extends StatelessWidget {
-  final List<CategoryModel> categories;
-  const _CategoryGrid({required this.categories});
-
-  @override
-  Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final w = constraints.maxWidth;
-        final int cols;
-        final double ratio;
-        if (w < 600) {
-          cols = 2;
-          ratio = 0.95;
-        } else if (w < 900) {
-          cols = 3;
-          ratio = 1.05;
-        } else {
-          cols = 4;
-          ratio = 1.1;
-        }
-
-        return GridView.builder(
-          padding: const EdgeInsets.fromLTRB(16, 16, 16, 40),
-          physics: const AlwaysScrollableScrollPhysics(),
-          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: cols,
-            childAspectRatio: ratio,
-            crossAxisSpacing: 12,
-            mainAxisSpacing: 12,
-          ),
-          itemCount: categories.length,
-          itemBuilder: (context, index) {
-            final cat = categories[index];
-            return CategoryCard(
-              category: cat,
-              colorIndex: index,
-              onTap: () => context.push(
-                '/subcategory/${cat.id}',
-                extra: cat,
-              ),
+    return TextField(
+      controller: controller,
+      textInputAction: TextInputAction.search,
+      decoration: InputDecoration(
+        hintText: 'Search services...',
+        prefixIcon: const Icon(Icons.search_rounded, size: 20),
+        suffixIcon: ValueListenableBuilder<TextEditingValue>(
+          valueListenable: controller,
+          builder: (context, value, child) {
+            if (value.text.isEmpty) return const SizedBox.shrink();
+            return IconButton(
+              icon: const Icon(Icons.clear_rounded, size: 18),
+              onPressed: controller.clear,
             );
           },
-        );
-      },
-    );
-  }
-}
-
-// ── Loading skeleton ───────────────────────────────────────────────────────────
-
-class _CategorySkeleton extends StatelessWidget {
-  const _CategorySkeleton();
-
-  @override
-  Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final cols = constraints.maxWidth < 600 ? 2 : (constraints.maxWidth < 900 ? 3 : 4);
-        return GridView.builder(
-          padding: const EdgeInsets.fromLTRB(16, 16, 16, 40),
-          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: cols,
-            childAspectRatio: 0.95,
-            crossAxisSpacing: 12,
-            mainAxisSpacing: 12,
-          ),
-          itemCount: 8,
-          itemBuilder: (_, _) => Container(
-            decoration: BoxDecoration(
-              color: AppColors.shimmerBase,
-              borderRadius: BorderRadius.circular(18),
-            ),
-          ),
-        );
-      },
+        ),
+        filled: true,
+        fillColor: AppColors.surface,
+        contentPadding: const EdgeInsets.symmetric(vertical: 14),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: BorderSide(color: AppColors.border, width: 0.8),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: BorderSide(color: AppColors.border, width: 0.8),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: BorderSide(color: AppColors.primary, width: 1.4),
+        ),
+      ),
     );
   }
 }
@@ -211,7 +242,7 @@ class _ErrorState extends StatelessWidget {
             const Icon(Icons.wifi_off_rounded, size: 64, color: AppColors.textHint),
             const SizedBox(height: 16),
             Text(
-              'Could not load categories',
+              'Could not load services',
               style: theme.textTheme.titleMedium,
               textAlign: TextAlign.center,
             ),
@@ -260,7 +291,7 @@ class _EmptyState extends StatelessWidget {
             ),
             const SizedBox(height: 16),
             Text(
-              isSearch ? 'No results found' : 'No categories yet',
+              isSearch ? 'No results found' : 'No services yet',
               style: theme.textTheme.titleMedium,
               textAlign: TextAlign.center,
             ),
@@ -268,7 +299,7 @@ class _EmptyState extends StatelessWidget {
             Text(
               isSearch
                   ? 'Try a different search term'
-                  : 'Categories will appear here soon',
+                  : 'Services will appear here soon',
               style: theme.textTheme.bodyMedium,
               textAlign: TextAlign.center,
             ),

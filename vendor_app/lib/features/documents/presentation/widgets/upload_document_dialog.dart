@@ -10,11 +10,11 @@ import '../utils/document_file_picker.dart'
 class UploadDocumentDialog extends StatefulWidget {
   const UploadDocumentDialog({
     super.key,
-    required this.uploadedTypes,
+    required this.availableTypes,
     required this.onUpload,
   });
 
-  final Set<String> uploadedTypes;
+  final List<DocumentTypeModel> availableTypes;
   final Future<void> Function(
     String documentType,
     Uint8List bytes,
@@ -27,7 +27,7 @@ class UploadDocumentDialog extends StatefulWidget {
 }
 
 class _UploadDocumentDialogState extends State<UploadDocumentDialog> {
-  DocumentType? _type;
+  DocumentTypeModel? _type;
   PickedDocument? _file;
   bool _uploading = false;
   String? _error;
@@ -40,11 +40,7 @@ class _UploadDocumentDialogState extends State<UploadDocumentDialog> {
     super.dispose();
   }
 
-  bool get _isOther => _type?.value == 'other';
-
-  List<DocumentType> get _available => DocumentType.values
-      .where((t) => !widget.uploadedTypes.contains(t.value))
-      .toList();
+  bool get _isOther => _type?.id == 'other';
 
   Future<void> _pickFile() async {
     debugPrint(
@@ -86,7 +82,7 @@ class _UploadDocumentDialogState extends State<UploadDocumentDialog> {
       return;
     }
 
-    debugPrint('[FILE_PICKER] Upload started — type: ${_type!.value}, file: ${_file!.name}');
+    debugPrint('[FILE_PICKER] Upload started — type: ${_type!.id}, file: ${_file!.name}');
 
     final bytes = _file!.bytes;
     final ext = _file!.extension;
@@ -103,7 +99,7 @@ class _UploadDocumentDialogState extends State<UploadDocumentDialog> {
       _error = null;
     });
     try {
-      await widget.onUpload(_type!.value, bytes, contentType, customName);
+      await widget.onUpload(_type!.id, bytes, contentType, customName);
       if (mounted) Navigator.of(context).pop(true);
     } catch (e) {
       if (mounted) {
@@ -125,7 +121,7 @@ class _UploadDocumentDialogState extends State<UploadDocumentDialog> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            DropdownMenu<DocumentType>(
+            DropdownMenu<DocumentTypeModel>(
               label: const Text('Document Type'),
               leadingIcon: const Icon(Icons.description_outlined),
               hintText: 'Select document type',
@@ -138,7 +134,7 @@ class _UploadDocumentDialogState extends State<UploadDocumentDialog> {
                 _nameController.clear();
                 _error = null;
               }),
-              dropdownMenuEntries: _available
+              dropdownMenuEntries: widget.availableTypes
                   .map((t) => DropdownMenuEntry(value: t, label: t.label))
                   .toList(),
             ),

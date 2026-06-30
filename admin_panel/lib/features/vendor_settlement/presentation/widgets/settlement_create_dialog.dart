@@ -4,14 +4,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../features/auth/application/providers/auth_provider.dart';
-import '../../../../features/vendors/application/providers/vendors_providers.dart';
-import '../../../../features/vendors/domain/models/vendor.dart';
 import '../../application/providers/vendor_settlement_providers.dart';
-import '../../domain/models/vendor_settlement.dart';
+import '../../domain/models/vendor_earnings_summary.dart';
 
 class SettlementCreateDialog extends ConsumerStatefulWidget {
-  const SettlementCreateDialog({super.key, required this.vendor});
-  final Vendor vendor;
+  const SettlementCreateDialog({super.key, required this.summary});
+  final VendorEarningsSummary summary;
 
   @override
   ConsumerState<SettlementCreateDialog> createState() =>
@@ -21,50 +19,57 @@ class SettlementCreateDialog extends ConsumerStatefulWidget {
 class _SettlementCreateDialogState
     extends ConsumerState<SettlementCreateDialog> {
   final _formKey = GlobalKey<FormState>();
-  final _amountCtrl = TextEditingController();
+  late final TextEditingController _amountCtrl;
+  final _refCtrl = TextEditingController();
   final _notesCtrl = TextEditingController();
+  String? _paymentMethod = 'Bank Transfer';
   bool _saving = false;
 
   static final _fmt = NumberFormat('#,##0.00', 'en_IN');
 
-  double get _parsedAmount =>
-      double.tryParse(_amountCtrl.text.trim()) ?? 0.0;
+  static const _paymentMethods = [
+    'Bank Transfer',
+    'UPI',
+    'Cash',
+    'Cheque',
+  ];
+
+  @override
+  void initState() {
+    super.initState();
+    final pending = widget.summary.pendingSettlement;
+    _amountCtrl = TextEditingController(
+      text: pending > 0 ? pending.toStringAsFixed(2) : '',
+    );
+  }
 
   @override
   void dispose() {
     _amountCtrl.dispose();
+    _refCtrl.dispose();
     _notesCtrl.dispose();
     super.dispose();
   }
+
+  double get _parsedAmount => double.tryParse(_amountCtrl.text.trim()) ?? 0.0;
 
   Future<void> _submit() async {
     if (!(_formKey.currentState?.validate() ?? false)) return;
     setState(() => _saving = true);
     try {
-      final vendor = widget.vendor;
-      final amount = _parsedAmount;
-      final newBalance = vendor.walletBalance - amount;
       final adminUser = ref.read(currentAdminUserProvider);
-
-      await ref.read(vendorSettlementRepositoryProvider).deductWalletBalance(
-            vendor.id,
-            newBalance: newBalance,
+      final s = widget.summary;
+      await ref.read(vendorSettlementNotifierProvider.notifier).createSettlement(
+            vendorId: s.vendorId,
+            vendorName: s.vendorName,
+            amount: _parsedAmount,
+            completedJobsCount: s.completedJobs,
+            settledBy: adminUser?.displayName ?? 'Admin',
+            paymentMethod: _paymentMethod,
+            referenceNumber:
+                _refCtrl.text.trim().isEmpty ? null : _refCtrl.text.trim(),
+            notes: _notesCtrl.text.trim().isEmpty ? null : _notesCtrl.text.trim(),
           );
-
-      final entry = VendorSettlement(
-        id: '${vendor.id}_${DateTime.now().millisecondsSinceEpoch}',
-        vendorId: vendor.id,
-        vendorName: vendor.businessName,
-        amount: amount,
-        balanceBefore: vendor.walletBalance,
-        balanceAfter: newBalance,
-        notes: _notesCtrl.text.trim().isEmpty ? null : _notesCtrl.text.trim(),
-        settledAt: DateTime.now(),
-        settledBy: adminUser?.displayName ?? 'Admin',
-      );
-      ref.read(vendorSettlementHistoryProvider.notifier).addEntry(entry);
-      await ref.read(vendorsNotifierProvider.notifier).refresh();
-
       if (mounted) Navigator.of(context).pop(true);
     } catch (e) {
       setState(() => _saving = false);
@@ -81,12 +86,12 @@ class _SettlementCreateDialogState
 
   @override
   Widget build(BuildContext context) {
-    final vendor = widget.vendor;
+    final s = widget.summary;
 
     return Dialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 480),
+        constraints: const BoxConstraints(maxWidth: 520),
         child: Padding(
           padding: const EdgeInsets.all(28),
           child: Form(
@@ -106,7 +111,7 @@ class _SettlementCreateDialogState
                         borderRadius: BorderRadius.circular(10),
                       ),
                       child: const Icon(
-                        Icons.account_balance_wallet_rounded,
+                        Icons.payments_rounded,
                         color: AppColors.success,
                         size: 20,
                       ),
@@ -117,7 +122,7 @@ class _SettlementCreateDialogState
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           const Text(
-                            'Process Settlement',
+                            'Mark as Paid',
                             style: TextStyle(
                               fontSize: 16,
                               fontWeight: FontWeight.w700,
@@ -125,7 +130,7 @@ class _SettlementCreateDialogState
                             ),
                           ),
                           Text(
-                            vendor.businessName,
+                            s.vendorName,
                             style: const TextStyle(
                               fontSize: 12,
                               color: AppColors.textSecondary,
@@ -134,55 +139,77 @@ class _SettlementCreateDialogState
                         ],
                       ),
                     ),
+                    IconButton(
+                      onPressed:
+                          _saving ? null : () => Navigator.of(context).pop(),
+                      icon: const Icon(Icons.close_rounded, size: 20),
+                      color: AppColors.textSecondary,
+                    ),
                   ],
                 ),
-                const SizedBox(height: 24),
+                const SizedBox(height: 20),
 
-                // Balance preview
-                AnimatedBuilder(
-                  animation: _amountCtrl,
-                  builder: (context, _) {
-                    final amount = _parsedAmount;
-                    final isValid =
-                        amount > 0 && amount <= vendor.walletBalance;
-                    final balanceAfter =
-                        (vendor.walletBalance - amount).clamp(0.0, double.infinity);
-
-                    return Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: AppColors.background,
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: AppColors.border),
-                      ),
-                      child: Row(
+                // Summary strip
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: AppColors.background,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: AppColors.border),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
                         mainAxisAlignment: MainAxisAlignment.spaceAround,
                         children: [
-                          _BalanceColumn(
-                            label: 'Current Balance',
-                            value: '₹${_fmt.format(vendor.walletBalance)}',
-                            valueColor: vendor.walletBalance > 0
-                                ? AppColors.success
-                                : AppColors.textSecondary,
+                          _SummaryItem(
+                            label: 'Completed Jobs',
+                            value: s.completedJobs.toString(),
+                            color: AppColors.primary,
                           ),
-                          const Icon(
-                            Icons.arrow_forward_rounded,
+                          _Divider(),
+                          _SummaryItem(
+                            label: 'Gross Earnings',
+                            value: '₹${_fmt.format(s.grossEarnings)}',
+                            color: AppColors.textPrimary,
+                          ),
+                          _Divider(),
+                          _SummaryItem(
+                            label: 'Platform Commission',
+                            value: '₹0.00',
                             color: AppColors.textSecondary,
-                            size: 18,
                           ),
-                          _BalanceColumn(
-                            label: 'After Settlement',
-                            value: isValid
-                                ? '₹${_fmt.format(balanceAfter)}'
-                                : '—',
-                            valueColor: isValid
-                                ? AppColors.primary
-                                : AppColors.textSecondary,
+                          _Divider(),
+                          _SummaryItem(
+                            label: 'Adjustments',
+                            value: '—',
+                            color: AppColors.textSecondary,
                           ),
                         ],
                       ),
-                    );
-                  },
+                      const SizedBox(height: 12),
+                      const Divider(height: 1, color: AppColors.border),
+                      const SizedBox(height: 12),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceAround,
+                        children: [
+                          _SummaryItem(
+                            label: 'Previously Settled',
+                            value: '₹${_fmt.format(s.totalSettled)}',
+                            color: AppColors.textSecondary,
+                          ),
+                          _Divider(),
+                          _SummaryItem(
+                            label: 'Final Payable Amount',
+                            value: '₹${_fmt.format(s.pendingSettlement)}',
+                            color: AppColors.warning,
+                            bold: true,
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
                 ),
                 const SizedBox(height: 20),
 
@@ -200,25 +227,52 @@ class _SettlementCreateDialogState
                   decoration: const InputDecoration(
                     labelText: 'Settlement Amount (₹) *',
                     prefixIcon: Icon(Icons.currency_rupee_rounded, size: 18),
+                    helperText: 'Defaults to full pending amount; edit for partial',
                   ),
-                  onChanged: (_) => setState(() {}),
                   validator: (v) {
                     final val = double.tryParse(v?.trim() ?? '');
                     if (val == null || val <= 0) {
                       return 'Enter a valid amount greater than zero';
                     }
-                    if (val > vendor.walletBalance) {
-                      return 'Exceeds wallet balance (₹${_fmt.format(vendor.walletBalance)})';
+                    if (val > s.pendingSettlement + 0.01) {
+                      return 'Exceeds pending settlement (₹${_fmt.format(s.pendingSettlement)})';
                     }
                     return null;
                   },
                 ),
                 const SizedBox(height: 16),
 
-                // Notes field
+                // Payment Method
+                // ignore: deprecated_member_use
+                DropdownButtonFormField<String>(
+                  value: _paymentMethod,
+                  decoration: const InputDecoration(
+                    labelText: 'Payment Method *',
+                    prefixIcon: Icon(Icons.account_balance_rounded, size: 18),
+                  ),
+                  items: _paymentMethods
+                      .map((m) => DropdownMenuItem(value: m, child: Text(m)))
+                      .toList(),
+                  onChanged: (v) => setState(() => _paymentMethod = v),
+                  validator: (v) =>
+                      v == null ? 'Select a payment method' : null,
+                ),
+                const SizedBox(height: 16),
+
+                // Reference Number
+                TextFormField(
+                  controller: _refCtrl,
+                  decoration: const InputDecoration(
+                    labelText: 'Reference / Transaction Number (Optional)',
+                    prefixIcon: Icon(Icons.tag_rounded, size: 18),
+                  ),
+                ),
+                const SizedBox(height: 16),
+
+                // Notes
                 TextFormField(
                   controller: _notesCtrl,
-                  maxLines: 3,
+                  maxLines: 2,
                   decoration: const InputDecoration(
                     labelText: 'Notes (Optional)',
                     alignLabelWithHint: true,
@@ -248,7 +302,7 @@ class _SettlementCreateDialogState
                               ),
                             )
                           : const Icon(Icons.check_rounded, size: 18),
-                      label: const Text('Process Settlement'),
+                      label: const Text('Mark as Paid'),
                       style: FilledButton.styleFrom(
                         backgroundColor: AppColors.success,
                       ),
@@ -264,37 +318,48 @@ class _SettlementCreateDialogState
   }
 }
 
-class _BalanceColumn extends StatelessWidget {
-  const _BalanceColumn({
+class _SummaryItem extends StatelessWidget {
+  const _SummaryItem({
     required this.label,
     required this.value,
-    required this.valueColor,
+    required this.color,
+    this.bold = false,
   });
   final String label;
   final String value;
-  final Color valueColor;
+  final Color color;
+  final bool bold;
 
   @override
   Widget build(BuildContext context) {
     return Column(
+      mainAxisSize: MainAxisSize.min,
       children: [
         Text(
           label,
-          style: const TextStyle(
-            fontSize: 11,
-            color: AppColors.textSecondary,
-          ),
+          style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
         ),
         const SizedBox(height: 4),
         Text(
           value,
           style: TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.w700,
-            color: valueColor,
+            fontSize: 14,
+            fontWeight: bold ? FontWeight.w700 : FontWeight.w600,
+            color: color,
           ),
         ),
       ],
+    );
+  }
+}
+
+class _Divider extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 1,
+      height: 32,
+      color: AppColors.border,
     );
   }
 }

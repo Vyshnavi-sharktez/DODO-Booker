@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/widgets/app_modal_dialog.dart';
+import '../../../core/widgets/clickable.dart';
 import '../providers/auth_provider.dart';
 import '../../cart/providers/cart_provider.dart';
 
@@ -124,6 +125,7 @@ class _OtpVerificationModalState extends ConsumerState<OtpVerificationModal> {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
 
     return AppModalDialog(
@@ -159,20 +161,20 @@ class _OtpVerificationModalState extends ConsumerState<OtpVerificationModal> {
             children: [
               Text(
                 "Didn't receive it? ",
-                style: tt.bodySmall?.copyWith(color: AppColors.textSecondary),
+                style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
               ),
               if (_secondsLeft > 0)
                 Text(
                   'Resend in ${_secondsLeft}s',
-                  style: tt.bodySmall?.copyWith(color: AppColors.textHint),
+                  style: tt.bodySmall?.copyWith(color: cs.onSurface.withAlpha(120)),
                 )
               else
-                GestureDetector(
+                Clickable(
                   onTap: _resend,
                   child: Text(
                     'Resend OTP',
                     style: tt.bodySmall?.copyWith(
-                      color: AppColors.primary,
+                      color: cs.primary,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
@@ -245,6 +247,7 @@ class _OtpBox extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     return SizedBox(
       width: 44,
       height: 52,
@@ -275,14 +278,14 @@ class _OtpBox extends StatelessWidget {
             border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
             enabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(10),
-              borderSide: const BorderSide(color: AppColors.border, width: 1.5),
+              borderSide: BorderSide(color: cs.outline.withAlpha(80), width: 1.5),
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(10),
-              borderSide: const BorderSide(color: AppColors.primary, width: 2),
+              borderSide: BorderSide(color: cs.primary, width: 2),
             ),
             filled: true,
-            fillColor: AppColors.surfaceVariant,
+            fillColor: cs.surfaceContainerHighest,
           ),
           onChanged: onChanged,
         ),

@@ -8,6 +8,11 @@ import '../../domain/repositories/i_documents_repository.dart';
 import '../../domain/usecases/get_vendor_documents_usecase.dart';
 import '../../domain/usecases/upload_document_usecase.dart';
 
+final documentTypesProvider =
+    FutureProvider.autoDispose<List<DocumentTypeModel>>((ref) {
+  return ref.read(documentsDatasourceProvider).fetchDocumentTypes();
+});
+
 final documentsDatasourceProvider = Provider<DocumentsRemoteDatasource>((ref) {
   return DocumentsRemoteDatasource(ref.watch(supabaseClientProvider));
 });

@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../models/my_booking_model.dart';
 import '../services/bookings_providers.dart';
+import '../utils/booking_detail_launcher.dart';
 import 'booking_card.dart';
 import 'empty_bookings_widget.dart';
 
@@ -61,10 +62,7 @@ class BookingTabContent extends ConsumerWidget {
             itemCount: bookings.length,
             itemBuilder: (_, i) => BookingCard(
               booking: bookings[i],
-              onTap: () => context.push(
-                '/booking-detail/${bookings[i].id}',
-                extra: bookings[i],
-              ),
+              onTap: () => openBookingDetail(context, bookings[i]),
             ),
           ),
         );

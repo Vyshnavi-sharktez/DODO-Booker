@@ -1,15 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../categories/application/providers/categories_providers.dart';
-import '../../../categories/domain/models/category.dart';
 import '../../application/providers/sub_categories_providers.dart';
 import '../../domain/models/sub_category.dart';
 import '../widgets/sub_category_form_dialog.dart';
 
 class SubCategoriesPage extends ConsumerStatefulWidget {
-  const SubCategoriesPage({super.key});
+  /// When non-null, only sub-categories belonging to this category are shown.
+  final String? filterCategoryId;
+
+  const SubCategoriesPage({super.key, this.filterCategoryId});
 
   @override
   ConsumerState<SubCategoriesPage> createState() => _SubCategoriesPageState();
@@ -35,14 +38,21 @@ class _SubCategoriesPageState extends ConsumerState<SubCategoriesPage> {
         .toList();
   }
 
-  List<Category> _activeCategories() {
-    final state = ref.read(categoriesNotifierProvider);
-    return state.valueOrNull?.where((c) => c.isActive).toList() ?? [];
+  void _openCreate() {
+    final filterCatId = widget.filterCategoryId;
+    if (filterCatId != null) {
+      final cats = ref.read(categoriesNotifierProvider).valueOrNull ?? [];
+      final cat = cats.where((c) => c.id == filterCatId).firstOrNull;
+      _openCreateWithCategory(filterCatId, cat?.name ?? '');
+    } else {
+      _pickCategoryThenCreate();
+    }
   }
 
-  void _openCreate() {
-    final cats = _activeCategories();
-    if (cats.isEmpty) {
+  void _pickCategoryThenCreate() {
+    final cats = ref.read(categoriesNotifierProvider).valueOrNull ?? [];
+    final activeCats = cats.where((c) => c.isActive).toList();
+    if (activeCats.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('No active categories found. Create a category first.'),
@@ -50,16 +60,55 @@ class _SubCategoriesPageState extends ConsumerState<SubCategoriesPage> {
       );
       return;
     }
+    String? picked;
+    showDialog<String>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setLocal) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          title: const Text('Select Category'),
+          content: DropdownButtonFormField<String>(
+            // ignore: deprecated_member_use
+            value: picked,
+            decoration: const InputDecoration(hintText: 'Choose a category'),
+            items: activeCats
+                .map((c) => DropdownMenuItem(value: c.id, child: Text(c.name)))
+                .toList(),
+            onChanged: (v) => setLocal(() => picked = v),
+            isExpanded: true,
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: picked == null
+                  ? null
+                  : () => Navigator.of(ctx).pop(picked),
+              child: const Text('Continue'),
+            ),
+          ],
+        ),
+      ),
+    ).then((catId) {
+      if (catId == null || !mounted) return;
+      final cat = activeCats.where((c) => c.id == catId).firstOrNull;
+      _openCreateWithCategory(catId, cat?.name ?? '');
+    });
+  }
+
+  void _openCreateWithCategory(String categoryId, String categoryName) {
     showDialog(
       context: context,
       barrierDismissible: false,
       builder: (_) => SubCategoryFormDialog(
-        categories: cats,
+        categoryId: categoryId,
+        categoryName: categoryName,
         onSave: ({
           required categoryId,
           required name,
           required slug,
-          description,
           required sortOrder,
           required isActive,
         }) async {
@@ -69,7 +118,6 @@ class _SubCategoriesPageState extends ConsumerState<SubCategoriesPage> {
                 categoryId: categoryId,
                 name: name,
                 slug: slug,
-                description: description,
                 sortOrder: sortOrder,
                 isActive: isActive,
               );
@@ -85,26 +133,19 @@ class _SubCategoriesPageState extends ConsumerState<SubCategoriesPage> {
   }
 
   void _openEdit(SubCategory sub) {
-    final cats = _activeCategories();
-    // Include the sub's current category even if inactive
-    final allCats = ref.read(categoriesNotifierProvider).valueOrNull ?? [];
-    final current = allCats.where((c) => c.id == sub.categoryId).toList();
-    final merged = [
-      ...current,
-      ...cats.where((c) => c.id != sub.categoryId),
-    ];
-
+    final cats = ref.read(categoriesNotifierProvider).valueOrNull ?? [];
+    final cat = cats.where((c) => c.id == sub.categoryId).firstOrNull;
     showDialog(
       context: context,
       barrierDismissible: false,
       builder: (_) => SubCategoryFormDialog(
         existing: sub,
-        categories: merged,
+        categoryId: sub.categoryId,
+        categoryName: cat?.name ?? '',
         onSave: ({
           required categoryId,
           required name,
           required slug,
-          description,
           required sortOrder,
           required isActive,
         }) async {
@@ -115,7 +156,6 @@ class _SubCategoriesPageState extends ConsumerState<SubCategoriesPage> {
                 categoryId: categoryId,
                 name: name,
                 slug: slug,
-                description: description,
                 sortOrder: sortOrder,
                 isActive: isActive,
               );
@@ -131,6 +171,73 @@ class _SubCategoriesPageState extends ConsumerState<SubCategoriesPage> {
   }
 
   Future<void> _confirmDelete(SubCategory sub) async {
+    int serviceCount;
+    try {
+      serviceCount = await ref
+          .read(subCategoriesRepositoryProvider)
+          .countServices(sub.id);
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+                'Unable to validate sub category deletion. Please try again.'),
+          ),
+        );
+      }
+      return;
+    }
+    if (!mounted) return;
+
+    if (serviceCount > 0) {
+      showDialog(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          title: const Row(
+            children: [
+              Icon(Icons.warning_amber_rounded,
+                  color: AppColors.warning, size: 22),
+              SizedBox(width: 8),
+              Text('Cannot Delete Sub Category'),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                  '"${sub.name}" has dependencies that must be removed first:'),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  const Text('• '),
+                  Text(
+                      '$serviceCount ${serviceCount == 1 ? "Service" : "Services"}'),
+                ],
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () {
+                Navigator.of(ctx).pop();
+                context.go(
+                    '/dashboard/services?subCategoryId=${sub.id}');
+              },
+              child: const Text('View Services'),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
+
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -193,8 +300,14 @@ class _SubCategoriesPageState extends ConsumerState<SubCategoriesPage> {
 
   @override
   Widget build(BuildContext context) {
-    // Pre-load categories so they're ready when dialogs open
-    ref.watch(categoriesNotifierProvider);
+    // Pre-load categories so they're ready when dialogs open and for header label.
+    final categoriesState = ref.watch(categoriesNotifierProvider);
+    final filteredCategoryName = widget.filterCategoryId != null
+        ? categoriesState.valueOrNull
+            ?.where((c) => c.id == widget.filterCategoryId)
+            .firstOrNull
+            ?.name
+        : null;
 
     final state = ref.watch(subCategoriesNotifierProvider);
 
@@ -226,7 +339,9 @@ class _SubCategoriesPageState extends ConsumerState<SubCategoriesPage> {
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        'Manage sub categories within each category',
+                        filteredCategoryName != null
+                            ? 'Showing sub categories for "$filteredCategoryName"'
+                            : 'Manage sub categories within each category',
                         style: TextStyle(
                           fontSize: 13,
                           color: AppColors.textSecondary,
@@ -310,10 +425,18 @@ class _SubCategoriesPageState extends ConsumerState<SubCategoriesPage> {
                 ),
               ),
               data: (all) {
-                final filtered = _applySearch(all);
-                if (all.isEmpty) {
+                final byCat = widget.filterCategoryId != null
+                    ? all
+                        .where((s) =>
+                            s.categoryId == widget.filterCategoryId)
+                        .toList()
+                    : all;
+                final filtered = _applySearch(byCat);
+                if (byCat.isEmpty) {
                   return _EmptyState(
-                    message: 'No sub categories yet',
+                    message: filteredCategoryName != null
+                        ? 'No sub categories in "$filteredCategoryName"'
+                        : 'No sub categories yet',
                     sub: 'Click "New Sub Category" to add your first one.',
                     onAdd: _openCreate,
                   );

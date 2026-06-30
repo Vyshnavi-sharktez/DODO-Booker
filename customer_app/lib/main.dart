@@ -1,10 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'app.dart';
+import 'core/theme/theme_provider.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  final prefs = await SharedPreferences.getInstance();
+  final savedTheme = prefs.getString('dodo_theme_mode');
+  final initialTheme =
+      savedTheme == 'dark' ? ThemeMode.dark : ThemeMode.light;
 
   // Only initialise when credentials are provided via --dart-define.
   // Without credentials the app runs with the dev fallback dataset.
@@ -16,5 +23,12 @@ void main() async {
     );
   }
 
-  runApp(const ProviderScope(child: App()));
+  runApp(
+    ProviderScope(
+      overrides: [
+        themeProvider.overrideWith((ref) => ThemeNotifier(initialTheme)),
+      ],
+      child: const App(),
+    ),
+  );
 }

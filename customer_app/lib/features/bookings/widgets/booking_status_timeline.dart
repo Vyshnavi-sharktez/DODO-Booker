@@ -55,16 +55,16 @@ class _TimelineStep extends StatelessWidget {
     required this.isActive,
   });
 
-  Color get _dotColor {
+  Color _dotColor(ColorScheme cs) {
     if (isCancelledStep) return AppColors.error;
-    if (isActive) return AppColors.primary;
+    if (isActive) return cs.primary;
     if (event.isReached) return AppColors.success;
-    return AppColors.border;
+    return cs.outline.withAlpha(80);
   }
 
   // Line after this step: green if fully completed, gray otherwise.
-  Color get _lineColor =>
-      event.isReached && !isActive ? AppColors.success : AppColors.border;
+  Color _lineColor(ColorScheme cs) =>
+      event.isReached && !isActive ? AppColors.success : cs.outline.withAlpha(80);
 
   IconData get _dotIcon {
     if (isCancelledStep) return Icons.close_rounded;
@@ -74,6 +74,7 @@ class _TimelineStep extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
     final reached = event.isReached;
 
@@ -91,16 +92,16 @@ class _TimelineStep extends StatelessWidget {
                   width: isActive ? 26 : 24,
                   height: isActive ? 26 : 24,
                   decoration: BoxDecoration(
-                    color: reached ? _dotColor : AppColors.surface,
+                    color: reached ? _dotColor(cs) : cs.surface,
                     shape: BoxShape.circle,
                     border: Border.all(
-                      color: _dotColor,
+                      color: _dotColor(cs),
                       width: reached ? 0 : 2,
                     ),
                     boxShadow: isActive
                         ? [
                             BoxShadow(
-                              color: AppColors.primary.withAlpha(60),
+                              color: cs.primary.withAlpha(60),
                               blurRadius: 6,
                               spreadRadius: 1,
                             ),
@@ -121,7 +122,7 @@ class _TimelineStep extends StatelessWidget {
                     child: Container(
                       width: 2,
                       margin: const EdgeInsets.symmetric(vertical: 3),
-                      color: _lineColor,
+                      color: _lineColor(cs),
                     ),
                   ),
               ],
@@ -147,9 +148,9 @@ class _TimelineStep extends StatelessWidget {
                             ? (isCancelledStep
                                 ? AppColors.error
                                 : isActive
-                                    ? AppColors.primary
-                                    : AppColors.textPrimary)
-                            : AppColors.textHint,
+                                    ? cs.primary
+                                    : cs.onSurface)
+                            : cs.onSurface.withAlpha(120),
                       ),
                     ),
                   ),
@@ -167,7 +168,7 @@ class _TimelineStep extends StatelessWidget {
                       child: Text(
                         'Now',
                         style: tt.labelSmall?.copyWith(
-                          color: AppColors.primary,
+                          color: cs.primary,
                           fontWeight: FontWeight.w700,
                           fontSize: 10,
                         ),

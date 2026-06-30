@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../core/constants/app_colors.dart';
 
-class ProfileMenuTile extends StatelessWidget {
+class ProfileMenuTile extends StatefulWidget {
   final IconData icon;
   final Color iconColor;
   final String title;
@@ -22,92 +22,116 @@ class ProfileMenuTile extends StatelessWidget {
   });
 
   @override
+  State<ProfileMenuTile> createState() => _ProfileMenuTileState();
+}
+
+class _ProfileMenuTileState extends State<ProfileMenuTile> {
+  bool _hovered = false;
+
+  @override
   Widget build(BuildContext context) {
     final tt = Theme.of(context).textTheme;
-    final titleColor = isDestructive ? AppColors.error : AppColors.textPrimary;
+    final effectiveIconColor =
+        widget.isDestructive ? AppColors.error : widget.iconColor;
+    final titleColor =
+        widget.isDestructive ? AppColors.error : AppColors.textPrimary;
 
-    return InkWell(
-      onTap: onTap,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
-        child: Row(
-          children: [
-            // Icon container
-            Container(
-              width: 38,
-              height: 38,
-              decoration: BoxDecoration(
-                color: (isDestructive ? AppColors.error : iconColor).withAlpha(15),
-                borderRadius: BorderRadius.circular(10),
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      child: InkWell(
+        onTap: widget.onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 150),
+          color: _hovered
+              ? (widget.isDestructive
+                  ? AppColors.error.withAlpha(8)
+                  : AppColors.primary.withAlpha(6))
+              : Colors.transparent,
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          child: Row(
+            children: [
+              // Icon badge
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: effectiveIconColor.withAlpha(16),
+                  borderRadius: BorderRadius.circular(11),
+                ),
+                child: Icon(
+                  widget.icon,
+                  size: 20,
+                  color: effectiveIconColor,
+                ),
               ),
-              child: Icon(
-                icon,
-                size: 19,
-                color: isDestructive ? AppColors.error : iconColor,
-              ),
-            ),
 
-            const SizedBox(width: 14),
+              const SizedBox(width: 14),
 
-            // Title + subtitle
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    title,
-                    style: tt.bodyMedium?.copyWith(
-                      fontWeight: FontWeight.w600,
-                      color: titleColor,
-                    ),
-                  ),
-                  if (subtitle != null)
+              // Title + subtitle
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
                     Text(
-                      subtitle!,
-                      style: tt.labelSmall?.copyWith(
-                        color: AppColors.textSecondary,
+                      widget.title,
+                      style: tt.bodyMedium?.copyWith(
+                        fontWeight: FontWeight.w600,
+                        color: titleColor,
                       ),
                     ),
-                ],
-              ),
-            ),
-
-            // Badge
-            if (badge != null) ...[
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                decoration: BoxDecoration(
-                  color: AppColors.error,
-                  borderRadius: BorderRadius.circular(12),
+                    if (widget.subtitle != null) ...[
+                      const SizedBox(height: 1),
+                      Text(
+                        widget.subtitle!,
+                        style: tt.labelSmall?.copyWith(
+                          color: AppColors.textSecondary,
+                        ),
+                      ),
+                    ],
+                  ],
                 ),
-                child: Text(
-                  badge!,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 10,
-                    fontWeight: FontWeight.w700,
+              ),
+
+              // Badge
+              if (widget.badge != null) ...[
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: AppColors.error,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    widget.badge!,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
                 ),
-              ),
-              const SizedBox(width: 8),
-            ],
+                const SizedBox(width: 8),
+              ],
 
-            // Trailing arrow
-            if (!isDestructive)
-              const Icon(
-                Icons.chevron_right_rounded,
-                size: 20,
-                color: AppColors.textHint,
-              ),
-          ],
+              // Trailing chevron
+              if (!widget.isDestructive)
+                Icon(
+                  Icons.chevron_right_rounded,
+                  size: 20,
+                  color: _hovered ? AppColors.textSecondary : AppColors.textHint,
+                ),
+            ],
+          ),
         ),
       ),
     );
   }
 }
 
-// ── Section header ─────────────────────────────────────────────────────────────
+// ── Section wrapper ────────────────────────────────────────────────────────────
 
 class ProfileMenuSection extends StatelessWidget {
   final String title;
@@ -127,31 +151,37 @@ class ProfileMenuSection extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Padding(
-          padding: const EdgeInsets.fromLTRB(16, 20, 16, 6),
+          padding: const EdgeInsets.fromLTRB(16, 20, 16, 8),
           child: Text(
             title.toUpperCase(),
             style: tt.labelSmall?.copyWith(
               color: AppColors.textHint,
               fontWeight: FontWeight.w700,
-              letterSpacing: 1.1,
+              letterSpacing: 1.2,
             ),
           ),
         ),
+        // Outer container carries the shadow; ClipRRect inside clips ink effects
         Container(
           margin: const EdgeInsets.symmetric(horizontal: 16),
           decoration: BoxDecoration(
-            color: AppColors.surface,
             borderRadius: BorderRadius.circular(14),
             boxShadow: const [
               BoxShadow(
-                color: Color(0x08000000),
-                blurRadius: 8,
-                offset: Offset(0, 2),
+                color: Color(0x0A000000),
+                blurRadius: 10,
+                offset: Offset(0, 3),
               ),
             ],
           ),
-          child: Column(
-            children: _withDividers(children),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(14),
+            child: Container(
+              color: AppColors.surface,
+              child: Column(
+                children: _withDividers(children),
+              ),
+            ),
           ),
         ),
       ],
@@ -166,7 +196,7 @@ class ProfileMenuSection extends StatelessWidget {
         result.add(
           const Divider(
             height: 1,
-            indent: 68,
+            indent: 70,
             endIndent: 16,
             color: AppColors.divider,
           ),

@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import '../../../../core/theme/app_theme.dart';
+import '../../../../core/widgets/clickable.dart';
 import '../../../service_attributes/application/providers/service_attributes_providers.dart';
 import '../../../service_attributes/domain/models/service_attribute.dart';
 import '../../../service_attributes/domain/models/service_attribute_option.dart';
@@ -797,7 +798,7 @@ class _CalculatorAttributeSelector extends StatelessWidget {
                     ? '+₹${opt.priceAdjustment.toStringAsFixed(0)}'
                     : '−₹${opt.priceAdjustment.abs().toStringAsFixed(0)}';
 
-            return GestureDetector(
+            return Clickable(
               onTap: () => onSelect(opt.id),
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 120),

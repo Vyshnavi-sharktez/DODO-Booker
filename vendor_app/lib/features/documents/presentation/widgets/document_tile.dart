@@ -8,20 +8,21 @@ class DocumentTile extends StatelessWidget {
   const DocumentTile({
     super.key,
     required this.document,
+    required this.docType,
     required this.isReplacing,
     required this.onReplace,
     required this.onView,
   });
 
   final VendorDocument document;
+  final DocumentTypeModel? docType;
   final bool isReplacing;
   final VoidCallback onReplace;
   final VoidCallback onView;
 
   @override
   Widget build(BuildContext context) {
-    final docType = DocumentType.fromValue(document.documentType);
-    final isOther = document.documentType == DocumentType.other.value;
+    final isOther = document.documentType == 'other';
     final label = isOther && (document.customDocumentName?.isNotEmpty ?? false)
         ? document.customDocumentName!
         : (docType?.label ?? document.documentType);

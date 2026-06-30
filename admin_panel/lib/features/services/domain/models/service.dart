@@ -6,7 +6,6 @@ class Service {
   final String subCategoryName;
   final String name;
   final String slug;
-  final String? description;
   final double basePrice;
   final int estimatedDuration;
   final String? imageUrl;
@@ -22,7 +21,6 @@ class Service {
     required this.subCategoryName,
     required this.name,
     required this.slug,
-    this.description,
     required this.basePrice,
     required this.estimatedDuration,
     this.imageUrl,
@@ -42,7 +40,6 @@ class Service {
       subCategoryName: subCategoryJoin?['name'] as String? ?? '',
       name: map['name'] as String? ?? '',
       slug: map['slug'] as String? ?? '',
-      description: map['description'] as String?,
       basePrice: (map['base_price'] as num?)?.toDouble() ?? 0.0,
       estimatedDuration: map['estimated_duration'] as int? ?? 0,
       imageUrl: map['image_url'] as String?,
@@ -63,7 +60,6 @@ class Service {
     String? subCategoryName,
     String? name,
     String? slug,
-    String? description,
     double? basePrice,
     int? estimatedDuration,
     String? imageUrl,
@@ -77,7 +73,6 @@ class Service {
       subCategoryName: subCategoryName ?? this.subCategoryName,
       name: name ?? this.name,
       slug: slug ?? this.slug,
-      description: description ?? this.description,
       basePrice: basePrice ?? this.basePrice,
       estimatedDuration: estimatedDuration ?? this.estimatedDuration,
       imageUrl: imageUrl ?? this.imageUrl,

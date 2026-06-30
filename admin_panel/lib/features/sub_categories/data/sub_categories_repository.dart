@@ -21,7 +21,6 @@ class SubCategoriesRepository {
     required String categoryId,
     required String name,
     required String slug,
-    String? description,
     required int sortOrder,
     required bool isActive,
   }) async {
@@ -31,8 +30,6 @@ class SubCategoriesRepository {
           'category_id': categoryId,
           'name': name,
           'slug': slug,
-          if (description != null && description.isNotEmpty)
-            'description': description,
           'sort_order': sortOrder,
           'is_active': isActive,
         })
@@ -46,7 +43,6 @@ class SubCategoriesRepository {
     required String categoryId,
     required String name,
     required String slug,
-    String? description,
     required int sortOrder,
     required bool isActive,
   }) async {
@@ -56,7 +52,6 @@ class SubCategoriesRepository {
           'category_id': categoryId,
           'name': name,
           'slug': slug,
-          'description': description?.isNotEmpty == true ? description : null,
           'sort_order': sortOrder,
           'is_active': isActive,
         })
@@ -75,5 +70,13 @@ class SubCategoriesRepository {
         .from('sub_categories')
         .update({'is_active': isActive})
         .eq('id', id);
+  }
+
+  Future<int> countServices(String subCategoryId) async {
+    final data = await _supabase
+        .from('services')
+        .select('id')
+        .eq('sub_category_id', subCategoryId);
+    return (data as List).length;
   }
 }

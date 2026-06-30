@@ -21,18 +21,20 @@ class BookingsNotifier extends StateNotifier<AsyncValue<List<Booking>>> {
 
   Future<void> refresh() => _load();
 
-  Future<void> updateBooking(
+  Future<void> updateBookingAssignment(
     String id, {
-    required String vendorId,
+    required String assignmentType,
+    String? vendorId,
+    String? dodoTeamId,
     required DateTime serviceDate,
-    required String status,
     String? notes,
   }) async {
-    final updated = await _repo.updateBooking(
+    final updated = await _repo.updateBookingAssignment(
       id,
+      assignmentType: assignmentType,
       vendorId: vendorId,
+      dodoTeamId: dodoTeamId,
       serviceDate: serviceDate,
-      status: status,
       notes: notes,
     );
     final current = state.valueOrNull;
@@ -41,6 +43,34 @@ class BookingsNotifier extends StateNotifier<AsyncValue<List<Booking>>> {
         current.map((b) => b.id == id ? updated : b).toList(),
       );
     }
+  }
+
+  Future<void> cancelBooking(String id) async {
+    final updated = await _repo.cancelBooking(id);
+    final current = state.valueOrNull;
+    if (current != null) {
+      state = AsyncValue.data(
+        current.map((b) => b.id == id ? updated : b).toList(),
+      );
+    }
+  }
+
+  Future<void> createBooking({
+    required String customerId,
+    required DateTime serviceDate,
+    required String address,
+    String? notes,
+    required List<({String serviceId, int quantity, double unitPrice})> items,
+  }) async {
+    final created = await _repo.createBooking(
+      customerId: customerId,
+      serviceDate: serviceDate,
+      address: address,
+      notes: notes,
+      items: items,
+    );
+    final current = state.valueOrNull ?? [];
+    state = AsyncValue.data([created, ...current]);
   }
 
   Future<void> deleteBooking(String id) async {

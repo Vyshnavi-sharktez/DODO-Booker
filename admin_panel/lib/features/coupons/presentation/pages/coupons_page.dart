@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import '../../../../core/theme/app_theme.dart';
+import '../../../../core/widgets/clickable.dart';
 import '../../application/providers/coupons_providers.dart';
 import '../../domain/models/coupon.dart';
 import '../widgets/coupon_form_dialog.dart';
@@ -330,7 +331,7 @@ class _CouponsPageState extends ConsumerState<CouponsPage> {
                     // ignore: deprecated_member_use
                     value: _typeFilter,
                     decoration: const InputDecoration(
-                      hintText: 'All Types',
+                      hintText: 'Discount Type',
                       prefixIcon: Icon(Icons.percent_rounded, size: 18),
                       contentPadding: EdgeInsets.symmetric(
                           horizontal: 12, vertical: 10),
@@ -452,7 +453,7 @@ class _FilterChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
+    return Clickable(
       onTap: onTap,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 150),

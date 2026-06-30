@@ -246,6 +246,7 @@ class _AddressFormModalState extends ConsumerState<AddressFormModal> {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
 
     return AppModalDialog(
@@ -280,8 +281,8 @@ class _AddressFormModalState extends ConsumerState<AddressFormModal> {
                     ),
                     style: OutlinedButton.styleFrom(
                       padding: const EdgeInsets.symmetric(vertical: 12),
-                      side: const BorderSide(color: AppColors.border),
-                      foregroundColor: AppColors.primary,
+                      side: BorderSide(color: cs.outline.withAlpha(80)),
+                      foregroundColor: cs.primary,
                     ),
                   ),
                 ),
@@ -296,8 +297,8 @@ class _AddressFormModalState extends ConsumerState<AddressFormModal> {
                     ),
                     style: OutlinedButton.styleFrom(
                       padding: const EdgeInsets.symmetric(vertical: 12),
-                      side: const BorderSide(color: AppColors.border),
-                      foregroundColor: AppColors.primary,
+                      side: BorderSide(color: cs.outline.withAlpha(80)),
+                      foregroundColor: cs.primary,
                     ),
                   ),
                 ),
@@ -372,7 +373,7 @@ class _AddressFormModalState extends ConsumerState<AddressFormModal> {
                     'or fill manually',
                     style: TextStyle(
                       fontSize: 11,
-                      color: AppColors.textSecondary.withValues(alpha: 0.7),
+                      color: cs.onSurfaceVariant.withAlpha(178),
                     ),
                   ),
                 ),
@@ -383,7 +384,7 @@ class _AddressFormModalState extends ConsumerState<AddressFormModal> {
             const SizedBox(height: 14),
 
             // ── Address type ───────────────────────────────────────────────────
-            Text('Address Type', style: _labelStyle(tt)),
+            Text('Address Type', style: _labelStyle(tt, cs)),
             const SizedBox(height: 8),
             Row(
               children: _types.map((type) {
@@ -394,18 +395,18 @@ class _AddressFormModalState extends ConsumerState<AddressFormModal> {
                     label: Text(type),
                     selected: selected,
                     onSelected: (_) => setState(() => _label = type),
-                    selectedColor: AppColors.primary.withAlpha(25),
+                    selectedColor: cs.primary.withAlpha(25),
                     labelStyle: TextStyle(
                       color:
-                          selected ? AppColors.primary : AppColors.textSecondary,
+                          selected ? cs.primary : cs.onSurfaceVariant,
                       fontWeight:
                           selected ? FontWeight.w700 : FontWeight.w500,
                     ),
                     side: BorderSide(
-                      color: selected ? AppColors.primary : AppColors.border,
+                      color: selected ? cs.primary : cs.outline.withAlpha(80),
                       width: selected ? 1.5 : 1,
                     ),
-                    backgroundColor: AppColors.surface,
+                    backgroundColor: cs.surface,
                     showCheckmark: false,
                   ),
                 );
@@ -415,12 +416,12 @@ class _AddressFormModalState extends ConsumerState<AddressFormModal> {
             const SizedBox(height: 16),
 
             // ── House / Flat No., Street & Area ───────────────────────────────
-            Text('House / Flat No., Street & Area', style: _labelStyle(tt)),
+            Text('House / Flat No., Street & Area', style: _labelStyle(tt, cs)),
             const SizedBox(height: 6),
             TextFormField(
               controller: _line1Ctrl,
               decoration:
-                  _inputDecoration('e.g. 204, Sunrise Apartments, MG Road'),
+                  _inputDecoration('e.g. 204, Sunrise Apartments, MG Road', cs),
               validator: (v) =>
                   (v?.trim().isEmpty ?? true) ? 'Required' : null,
             ),
@@ -428,11 +429,11 @@ class _AddressFormModalState extends ConsumerState<AddressFormModal> {
             const SizedBox(height: 14),
 
             // ── Landmark ──────────────────────────────────────────────────────
-            Text('Landmark (Optional)', style: _labelStyle(tt)),
+            Text('Landmark (Optional)', style: _labelStyle(tt, cs)),
             const SizedBox(height: 6),
             TextFormField(
               controller: _line2Ctrl,
-              decoration: _inputDecoration('e.g. Near City Mall'),
+              decoration: _inputDecoration('e.g. Near City Mall', cs),
             ),
 
             const SizedBox(height: 14),
@@ -444,11 +445,11 @@ class _AddressFormModalState extends ConsumerState<AddressFormModal> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('City', style: _labelStyle(tt)),
+                      Text('City', style: _labelStyle(tt, cs)),
                       const SizedBox(height: 6),
                       TextFormField(
                         controller: _cityCtrl,
-                        decoration: _inputDecoration('e.g. Bengaluru'),
+                        decoration: _inputDecoration('e.g. Bengaluru', cs),
                         textCapitalization: TextCapitalization.words,
                         validator: (v) =>
                             (v?.trim().isEmpty ?? true) ? 'Required' : null,
@@ -461,11 +462,11 @@ class _AddressFormModalState extends ConsumerState<AddressFormModal> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('State', style: _labelStyle(tt)),
+                      Text('State', style: _labelStyle(tt, cs)),
                       const SizedBox(height: 6),
                       TextFormField(
                         controller: _stateCtrl,
-                        decoration: _inputDecoration('e.g. Karnataka'),
+                        decoration: _inputDecoration('e.g. Karnataka', cs),
                         textCapitalization: TextCapitalization.words,
                         validator: (v) =>
                             (v?.trim().isEmpty ?? true) ? 'Required' : null,
@@ -479,11 +480,11 @@ class _AddressFormModalState extends ConsumerState<AddressFormModal> {
             const SizedBox(height: 14),
 
             // ── Pincode ────────────────────────────────────────────────────────
-            Text('Pincode', style: _labelStyle(tt)),
+            Text('Pincode', style: _labelStyle(tt, cs)),
             const SizedBox(height: 6),
             TextFormField(
               controller: _pincodeCtrl,
-              decoration: _inputDecoration('e.g. 560001'),
+              decoration: _inputDecoration('e.g. 560001', cs),
               keyboardType: TextInputType.number,
               inputFormatters: [
                 FilteringTextInputFormatter.digitsOnly,
@@ -544,22 +545,21 @@ class _AddressFormModalState extends ConsumerState<AddressFormModal> {
     );
   }
 
-  TextStyle? _labelStyle(TextTheme tt) => tt.labelMedium?.copyWith(
+  TextStyle? _labelStyle(TextTheme tt, ColorScheme cs) => tt.labelMedium?.copyWith(
         fontWeight: FontWeight.w600,
-        color: AppColors.textSecondary,
+        color: cs.onSurfaceVariant,
       );
 
-  InputDecoration _inputDecoration(String hint) => InputDecoration(
+  InputDecoration _inputDecoration(String hint, ColorScheme cs) => InputDecoration(
         hintText: hint,
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: AppColors.border),
+          borderSide: BorderSide(color: cs.outline.withAlpha(80)),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide:
-              const BorderSide(color: AppColors.primary, width: 1.5),
+          borderSide: BorderSide(color: cs.primary, width: 1.5),
         ),
         errorBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),

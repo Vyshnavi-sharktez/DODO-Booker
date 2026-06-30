@@ -13,6 +13,13 @@ final servicesBySubcategoryProvider =
       .fetchServicesBySubcategoryId(subcategoryId),
 );
 
+final servicesByCategoryProvider =
+    FutureProvider.family<List<ServiceModel>, String>(
+  (ref, categoryId) => ref
+      .read(serviceServiceProvider)
+      .fetchServicesByCategoryId(categoryId),
+);
+
 final serviceDetailProvider =
     FutureProvider.family<ServiceModel?, String>(
   (ref, serviceId) =>

@@ -21,7 +21,6 @@ class CategoriesRepository {
     required String name,
     required String slug,
     String? imageUrl,
-    String? description,
     required int sortOrder,
     required bool isActive,
   }) async {
@@ -31,8 +30,6 @@ class CategoriesRepository {
           'name': name,
           'slug': slug,
           if (imageUrl != null && imageUrl.isNotEmpty) 'image_url': imageUrl,
-          if (description != null && description.isNotEmpty)
-            'description': description,
           'sort_order': sortOrder,
           'is_active': isActive,
         })
@@ -46,7 +43,6 @@ class CategoriesRepository {
     required String name,
     required String slug,
     String? imageUrl,
-    String? description,
     required int sortOrder,
     required bool isActive,
   }) async {
@@ -56,7 +52,6 @@ class CategoriesRepository {
           'name': name,
           'slug': slug,
           'image_url': imageUrl?.isNotEmpty == true ? imageUrl : null,
-          'description': description?.isNotEmpty == true ? description : null,
           'sort_order': sortOrder,
           'is_active': isActive,
         })
@@ -75,5 +70,23 @@ class CategoriesRepository {
         .from('categories')
         .update({'is_active': isActive})
         .eq('id', id);
+  }
+
+  /// Returns the count of sub-categories and services that belong to [categoryId].
+  /// Used to block deletion when dependents exist.
+  Future<({int subCategories, int services})> countDependents(
+      String categoryId) async {
+    final subcatData = await _supabase
+        .from('sub_categories')
+        .select('id')
+        .eq('category_id', categoryId);
+    final serviceData = await _supabase
+        .from('services')
+        .select('id')
+        .eq('category_id', categoryId);
+    return (
+      subCategories: (subcatData as List).length,
+      services: (serviceData as List).length,
+    );
   }
 }

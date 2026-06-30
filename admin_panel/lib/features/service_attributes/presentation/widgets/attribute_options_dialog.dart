@@ -132,6 +132,19 @@ class _AttributeOptionsDialogState
     }
   }
 
+  void _reorder(int oldIndex, int newIndex) {
+    final attribute =
+        ref.read(singleAttributeProvider(widget.attributeId));
+    final options =
+        List<ServiceAttributeOption>.from(attribute?.options ?? []);
+    if (newIndex > oldIndex) newIndex--;
+    final item = options.removeAt(oldIndex);
+    options.insert(newIndex, item);
+    ref
+        .read(serviceAttributesNotifierProvider.notifier)
+        .reorderOptions(widget.attributeId, options);
+  }
+
   String _formatPrice(double price) {
     if (price == 0) return 'No adjustment';
     final sign = price > 0 ? '+' : '';
@@ -242,17 +255,18 @@ class _AttributeOptionsDialogState
                         ],
                       ),
                     )
-                  : ListView.separated(
+                  : ReorderableListView.builder(
                       padding: const EdgeInsets.all(16),
+                      buildDefaultDragHandles: false,
+                      onReorder: _reorder,
                       itemCount: options.length,
-                      separatorBuilder: (_, i) =>
-                          const SizedBox(height: 8),
                       itemBuilder: (ctx, i) {
                         final opt = options[i];
                         final isEditing = _editingId == opt.id;
 
                         if (isEditing) {
                           return _EditOptionRow(
+                            key: ValueKey(opt.id),
                             nameController: _editNameController,
                             priceController: _editPriceController,
                             onSave: _saving ? null : _saveEdit,
@@ -261,12 +275,17 @@ class _AttributeOptionsDialogState
                           );
                         }
 
-                        return _OptionTile(
-                          option: opt,
-                          priceLabel: _formatPrice(opt.priceAdjustment),
-                          deleting: _deletingId == opt.id,
-                          onEdit: () => _startEdit(opt),
-                          onDelete: () => _deleteOption(opt.id),
+                        return Padding(
+                          key: ValueKey(opt.id),
+                          padding: const EdgeInsets.only(bottom: 8),
+                          child: _OptionTile(
+                            option: opt,
+                            index: i,
+                            priceLabel: _formatPrice(opt.priceAdjustment),
+                            deleting: _deletingId == opt.id,
+                            onEdit: () => _startEdit(opt),
+                            onDelete: () => _deleteOption(opt.id),
+                          ),
                         );
                       },
                     ),
@@ -402,6 +421,7 @@ class _AttributeOptionsDialogState
 
 class _OptionTile extends StatelessWidget {
   final ServiceAttributeOption option;
+  final int index;
   final String priceLabel;
   final bool deleting;
   final VoidCallback onEdit;
@@ -409,6 +429,7 @@ class _OptionTile extends StatelessWidget {
 
   const _OptionTile({
     required this.option,
+    required this.index,
     required this.priceLabel,
     required this.deleting,
     required this.onEdit,
@@ -418,7 +439,7 @@ class _OptionTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
       decoration: BoxDecoration(
         color: AppColors.surface,
         borderRadius: BorderRadius.circular(8),
@@ -426,6 +447,19 @@ class _OptionTile extends StatelessWidget {
       ),
       child: Row(
         children: [
+          // Drag handle
+          ReorderableDragStartListener(
+            index: index,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 4),
+              child: Icon(
+                Icons.drag_handle_rounded,
+                size: 18,
+                color: AppColors.textSecondary.withValues(alpha: 0.5),
+              ),
+            ),
+          ),
+          const SizedBox(width: 6),
           Expanded(
             child: Text(
               option.optionName,
@@ -437,7 +471,8 @@ class _OptionTile extends StatelessWidget {
             ),
           ),
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+            padding:
+                const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
             decoration: BoxDecoration(
               color: option.priceAdjustment == 0
                   ? AppColors.background
@@ -503,6 +538,7 @@ class _EditOptionRow extends StatelessWidget {
   final bool saving;
 
   const _EditOptionRow({
+    super.key,
     required this.nameController,
     required this.priceController,
     required this.onSave,

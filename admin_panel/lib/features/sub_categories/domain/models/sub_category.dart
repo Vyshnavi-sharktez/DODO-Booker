@@ -4,7 +4,6 @@ class SubCategory {
   final String categoryName;
   final String name;
   final String slug;
-  final String? description;
   final int sortOrder;
   final bool isActive;
   final DateTime? createdAt;
@@ -16,7 +15,6 @@ class SubCategory {
     required this.categoryName,
     required this.name,
     required this.slug,
-    this.description,
     required this.sortOrder,
     required this.isActive,
     this.createdAt,
@@ -31,7 +29,6 @@ class SubCategory {
       categoryName: categoryJoin?['name'] as String? ?? '',
       name: map['name'] as String? ?? '',
       slug: map['slug'] as String? ?? '',
-      description: map['description'] as String?,
       sortOrder: map['sort_order'] as int? ?? 0,
       isActive: map['is_active'] as bool? ?? true,
       createdAt: map['created_at'] != null
@@ -48,7 +45,6 @@ class SubCategory {
     String? categoryName,
     String? name,
     String? slug,
-    String? description,
     int? sortOrder,
     bool? isActive,
   }) {
@@ -58,7 +54,6 @@ class SubCategory {
       categoryName: categoryName ?? this.categoryName,
       name: name ?? this.name,
       slug: slug ?? this.slug,
-      description: description ?? this.description,
       sortOrder: sortOrder ?? this.sortOrder,
       isActive: isActive ?? this.isActive,
       createdAt: createdAt,

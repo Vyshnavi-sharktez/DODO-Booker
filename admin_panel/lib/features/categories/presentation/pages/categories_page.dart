@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../application/providers/categories_providers.dart';
@@ -42,7 +43,6 @@ class _CategoriesPageState extends ConsumerState<CategoriesPage> {
           required name,
           required slug,
           imageUrl,
-          description,
           required sortOrder,
           required isActive,
         }) async {
@@ -50,7 +50,6 @@ class _CategoriesPageState extends ConsumerState<CategoriesPage> {
                 name: name,
                 slug: slug,
                 imageUrl: imageUrl,
-                description: description,
                 sortOrder: sortOrder,
                 isActive: isActive,
               );
@@ -74,7 +73,6 @@ class _CategoriesPageState extends ConsumerState<CategoriesPage> {
           required name,
           required slug,
           imageUrl,
-          description,
           required sortOrder,
           required isActive,
         }) async {
@@ -85,7 +83,6 @@ class _CategoriesPageState extends ConsumerState<CategoriesPage> {
                 name: name,
                 slug: slug,
                 imageUrl: imageUrl,
-                description: description,
                 sortOrder: sortOrder,
                 isActive: isActive,
               );
@@ -100,6 +97,47 @@ class _CategoriesPageState extends ConsumerState<CategoriesPage> {
   }
 
   Future<void> _confirmDelete(Category category) async {
+    // ── Step 1: check for dependent sub-categories and services ───────────────
+    late final ({int subCategories, int services}) counts;
+    try {
+      counts = await ref
+          .read(categoriesRepositoryProvider)
+          .countDependents(category.id);
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content:
+                Text('Unable to validate category deletion. Please try again.'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+      return;
+    }
+
+    if (!mounted) return;
+
+    // ── Step 2a: dependents exist → show blocking dialog ──────────────────────
+    if (counts.subCategories > 0 || counts.services > 0) {
+      await showDialog<void>(
+        context: context,
+        builder: (ctx) => _CategoryBlockedDialog(
+          categoryName: category.name,
+          subCategoryCount: counts.subCategories,
+          serviceCount: counts.services,
+          onViewSubCategories: () {
+            Navigator.of(ctx).pop();
+            context.go(
+              '/dashboard/sub-categories?categoryId=${category.id}',
+            );
+          },
+        ),
+      );
+      return;
+    }
+
+    // ── Step 2b: safe to delete → standard confirmation dialog ────────────────
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -122,20 +160,23 @@ class _CategoriesPageState extends ConsumerState<CategoriesPage> {
       ),
     );
     if (confirmed != true) return;
+
+    // ── Step 3: perform deletion ───────────────────────────────────────────────
     try {
       await ref
           .read(categoriesNotifierProvider.notifier)
           .deleteCategory(category.id);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Category deleted')),
+          const SnackBar(content: Text('Category deleted successfully.')),
         );
       }
-    } catch (e) {
+    } catch (_) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Delete failed: $e'),
+          const SnackBar(
+            content:
+                Text('Unable to validate category deletion. Please try again.'),
             backgroundColor: AppColors.error,
           ),
         );
@@ -590,6 +631,104 @@ class _StatusBadge extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+// ── Deletion-blocked dialog ────────────────────────────────────────────────────
+// Shown when the category still has sub-categories or services linked to it.
+
+class _CategoryBlockedDialog extends StatelessWidget {
+  final String categoryName;
+  final int subCategoryCount;
+  final int serviceCount;
+  final VoidCallback onViewSubCategories;
+
+  const _CategoryBlockedDialog({
+    required this.categoryName,
+    required this.subCategoryCount,
+    required this.serviceCount,
+    required this.onViewSubCategories,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      title: const Text('Delete Category?'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'This category cannot be deleted because it still contains:',
+            style: TextStyle(
+              fontSize: 14,
+              color: AppColors.textPrimary,
+            ),
+          ),
+          const SizedBox(height: 12),
+          _BulletRow(
+            '$subCategoryCount Sub Categor${subCategoryCount == 1 ? 'y' : 'ies'}',
+          ),
+          const SizedBox(height: 6),
+          _BulletRow(
+            '$serviceCount Service${serviceCount == 1 ? '' : 's'}',
+          ),
+          const SizedBox(height: 16),
+          Text(
+            'You must remove or move these items before deleting this category.',
+            style: TextStyle(
+              fontSize: 13,
+              color: AppColors.textSecondary,
+            ),
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: onViewSubCategories,
+          style: FilledButton.styleFrom(
+            backgroundColor: AppColors.primary,
+          ),
+          child: const Text('View Sub Categories'),
+        ),
+      ],
+    );
+  }
+}
+
+class _BulletRow extends StatelessWidget {
+  final String text;
+  const _BulletRow(this.text);
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        Container(
+          width: 6,
+          height: 6,
+          margin: const EdgeInsets.only(right: 10),
+          decoration: BoxDecoration(
+            color: AppColors.textSecondary,
+            shape: BoxShape.circle,
+          ),
+        ),
+        Text(
+          text,
+          style: const TextStyle(
+            fontSize: 14,
+            color: AppColors.textPrimary,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+      ],
     );
   }
 }

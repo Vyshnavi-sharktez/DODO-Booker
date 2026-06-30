@@ -1,11 +1,29 @@
 import 'dart:typed_data';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../domain/models/vendor_document.dart';
 
 class DocumentsRemoteDatasource {
   const DocumentsRemoteDatasource(this._client);
   final SupabaseClient _client;
 
   static const _bucket = 'vendor-documents';
+
+  Future<List<DocumentTypeModel>> fetchDocumentTypes() async {
+    try {
+      final data = await _client
+          .from('document_types')
+          .select()
+          .eq('is_active', true)
+          .order('sort_order');
+      final rows = data as List;
+      if (rows.isEmpty) return DocumentTypeModel.fallbackList;
+      return rows
+          .map((e) => DocumentTypeModel.fromJson(e as Map<String, dynamic>))
+          .toList();
+    } catch (_) {
+      return DocumentTypeModel.fallbackList;
+    }
+  }
 
   Future<List<Map<String, dynamic>>> fetchDocuments(String vendorId) async {
     final result = await _client

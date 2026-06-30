@@ -17,3 +17,19 @@ final featuredCategoriesProvider = FutureProvider<List<CategoryModel>>((ref) {
 final featuredServicesProvider = FutureProvider<List<ServiceModel>>((ref) {
   return ref.read(homeServiceProvider).fetchFeaturedServices();
 });
+
+final popularServicesProvider = FutureProvider<List<ServiceModel>>((ref) {
+  return ref.read(homeServiceProvider).fetchPopularServices();
+});
+
+final trendingServicesProvider = FutureProvider<List<ServiceModel>>((ref) {
+  return ref.read(homeServiceProvider).fetchTrendingServices();
+});
+
+final newServicesProvider = FutureProvider<List<ServiceModel>>((ref) {
+  return ref.read(homeServiceProvider).fetchNewServices();
+});
+
+final homeReviewsProvider = FutureProvider<List<PublicReview>>((ref) {
+  return ref.read(homeServiceProvider).fetchPublicReviews();
+});

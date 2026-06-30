@@ -1,19 +1,54 @@
 import 'package:flutter/material.dart';
 
-enum DocumentType {
-  aadhaar('aadhaar_card', 'Aadhaar Card', Icons.credit_card_outlined),
-  pan('pan_card', 'PAN Card', Icons.perm_identity_outlined),
-  gst('gst_certificate', 'GST Certificate', Icons.receipt_long_outlined),
-  businessLicense('business_license', 'Business License', Icons.store_outlined),
-  other('other', 'Other', Icons.description_outlined);
+class DocumentTypeModel {
+  const DocumentTypeModel({
+    required this.id,
+    required this.label,
+    required this.iconKey,
+    this.isRequired = false,
+    this.isActive = true,
+    this.sortOrder = 0,
+  });
 
-  const DocumentType(this.value, this.label, this.icon);
-  final String value;
+  final String id;
   final String label;
-  final IconData icon;
+  final String iconKey;
+  final bool isRequired;
+  final bool isActive;
+  final int sortOrder;
 
-  static DocumentType? fromValue(String value) =>
-      DocumentType.values.where((d) => d.value == value).firstOrNull;
+  factory DocumentTypeModel.fromJson(Map<String, dynamic> json) {
+    return DocumentTypeModel(
+      id: json['id'] as String,
+      label: json['label'] as String,
+      iconKey: (json['icon_key'] as String?) ?? 'description_outlined',
+      isRequired: (json['is_required'] as bool?) ?? false,
+      isActive: (json['is_active'] as bool?) ?? true,
+      sortOrder: (json['sort_order'] as int?) ?? 0,
+    );
+  }
+
+  IconData get icon => _iconMap[iconKey] ?? Icons.description_outlined;
+
+  static const _iconMap = <String, IconData>{
+    'credit_card_outlined':   Icons.credit_card_outlined,
+    'perm_identity_outlined': Icons.perm_identity_outlined,
+    'receipt_long_outlined':  Icons.receipt_long_outlined,
+    'store_outlined':         Icons.store_outlined,
+    'description_outlined':   Icons.description_outlined,
+    'folder_outlined':        Icons.folder_outlined,
+    'badge_outlined':         Icons.badge_outlined,
+  };
+
+  // Used when the document_types table is unreachable (table not yet created
+  // or network error). Preserves the previous hardcoded enum behaviour.
+  static const List<DocumentTypeModel> fallbackList = [
+    DocumentTypeModel(id: 'aadhaar_card',     label: 'Aadhaar Card',     iconKey: 'credit_card_outlined',   isRequired: true,  sortOrder: 1),
+    DocumentTypeModel(id: 'pan_card',         label: 'PAN Card',         iconKey: 'perm_identity_outlined', isRequired: true,  sortOrder: 2),
+    DocumentTypeModel(id: 'gst_certificate',  label: 'GST Certificate',  iconKey: 'receipt_long_outlined',  isRequired: false, sortOrder: 3),
+    DocumentTypeModel(id: 'business_license', label: 'Business License', iconKey: 'store_outlined',         isRequired: false, sortOrder: 4),
+    DocumentTypeModel(id: 'other',            label: 'Other',            iconKey: 'description_outlined',   isRequired: false, sortOrder: 99),
+  ];
 }
 
 class VendorDocument {

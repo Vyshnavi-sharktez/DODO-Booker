@@ -27,8 +27,41 @@ class ServiceService {
 
     final data = await _db
         .from('services')
-        .select('*, sub_categories(name, categories(name))')
+        .select('''
+          *,
+          sub_categories(name, categories(name)),
+          service_faqs(id, question, answer, sort_order),
+          service_add_ons(id, name, description, price, is_active)
+        ''')
         .eq('sub_category_id', subcategoryId)
+        .eq('is_active', true)
+        .order('name', ascending: true);
+
+    return (data as List)
+        .map((e) => ServiceModel.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  // ── Services by category (all subcategories) ─────────────────────────────
+
+  Future<List<ServiceModel>> fetchServicesByCategoryId(
+    String categoryId,
+  ) async {
+    if (!_ready) {
+      debugPrint('[DODO][ServiceService] fetchServicesByCategoryId($categoryId) → MOCK');
+      return _devServices;
+    }
+    debugPrint('[DODO][ServiceService] fetchServicesByCategoryId($categoryId) → SUPABASE');
+
+    final data = await _db
+        .from('services')
+        .select('''
+          *,
+          sub_categories!inner(name, categories(name)),
+          service_faqs(id, question, answer, sort_order),
+          service_add_ons(id, name, description, price, is_active)
+        ''')
+        .filter('sub_categories.category_id', 'eq', categoryId)
         .eq('is_active', true)
         .order('name', ascending: true);
 
@@ -52,7 +85,12 @@ class ServiceService {
 
     final data = await _db
         .from('services')
-        .select('*, sub_categories(name, categories(name))')
+        .select('''
+          *,
+          sub_categories(name, categories(name)),
+          service_faqs(id, question, answer, sort_order),
+          service_add_ons(id, name, description, price, is_active)
+        ''')
         .eq('id', serviceId)
         .maybeSingle();
 

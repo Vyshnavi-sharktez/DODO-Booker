@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../services/application/providers/services_providers.dart';
-import '../../../services/domain/models/service.dart';
 import '../../application/providers/service_attributes_providers.dart';
 import '../../domain/models/service_attribute.dart';
 import '../widgets/attribute_form_dialog.dart';
@@ -19,7 +18,10 @@ const _typeConfig = <String, (String, Color)>{
 };
 
 class ServiceAttributesPage extends ConsumerStatefulWidget {
-  const ServiceAttributesPage({super.key});
+  /// When non-null, the service dropdown is pre-selected to this service id.
+  final String? filterServiceId;
+
+  const ServiceAttributesPage({super.key, this.filterServiceId});
 
   @override
   ConsumerState<ServiceAttributesPage> createState() =>
@@ -30,6 +32,21 @@ class _ServiceAttributesPageState
     extends ConsumerState<ServiceAttributesPage> {
   String? _selectedServiceId;
 
+  @override
+  void initState() {
+    super.initState();
+    if (widget.filterServiceId != null) {
+      _selectedServiceId = widget.filterServiceId;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          ref
+              .read(serviceAttributesNotifierProvider.notifier)
+              .loadForService(widget.filterServiceId!);
+        }
+      });
+    }
+  }
+
   void _onServiceChanged(String? serviceId) {
     if (serviceId == null || serviceId == _selectedServiceId) return;
     setState(() => _selectedServiceId = serviceId);
@@ -38,38 +55,20 @@ class _ServiceAttributesPageState
         .loadForService(serviceId);
   }
 
-  List<Service> _activeServices() {
+  String _serviceNameFor(String serviceId) {
     final all = ref.read(servicesNotifierProvider).valueOrNull ?? [];
-    return all.where((s) => s.isActive).toList();
-  }
-
-  List<Service> _servicesForEdit(ServiceAttribute attr) {
-    final all = ref.read(servicesNotifierProvider).valueOrNull ?? [];
-    final active = all.where((s) => s.isActive).toList();
-    final current = all.where((s) => s.id == attr.serviceId).toList();
-    return [
-      ...current,
-      ...active.where((s) => s.id != attr.serviceId),
-    ];
+    return all.where((s) => s.id == serviceId).firstOrNull?.name ?? '';
   }
 
   void _openCreate() {
-    final services = _activeServices();
-    if (services.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content:
-              Text('No active services found. Create a service first.'),
-        ),
-      );
-      return;
-    }
+    final sid = _selectedServiceId;
+    if (sid == null) return;
     showDialog(
       context: context,
       barrierDismissible: false,
       builder: (_) => AttributeFormDialog(
-        services: services,
-        initialServiceId: _selectedServiceId,
+        serviceId: sid,
+        serviceName: _serviceNameFor(sid),
         onSave: ({
           required serviceId,
           required name,
@@ -101,8 +100,8 @@ class _ServiceAttributesPageState
       barrierDismissible: false,
       builder: (_) => AttributeFormDialog(
         existing: attr,
-        services: _servicesForEdit(attr),
-        initialServiceId: attr.serviceId,
+        serviceId: attr.serviceId,
+        serviceName: _serviceNameFor(attr.serviceId),
         onSave: ({
           required serviceId,
           required name,

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/widgets/app_modal_dialog.dart';
+import '../../../core/widgets/clickable.dart';
 import '../../../models/service_model.dart';
 import '../../../models/address_model.dart';
 import '../../../models/time_slot_model.dart';
@@ -187,7 +188,7 @@ class _BookingSummaryModalState extends ConsumerState<BookingSummaryModal> {
                         ],
                       ),
                       const SizedBox(height: 6),
-                      GestureDetector(
+                      Clickable(
                         onTap: _showCouponsSheet,
                         child: const Row(
                           mainAxisSize: MainAxisSize.min,

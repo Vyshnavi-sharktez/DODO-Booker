@@ -62,6 +62,7 @@ class MyBookingModel {
   final String serviceId;
   final String serviceName;
   final String? categoryName;
+  final String? categoryIconKey;
   final String? subcategoryName;
   final List<BookingItem> items;
   final AddressModel address;
@@ -82,6 +83,7 @@ class MyBookingModel {
     required this.serviceId,
     required this.serviceName,
     this.categoryName,
+    this.categoryIconKey,
     this.subcategoryName,
     this.items = const [],
     required this.address,

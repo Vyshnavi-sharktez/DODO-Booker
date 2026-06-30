@@ -55,6 +55,7 @@ class _OtpLoginModalState extends ConsumerState<OtpLoginModal> {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
 
     return AppModalDialog(
@@ -81,11 +82,11 @@ class _OtpLoginModalState extends ConsumerState<OtpLoginModal> {
               border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
               enabledBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
-                borderSide: const BorderSide(color: AppColors.border),
+                borderSide: BorderSide(color: cs.outline.withAlpha(80)),
               ),
               focusedBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
-                borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
+                borderSide: BorderSide(color: cs.primary, width: 1.5),
               ),
               errorBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
@@ -118,7 +119,7 @@ class _OtpLoginModalState extends ConsumerState<OtpLoginModal> {
           const SizedBox(height: 16),
           Text(
             'By continuing, you agree to our Terms & Privacy Policy.',
-            style: tt.labelSmall?.copyWith(color: AppColors.textHint),
+            style: tt.labelSmall?.copyWith(color: cs.onSurface.withAlpha(120)),
             textAlign: TextAlign.center,
           ),
         ],
@@ -130,6 +131,7 @@ class _OtpLoginModalState extends ConsumerState<OtpLoginModal> {
 class _PhonePrefix extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
@@ -143,13 +145,13 @@ class _PhonePrefix extends StatelessWidget {
             style: tt.bodyLarge?.copyWith(fontWeight: FontWeight.w600),
           ),
           const SizedBox(width: 6),
-          const Icon(
+          Icon(
             Icons.keyboard_arrow_down_rounded,
             size: 16,
-            color: AppColors.textSecondary,
+            color: cs.onSurfaceVariant,
           ),
           const SizedBox(width: 8),
-          Container(width: 1, height: 20, color: AppColors.border),
+          Container(width: 1, height: 20, color: cs.outline.withAlpha(80)),
           const SizedBox(width: 4),
         ],
       ),

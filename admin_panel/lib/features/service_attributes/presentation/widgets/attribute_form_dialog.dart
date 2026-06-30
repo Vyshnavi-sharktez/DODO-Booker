@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import '../../../../core/theme/app_theme.dart';
-import '../../../services/domain/models/service.dart';
 import '../../domain/models/service_attribute.dart';
 
 const _fieldTypes = [
@@ -13,8 +12,8 @@ const _fieldTypes = [
 
 class AttributeFormDialog extends StatefulWidget {
   final ServiceAttribute? existing;
-  final List<Service> services;
-  final String? initialServiceId;
+  final String serviceId;
+  final String serviceName;
   final Future<void> Function({
     required String serviceId,
     required String name,
@@ -25,8 +24,8 @@ class AttributeFormDialog extends StatefulWidget {
   const AttributeFormDialog({
     super.key,
     this.existing,
-    required this.services,
-    this.initialServiceId,
+    required this.serviceId,
+    required this.serviceName,
     required this.onSave,
   });
 
@@ -39,7 +38,6 @@ class _AttributeFormDialogState extends State<AttributeFormDialog> {
   late final TextEditingController _name;
   late String _fieldType;
   late bool _isRequired;
-  String? _selectedServiceId;
   bool _saving = false;
 
   @override
@@ -49,9 +47,6 @@ class _AttributeFormDialogState extends State<AttributeFormDialog> {
     _name = TextEditingController(text: e?.name ?? '');
     _fieldType = e?.fieldType ?? 'text';
     _isRequired = e?.isRequired ?? false;
-    _selectedServiceId = e?.serviceId.isNotEmpty == true
-        ? e!.serviceId
-        : widget.initialServiceId;
   }
 
   @override
@@ -65,7 +60,7 @@ class _AttributeFormDialogState extends State<AttributeFormDialog> {
     setState(() => _saving = true);
     try {
       await widget.onSave(
-        serviceId: _selectedServiceId!,
+        serviceId: widget.serviceId,
         name: _name.text.trim(),
         fieldType: _fieldType,
         isRequired: _isRequired,
@@ -144,30 +139,11 @@ class _AttributeFormDialogState extends State<AttributeFormDialog> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // Service dropdown
-                      DropdownButtonFormField<String>(
-                        // ignore: deprecated_member_use
-                        value: _selectedServiceId,
-                        decoration: const InputDecoration(
-                          labelText: 'Service *',
-                          hintText: 'Select a service',
-                        ),
-                        items: widget.services
-                            .map(
-                              (s) => DropdownMenuItem(
-                                value: s.id,
-                                child: Text(
-                                  s.name,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                            )
-                            .toList(),
-                        onChanged: (v) =>
-                            setState(() => _selectedServiceId = v),
-                        validator: (v) =>
-                            v == null ? 'Please select a service' : null,
-                        isExpanded: true,
+                      // Service — read-only context
+                      _ContextRow(
+                        label: 'Service',
+                        name: widget.serviceName,
+                        icon: Icons.miscellaneous_services_rounded,
                       ),
                       const SizedBox(height: 16),
 
@@ -292,6 +268,58 @@ class _AttributeFormDialogState extends State<AttributeFormDialog> {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _ContextRow extends StatelessWidget {
+  final String label;
+  final String name;
+  final IconData icon;
+
+  const _ContextRow({
+    required this.label,
+    required this.name,
+    required this.icon,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: AppColors.primary.withValues(alpha: 0.05),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: AppColors.primary.withValues(alpha: 0.18)),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, size: 16, color: AppColors.primary),
+          const SizedBox(width: 8),
+          Text(
+            '$label:',
+            style: TextStyle(
+              fontSize: 12,
+              color: AppColors.textSecondary,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text(
+              name,
+              style: const TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: AppColors.textPrimary,
+              ),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          const SizedBox(width: 4),
+          Icon(Icons.lock_outline, size: 13, color: AppColors.textSecondary),
+        ],
       ),
     );
   }

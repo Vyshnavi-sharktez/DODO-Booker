@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/constants/app_colors.dart';
+import '../../../core/widgets/clickable.dart';
 import '../../../models/service_model.dart';
 import '../widgets/service_image_carousel.dart';
 import '../widgets/service_info_section.dart';
@@ -157,7 +158,7 @@ class _AddOnCardState extends State<_AddOnCard> {
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
-              GestureDetector(
+              Clickable(
                 onTap: () => setState(() => _added = !_added),
                 child: AnimatedContainer(
                   duration: const Duration(milliseconds: 180),

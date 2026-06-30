@@ -110,51 +110,6 @@ class _VendorsPageState extends ConsumerState<VendorsPage> {
     );
   }
 
-  void _openEdit(Vendor vendor) {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (_) => VendorFormDialog(
-        existing: vendor,
-        onSave: ({
-          required businessName,
-          ownerName,
-          required phone,
-          required email,
-          required city,
-          address,
-          required status,
-          required isActive,
-          rating,
-          walletBalance,
-          latitude,
-          longitude,
-        }) async {
-          await ref.read(vendorsNotifierProvider.notifier).updateVendor(
-                vendor.id,
-                businessName: businessName,
-                ownerName: ownerName,
-                phone: phone,
-                email: email,
-                city: city,
-                address: address,
-                status: status,
-                isActive: isActive,
-                rating: rating,
-                walletBalance: walletBalance,
-                latitude: latitude,
-                longitude: longitude,
-              );
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Vendor updated successfully')),
-            );
-          }
-        },
-      ),
-    );
-  }
-
   Future<void> _confirmDelete(Vendor vendor) async {
     final confirmed = await showDialog<bool>(
       context: context,
@@ -315,7 +270,7 @@ class _VendorsPageState extends ConsumerState<VendorsPage> {
                     // ignore: deprecated_member_use
                     value: _cityFilter,
                     decoration: const InputDecoration(
-                      hintText: 'All Cities',
+                      hintText: 'Locality',
                       prefixIcon:
                           Icon(Icons.location_city_rounded, size: 18),
                       contentPadding: EdgeInsets.symmetric(
@@ -324,7 +279,7 @@ class _VendorsPageState extends ConsumerState<VendorsPage> {
                     items: [
                       const DropdownMenuItem(
                         value: null,
-                        child: Text('All Cities'),
+                        child: Text('All Localities'),
                       ),
                       ..._uniqueCities(all).map(
                         (c) => DropdownMenuItem(
@@ -345,7 +300,7 @@ class _VendorsPageState extends ConsumerState<VendorsPage> {
                     // ignore: deprecated_member_use
                     value: _statusFilter,
                     decoration: const InputDecoration(
-                      hintText: 'All Statuses',
+                      hintText: 'Status',
                       prefixIcon: Icon(Icons.flag_rounded, size: 18),
                       contentPadding: EdgeInsets.symmetric(
                           horizontal: 12, vertical: 10),
@@ -353,7 +308,7 @@ class _VendorsPageState extends ConsumerState<VendorsPage> {
                     items: [
                       const DropdownMenuItem(
                         value: null,
-                        child: Text('All Statuses'),
+                        child: Text('Status'),
                       ),
                       ..._allStatuses.map(
                         (s) => DropdownMenuItem(
@@ -444,7 +399,6 @@ class _VendorsPageState extends ConsumerState<VendorsPage> {
                 return _VendorsTable(
                   vendors: filtered,
                   totalCount: all.length,
-                  onEdit: _openEdit,
                   onDelete: _confirmDelete,
                   onToggle: _toggle,
                   onViewDetails: (v) =>
@@ -464,7 +418,6 @@ class _VendorsPageState extends ConsumerState<VendorsPage> {
 class _VendorsTable extends StatelessWidget {
   final List<Vendor> vendors;
   final int totalCount;
-  final void Function(Vendor) onEdit;
   final void Function(Vendor) onDelete;
   final void Function(Vendor) onToggle;
   final void Function(Vendor) onViewDetails;
@@ -472,7 +425,6 @@ class _VendorsTable extends StatelessWidget {
   const _VendorsTable({
     required this.vendors,
     required this.totalCount,
-    required this.onEdit,
     required this.onDelete,
     required this.onToggle,
     required this.onViewDetails,
@@ -534,7 +486,6 @@ class _VendorsTable extends StatelessWidget {
                                 final v = vendors[i];
                                 return _VendorRow(
                                   vendor: v,
-                                  onEdit: () => onEdit(v),
                                   onDelete: () => onDelete(v),
                                   onToggle: () => onToggle(v),
                                   onViewDetails: () => onViewDetails(v),
@@ -596,14 +547,12 @@ class _HeaderCell extends StatelessWidget {
 
 class _VendorRow extends StatelessWidget {
   final Vendor vendor;
-  final VoidCallback onEdit;
   final VoidCallback onDelete;
   final VoidCallback onToggle;
   final VoidCallback onViewDetails;
 
   const _VendorRow({
     required this.vendor,
-    required this.onEdit,
     required this.onDelete,
     required this.onToggle,
     required this.onViewDetails,
@@ -772,13 +721,6 @@ class _VendorRow extends StatelessWidget {
                   icon: Icon(Icons.open_in_new_rounded,
                       size: 16, color: AppColors.primary),
                   tooltip: 'View Details',
-                  visualDensity: VisualDensity.compact,
-                ),
-                IconButton(
-                  onPressed: onEdit,
-                  icon: Icon(Icons.edit_rounded,
-                      size: 16, color: AppColors.accent),
-                  tooltip: 'Edit',
                   visualDensity: VisualDensity.compact,
                 ),
                 IconButton(

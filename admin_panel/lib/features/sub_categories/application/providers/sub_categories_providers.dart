@@ -27,7 +27,6 @@ class SubCategoriesNotifier
     required String categoryId,
     required String name,
     required String slug,
-    String? description,
     required int sortOrder,
     required bool isActive,
   }) async {
@@ -35,7 +34,6 @@ class SubCategoriesNotifier
       categoryId: categoryId,
       name: name,
       slug: slug,
-      description: description,
       sortOrder: sortOrder,
       isActive: isActive,
     );
@@ -47,7 +45,6 @@ class SubCategoriesNotifier
     required String categoryId,
     required String name,
     required String slug,
-    String? description,
     required int sortOrder,
     required bool isActive,
   }) async {
@@ -56,7 +53,6 @@ class SubCategoriesNotifier
       categoryId: categoryId,
       name: name,
       slug: slug,
-      description: description,
       sortOrder: sortOrder,
       isActive: isActive,
     );

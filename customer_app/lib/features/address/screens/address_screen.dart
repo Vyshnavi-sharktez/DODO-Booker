@@ -7,27 +7,31 @@ import '../modals/address_form_modal.dart';
 import '../services/address_providers.dart';
 
 class AddressScreen extends ConsumerWidget {
-  const AddressScreen({super.key});
+  final bool inModal;
+  const AddressScreen({super.key, this.inModal = false});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final cs = Theme.of(context).colorScheme;
     final asyncAddresses = ref.watch(addressNotifierProvider);
 
     return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        title: const Text(
-          'My Addresses',
-          style: TextStyle(fontWeight: FontWeight.w700),
-        ),
-        backgroundColor: AppColors.surface,
-        surfaceTintColor: Colors.transparent,
-        elevation: 0,
-        bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(1),
-          child: Container(height: 1, color: AppColors.divider),
-        ),
-      ),
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+      appBar: inModal
+          ? null
+          : AppBar(
+              title: const Text(
+                'My Addresses',
+                style: TextStyle(fontWeight: FontWeight.w700),
+              ),
+              backgroundColor: cs.surface,
+              surfaceTintColor: Colors.transparent,
+              elevation: 0,
+              bottom: PreferredSize(
+                preferredSize: const Size.fromHeight(1),
+                child: Container(height: 1, color: cs.outline.withAlpha(60)),
+              ),
+            ),
       body: asyncAddresses.when(
         loading: () => const _AddressSkeleton(),
         error: (e, _) => _AddressErrorState(
@@ -48,7 +52,7 @@ class AddressScreen extends ConsumerWidget {
                 onPressed: () => _openAddForm(context, ref),
                 icon: const Icon(Icons.add_location_alt_rounded),
                 label: const Text('Add Address'),
-                backgroundColor: AppColors.primary,
+                backgroundColor: cs.primary,
                 foregroundColor: Colors.white,
               )
             : null,
@@ -162,13 +166,14 @@ class _AddressManageCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
 
     return Container(
       decoration: BoxDecoration(
-        color: AppColors.surface,
+        color: cs.surface,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppColors.border),
+        border: Border.all(color: cs.outline.withAlpha(80)),
         boxShadow: const [
           BoxShadow(color: Color(0x08000000), blurRadius: 6, offset: Offset(0, 2)),
         ],
@@ -229,17 +234,17 @@ class _AddressManageCard extends StatelessWidget {
                   const SizedBox(height: 4),
                   Text(
                     address.line1,
-                    style: tt.bodySmall?.copyWith(color: AppColors.textSecondary),
+                    style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
                   ),
                   if (address.line2 != null)
                     Text(
                       address.line2!,
-                      style: tt.bodySmall?.copyWith(color: AppColors.textSecondary),
+                      style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
                     ),
                   const SizedBox(height: 2),
                   Text(
                     '${address.city}, ${address.state} – ${address.pincode}',
-                    style: tt.bodySmall?.copyWith(color: AppColors.textSecondary),
+                    style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
                   ),
                 ],
               ),
@@ -303,6 +308,7 @@ class _EmptyAddressState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
     return Center(
       child: Padding(
@@ -314,13 +320,13 @@ class _EmptyAddressState extends StatelessWidget {
               width: 72,
               height: 72,
               decoration: BoxDecoration(
-                color: AppColors.surfaceVariant,
+                color: cs.surfaceContainerHighest,
                 shape: BoxShape.circle,
               ),
-              child: const Icon(
+              child: Icon(
                 Icons.location_off_rounded,
                 size: 34,
-                color: AppColors.textHint,
+                color: cs.onSurface.withAlpha(120),
               ),
             ),
             const SizedBox(height: 16),
@@ -333,7 +339,7 @@ class _EmptyAddressState extends StatelessWidget {
             Text(
               'Add your first address to use\nduring bookings.',
               style: tt.bodySmall?.copyWith(
-                color: AppColors.textSecondary,
+                color: cs.onSurfaceVariant,
                 height: 1.5,
               ),
               textAlign: TextAlign.center,
@@ -362,6 +368,7 @@ class _AddressSkeleton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     return ListView.builder(
       padding: const EdgeInsets.all(16),
       itemCount: 3,
@@ -369,7 +376,7 @@ class _AddressSkeleton extends StatelessWidget {
         height: 110,
         margin: const EdgeInsets.only(bottom: 12),
         decoration: BoxDecoration(
-          color: AppColors.shimmerBase,
+          color: cs.onSurface.withAlpha(20),
           borderRadius: BorderRadius.circular(14),
         ),
       ),
@@ -385,11 +392,12 @@ class _AddressErrorState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     return Center(
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(Icons.error_outline_rounded, size: 48, color: AppColors.textHint),
+          Icon(Icons.error_outline_rounded, size: 48, color: cs.onSurface.withAlpha(120)),
           const SizedBox(height: 12),
           const Text('Could not load addresses'),
           const SizedBox(height: 16),

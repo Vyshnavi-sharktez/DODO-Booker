@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../core/constants/app_colors.dart';
+import '../../../core/utils/icon_registry.dart';
 import '../../../models/my_booking_model.dart';
 
 class BookingCard extends StatelessWidget {
@@ -53,7 +54,7 @@ class BookingCard extends StatelessWidget {
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Icon(
-                      _iconForCategory(booking.categoryName),
+                      IconRegistry.resolve(booking.categoryIconKey, booking.categoryName),
                       size: 18,
                       color: statusColor,
                     ),
@@ -230,28 +231,6 @@ class BookingCard extends StatelessWidget {
   }
 }
 
-IconData _iconForCategory(String? category) {
-  switch ((category ?? '').toLowerCase()) {
-    case 'cleaning':
-      return Icons.cleaning_services_rounded;
-    case 'plumbing':
-      return Icons.plumbing_rounded;
-    case 'electrical':
-      return Icons.electrical_services_rounded;
-    case 'appliances':
-      return Icons.ac_unit_rounded;
-    case 'painting':
-      return Icons.format_paint_rounded;
-    case 'pest control':
-      return Icons.bug_report_rounded;
-    case 'shifting':
-      return Icons.local_shipping_rounded;
-    case 'carpentry':
-      return Icons.chair_rounded;
-    default:
-      return Icons.home_repair_service_rounded;
-  }
-}
 
 class _StatusChip extends StatelessWidget {
   final String label;

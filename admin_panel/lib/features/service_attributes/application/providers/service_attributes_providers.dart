@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../auth/application/providers/auth_provider.dart';
 import '../../data/service_attributes_repository.dart';
 import '../../domain/models/service_attribute.dart';
+import '../../domain/models/service_attribute_option.dart';
 
 final serviceAttributesRepositoryProvider =
     Provider<ServiceAttributesRepository>((ref) {
@@ -74,10 +75,16 @@ class ServiceAttributesNotifier
     required String optionName,
     required double priceAdjustment,
   }) async {
+    // Append at the end of the current list.
+    final attrs = state.valueOrNull ?? [];
+    final attr = attrs.where((a) => a.id == attributeId).firstOrNull;
+    final nextSortOrder = attr?.options.length ?? 0;
+
     await _repo.createOption(
       attributeId: attributeId,
       optionName: optionName,
       priceAdjustment: priceAdjustment,
+      sortOrder: nextSortOrder,
     );
     await _reload();
   }
@@ -98,6 +105,33 @@ class ServiceAttributesNotifier
   Future<void> deleteOption(String optionId) async {
     await _repo.deleteOption(optionId);
     await _reload();
+  }
+
+  /// Optimistically reorders the options for [attributeId] and persists the
+  /// new sort_order values to Supabase in a single batch upsert.
+  Future<void> reorderOptions(
+    String attributeId,
+    List<ServiceAttributeOption> reorderedOptions,
+  ) async {
+    // Optimistic update so the UI reflects the drag immediately.
+    final current = state.valueOrNull;
+    if (current != null) {
+      state = AsyncValue.data(
+        current.map((attr) {
+          if (attr.id != attributeId) return attr;
+          return attr.copyWith(options: reorderedOptions);
+        }).toList(),
+      );
+    }
+
+    // Assign contiguous sort_order values (0, 1, 2, …) and persist.
+    await _repo.reorderOptions(
+      reorderedOptions
+          .asMap()
+          .entries
+          .map((e) => (id: e.value.id, sortOrder: e.key))
+          .toList(),
+    );
   }
 }
 

@@ -32,34 +32,10 @@ const _navItems = <_NavItem>[
     requiredPermission: 'rbac.manage',
   ),
   _NavItem(
-    label: 'Categories',
-    icon: Icons.category_rounded,
-    route: '/dashboard/categories',
+    label: 'Catalog',
+    icon: Icons.layers_rounded,
+    route: '/dashboard/catalog',
     requiredPermission: 'category.view',
-  ),
-  _NavItem(
-    label: 'Sub Categories',
-    icon: Icons.list_alt_rounded,
-    route: '/dashboard/sub-categories',
-    requiredPermission: 'category.view',
-  ),
-  _NavItem(
-    label: 'Services',
-    icon: Icons.home_repair_service_rounded,
-    route: '/dashboard/services',
-    requiredPermission: 'service.view',
-  ),
-  _NavItem(
-    label: 'Service Attributes',
-    icon: Icons.tune_rounded,
-    route: '/dashboard/service-attributes',
-    requiredPermission: 'service.view',
-  ),
-  _NavItem(
-    label: 'Pricing Engine',
-    icon: Icons.price_change_rounded,
-    route: '/dashboard/pricing-engine',
-    requiredPermission: 'service.view',
   ),
   _NavItem(
     label: 'Vendors',
@@ -68,15 +44,15 @@ const _navItems = <_NavItem>[
     requiredPermission: 'vendor.view',
   ),
   _NavItem(
+    label: 'DODO Teams',
+    icon: Icons.groups_rounded,
+    route: '/dashboard/dodo-teams',
+    requiredPermission: 'dodo_team.view',
+  ),
+  _NavItem(
     label: 'Bookings',
     icon: Icons.book_online_rounded,
     route: '/dashboard/bookings',
-    requiredPermission: 'booking.view',
-  ),
-  _NavItem(
-    label: 'Vendor Assignment',
-    icon: Icons.assignment_ind_rounded,
-    route: '/dashboard/vendor-assignment',
     requiredPermission: 'booking.view',
   ),
   _NavItem(
@@ -102,18 +78,6 @@ const _navItems = <_NavItem>[
     icon: Icons.shopping_cart_outlined,
     route: '/dashboard/abandoned-carts',
     requiredPermission: 'customer.view',
-  ),
-  _NavItem(
-    label: 'Notifications',
-    icon: Icons.notifications_rounded,
-    route: '/dashboard/notifications',
-    requiredPermission: 'notification.view',
-  ),
-  _NavItem(
-    label: 'CMS & SEO',
-    icon: Icons.web_rounded,
-    route: '/dashboard/cms',
-    requiredPermission: 'cms.manage',
   ),
   _NavItem(
     label: 'Settings',
@@ -205,13 +169,13 @@ class _SidebarBrand extends StatelessWidget {
             width: 36,
             height: 36,
             decoration: BoxDecoration(
-              color: AppColors.accent,
+              color: Colors.white,
               borderRadius: BorderRadius.circular(10),
             ),
-            child: const Icon(
-              Icons.admin_panel_settings_rounded,
-              color: Colors.white,
-              size: 20,
+            padding: const EdgeInsets.all(4),
+            child: Image.asset(
+              'assets/images/logo.png',
+              fit: BoxFit.contain,
             ),
           ),
           const SizedBox(width: 12),

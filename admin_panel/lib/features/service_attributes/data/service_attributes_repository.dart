@@ -3,7 +3,7 @@ import '../domain/models/service_attribute.dart';
 import '../domain/models/service_attribute_option.dart';
 
 const _optionsSelect =
-    'service_attribute_options(id, attribute_id, option_name, price_adjustment)';
+    'service_attribute_options(id, attribute_id, option_name, price_adjustment, sort_order)';
 
 class ServiceAttributesRepository {
   final SupabaseClient _supabase;
@@ -15,7 +15,9 @@ class ServiceAttributesRepository {
         .from('service_attributes')
         .select('*, $_optionsSelect')
         .eq('service_id', serviceId)
-        .order('name', ascending: true);
+        .order('name', ascending: true)
+        .order('sort_order',
+            referencedTable: 'service_attribute_options', ascending: true);
     return (data as List<dynamic>)
         .map((r) => ServiceAttribute.fromMap(r as Map<String, dynamic>))
         .toList();
@@ -71,6 +73,7 @@ class ServiceAttributesRepository {
     required String attributeId,
     required String optionName,
     required double priceAdjustment,
+    required int sortOrder,
   }) async {
     final data = await _supabase
         .from('service_attribute_options')
@@ -78,6 +81,7 @@ class ServiceAttributesRepository {
           'attribute_id': attributeId,
           'option_name': optionName,
           'price_adjustment': priceAdjustment,
+          'sort_order': sortOrder,
         })
         .select()
         .single();
@@ -103,5 +107,15 @@ class ServiceAttributesRepository {
 
   Future<void> deleteOption(String id) async {
     await _supabase.from('service_attribute_options').delete().eq('id', id);
+  }
+
+  /// Batch-updates sort_order for a reordered list of options in one request.
+  Future<void> reorderOptions(
+      List<({String id, int sortOrder})> updates) async {
+    await _supabase.from('service_attribute_options').upsert(
+          updates
+              .map((u) => {'id': u.id, 'sort_order': u.sortOrder})
+              .toList(),
+        );
   }
 }

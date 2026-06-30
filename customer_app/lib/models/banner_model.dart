@@ -7,6 +7,9 @@ class BannerModel {
   final String? redirectType;
   final String? redirectId;
   final bool isActive;
+  final DateTime? startDate;
+  final DateTime? endDate;
+  final int displayOrder;
 
   const BannerModel({
     required this.id,
@@ -17,6 +20,9 @@ class BannerModel {
     this.redirectType,
     this.redirectId,
     this.isActive = true,
+    this.startDate,
+    this.endDate,
+    this.displayOrder = 0,
   });
 
   factory BannerModel.fromJson(Map<String, dynamic> json) {
@@ -29,6 +35,13 @@ class BannerModel {
       redirectType: json['redirect_type'] as String?,
       redirectId: json['redirect_id'] as String?,
       isActive: (json['is_active'] as bool?) ?? true,
+      startDate: json['start_date'] != null
+          ? DateTime.tryParse(json['start_date'] as String)
+          : null,
+      endDate: json['end_date'] != null
+          ? DateTime.tryParse(json['end_date'] as String)
+          : null,
+      displayOrder: (json['display_order'] as int?) ?? 0,
     );
   }
 }

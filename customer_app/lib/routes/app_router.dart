@@ -7,14 +7,21 @@ import '../features/booking/screens/booking_screen.dart';
 import '../features/address/screens/address_screen.dart';
 import '../features/category/screens/subcategory_screen.dart';
 import '../features/service/screens/services_screen.dart';
+import '../features/service/screens/category_services_screen.dart';
 import '../features/service/screens/service_details_screen.dart';
 import '../features/booking/screens/booking_success_screen.dart';
 import '../features/bookings/screens/booking_details_screen.dart';
+import '../features/bookings/screens/my_bookings_screen.dart';
+import '../features/bookings/utils/booking_detail_launcher.dart';
+import '../features/bookings/utils/my_bookings_launcher.dart';
+import '../features/profile/screens/profile_screen.dart';
 import '../features/profile/screens/edit_profile_screen.dart';
 import '../features/wishlist/screens/wishlist_screen.dart';
 import '../features/notifications/screens/notification_booking_screen.dart';
 import '../features/cart/screens/cart_screen.dart';
 import '../features/cart/screens/checkout_screen.dart';
+import '../features/search/screens/search_screen.dart';
+import '../features/category/screens/category_screen.dart';
 import '../models/booking_model.dart';
 import '../models/category_model.dart';
 import '../models/subcategory_model.dart';
@@ -37,6 +44,11 @@ class AppRoutes {
   static const String wishlist = '/wishlist';
   static const String cart = '/cart';
   static const String checkout = '/cart/checkout';
+  static const String search = '/search';
+  static const String myBookings = '/my-bookings';
+  static const String profile = '/profile';
+  static const String categories = '/categories';
+  static const String categoryServices = '/category-services/:categoryId';
 }
 
 final appRouter = GoRouter(
@@ -103,7 +115,7 @@ final appRouter = GoRouter(
         if (booking is BookingModel) {
           return BookingSuccessScreen(
             booking: booking,
-            onViewBookings: () => context.go(AppRoutes.home),
+            onViewBookings: () => openMyBookings(context),
             onBackToHome: () => context.go(AppRoutes.home),
           );
         }
@@ -111,7 +123,7 @@ final appRouter = GoRouter(
       },
     ),
 
-    // My Bookings → Booking Detail
+    // My Bookings → Booking Detail (mobile full-screen; desktop uses openBookingDetail launcher)
     GoRoute(
       path: AppRoutes.bookingDetail,
       builder: (context, state) {
@@ -137,6 +149,16 @@ final appRouter = GoRouter(
     ),
 
     GoRoute(
+      path: AppRoutes.myBookings,
+      builder: (context, state) => const MyBookingsScreen(),
+    ),
+
+    GoRoute(
+      path: AppRoutes.profile,
+      builder: (context, state) => const ProfileScreen(),
+    ),
+
+    GoRoute(
       path: AppRoutes.editProfile,
       builder: (context, state) => const EditProfileScreen(),
     ),
@@ -154,6 +176,33 @@ final appRouter = GoRouter(
     GoRoute(
       path: AppRoutes.checkout,
       builder: (context, state) => const CheckoutScreen(),
+    ),
+
+    GoRoute(
+      path: AppRoutes.search,
+      builder: (context, state) => SearchScreen(
+        initialQuery:
+            state.extra is String ? state.extra as String : '',
+      ),
+    ),
+
+    GoRoute(
+      path: AppRoutes.categories,
+      builder: (context, state) => const CategoryScreen(),
+    ),
+
+    // Home category card → services filtered to that category
+    GoRoute(
+      path: AppRoutes.categoryServices,
+      builder: (context, state) {
+        final category = state.extra;
+        if (category is CategoryModel) {
+          return CategoryServicesScreen(category: category);
+        }
+        return const Scaffold(
+          body: Center(child: Text('Category not found')),
+        );
+      },
     ),
   ],
 );

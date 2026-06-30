@@ -2,17 +2,24 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/constants/app_colors.dart';
+import '../../../core/widgets/clickable.dart';
+import '../../../core/widgets/page_sheet.dart';
 import '../../../models/address_model.dart';
 import '../../../models/coupon_model.dart';
 import '../../../models/time_slot_model.dart';
 import '../../../features/booking/services/booking_providers.dart';
 import '../../../features/booking/widgets/available_coupons_sheet.dart';
+import '../../../features/booking/widgets/booking_success_dialog.dart';
+import '../../../features/address/screens/address_screen.dart';
+import '../../../features/bookings/utils/my_bookings_launcher.dart';
+import '../../../features/address/services/address_providers.dart';
 import '../models/cart_item.dart';
 import '../providers/cart_provider.dart';
 import '../services/checkout_service.dart';
 
 class CheckoutScreen extends ConsumerStatefulWidget {
-  const CheckoutScreen({super.key});
+  final bool inModal;
+  const CheckoutScreen({super.key, this.inModal = false});
 
   @override
   ConsumerState<CheckoutScreen> createState() => _CheckoutScreenState();
@@ -114,13 +121,42 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       ref.read(cartProvider.notifier).clearCart();
 
       if (!mounted) return;
-      context.go('/booking-success', extra: booking);
+      if (widget.inModal) {
+        // Capture the root navigator before the dialog opens.
+        // After popUntil runs inside the callbacks, this NavigatorState and
+        // its .context remain valid (the Navigator itself is never popped).
+        final navigator = Navigator.of(context);
+        await showBookingSuccessDialog(
+          context,
+          booking,
+          onClose: () => navigator.popUntil((route) => route.isFirst),
+          onViewBookings: () {
+            navigator.popUntil((route) => route.isFirst);
+            openMyBookings(navigator.context);
+          },
+        );
+      } else {
+        context.go('/booking-success', extra: booking);
+      }
     } catch (e) {
       if (!mounted) return;
       _showError('Booking failed: $e');
     } finally {
       if (mounted) setState(() => _placing = false);
     }
+  }
+
+  Future<void> _openAddressScreen() async {
+    if (widget.inModal) {
+      await PageSheet.show(
+        context,
+        title: 'My Addresses',
+        child: const AddressScreen(inModal: true),
+      );
+    } else {
+      await context.push('/address');
+    }
+    if (mounted) ref.invalidate(addressNotifierProvider);
   }
 
   void _showError(String message) {
@@ -161,17 +197,19 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
 
     return Scaffold(
       backgroundColor: AppColors.background,
-      appBar: AppBar(
-        title: const Text('Checkout'),
-        backgroundColor: AppColors.surface,
-        foregroundColor: AppColors.textPrimary,
-        elevation: 0,
-        surfaceTintColor: Colors.transparent,
-        bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(0.8),
-          child: Container(height: 0.8, color: AppColors.divider),
-        ),
-      ),
+      appBar: widget.inModal
+          ? null
+          : AppBar(
+              title: const Text('Checkout'),
+              backgroundColor: AppColors.surface,
+              foregroundColor: AppColors.textPrimary,
+              elevation: 0,
+              surfaceTintColor: Colors.transparent,
+              bottom: PreferredSize(
+                preferredSize: const Size.fromHeight(0.8),
+                child: Container(height: 0.8, color: AppColors.divider),
+              ),
+            ),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
         children: [
@@ -190,10 +228,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
           _SectionCard(
             title: 'Service Address',
             trailing: TextButton(
-              onPressed: () async {
-                await context.push('/address');
-                ref.invalidate(addressNotifierProvider);
-              },
+              onPressed: _openAddressScreen,
               child: const Text('Manage'),
             ),
             child: addressAsync.when(
@@ -222,10 +257,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                         ),
                         const SizedBox(height: 8),
                         OutlinedButton.icon(
-                          onPressed: () async {
-                            await context.push('/address');
-                            ref.invalidate(addressNotifierProvider);
-                          },
+                          onPressed: _openAddressScreen,
                           icon: const Icon(Icons.add_rounded, size: 16),
                           label: const Text('Add Address'),
                         ),
@@ -251,7 +283,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
           // ── Date ─────────────────────────────────────────────────────────
           _SectionCard(
             title: 'Service Date',
-            child: GestureDetector(
+            child: Clickable(
               onTap: _pickDate,
               child: Container(
                 padding: const EdgeInsets.symmetric(
@@ -492,7 +524,7 @@ class _AddressRadioTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final tt = Theme.of(context).textTheme;
-    return GestureDetector(
+    return Clickable(
       onTap: onTap,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 180),
@@ -611,7 +643,7 @@ class _SlotGrid extends StatelessWidget {
               runSpacing: 8,
               children: entry.value.map((slot) {
                 final isSelected = selected?.id == slot.id;
-                return GestureDetector(
+                return Clickable(
                   onTap: slot.isAvailable ? () => onSelect(slot) : null,
                   child: AnimatedContainer(
                     duration: const Duration(milliseconds: 150),
@@ -708,7 +740,7 @@ class _AppliedCouponRow extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: 8)),
           child: const Text('Change'),
         ),
-        GestureDetector(
+        Clickable(
           onTap: onRemove,
           child: const Icon(Icons.close_rounded,
               size: 18, color: AppColors.textHint),

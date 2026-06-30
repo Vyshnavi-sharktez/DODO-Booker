@@ -13,8 +13,13 @@ import '../../reviews/widgets/review_modal.dart';
 
 class BookingDetailsScreen extends ConsumerStatefulWidget {
   final MyBookingModel booking;
+  final bool inModal;
 
-  const BookingDetailsScreen({super.key, required this.booking});
+  const BookingDetailsScreen({
+    super.key,
+    required this.booking,
+    this.inModal = false,
+  });
 
   @override
   ConsumerState<BookingDetailsScreen> createState() =>
@@ -46,22 +51,24 @@ class _BookingDetailsScreenState extends ConsumerState<BookingDetailsScreen> {
         final isWide = constraints.maxWidth > 700;
         return Scaffold(
           backgroundColor: AppColors.background,
-          appBar: AppBar(
-            title: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text('Booking Details'),
-                Text(
-                  booking.id,
-                  style: const TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w400,
-                    letterSpacing: 0.5,
+          appBar: widget.inModal
+              ? null
+              : AppBar(
+                  title: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('Booking Details'),
+                      Text(
+                        booking.id,
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w400,
+                          letterSpacing: 0.5,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-              ],
-            ),
-          ),
           body: SingleChildScrollView(
             padding: EdgeInsets.symmetric(
               horizontal: isWide ? (constraints.maxWidth - 600) / 2 : 0,

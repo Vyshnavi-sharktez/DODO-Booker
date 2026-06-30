@@ -3,32 +3,30 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import '../../../../core/theme/app_theme.dart';
+import '../../../../core/widgets/clickable.dart';
+import '../../../dodo_teams/application/providers/dodo_teams_providers.dart';
+import '../../../dodo_teams/domain/models/dodo_team.dart';
 import '../../../vendors/application/providers/vendor_detail_providers.dart';
 import '../../../vendors/application/providers/vendors_providers.dart';
 import '../../../vendors/domain/models/vendor.dart';
 import '../../domain/models/booking.dart';
 import '../../domain/services/vendor_assignment_service.dart';
 
-const _statusOptions = [
-  ('pending', 'Pending'),
-  ('assigned', 'Assigned'),
-  ('in_progress', 'In Progress'),
-  ('completed', 'Completed'),
-  ('cancelled', 'Cancelled'),
-];
-
 final _dateFmt = DateFormat('dd MMM yyyy');
 
 enum _AssignMode { auto, manual }
+
+enum _AssigneeType { vendor, team, unassigned }
 
 // ── Dialog ─────────────────────────────────────────────────────────────────────
 
 class BookingAssignmentDialog extends ConsumerStatefulWidget {
   final Booking booking;
   final Future<void> Function({
-    required String vendorId,
+    required String assignmentType,
+    String? vendorId,
+    String? dodoTeamId,
     required DateTime serviceDate,
-    required String status,
     String? notes,
   }) onSave;
 
@@ -48,13 +46,13 @@ class _BookingAssignmentDialogState
   final _formKey = GlobalKey<FormState>();
   late final TextEditingController _notesCtrl;
 
+  late _AssigneeType _assigneeType;
   late _AssignMode _mode;
   late String _vendorId;
+  late String _dodoTeamId;
   late DateTime? _serviceDate;
-  late String _status;
   bool _saving = false;
 
-  // Tracks whether the current _vendorId was selected via auto mode.
   bool _autoSelected = false;
   double? _autoSelectedDistanceKm;
 
@@ -66,9 +64,13 @@ class _BookingAssignmentDialogState
     super.initState();
     _notesCtrl = TextEditingController(text: widget.booking.notes ?? '');
     _vendorId = widget.booking.vendorId;
+    _dodoTeamId = widget.booking.dodoTeamId;
     _serviceDate = widget.booking.serviceDate;
-    _status = widget.booking.status;
-    // Default to auto when the booking has coordinates.
+    _assigneeType = switch (widget.booking.assignmentType) {
+      'DODO Team' => _AssigneeType.team,
+      'Unassigned' => _AssigneeType.unassigned,
+      _ => _AssigneeType.vendor,
+    };
     _mode = _bookingHasLocation ? _AssignMode.auto : _AssignMode.manual;
   }
 
@@ -96,12 +98,32 @@ class _BookingAssignmentDialogState
       );
       return;
     }
+    if (_assigneeType == _AssigneeType.vendor && _vendorId.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please select a vendor')),
+      );
+      return;
+    }
+    if (_assigneeType == _AssigneeType.team && _dodoTeamId.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please select a DODO Team')),
+      );
+      return;
+    }
+
+    final assignmentType = switch (_assigneeType) {
+      _AssigneeType.vendor => 'External Vendor',
+      _AssigneeType.team => 'DODO Team',
+      _AssigneeType.unassigned => 'Unassigned',
+    };
+
     setState(() => _saving = true);
     try {
       await widget.onSave(
-        vendorId: _vendorId,
+        assignmentType: assignmentType,
+        vendorId: _assigneeType == _AssigneeType.vendor ? _vendorId : null,
+        dodoTeamId: _assigneeType == _AssigneeType.team ? _dodoTeamId : null,
         serviceDate: _serviceDate!,
-        status: _status,
         notes:
             _notesCtrl.text.trim().isEmpty ? null : _notesCtrl.text.trim(),
       );
@@ -124,12 +146,17 @@ class _BookingAssignmentDialogState
   Widget build(BuildContext context) {
     final vendorsAsync = ref.watch(vendorsNotifierProvider);
     final serviceAreasAsync = ref.watch(allVendorServiceAreasProvider);
-    final allVendors = vendorsAsync.valueOrNull ?? <Vendor>[];
+    final dodoTeamsAsync = ref.watch(dodoTeamsNotifierProvider);
 
-    // Compute ranked candidates synchronously when both providers are ready.
+    final allVendors = vendorsAsync.valueOrNull ?? <Vendor>[];
+    final allTeams = dodoTeamsAsync.valueOrNull ?? <DodoTeam>[];
+
     final candidates =
-        (_mode == _AssignMode.auto && _bookingHasLocation &&
-                vendorsAsync.hasValue && serviceAreasAsync.hasValue)
+        (_assigneeType == _AssigneeType.vendor &&
+                _mode == _AssignMode.auto &&
+                _bookingHasLocation &&
+                vendorsAsync.hasValue &&
+                serviceAreasAsync.hasValue)
             ? VendorAssignmentService.rankEligibleVendors(
                 bookingLat: widget.booking.latitude!,
                 bookingLng: widget.booking.longitude!,
@@ -140,6 +167,8 @@ class _BookingAssignmentDialogState
 
     final selectedVendor =
         allVendors.where((v) => v.id == _vendorId).firstOrNull;
+    final selectedTeam =
+        allTeams.where((t) => t.id == _dodoTeamId).firstOrNull;
 
     return Dialog(
       insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
@@ -150,10 +179,8 @@ class _BookingAssignmentDialogState
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // ── Header ──────────────────────────────────────────────────────
             _buildHeader(),
 
-            // ── Scrollable content ───────────────────────────────────────────
             Flexible(
               child: SingleChildScrollView(
                 padding: const EdgeInsets.all(24),
@@ -162,31 +189,58 @@ class _BookingAssignmentDialogState
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // Mode toggle
-                      _buildModeSelector(),
+                      // ── Assignee type (Vendor | DODO Team | Unassigned) ──
+                      _buildAssigneeTypeSelector(),
                       const SizedBox(height: 20),
 
-                      // Mode panel
-                      if (_mode == _AssignMode.auto)
-                        _buildAutoPanel(
-                          isLoading: vendorsAsync.isLoading ||
-                              serviceAreasAsync.isLoading,
-                          hasError: vendorsAsync.hasError ||
-                              serviceAreasAsync.hasError,
-                          candidates: candidates,
-                        )
-                      else
-                        _buildManualPanel(allVendors),
-
-                      const SizedBox(height: 20),
-
-                      // Selected vendor indicator
-                      if (selectedVendor != null) ...[
-                        _buildSelectedIndicator(selectedVendor),
-                        const SizedBox(height: 16),
+                      // ── Vendor panels ────────────────────────────────────
+                      if (_assigneeType == _AssigneeType.vendor) ...[
+                        _buildModeSelector(),
+                        const SizedBox(height: 20),
+                        if (_mode == _AssignMode.auto)
+                          _buildAutoPanel(
+                            isLoading: vendorsAsync.isLoading ||
+                                serviceAreasAsync.isLoading,
+                            hasError: vendorsAsync.hasError ||
+                                serviceAreasAsync.hasError,
+                            candidates: candidates,
+                          )
+                        else
+                          _buildManualPanel(allVendors),
+                        const SizedBox(height: 20),
+                        if (selectedVendor != null) ...[
+                          _buildVendorSelectedIndicator(selectedVendor),
+                          const SizedBox(height: 16),
+                        ],
                       ],
 
-                      // Shared: service date
+                      // ── DODO Team panel ──────────────────────────────────
+                      if (_assigneeType == _AssigneeType.team) ...[
+                        _buildDodoTeamPanel(
+                          allTeams,
+                          isLoading: dodoTeamsAsync.isLoading,
+                          hasError: dodoTeamsAsync.hasError,
+                        ),
+                        const SizedBox(height: 20),
+                        if (selectedTeam != null) ...[
+                          _buildTeamSelectedIndicator(selectedTeam),
+                          const SizedBox(height: 16),
+                        ],
+                      ],
+
+                      // ── Unassigned notice ────────────────────────────────
+                      if (_assigneeType == _AssigneeType.unassigned) ...[
+                        _InfoBanner(
+                          icon: Icons.person_off_rounded,
+                          color: AppColors.textSecondary,
+                          message:
+                              'Saving will clear any existing vendor or team '
+                              'assignment and mark the booking as Unassigned.',
+                        ),
+                        const SizedBox(height: 20),
+                      ],
+
+                      // ── Shared fields ─────────────────────────────────────
                       InkWell(
                         onTap: _saving ? null : _pickDate,
                         borderRadius: BorderRadius.circular(8),
@@ -211,30 +265,6 @@ class _BookingAssignmentDialogState
                       ),
                       const SizedBox(height: 16),
 
-                      // Shared: status
-                      DropdownButtonFormField<String>(
-                        // ignore: deprecated_member_use
-                        value: _status,
-                        decoration: const InputDecoration(
-                          labelText: 'Status *',
-                          prefixIcon: Icon(Icons.flag_rounded),
-                        ),
-                        items: _statusOptions
-                            .map((s) => DropdownMenuItem(
-                                  value: s.$1,
-                                  child: Text(s.$2),
-                                ))
-                            .toList(),
-                        onChanged: _saving
-                            ? null
-                            : (v) {
-                                if (v != null) setState(() => _status = v);
-                              },
-                        validator: (v) => v == null ? 'Required' : null,
-                      ),
-                      const SizedBox(height: 16),
-
-                      // Shared: notes
                       TextFormField(
                         controller: _notesCtrl,
                         decoration: const InputDecoration(
@@ -253,7 +283,6 @@ class _BookingAssignmentDialogState
               ),
             ),
 
-            // ── Footer ──────────────────────────────────────────────────────
             _buildFooter(),
           ],
         ),
@@ -290,6 +319,45 @@ class _BookingAssignmentDialogState
             onPressed: () => Navigator.of(context).pop(),
             icon: const Icon(Icons.close_rounded, color: Colors.white70),
             visualDensity: VisualDensity.compact,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAssigneeTypeSelector() {
+    return Container(
+      height: 42,
+      decoration: BoxDecoration(
+        color: AppColors.background,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Row(
+        children: [
+          _ModeTab(
+            icon: Icons.store_rounded,
+            label: 'External Vendor',
+            selected: _assigneeType == _AssigneeType.vendor,
+            onTap: _saving
+                ? null
+                : () => setState(() => _assigneeType = _AssigneeType.vendor),
+          ),
+          _ModeTab(
+            icon: Icons.groups_rounded,
+            label: 'DODO Team',
+            selected: _assigneeType == _AssigneeType.team,
+            onTap: _saving
+                ? null
+                : () => setState(() => _assigneeType = _AssigneeType.team),
+          ),
+          _ModeTab(
+            icon: Icons.person_off_rounded,
+            label: 'Unassigned',
+            selected: _assigneeType == _AssigneeType.unassigned,
+            onTap: _saving
+                ? null
+                : () => setState(() => _assigneeType = _AssigneeType.unassigned),
           ),
         ],
       ),
@@ -429,7 +497,6 @@ class _BookingAssignmentDialogState
                           _vendorId = e.value.vendor.id;
                           _autoSelected = true;
                           _autoSelectedDistanceKm = e.value.distanceKm;
-                          if (_status == 'pending') _status = 'assigned';
                         }),
               ),
             ),
@@ -440,7 +507,6 @@ class _BookingAssignmentDialogState
   Widget _buildManualPanel(List<Vendor> vendors) {
     final vendorIds = vendors.map((v) => v.id).toSet();
     final currentKnown = vendorIds.contains(_vendorId);
-    // Treat empty string as unselected.
     final dropdownValue =
         (currentKnown && _vendorId.isNotEmpty) ? _vendorId : null;
 
@@ -459,8 +525,8 @@ class _BookingAssignmentDialogState
             child: Text(
               'Unknown vendor '
               '(${_vendorId.substring(0, min(8, _vendorId.length))}…)',
-              style: TextStyle(
-                  color: AppColors.textSecondary, fontSize: 13),
+              style:
+                  TextStyle(color: AppColors.textSecondary, fontSize: 13),
             ),
           ),
         ...vendors.map(
@@ -482,7 +548,61 @@ class _BookingAssignmentDialogState
     );
   }
 
-  Widget _buildSelectedIndicator(Vendor vendor) {
+  Widget _buildDodoTeamPanel(
+    List<DodoTeam> teams, {
+    required bool isLoading,
+    required bool hasError,
+  }) {
+    if (isLoading) {
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.symmetric(vertical: 24),
+          child: CircularProgressIndicator(),
+        ),
+      );
+    }
+
+    if (hasError) {
+      return _InfoBanner(
+        icon: Icons.error_outline_rounded,
+        color: AppColors.error,
+        message: 'Failed to load DODO Teams.',
+      );
+    }
+
+    if (teams.isEmpty) {
+      return _InfoBanner(
+        icon: Icons.groups_outlined,
+        color: AppColors.textSecondary,
+        message: 'No DODO Teams available. Create a team first.',
+      );
+    }
+
+    final teamIds = teams.map((t) => t.id).toSet();
+    final currentKnown = teamIds.contains(_dodoTeamId);
+    final dropdownValue =
+        (currentKnown && _dodoTeamId.isNotEmpty) ? _dodoTeamId : null;
+
+    return DropdownButtonFormField<String>(
+      // ignore: deprecated_member_use
+      value: dropdownValue,
+      decoration: const InputDecoration(
+        labelText: 'DODO Team',
+        prefixIcon: Icon(Icons.groups_rounded),
+      ),
+      isExpanded: true,
+      items: teams
+          .map((t) => DropdownMenuItem(value: t.id, child: Text(t.teamName)))
+          .toList(),
+      onChanged: _saving
+          ? null
+          : (v) {
+              if (v != null) setState(() => _dodoTeamId = v);
+            },
+    );
+  }
+
+  Widget _buildVendorSelectedIndicator(Vendor vendor) {
     final annotation = (_autoSelected && _autoSelectedDistanceKm != null)
         ? 'auto — ${_autoSelectedDistanceKm!.toStringAsFixed(1)} km away'
         : 'manual';
@@ -520,6 +640,48 @@ class _BookingAssignmentDialogState
                       color: AppColors.primary.withValues(alpha: 0.7),
                     ),
                   ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTeamSelectedIndicator(DodoTeam team) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: AppColors.primaryLight,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(
+            color: AppColors.primary.withValues(alpha: 0.3)),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.groups_rounded, size: 16, color: AppColors.primary),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text.rich(
+              TextSpan(
+                children: [
+                  TextSpan(
+                    text: team.teamName,
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.primary,
+                    ),
+                  ),
+                  if (team.supervisorName != null)
+                    TextSpan(
+                      text: '  ·  ${team.supervisorName}',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: AppColors.primary.withValues(alpha: 0.7),
+                      ),
+                    ),
                 ],
               ),
             ),
@@ -589,7 +751,7 @@ class _ModeTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Expanded(
-      child: GestureDetector(
+      child: Clickable(
         onTap: onTap,
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 150),
@@ -607,14 +769,17 @@ class _ModeTab extends StatelessWidget {
                 size: 15,
                 color: selected ? Colors.white : AppColors.textSecondary,
               ),
-              const SizedBox(width: 6),
-              Text(
-                label,
-                style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                  color:
-                      selected ? Colors.white : AppColors.textSecondary,
+              const SizedBox(width: 5),
+              Flexible(
+                child: Text(
+                  label,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color:
+                        selected ? Colors.white : AppColors.textSecondary,
+                  ),
                 ),
               ),
             ],
@@ -665,7 +830,7 @@ class _InfoBanner extends StatelessWidget {
                 ),
                 if (actionLabel != null && onAction != null) ...[
                   const SizedBox(height: 8),
-                  GestureDetector(
+                  Clickable(
                     onTap: onAction,
                     child: Text(
                       actionLabel!,
@@ -719,7 +884,6 @@ class _VendorCandidateCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Top row: [NEAREST chip?] + name + distance badge
           Row(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
@@ -765,7 +929,6 @@ class _VendorCandidateCard extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 8),
-              // Distance badge
               Container(
                 padding: const EdgeInsets.symmetric(
                     horizontal: 8, vertical: 3),
@@ -795,10 +958,8 @@ class _VendorCandidateCard extends StatelessWidget {
           ),
           const SizedBox(height: 8),
 
-          // Detail row: rating · active status · radius
           Row(
             children: [
-              // Rating
               if (vendor.rating != null) ...[
                 const Icon(Icons.star_rounded,
                     size: 13, color: Color(0xFFD69E2E)),
@@ -816,7 +977,6 @@ class _VendorCandidateCard extends StatelessWidget {
                 ),
               const SizedBox(width: 12),
 
-              // Active status dot
               Container(
                 width: 6,
                 height: 6,
@@ -835,7 +995,6 @@ class _VendorCandidateCard extends StatelessWidget {
               ),
               const SizedBox(width: 12),
 
-              // Effective radius
               Icon(Icons.radar_rounded,
                   size: 13, color: AppColors.textSecondary),
               const SizedBox(width: 3),
@@ -848,7 +1007,6 @@ class _VendorCandidateCard extends StatelessWidget {
           ),
           const SizedBox(height: 10),
 
-          // Select / Selected indicator
           Align(
             alignment: Alignment.centerRight,
             child: isSelected

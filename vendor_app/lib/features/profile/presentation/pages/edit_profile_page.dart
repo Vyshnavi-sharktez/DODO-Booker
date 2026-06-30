@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:geolocator/geolocator.dart';
 import '../../../../core/constants/app_colors.dart';
+import '../../../../core/widgets/clickable.dart';
 import '../../../../core/screens/map_picker_screen.dart';
 import '../../../../core/services/nominatim_service.dart';
 import '../../../auth/presentation/providers/auth_controller.dart';
@@ -310,7 +311,7 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
                           ),
                         ),
                       ),
-                      GestureDetector(
+                      Clickable(
                         onTap: () => setState(() {
                           _latitude = null;
                           _longitude = null;

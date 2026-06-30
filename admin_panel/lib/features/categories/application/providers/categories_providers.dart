@@ -25,7 +25,6 @@ class CategoriesNotifier extends StateNotifier<AsyncValue<List<Category>>> {
     required String name,
     required String slug,
     String? imageUrl,
-    String? description,
     required int sortOrder,
     required bool isActive,
   }) async {
@@ -33,7 +32,6 @@ class CategoriesNotifier extends StateNotifier<AsyncValue<List<Category>>> {
       name: name,
       slug: slug,
       imageUrl: imageUrl,
-      description: description,
       sortOrder: sortOrder,
       isActive: isActive,
     );
@@ -45,7 +43,6 @@ class CategoriesNotifier extends StateNotifier<AsyncValue<List<Category>>> {
     required String name,
     required String slug,
     String? imageUrl,
-    String? description,
     required int sortOrder,
     required bool isActive,
   }) async {
@@ -54,7 +51,6 @@ class CategoriesNotifier extends StateNotifier<AsyncValue<List<Category>>> {
       name: name,
       slug: slug,
       imageUrl: imageUrl,
-      description: description,
       sortOrder: sortOrder,
       isActive: isActive,
     );

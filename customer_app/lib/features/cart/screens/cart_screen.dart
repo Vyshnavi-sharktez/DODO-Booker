@@ -2,16 +2,27 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/constants/app_colors.dart';
+import '../../../core/widgets/clickable.dart';
+import '../../../core/widgets/page_sheet.dart';
 import '../models/cart_item.dart';
 import '../providers/cart_provider.dart';
+import 'checkout_screen.dart';
 
 class CartScreen extends ConsumerWidget {
-  const CartScreen({super.key});
+  /// When [true], renders without a [Scaffold] / [AppBar] so it can be hosted
+  /// inside [PageSheet] on desktop. All business logic and providers are shared.
+  final bool inModal;
+
+  const CartScreen({super.key, this.inModal = false});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final items = ref.watch(cartProvider);
     final subtotal = ref.watch(cartSubtotalProvider);
+
+    if (inModal) {
+      return _ModalBody(items: items, subtotal: subtotal);
+    }
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -57,10 +68,71 @@ class CartScreen extends ConsumerWidget {
   }
 }
 
+// ── Modal-mode body (hosted inside PageSheet) ─────────────────────────────────
+
+class _ModalBody extends ConsumerWidget {
+  final List<CartItem> items;
+  final double subtotal;
+
+  const _ModalBody({required this.items, required this.subtotal});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return Column(
+      children: [
+        // Compact "Clear all" row — replaces the AppBar action
+        if (items.isNotEmpty)
+          Container(
+            padding: const EdgeInsets.fromLTRB(20, 6, 12, 0),
+            child: Row(
+              children: [
+                Text(
+                  '${items.fold<int>(0, (s, i) => s + i.quantity)} item(s)',
+                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                        color: AppColors.textSecondary,
+                      ),
+                ),
+                const Spacer(),
+                TextButton(
+                  onPressed: () => ref.read(cartProvider.notifier).clearCart(),
+                  style: TextButton.styleFrom(
+                    foregroundColor: AppColors.error,
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 12, vertical: 6),
+                  ),
+                  child: const Text('Clear all'),
+                ),
+              ],
+            ),
+          ),
+
+        Expanded(
+          child: items.isEmpty
+              ? const _EmptyCart(inModal: true)
+              : ListView(
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+                  children: [
+                    ...items.map((item) => Padding(
+                          padding: const EdgeInsets.only(bottom: 12),
+                          child: _CartItemCard(item: item),
+                        )),
+                    const SizedBox(height: 8),
+                    _CartSummaryCard(items: items, subtotal: subtotal),
+                  ],
+                ),
+        ),
+
+        if (items.isNotEmpty) _ModalCheckoutBar(subtotal: subtotal),
+      ],
+    );
+  }
+}
+
 // ── Empty state ───────────────────────────────────────────────────────────────
 
 class _EmptyCart extends StatelessWidget {
-  const _EmptyCart();
+  final bool inModal;
+  const _EmptyCart({this.inModal = false});
 
   @override
   Widget build(BuildContext context) {
@@ -101,7 +173,17 @@ class _EmptyCart extends StatelessWidget {
             ),
             const SizedBox(height: 28),
             FilledButton.icon(
-              onPressed: () => context.go('/'),
+              onPressed: () {
+                if (inModal) {
+                  // Close the dialog before navigating so GoRouter
+                  // doesn't fight the showGeneralDialog route.
+                  final router = GoRouter.of(context);
+                  Navigator.of(context).pop();
+                  router.go('/');
+                } else {
+                  context.go('/');
+                }
+              },
               icon: const Icon(Icons.explore_outlined, size: 18),
               label: const Text(
                 'Explore Services',
@@ -170,7 +252,7 @@ class _CartItemCard extends ConsumerWidget {
                             ),
                           ),
                           const SizedBox(width: 8),
-                          GestureDetector(
+                          Clickable(
                             onTap: () =>
                                 notifier.removeFromCart(item.serviceId),
                             child: const Icon(
@@ -325,7 +407,7 @@ class _StepBtn extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
+    return Clickable(
       onTap: onTap,
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
@@ -429,7 +511,7 @@ class _SummaryRow extends StatelessWidget {
   }
 }
 
-// ── Sticky checkout bar ───────────────────────────────────────────────────────
+// ── Sticky checkout bar — full-screen (mobile) ────────────────────────────────
 
 class _CheckoutBar extends StatelessWidget {
   final double subtotal;
@@ -481,6 +563,66 @@ class _CheckoutBar extends StatelessWidget {
           Expanded(
             child: FilledButton(
               onPressed: () => context.go('/cart/checkout'),
+              style: FilledButton.styleFrom(
+                minimumSize: const Size.fromHeight(48),
+              ),
+              child: const Text(
+                'Proceed to Checkout',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Sticky checkout bar — modal variant (desktop) ─────────────────────────────
+
+class _ModalCheckoutBar extends StatelessWidget {
+  final double subtotal;
+
+  const _ModalCheckoutBar({required this.subtotal});
+
+  @override
+  Widget build(BuildContext context) {
+    final tt = Theme.of(context).textTheme;
+    final grandTotal = subtotal * 1.18;
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
+      decoration: const BoxDecoration(
+        color: AppColors.surface,
+        border: Border(top: BorderSide(color: AppColors.divider, width: 0.8)),
+      ),
+      child: Row(
+        children: [
+          Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                '₹${grandTotal.toInt()}',
+                style: tt.headlineSmall?.copyWith(
+                  color: AppColors.primary,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              Text(
+                'incl. taxes',
+                style: tt.labelSmall?.copyWith(color: AppColors.textHint),
+              ),
+            ],
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: FilledButton(
+              onPressed: () => PageSheet.show(
+                context,
+                title: 'Checkout',
+                child: const CheckoutScreen(inModal: true),
+              ),
               style: FilledButton.styleFrom(
                 minimumSize: const Size.fromHeight(48),
               ),

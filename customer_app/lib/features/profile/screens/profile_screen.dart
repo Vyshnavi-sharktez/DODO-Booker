@@ -2,17 +2,16 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/constants/app_colors.dart';
-import '../../../core/widgets/app_modal_dialog.dart';
+import '../../../core/widgets/page_sheet.dart';
+import '../../../models/profile_model.dart';
 import '../services/profile_providers.dart';
-import '../widgets/profile_header.dart';
-import '../widgets/profile_stats_card.dart';
 import '../widgets/profile_menu_tile.dart';
 import '../../../routes/app_router.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../../auth/utils/auth_modal_gate.dart';
-import '../../bookings/modals/my_bookings_modal.dart';
-import '../../notifications/widgets/notifications_modal.dart';
-import '../../notifications/services/notification_providers.dart';
+import '../../address/screens/address_screen.dart';
+import '../../wishlist/screens/wishlist_screen.dart';
+import 'settings_screen.dart';
 
 class ProfileScreen extends ConsumerWidget {
   const ProfileScreen({super.key});
@@ -21,171 +20,35 @@ class ProfileScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final isAuthenticated = ref.watch(isAuthenticatedProvider);
 
-    // When the user logs in, force a fresh profile fetch.
     ref.listen<bool>(isAuthenticatedProvider, (prev, next) {
       if (next == true) ref.invalidate(profileProvider);
     });
 
     if (!isAuthenticated) {
       return Scaffold(
-        backgroundColor: AppColors.background,
+        backgroundColor: AppColors.surfaceVariant,
+        appBar: AppBar(title: const Text('My Account')),
         body: _UnauthenticatedProfile(
-          onSignIn: () async {
-            await requireAuth(context, ref);
-          },
+          onSignIn: () async => requireAuth(context, ref),
         ),
       );
     }
 
     final profileAsync = ref.watch(profileProvider);
 
-    final unreadCount = ref.watch(unreadCountProvider);
-
     return Scaffold(
-      backgroundColor: AppColors.background,
-      body: profileAsync.when(
-        loading: () => const _ProfileSkeleton(),
-        error: (e, _) => _ProfileError(onRetry: () => ref.invalidate(profileProvider)),
-        data: (profile) => RefreshIndicator(
-          color: AppColors.primary,
-          onRefresh: () async {
-            ref.invalidate(profileProvider);
-            try { await ref.read(profileProvider.future); } catch (_) {}
-          },
-          child: LayoutBuilder(
-            builder: (context, constraints) {
-              final isWide = constraints.maxWidth > 600;
-              return Center(
-                child: ConstrainedBox(
-                  constraints: BoxConstraints(
-                    maxWidth: isWide ? 480 : double.infinity,
-                  ),
-                  child: SingleChildScrollView(
-                    physics: const AlwaysScrollableScrollPhysics(),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        // ── Header ──────────────────────────────────────
-                        ProfileHeader(
-                          profile: profile,
-                          onEditTap: () => context.push(AppRoutes.editProfile),
-                        ),
-
-                        const SizedBox(height: 20),
-
-                        // ── Stats ────────────────────────────────────────
-                        ProfileStatsCard(profile: profile),
-
-                        // ── Account section ──────────────────────────────
-                        ProfileMenuSection(
-                          title: 'Account',
-                          children: [
-                            ProfileMenuTile(
-                              icon: Icons.location_on_rounded,
-                              iconColor: AppColors.primary,
-                              title: 'My Addresses',
-                              subtitle: 'Manage saved addresses',
-                              onTap: () => context.push(AppRoutes.address),
-                            ),
-                            ProfileMenuTile(
-                              icon: Icons.receipt_long_rounded,
-                              iconColor: const Color(0xFF5C6BC0),
-                              title: 'My Bookings',
-                              subtitle: 'View all your bookings',
-                              onTap: () => AppModalDialog.show(
-                                context: context,
-                                child: const MyBookingsModal(),
-                              ).ignore(),
-                            ),
-                            ProfileMenuTile(
-                              icon: Icons.notifications_rounded,
-                              iconColor: const Color(0xFFFF6D00),
-                              title: 'Notifications',
-                              subtitle: 'Alerts and updates',
-                              badge: unreadCount > 0 ? '$unreadCount' : null,
-                              onTap: () => AppModalDialog.show(
-                                context: context,
-                                child: const NotificationsModal(),
-                              ).ignore(),
-                            ),
-                            ProfileMenuTile(
-                              icon: Icons.favorite_rounded,
-                              iconColor: const Color(0xFFE91E63),
-                              title: 'Wishlist',
-                              subtitle: 'Services you love',
-                              onTap: () => context.push(AppRoutes.wishlist),
-                            ),
-                            ProfileMenuTile(
-                              icon: Icons.discount_rounded,
-                              iconColor: AppColors.success,
-                              title: 'Coupons',
-                              subtitle: 'View available offers',
-                              onTap: () {},
-                            ),
-                          ],
-                        ),
-
-                        // ── Support section ──────────────────────────────
-                        ProfileMenuSection(
-                          title: 'Help & Support',
-                          children: [
-                            ProfileMenuTile(
-                              icon: Icons.headset_mic_rounded,
-                              iconColor: const Color(0xFF00ACC1),
-                              title: 'Support Center',
-                              subtitle: '24/7 customer support',
-                              onTap: () {},
-                            ),
-                            ProfileMenuTile(
-                              icon: Icons.help_outline_rounded,
-                              iconColor: const Color(0xFF7E57C2),
-                              title: 'FAQs',
-                              subtitle: 'Frequently asked questions',
-                              onTap: () {},
-                            ),
-                            ProfileMenuTile(
-                              icon: Icons.info_outline_rounded,
-                              iconColor: AppColors.textSecondary,
-                              title: 'About Us',
-                              subtitle: 'Learn about DODO Booker',
-                              onTap: () {},
-                            ),
-                          ],
-                        ),
-
-                        // ── Legal section ────────────────────────────────
-                        ProfileMenuSection(
-                          title: 'Legal',
-                          children: [
-                            ProfileMenuTile(
-                              icon: Icons.privacy_tip_outlined,
-                              iconColor: AppColors.textSecondary,
-                              title: 'Privacy Policy',
-                              onTap: () {},
-                            ),
-                            ProfileMenuTile(
-                              icon: Icons.description_outlined,
-                              iconColor: AppColors.textSecondary,
-                              title: 'Terms of Service',
-                              onTap: () {},
-                            ),
-                          ],
-                        ),
-
-                        // ── Logout ───────────────────────────────────────
-                        const SizedBox(height: 20),
-                        _LogoutTile(),
-
-                        // ── App version ──────────────────────────────────
-                        const _AppVersion(),
-
-                        const SizedBox(height: 40),
-                      ],
-                    ),
-                  ),
-                ),
-              );
-            },
+      backgroundColor: AppColors.surfaceVariant,
+      appBar: AppBar(title: const Text('My Account')),
+      body: Align(
+        alignment: Alignment.topCenter,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 680),
+          child: profileAsync.when(
+            loading: () => const _ProfileSkeleton(),
+            error: (e, _) => _ProfileError(
+              onRetry: () => ref.invalidate(profileProvider),
+            ),
+            data: (profile) => _ProfileBody(profile: profile),
           ),
         ),
       ),
@@ -193,15 +56,128 @@ class ProfileScreen extends ConsumerWidget {
   }
 }
 
-// ── Logout tile ───────────────────────────────────────────────────────────────
+// ── Authenticated body ─────────────────────────────────────────────────────────
 
-class _LogoutTile extends ConsumerStatefulWidget {
+class _ProfileBody extends ConsumerWidget {
+  final ProfileModel profile;
+  const _ProfileBody({required this.profile});
+
   @override
-  ConsumerState<_LogoutTile> createState() => _LogoutTileState();
+  Widget build(BuildContext context, WidgetRef ref) {
+    return RefreshIndicator(
+      color: AppColors.primary,
+      displacement: 20,
+      onRefresh: () async {
+        ref.invalidate(profileProvider);
+        try {
+          await ref.read(profileProvider.future);
+        } catch (_) {}
+      },
+      child: ScrollConfiguration(
+        behavior: ScrollConfiguration.of(context).copyWith(scrollbars: false),
+        child: SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: const EdgeInsets.only(bottom: 40),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const SizedBox(height: 20),
+
+              // ── Profile card ──────────────────────────────────────────
+              _ProfileCard(profile: profile),
+
+              // ── Account section ───────────────────────────────────────
+              const _SectionLabel('Account'),
+
+              _FloatingCard(
+                child: ProfileMenuTile(
+                  icon: Icons.location_on_rounded,
+                  iconColor: AppColors.primary,
+                  title: 'Saved Addresses',
+                  subtitle: 'Manage your delivery locations',
+                  onTap: () => _openResponsive(
+                    context,
+                    desktopModal: () => PageSheet.show(
+                      context,
+                      title: 'My Addresses',
+                      child: const AddressScreen(inModal: true),
+                    ),
+                    mobileRoute: () => context.push(AppRoutes.address),
+                  ),
+                ),
+              ),
+
+              const SizedBox(height: 12),
+
+              _FloatingCard(
+                child: ProfileMenuTile(
+                  icon: Icons.favorite_rounded,
+                  iconColor: const Color(0xFFE91E63),
+                  title: 'Wishlist',
+                  subtitle: 'Services you have saved',
+                  onTap: () => _openResponsive(
+                    context,
+                    desktopModal: () => PageSheet.show(
+                      context,
+                      title: 'Wishlist',
+                      child: const WishlistScreen(inModal: true),
+                    ),
+                    mobileRoute: () => context.push(AppRoutes.wishlist),
+                  ),
+                ),
+              ),
+
+              // ── Preferences section ───────────────────────────────────
+              const _SectionLabel('Preferences'),
+
+              _FloatingCard(
+                child: ProfileMenuTile(
+                  icon: Icons.settings_rounded,
+                  iconColor: AppColors.textSecondary,
+                  title: 'Settings',
+                  subtitle: 'App preferences',
+                  onTap: () => _openResponsive(
+                    context,
+                    desktopModal: () => PageSheet.show(
+                      context,
+                      title: 'Settings',
+                      child: const SettingsScreen(inModal: true),
+                    ),
+                    mobileRoute: () => Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => const SettingsScreen(),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+
+              const SizedBox(height: 8),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  static void _openResponsive(
+    BuildContext context, {
+    required VoidCallback desktopModal,
+    required VoidCallback mobileRoute,
+  }) {
+    if (MediaQuery.of(context).size.width >= 768) {
+      desktopModal();
+    } else {
+      mobileRoute();
+    }
+  }
 }
 
-class _LogoutTileState extends ConsumerState<_LogoutTile> {
-  bool _isLoading = false;
+// ── Floating card wrapper ──────────────────────────────────────────────────────
+
+class _FloatingCard extends StatelessWidget {
+  final Widget child;
+  const _FloatingCard({required this.child});
 
   @override
   Widget build(BuildContext context) {
@@ -209,58 +185,193 @@ class _LogoutTileState extends ConsumerState<_LogoutTile> {
       margin: const EdgeInsets.symmetric(horizontal: 16),
       decoration: BoxDecoration(
         color: AppColors.surface,
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.border, width: 0.8),
         boxShadow: const [
           BoxShadow(
-            color: Color(0x08000000),
-            blurRadius: 8,
-            offset: Offset(0, 2),
+            color: Color(0x0A000000),
+            blurRadius: 10,
+            offset: Offset(0, 3),
           ),
         ],
       ),
-      child: ProfileMenuTile(
-        icon: Icons.logout_rounded,
-        iconColor: AppColors.error,
-        title: 'Logout',
-        isDestructive: true,
-        onTap: _isLoading ? null : () => _showLogoutDialog(context),
-      ),
-    );
-  }
-
-  void _showLogoutDialog(BuildContext context) {
-    showDialog<void>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Logout'),
-        content: const Text('Are you sure you want to logout?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () async {
-              Navigator.of(ctx).pop();
-              if (!mounted) return;
-              setState(() => _isLoading = true);
-              final router = GoRouter.of(context);
-              await ref.read(authServiceProvider).signOut();
-              ref.read(authNotifierProvider.notifier).setAuthenticated(false);
-              if (!mounted) return;
-              setState(() => _isLoading = false);
-              router.go(AppRoutes.home);
-            },
-            style: TextButton.styleFrom(foregroundColor: AppColors.error),
-            child: const Text('Logout'),
-          ),
-        ],
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(16),
+        child: child,
       ),
     );
   }
 }
 
-// ── Unauthenticated state ─────────────────────────────────────────────────────
+// ── Section label ──────────────────────────────────────────────────────────────
+
+class _SectionLabel extends StatelessWidget {
+  final String text;
+  const _SectionLabel(this.text);
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 24, 16, 10),
+      child: Text(
+        text.toUpperCase(),
+        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+              color: AppColors.textHint,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 1.2,
+            ),
+      ),
+    );
+  }
+}
+
+// ── Profile card (hero) ────────────────────────────────────────────────────────
+
+class _ProfileCard extends StatelessWidget {
+  final ProfileModel profile;
+  const _ProfileCard({required this.profile});
+
+  @override
+  Widget build(BuildContext context) {
+    final tt = Theme.of(context).textTheme;
+
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 0, 16, 4),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: AppColors.border, width: 0.8),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x0E000000),
+            blurRadius: 20,
+            offset: Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(24, 32, 24, 28),
+        child: Column(
+          children: [
+            _AvatarWidget(profile: profile),
+
+            const SizedBox(height: 16),
+
+            Text(
+              profile.fullName.isEmpty ? 'Set your name' : profile.fullName,
+              style: tt.titleLarge?.copyWith(
+                fontWeight: FontWeight.w700,
+                color: AppColors.textPrimary,
+                fontSize: 20,
+              ),
+              textAlign: TextAlign.center,
+            ),
+
+            const SizedBox(height: 6),
+
+            if (profile.email != null && profile.email!.isNotEmpty) ...[
+              Text(
+                profile.email!,
+                style: tt.bodySmall?.copyWith(
+                  color: AppColors.textSecondary,
+                  fontSize: 13,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 3),
+            ],
+
+            if (profile.mobileNumber.isNotEmpty)
+              Text(
+                profile.mobileNumber,
+                style: tt.bodySmall?.copyWith(
+                  color: AppColors.textSecondary,
+                  fontSize: 13,
+                ),
+                textAlign: TextAlign.center,
+              ),
+
+            const SizedBox(height: 24),
+
+            OutlinedButton.icon(
+              onPressed: () => context.push(AppRoutes.editProfile),
+              icon: const Icon(Icons.edit_outlined, size: 15),
+              label: const Text('Edit Profile'),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: AppColors.textPrimary,
+                side: const BorderSide(color: AppColors.border, width: 1.5),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 28, vertical: 11),
+                minimumSize: Size.zero,
+                textStyle: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: 0.1,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(24),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ── Avatar ─────────────────────────────────────────────────────────────────────
+
+class _AvatarWidget extends StatelessWidget {
+  final ProfileModel profile;
+  const _AvatarWidget({required this.profile});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 96,
+      height: 96,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: AppColors.textPrimary,
+        border: Border.all(
+          color: AppColors.gold.withAlpha(180),
+          width: 2.5,
+        ),
+      ),
+      child: profile.imageUrl != null
+          ? ClipOval(
+              child: Image.network(
+                profile.imageUrl!,
+                fit: BoxFit.cover,
+                errorBuilder: (ctx, e, st) => _Initials(profile.initials),
+              ),
+            )
+          : _Initials(profile.initials),
+    );
+  }
+}
+
+class _Initials extends StatelessWidget {
+  final String text;
+  const _Initials(this.text);
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Text(
+        text,
+        style: const TextStyle(
+          color: Colors.white,
+          fontSize: 32,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+    );
+  }
+}
+
+// ── Unauthenticated state ──────────────────────────────────────────────────────
 
 class _UnauthenticatedProfile extends StatelessWidget {
   final VoidCallback onSignIn;
@@ -276,38 +387,47 @@ class _UnauthenticatedProfile extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             Container(
-              width: 80,
-              height: 80,
+              width: 88,
+              height: 88,
               decoration: BoxDecoration(
-                color: AppColors.surfaceVariant,
+                color: AppColors.surface,
                 shape: BoxShape.circle,
                 border: Border.all(color: AppColors.border, width: 1.5),
+                boxShadow: const [
+                  BoxShadow(
+                    color: Color(0x0C000000),
+                    blurRadius: 16,
+                    offset: Offset(0, 4),
+                  ),
+                ],
               ),
               child: const Icon(
                 Icons.person_outline_rounded,
-                size: 38,
+                size: 40,
                 color: AppColors.textHint,
               ),
             ),
-            const SizedBox(height: 20),
+            const SizedBox(height: 24),
             Text(
               'Sign in to your account',
               style: tt.titleMedium?.copyWith(
                 fontWeight: FontWeight.w700,
                 color: AppColors.textPrimary,
+                fontSize: 18,
               ),
               textAlign: TextAlign.center,
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 10),
             Text(
-              'View your bookings, manage addresses,\nand access your profile.',
+              'Access your bookings, addresses,\nwishlist and more.',
               style: tt.bodySmall?.copyWith(
                 color: AppColors.textSecondary,
-                height: 1.5,
+                height: 1.6,
+                fontSize: 13,
               ),
               textAlign: TextAlign.center,
             ),
-            const SizedBox(height: 28),
+            const SizedBox(height: 32),
             FilledButton.icon(
               onPressed: onSignIn,
               icon: const Icon(Icons.login_rounded, size: 18),
@@ -316,7 +436,10 @@ class _UnauthenticatedProfile extends StatelessWidget {
                 style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
               ),
               style: FilledButton.styleFrom(
-                minimumSize: const Size(180, 48),
+                minimumSize: const Size(180, 50),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
               ),
             ),
           ],
@@ -326,70 +449,73 @@ class _UnauthenticatedProfile extends StatelessWidget {
   }
 }
 
-// ── App version ───────────────────────────────────────────────────────────────
+// ── Loading skeleton ───────────────────────────────────────────────────────────
 
-class _AppVersion extends StatelessWidget {
-  const _AppVersion();
+class _ProfileSkeleton extends StatelessWidget {
+  const _ProfileSkeleton();
+
+  Widget _shimmer({double w = double.infinity, double h = 14, double r = 8}) =>
+      Container(
+        width: w,
+        height: h,
+        decoration: BoxDecoration(
+          color: AppColors.shimmerBase,
+          borderRadius: BorderRadius.circular(r),
+        ),
+      );
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(top: 20),
-      child: Center(
-        child: Text(
-          'DODO Booker v1.0.0',
-          style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                color: AppColors.textHint,
-              ),
-        ),
+    return SingleChildScrollView(
+      padding: const EdgeInsets.only(bottom: 40),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const SizedBox(height: 20),
+
+          Container(
+            margin: const EdgeInsets.fromLTRB(16, 0, 16, 4),
+            padding: const EdgeInsets.fromLTRB(24, 32, 24, 28),
+            decoration: BoxDecoration(
+              color: AppColors.surface,
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: AppColors.border, width: 0.8),
+            ),
+            child: Column(
+              children: [
+                _shimmer(w: 96, h: 96, r: 48),
+                const SizedBox(height: 16),
+                _shimmer(w: 130, h: 18, r: 6),
+                const SizedBox(height: 10),
+                _shimmer(w: 160, h: 13),
+                const SizedBox(height: 6),
+                _shimmer(w: 110, h: 13),
+                const SizedBox(height: 24),
+                _shimmer(w: 120, h: 38, r: 24),
+              ],
+            ),
+          ),
+
+          ...List.generate(
+            4,
+            (i) => Padding(
+              padding: EdgeInsets.fromLTRB(16, i == 0 ? 32 : 12, 16, 0),
+              child: _shimmer(h: 56, r: 16),
+            ),
+          ),
+
+          const SizedBox(height: 24),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: _shimmer(h: 56, r: 16),
+          ),
+        ],
       ),
     );
   }
 }
 
-// ── Loading skeleton ──────────────────────────────────────────────────────────
-
-class _ProfileSkeleton extends StatelessWidget {
-  const _ProfileSkeleton();
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: [
-        // Header skeleton
-        Container(
-          height: 240,
-          color: AppColors.shimmerBase,
-        ),
-        const SizedBox(height: 20),
-        // Stats skeleton
-        Container(
-          margin: const EdgeInsets.symmetric(horizontal: 16),
-          height: 110,
-          decoration: BoxDecoration(
-            color: AppColors.shimmerBase,
-            borderRadius: BorderRadius.circular(16),
-          ),
-        ),
-        const SizedBox(height: 20),
-        // Menu skeleton
-        ...List.generate(
-          5,
-          (i) => Container(
-            margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-            height: 56,
-            decoration: BoxDecoration(
-              color: AppColors.shimmerBase,
-              borderRadius: BorderRadius.circular(12),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-// ── Error state ───────────────────────────────────────────────────────────────
+// ── Error state ────────────────────────────────────────────────────────────────
 
 class _ProfileError extends StatelessWidget {
   final VoidCallback onRetry;
@@ -401,11 +527,8 @@ class _ProfileError extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(
-            Icons.error_outline_rounded,
-            size: 48,
-            color: AppColors.textHint,
-          ),
+          const Icon(Icons.error_outline_rounded,
+              size: 48, color: AppColors.textHint),
           const SizedBox(height: 12),
           Text(
             'Could not load profile',

@@ -31,6 +31,8 @@ class Booking {
   final String bookingNumber;
   final String customerId;
   final String vendorId;
+  final String dodoTeamId;
+  final String assignmentType; // 'Unassigned' | 'External Vendor' | 'DODO Team'
   final DateTime? serviceDate;
   final String status;
   final double subtotal;
@@ -52,6 +54,8 @@ class Booking {
     required this.bookingNumber,
     required this.customerId,
     required this.vendorId,
+    this.dodoTeamId = '',
+    this.assignmentType = 'Unassigned',
     this.serviceDate,
     required this.status,
     required this.subtotal,
@@ -68,6 +72,8 @@ class Booking {
     this.latitude,
     this.longitude,
   });
+
+  bool get isUnassigned => assignmentType == 'Unassigned';
 
   factory Booking.fromMap(Map<String, dynamic> map) {
     BookingReview? review;
@@ -94,6 +100,8 @@ class Booking {
       bookingNumber: map['booking_number'] as String? ?? '',
       customerId: map['customer_id'] as String? ?? '',
       vendorId: map['vendor_id'] as String? ?? '',
+      dodoTeamId: map['dodo_team_id'] as String? ?? '',
+      assignmentType: map['assignment_type'] as String? ?? 'Unassigned',
       serviceDate: map['service_date'] != null
           ? DateTime.tryParse(map['service_date'] as String)
           : null,
@@ -122,6 +130,8 @@ class Booking {
 
   Booking copyWith({
     String? vendorId,
+    String? dodoTeamId,
+    String? assignmentType,
     DateTime? serviceDate,
     String? status,
     String? notes,
@@ -131,6 +141,8 @@ class Booking {
       bookingNumber: bookingNumber,
       customerId: customerId,
       vendorId: vendorId ?? this.vendorId,
+      dodoTeamId: dodoTeamId ?? this.dodoTeamId,
+      assignmentType: assignmentType ?? this.assignmentType,
       serviceDate: serviceDate ?? this.serviceDate,
       status: status ?? this.status,
       subtotal: subtotal,

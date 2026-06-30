@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 import '../../../../core/theme/app_theme.dart';
+import '../../../vendor_settlement/application/providers/vendor_settlement_providers.dart';
 import '../../application/providers/vendor_detail_providers.dart';
 import '../../domain/models/vendor.dart';
 import '../../domain/models/vendor_detail.dart';
@@ -169,12 +170,12 @@ class _PageHeader extends StatelessWidget {
 
 // ── Overview Tab ───────────────────────────────────────────────────────────────
 
-class _OverviewTab extends StatelessWidget {
+class _OverviewTab extends ConsumerWidget {
   const _OverviewTab({required this.vendor});
   final Vendor vendor;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final dateStr = vendor.createdAt != null
         ? DateFormat('d MMM yyyy').format(vendor.createdAt!)
         : '—';
@@ -218,12 +219,22 @@ class _OverviewTab extends StatelessWidget {
               label: 'Rating',
               value: vendor.rating?.toStringAsFixed(1) ?? 'No rating',
             ),
-            _InfoCell(
-              icon: Icons.account_balance_wallet_rounded,
-              label: 'Wallet Balance',
-              value: _currencyFmt.format(vendor.walletBalance),
-              valueColor: AppColors.accent,
-            ),
+            Builder(builder: (context) {
+              final pendingAsync =
+                  ref.watch(vendorPendingSettlementProvider(vendor.id));
+              return _InfoCell(
+                icon: Icons.pending_actions_rounded,
+                label: 'Pending Settlement',
+                value: pendingAsync.when(
+                  loading: () => '…',
+                  error: (_, __) => '—',
+                  data: (s) => s != null
+                      ? _currencyFmt.format(s.pendingSettlement)
+                      : '—',
+                ),
+                valueColor: AppColors.warning,
+              );
+            }),
             _InfoCell(
                 icon: Icons.calendar_today_rounded,
                 label: 'Joined',
@@ -766,6 +777,7 @@ class _AnalyticsTab extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final statsAsync = ref.watch(vendorBookingStatsProvider(vendorId));
+    final pendingAsync = ref.watch(vendorPendingSettlementProvider(vendorId));
 
     return statsAsync.when(
       loading: () => const Center(child: CircularProgressIndicator()),
@@ -836,10 +848,42 @@ class _AnalyticsTab extends ConsumerWidget {
                   wide: true,
                 ),
                 _StatCard(
-                  label: 'Wallet Balance',
-                  value: _currencyFmt.format(vendor.walletBalance),
-                  icon: Icons.account_balance_wallet_rounded,
-                  color: AppColors.accent,
+                  label: 'Pending Settlement',
+                  value: pendingAsync.when(
+                    loading: () => '…',
+                    error: (_, __) => '—',
+                    data: (s) => s != null
+                        ? _currencyFmt.format(s.pendingSettlement)
+                        : '—',
+                  ),
+                  icon: Icons.pending_actions_rounded,
+                  color: AppColors.warning,
+                  wide: true,
+                ),
+                _StatCard(
+                  label: 'Total Settled',
+                  value: pendingAsync.when(
+                    loading: () => '…',
+                    error: (_, __) => '—',
+                    data: (s) => s != null
+                        ? _currencyFmt.format(s.totalSettled)
+                        : '—',
+                  ),
+                  icon: Icons.payments_rounded,
+                  color: AppColors.success,
+                  wide: true,
+                ),
+                _StatCard(
+                  label: 'Last Settlement Date',
+                  value: pendingAsync.when(
+                    loading: () => '…',
+                    error: (_, __) => '—',
+                    data: (s) => s?.lastSettlementAt != null
+                        ? DateFormat('dd MMM yyyy').format(s!.lastSettlementAt!)
+                        : '—',
+                  ),
+                  icon: Icons.event_available_rounded,
+                  color: AppColors.primary,
                   wide: true,
                 ),
               ],

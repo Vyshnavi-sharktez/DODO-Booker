@@ -15,16 +15,14 @@ class SettlementHistoryDialog extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final allHistory = ref.watch(vendorSettlementHistoryProvider);
-    final history =
-        allHistory.where((e) => e.vendorId == vendorId).toList();
+    final historyAsync = ref.watch(vendorSettlementHistoryProvider(vendorId));
     final dateFmt = DateFormat('dd MMM yyyy, hh:mm a');
     final moneyFmt = NumberFormat('#,##0.00', 'en_IN');
 
     return Dialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 680, maxHeight: 520),
+        constraints: const BoxConstraints(maxWidth: 900, maxHeight: 560),
         child: Padding(
           padding: const EdgeInsets.all(28),
           child: Column(
@@ -77,116 +75,171 @@ class SettlementHistoryDialog extends ConsumerWidget {
                   ),
                 ],
               ),
-              const SizedBox(height: 6),
-              const Text(
-                'Settlement events are recorded within the current session.',
-                style: TextStyle(fontSize: 11, color: AppColors.textSecondary),
-              ),
               const SizedBox(height: 16),
               const Divider(color: AppColors.border),
               const SizedBox(height: 8),
 
-              if (history.isEmpty)
-                const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 40),
+              historyAsync.when(
+                loading: () => const Expanded(
+                  child: Center(child: CircularProgressIndicator()),
+                ),
+                error: (e, _) => Expanded(
                   child: Center(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          Icons.history_rounded,
-                          size: 40,
-                          color: AppColors.border,
-                        ),
-                        SizedBox(height: 12),
-                        Text(
-                          'No settlement history recorded in this session',
-                          style: TextStyle(color: AppColors.textSecondary),
-                        ),
-                      ],
-                    ),
-                  ),
-                )
-              else
-                Expanded(
-                  child: SingleChildScrollView(
-                    child: Table(
-                      columnWidths: const {
-                        0: FlexColumnWidth(1.8),
-                        1: FlexColumnWidth(2.5),
-                        2: FlexColumnWidth(2.5),
-                        3: FlexColumnWidth(3),
-                        4: FlexColumnWidth(1.5),
-                      },
-                      children: [
-                        TableRow(
-                          decoration: BoxDecoration(
-                            color: AppColors.background,
-                            borderRadius: BorderRadius.circular(6),
-                          ),
-                          children: const [
-                            _HeaderCell('Amount'),
-                            _HeaderCell('Balance Change'),
-                            _HeaderCell('Notes'),
-                            _HeaderCell('Date'),
-                            _HeaderCell('Settled By'),
-                          ],
-                        ),
-                        for (final entry in history)
-                          TableRow(
-                            decoration: const BoxDecoration(
-                              border: Border(
-                                bottom: BorderSide(
-                                  color: AppColors.border,
-                                  width: 0.5,
-                                ),
-                              ),
-                            ),
-                            children: [
-                              _DataCell(
-                                child: Text(
-                                  '₹${moneyFmt.format(entry.amount)}',
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.w600,
-                                    color: AppColors.success,
-                                  ),
-                                ),
-                              ),
-                              _DataCell(
-                                child: Text(
-                                  '₹${moneyFmt.format(entry.balanceBefore)} → ₹${moneyFmt.format(entry.balanceAfter)}',
-                                  style: const TextStyle(
-                                    fontSize: 12,
-                                    color: AppColors.textSecondary,
-                                  ),
-                                ),
-                              ),
-                              _DataCell(
-                                child: Text(
-                                  entry.notes ?? '—',
-                                  style: const TextStyle(fontSize: 12),
-                                  maxLines: 2,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                              _DataCell(
-                                child: Text(
-                                  dateFmt.format(entry.settledAt),
-                                  style: const TextStyle(fontSize: 12),
-                                ),
-                              ),
-                              _DataCell(
-                                child: Text(
-                                  entry.settledBy,
-                                  style: const TextStyle(fontSize: 12),
-                                ),
-                              ),
-                            ],
-                          ),
-                      ],
+                    child: Text(
+                      'Error loading history: $e',
+                      style: const TextStyle(color: AppColors.error),
                     ),
                   ),
                 ),
+                data: (history) {
+                  if (history.isEmpty) {
+                    return const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 40),
+                      child: Center(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.history_rounded,
+                              size: 40,
+                              color: AppColors.border,
+                            ),
+                            SizedBox(height: 12),
+                            Text(
+                              'No settlement records found',
+                              style:
+                                  TextStyle(color: AppColors.textSecondary),
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  }
+
+                  return Expanded(
+                    child: SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: SingleChildScrollView(
+                        child: Table(
+                          columnWidths: const {
+                            0: FixedColumnWidth(110),
+                            1: FlexColumnWidth(1.8),
+                            2: FlexColumnWidth(1.6),
+                            3: FlexColumnWidth(1.6),
+                            4: FlexColumnWidth(2.2),
+                            5: FlexColumnWidth(1.6),
+                            6: FlexColumnWidth(2.4),
+                            7: FixedColumnWidth(80),
+                          },
+                          children: [
+                            TableRow(
+                              decoration: BoxDecoration(
+                                color: AppColors.background,
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              children: const [
+                                _HeaderCell('Settlement ID'),
+                                _HeaderCell('Amount'),
+                                _HeaderCell('Payment Method'),
+                                _HeaderCell('Reference'),
+                                _HeaderCell('Notes'),
+                                _HeaderCell('Paid By'),
+                                _HeaderCell('Paid On'),
+                                _HeaderCell('Status'),
+                              ],
+                            ),
+                            for (final entry in history)
+                              TableRow(
+                                decoration: const BoxDecoration(
+                                  border: Border(
+                                    bottom: BorderSide(
+                                      color: AppColors.border,
+                                      width: 0.5,
+                                    ),
+                                  ),
+                                ),
+                                children: [
+                                  _DataCell(
+                                    child: Text(
+                                      '#${entry.id.length > 8 ? entry.id.substring(0, 8).toUpperCase() : entry.id.toUpperCase()}',
+                                      style: const TextStyle(
+                                        fontSize: 11,
+                                        fontFamily: 'monospace',
+                                        color: AppColors.textSecondary,
+                                      ),
+                                    ),
+                                  ),
+                                  _DataCell(
+                                    child: Text(
+                                      '₹${moneyFmt.format(entry.amount)}',
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.w600,
+                                        color: AppColors.success,
+                                      ),
+                                    ),
+                                  ),
+                                  _DataCell(
+                                    child: Text(
+                                      entry.paymentMethod ?? '—',
+                                      style: const TextStyle(fontSize: 12),
+                                    ),
+                                  ),
+                                  _DataCell(
+                                    child: Text(
+                                      entry.referenceNumber ?? '—',
+                                      style: const TextStyle(fontSize: 12),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                  _DataCell(
+                                    child: Text(
+                                      entry.notes ?? '—',
+                                      style: const TextStyle(fontSize: 12),
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                  _DataCell(
+                                    child: Text(
+                                      entry.settledBy,
+                                      style: const TextStyle(fontSize: 12),
+                                    ),
+                                  ),
+                                  _DataCell(
+                                    child: Text(
+                                      dateFmt.format(entry.settledAt),
+                                      style: const TextStyle(fontSize: 12),
+                                    ),
+                                  ),
+                                  _DataCell(
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 6, vertical: 2),
+                                      decoration: BoxDecoration(
+                                        color: AppColors.success
+                                            .withValues(alpha: 0.12),
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                      child: const Text(
+                                        'Paid',
+                                        style: TextStyle(
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.w600,
+                                          color: AppColors.success,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              ),
 
               const SizedBox(height: 16),
               Align(

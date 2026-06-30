@@ -1,13 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 import '../../../core/constants/app_colors.dart';
 import '../services/wishlist_providers.dart';
 import '../models/wishlist_item_model.dart';
 import '../widgets/wishlist_item_card.dart';
+import '../../service/utils/service_detail_launcher.dart';
 
 class WishlistScreen extends ConsumerWidget {
-  const WishlistScreen({super.key});
+  final bool inModal;
+  const WishlistScreen({super.key, this.inModal = false});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -15,7 +16,7 @@ class WishlistScreen extends ConsumerWidget {
 
     return Scaffold(
       backgroundColor: AppColors.background,
-      appBar: AppBar(title: const Text('Wishlist')),
+      appBar: inModal ? null : AppBar(title: const Text('Wishlist')),
       body: wishlistAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => Center(
@@ -50,10 +51,7 @@ class WishlistScreen extends ConsumerWidget {
                   itemCount: items.length,
                   itemBuilder: (_, i) => WishlistItemCard(
                     item: items[i],
-                    onTap: () => context.push(
-                      '/service-detail/${items[i].serviceId}',
-                      extra: items[i].service,
-                    ),
+                    onTap: () => openServiceDetail(context, items[i].service),
                     onRemove: () => _remove(context, ref, items[i]),
                   ),
                 ),

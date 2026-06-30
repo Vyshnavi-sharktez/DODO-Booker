@@ -56,6 +56,9 @@ abstract final class AppTheme {
             ),
           ),
         ),
+        listTileTheme: const ListTileThemeData(
+          mouseCursor: WidgetStateMouseCursor.clickable,
+        ),
         dividerTheme: const DividerThemeData(
           color: AppColors.border,
           thickness: 1,

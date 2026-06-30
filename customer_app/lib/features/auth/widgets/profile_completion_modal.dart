@@ -62,6 +62,7 @@ class _ProfileCompletionModalState extends ConsumerState<ProfileCompletionModal>
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
 
     return AppModalDialog(
@@ -80,7 +81,7 @@ class _ProfileCompletionModalState extends ConsumerState<ProfileCompletionModal>
               'Full Name',
               style: tt.labelMedium?.copyWith(
                 fontWeight: FontWeight.w600,
-                color: AppColors.textSecondary,
+                color: cs.onSurfaceVariant,
               ),
             ),
             const SizedBox(height: 6),
@@ -88,7 +89,7 @@ class _ProfileCompletionModalState extends ConsumerState<ProfileCompletionModal>
               controller: _nameCtrll,
               autofocus: true,
               textCapitalization: TextCapitalization.words,
-              decoration: _inputDecoration('e.g. Riya Sharma'),
+              decoration: _inputDecoration('e.g. Riya Sharma', cs),
               validator: (v) {
                 if (v == null || v.trim().isEmpty) {
                   return 'Full name is required';
@@ -105,14 +106,14 @@ class _ProfileCompletionModalState extends ConsumerState<ProfileCompletionModal>
               'Email Address',
               style: tt.labelMedium?.copyWith(
                 fontWeight: FontWeight.w600,
-                color: AppColors.textSecondary,
+                color: cs.onSurfaceVariant,
               ),
             ),
             const SizedBox(height: 6),
             TextFormField(
               controller: _emailCtrl,
               keyboardType: TextInputType.emailAddress,
-              decoration: _inputDecoration('e.g. riya@email.com'),
+              decoration: _inputDecoration('e.g. riya@email.com', cs),
               validator: (v) {
                 if (v == null || v.trim().isEmpty) {
                   return 'Email is required';
@@ -167,16 +168,16 @@ class _ProfileCompletionModalState extends ConsumerState<ProfileCompletionModal>
     );
   }
 
-  InputDecoration _inputDecoration(String hint) => InputDecoration(
+  InputDecoration _inputDecoration(String hint, ColorScheme cs) => InputDecoration(
         hintText: hint,
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: AppColors.border),
+          borderSide: BorderSide(color: cs.outline.withAlpha(80)),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
+          borderSide: BorderSide(color: cs.primary, width: 1.5),
         ),
         errorBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),

@@ -21,7 +21,6 @@ class ServicesRepository {
     required String subCategoryId,
     required String name,
     required String slug,
-    String? description,
     required double basePrice,
     required int estimatedDuration,
     String? imageUrl,
@@ -34,8 +33,6 @@ class ServicesRepository {
           'sub_category_id': subCategoryId,
           'name': name,
           'slug': slug,
-          if (description != null && description.isNotEmpty)
-            'description': description,
           'base_price': basePrice,
           'estimated_duration': estimatedDuration,
           if (imageUrl != null && imageUrl.isNotEmpty) 'image_url': imageUrl,
@@ -52,7 +49,6 @@ class ServicesRepository {
     required String subCategoryId,
     required String name,
     required String slug,
-    String? description,
     required double basePrice,
     required int estimatedDuration,
     String? imageUrl,
@@ -65,7 +61,6 @@ class ServicesRepository {
           'sub_category_id': subCategoryId,
           'name': name,
           'slug': slug,
-          'description': description?.isNotEmpty == true ? description : null,
           'base_price': basePrice,
           'estimated_duration': estimatedDuration,
           'image_url': imageUrl?.isNotEmpty == true ? imageUrl : null,
@@ -86,5 +81,13 @@ class ServicesRepository {
         .from('services')
         .update({'is_active': isActive})
         .eq('id', id);
+  }
+
+  Future<int> countAttributes(String serviceId) async {
+    final data = await _supabase
+        .from('service_attributes')
+        .select('id')
+        .eq('service_id', serviceId);
+    return (data as List).length;
   }
 }
