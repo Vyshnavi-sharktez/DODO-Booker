@@ -43,6 +43,9 @@ class _BookingDetailsScreenState extends ConsumerState<BookingDetailsScreen> {
   Widget build(BuildContext context) {
     final bookingAsync = ref.watch(bookingByIdProvider(widget.booking.id));
     final booking = bookingAsync.valueOrNull ?? widget.booking;
+    debugPrint('[OTP][Screen] build — asyncState=${bookingAsync.runtimeType}  '
+        'status=${booking.status}  completionOtp=${booking.completionOtp}  '
+        'source=${bookingAsync.valueOrNull != null ? "provider" : "widget.booking"}');
     final reviewAsync = booking.canReview
         ? ref.watch(bookingReviewProvider(booking.id))
         : null;
@@ -76,13 +79,13 @@ class _BookingDetailsScreenState extends ConsumerState<BookingDetailsScreen> {
             child: Column(
               children: [
                 _StatusBanner(booking: booking),
-                if (booking.status == BookingStatus.awaitingVerification &&
-                    booking.completionOtp != null)
+                if (booking.completionOtp != null &&
+                    _otpVisibleForStatus(booking.status))
                   _OtpDisplayCard(otp: booking.completionOtp!),
                 _BookingInfoCard(booking: booking),
                 _ServiceInfoCard(booking: booking),
                 _AddressCard(booking: booking),
-                _VendorCard(booking: booking),
+                if (!booking.isDodoTeam) _VendorCard(booking: booking),
                 _TimelineCard(booking: booking),
                 _PaymentCard(booking: booking),
                 const SizedBox(height: 16),
@@ -166,6 +169,13 @@ class _BookingDetailsScreenState extends ConsumerState<BookingDetailsScreen> {
   }
 }
 
+bool _otpVisibleForStatus(String status) => const {
+      BookingStatus.inProgress,
+      BookingStatus.started,
+      BookingStatus.awaitingVerification,
+      BookingStatus.completed,
+    }.contains(status);
+
 // ── Status Banner ─────────────────────────────────────────────────────────────
 
 class _StatusBanner extends StatelessWidget {
@@ -214,7 +224,7 @@ class _StatusBanner extends StatelessWidget {
               borderRadius: BorderRadius.circular(20),
             ),
             child: Text(
-              BookingStatus.labelFor(booking.status),
+              BookingStatus.labelFor(booking.status, assignmentType: booking.assignmentType),
               style: TextStyle(
                 color: color,
                 fontSize: 11,
@@ -231,9 +241,11 @@ class _StatusBanner extends StatelessWidget {
   (Color, String, IconData) _bannerMeta(String status) {
     switch (status) {
       case BookingStatus.pending:
-        return (AppColors.warning, 'Waiting for vendor assignment', Icons.hourglass_top_rounded);
+        return (AppColors.warning, 'Waiting for provider assignment', Icons.hourglass_top_rounded);
       case BookingStatus.assigned:
         return (AppColors.primary, 'Vendor has been assigned', Icons.person_pin_rounded);
+      case BookingStatus.assignedToDodoTeam:
+        return (const Color(0xFF6B46C1), 'DODO Team has been assigned', Icons.groups_rounded);
       case BookingStatus.accepted:
         return (const Color(0xFF00ACC1), 'Vendor confirmed your booking', Icons.thumb_up_rounded);
       case BookingStatus.enRoute:
@@ -242,7 +254,7 @@ class _StatusBanner extends StatelessWidget {
       case BookingStatus.started:
         return (const Color(0xFFFF6D00), 'Service is in progress', Icons.construction_rounded);
       case BookingStatus.awaitingVerification:
-        return (AppColors.warning, 'Share OTP with vendor to complete service', Icons.lock_clock_rounded);
+        return (AppColors.warning, 'Share OTP with provider to complete service', Icons.lock_clock_rounded);
       case BookingStatus.completed:
         return (AppColors.success, 'Service completed successfully', Icons.check_circle_rounded);
       case BookingStatus.cancelled:
@@ -760,10 +772,17 @@ class _PaymentRow extends StatelessWidget {
 
 // ── OTP Display Card (awaiting_verification) ──────────────────────────────────
 
-class _OtpDisplayCard extends StatelessWidget {
+class _OtpDisplayCard extends StatefulWidget {
   final String otp;
 
   const _OtpDisplayCard({required this.otp});
+
+  @override
+  State<_OtpDisplayCard> createState() => _OtpDisplayCardState();
+}
+
+class _OtpDisplayCardState extends State<_OtpDisplayCard> {
+  bool _visible = false;
 
   @override
   Widget build(BuildContext context) {
@@ -783,12 +802,29 @@ class _OtpDisplayCard extends StatelessWidget {
                   color: AppColors.warning,
                 ),
                 const SizedBox(width: 8),
-                Text(
-                  'SERVICE COMPLETION OTP',
-                  style: tt.labelMedium?.copyWith(
-                    color: AppColors.textSecondary,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 0.5,
+                Expanded(
+                  child: Text(
+                    'SERVICE COMPLETION OTP',
+                    style: tt.labelMedium?.copyWith(
+                      color: AppColors.textSecondary,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                ),
+                TextButton.icon(
+                  onPressed: () => setState(() => _visible = !_visible),
+                  icon: Icon(
+                    _visible
+                        ? Icons.visibility_off_rounded
+                        : Icons.visibility_rounded,
+                    size: 16,
+                  ),
+                  label: Text(_visible ? 'Hide OTP' : 'Show OTP'),
+                  style: TextButton.styleFrom(
+                    foregroundColor: AppColors.warning,
+                    visualDensity: VisualDensity.compact,
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
                   ),
                 ),
               ],
@@ -797,7 +833,7 @@ class _OtpDisplayCard extends StatelessWidget {
             // Digit boxes
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
-              children: otp.split('').map((digit) {
+              children: widget.otp.split('').map((digit) {
                 return Container(
                   width: 44,
                   height: 54,
@@ -812,7 +848,7 @@ class _OtpDisplayCard extends StatelessWidget {
                   ),
                   child: Center(
                     child: Text(
-                      digit,
+                      _visible ? digit : '•',
                       style: tt.headlineMedium?.copyWith(
                         color: AppColors.textPrimary,
                         fontWeight: FontWeight.w900,
@@ -841,7 +877,7 @@ class _OtpDisplayCard extends StatelessWidget {
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      'Share this OTP only after service is completed.',
+                      'Share this OTP with your service provider when the service is complete.',
                       style: tt.bodySmall?.copyWith(
                         color: AppColors.textPrimary,
                         fontWeight: FontWeight.w600,

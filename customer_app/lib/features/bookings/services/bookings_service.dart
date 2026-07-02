@@ -7,10 +7,14 @@ class BookingsService {
   static const _phoneKey = 'dodo_auth_phone';
   final _client = Supabase.instance.client;
 
-  // Nested select: booking_items → services → categories / sub_categories
-  // vendors join intentionally omitted — no FK constraint on bookings.vendor_id
+  // Explicit column list avoids relying on * to include columns that Supabase
+  // RLS or PostgREST might silently omit (e.g. completion_otp).
   static const _bookingSelect = '''
-    *,
+    id, booking_number, customer_id, vendor_id, dodo_team_id,
+    assignment_type, service_date, status,
+    subtotal, discount_amount, total_amount,
+    address, notes, created_at,
+    completion_otp, otp_verified_at,
     booking_items(
       service_id,
       quantity,
@@ -65,6 +69,7 @@ class BookingsService {
       for (final b in bookings) {
         debugPrint('[DODO][Bookings] Service loaded: ${b.serviceName}');
         debugPrint('[DODO][Bookings] Address loaded: ${b.address.city.isNotEmpty ? b.address.city : b.address.line1}');
+        debugPrint('[OTP][Customer] list — id=${b.id}  status=${b.status}  otp=${b.completionOtp}');
       }
       return bookings;
     } catch (e, st) {
@@ -77,15 +82,24 @@ class BookingsService {
   }
 
   Future<MyBookingModel?> fetchBookingById(String id) async {
-    debugPrint('[NOTIF][Customer] fetchBookingById — id=$id');
+    debugPrint('[OTP][Customer] fetchBookingById — id=$id');
     final data = await _client
         .from('bookings')
         .select(_bookingSelect)
         .eq('id', id)
         .maybeSingle();
-    debugPrint('[NOTIF][Customer] Supabase result — ${data == null ? "null (no row)" : "found id=${data['id']}"}');
-    if (data == null) return null;
-    return MyBookingModel.fromJson(data);
+    if (data == null) {
+      debugPrint('[OTP][Customer] fetchBookingById — no row returned');
+      return null;
+    }
+    // ── OTP trace ────────────────────────────────────────────────────────────
+    debugPrint('[OTP][Customer] raw status         = ${data['status']}');
+    debugPrint('[OTP][Customer] raw completion_otp = ${data['completion_otp']}');
+    debugPrint('[OTP][Customer] raw keys           = ${data.keys.toList()}');
+    final booking = MyBookingModel.fromJson(data);
+    debugPrint('[OTP][Customer] model.status       = ${booking.status}');
+    debugPrint('[OTP][Customer] model.completionOtp= ${booking.completionOtp}');
+    return booking;
   }
 
   Future<bool> cancelBooking(String bookingId) async {

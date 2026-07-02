@@ -1,5 +1,6 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:flutter/gestures.dart' show PointerDeviceKind;
 import '../constants/app_colors.dart';
 
 /// Reusable centered modal with blurred background.
@@ -65,11 +66,15 @@ class AppModalDialog extends StatelessWidget {
             ),
           ),
         ),
-        // Modal card
+        // Modal card — capped at 88 % of screen height so tall content scrolls
+        // instead of growing off-screen.
         SafeArea(
           child: Center(
             child: ConstrainedBox(
-              constraints: BoxConstraints(maxWidth: maxWidth),
+              constraints: BoxConstraints(
+                maxWidth: maxWidth,
+                maxHeight: MediaQuery.of(context).size.height * 0.88,
+              ),
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
                 child: Material(
@@ -97,9 +102,24 @@ class AppModalDialog extends StatelessWidget {
                         ),
                         Flexible(
                           child: scrollable
-                              ? SingleChildScrollView(
-                                  padding: contentPadding,
-                                  child: child,
+                              ? ScrollConfiguration(
+                                  behavior: ScrollConfiguration.of(context)
+                                      .copyWith(
+                                    dragDevices: {
+                                      PointerDeviceKind.touch,
+                                      PointerDeviceKind.mouse,
+                                      PointerDeviceKind.trackpad,
+                                      PointerDeviceKind.stylus,
+                                    },
+                                  ),
+                                  child: Scrollbar(
+                                    thumbVisibility: true,
+                                    child: SingleChildScrollView(
+                                      padding: contentPadding,
+                                      primary: true,
+                                      child: child,
+                                    ),
+                                  ),
                                 )
                               : Padding(
                                   padding: contentPadding,

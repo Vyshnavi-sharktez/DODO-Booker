@@ -4,29 +4,41 @@ import 'package:intl/intl.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../dodo_teams/application/providers/dodo_teams_providers.dart';
 import '../../../vendors/application/providers/vendors_providers.dart';
+import '../../application/providers/bookings_providers.dart';
 import '../../domain/models/booking.dart';
 import '../../domain/models/booking_item.dart';
 
 const _statusConfig = <String, (String, Color, Color)>{
-  'pending':     ('Pending',     Color(0xFFDD6B20), Color(0xFFFEEBC8)),
-  'assigned':    ('Assigned',    Color(0xFF3182CE), Color(0xFFEBF8FF)),
-  'accepted':    ('Accepted',    Color(0xFF2C7A7B), Color(0xFFE6FFFA)),
-  'on_the_way':  ('On The Way',  Color(0xFF4A6FA5), Color(0xFFEBF4FF)),
-  'arrived':     ('Arrived',     Color(0xFF6B46C1), Color(0xFFF3E8FF)),
+  'pending': ('Pending', Color(0xFFDD6B20), Color(0xFFFEEBC8)),
+  'assigned': ('Assigned', Color(0xFF3182CE), Color(0xFFEBF8FF)),
+  'assigned_to_dodo_team': (
+    'DODO Assigned',
+    Color(0xFF6B46C1),
+    Color(0xFFF3E8FF),
+  ),
+  'accepted': ('Accepted', Color(0xFF2C7A7B), Color(0xFFE6FFFA)),
+  'on_the_way': ('On The Way', Color(0xFF4A6FA5), Color(0xFFEBF4FF)),
+  'arrived': ('Arrived', Color(0xFF6B46C1), Color(0xFFF3E8FF)),
   'in_progress': ('In Progress', Color(0xFF805AD5), Color(0xFFFAF5FF)),
-  'completed':   ('Completed',   Color(0xFF38A169), Color(0xFFF0FFF4)),
-  'rejected':    ('Rejected',    Color(0xFFC05621), Color(0xFFFEEBC8)),
-  'cancelled':   ('Cancelled',   Color(0xFFE53E3E), Color(0xFFFFF5F5)),
+  'completed': ('Completed', Color(0xFF38A169), Color(0xFFF0FFF4)),
+  'rejected': ('Rejected', Color(0xFFC05621), Color(0xFFFEEBC8)),
+  'cancelled': ('Cancelled', Color(0xFFE53E3E), Color(0xFFFFF5F5)),
 };
 
 const _cancellableStatuses = {
-  'pending', 'assigned', 'accepted', 'on_the_way', 'arrived', 'in_progress',
+  'pending',
+  'assigned',
+  'assigned_to_dodo_team',
+  'accepted',
+  'on_the_way',
+  'arrived',
+  'in_progress',
 };
 
 final _currency = NumberFormat.currency(symbol: '₹', decimalDigits: 2);
 final _dateFmt = DateFormat('dd MMM yyyy');
 
-class BookingDetailsDialog extends ConsumerWidget {
+class BookingDetailsDialog extends ConsumerStatefulWidget {
   final Booking booking;
   final VoidCallback? onAssign;
   final VoidCallback? onCancel;
@@ -39,7 +51,57 @@ class BookingDetailsDialog extends ConsumerWidget {
   });
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<BookingDetailsDialog> createState() =>
+      _BookingDetailsDialogState();
+}
+
+class _BookingDetailsDialogState extends ConsumerState<BookingDetailsDialog> {
+  final List<TextEditingController> _otpControllers =
+      List.generate(6, (_) => TextEditingController());
+  final List<FocusNode> _otpFocusNodes =
+      List.generate(6, (_) => FocusNode());
+  bool _isVerifying = false;
+
+  @override
+  void dispose() {
+    for (final c in _otpControllers) c.dispose();
+    for (final f in _otpFocusNodes) f.dispose();
+    super.dispose();
+  }
+
+  Future<void> _verifyOtp(String bookingId) async {
+    final otp = _otpControllers.map((c) => c.text).join();
+    if (otp.length != 6) return;
+    setState(() => _isVerifying = true);
+    try {
+      await ref
+          .read(bookingsNotifierProvider.notifier)
+          .completeDodoTeamBooking(bookingId, otp);
+      if (!mounted) return;
+      Navigator.of(context).pop();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Booking completed successfully')),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      for (final c in _otpControllers) c.clear();
+      _otpFocusNodes.first.requestFocus();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Invalid OTP')),
+      );
+    } finally {
+      if (mounted) setState(() => _isVerifying = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final bookings = ref.watch(bookingsNotifierProvider).valueOrNull ?? [];
+    final booking = bookings.firstWhere(
+      (b) => b.id == widget.booking.id,
+      orElse: () => widget.booking,
+    );
+
     final vendors = ref.watch(vendorsNotifierProvider).valueOrNull ?? [];
     final teams = ref.watch(dodoTeamsNotifierProvider).valueOrNull ?? [];
     final vendor = vendors.where((v) => v.id == booking.vendorId).firstOrNull;
@@ -71,13 +133,17 @@ class BookingDetailsDialog extends ConsumerWidget {
               padding: const EdgeInsets.fromLTRB(24, 20, 16, 20),
               decoration: BoxDecoration(
                 color: AppColors.primary,
-                borderRadius:
-                    const BorderRadius.vertical(top: Radius.circular(16)),
+                borderRadius: const BorderRadius.vertical(
+                  top: Radius.circular(16),
+                ),
               ),
               child: Row(
                 children: [
-                  const Icon(Icons.receipt_long_rounded,
-                      color: Colors.white, size: 20),
+                  const Icon(
+                    Icons.receipt_long_rounded,
+                    color: Colors.white,
+                    size: 20,
+                  ),
                   const SizedBox(width: 10),
                   Expanded(
                     child: Text(
@@ -91,7 +157,9 @@ class BookingDetailsDialog extends ConsumerWidget {
                   ),
                   Container(
                     padding: const EdgeInsets.symmetric(
-                        horizontal: 10, vertical: 4),
+                      horizontal: 10,
+                      vertical: 4,
+                    ),
                     decoration: BoxDecoration(
                       color: statusBg,
                       borderRadius: BorderRadius.circular(20),
@@ -108,8 +176,10 @@ class BookingDetailsDialog extends ConsumerWidget {
                   const SizedBox(width: 8),
                   IconButton(
                     onPressed: () => Navigator.of(context).pop(),
-                    icon: const Icon(Icons.close_rounded,
-                        color: Colors.white70),
+                    icon: const Icon(
+                      Icons.close_rounded,
+                      color: Colors.white70,
+                    ),
                     visualDensity: VisualDensity.compact,
                   ),
                 ],
@@ -126,8 +196,11 @@ class BookingDetailsDialog extends ConsumerWidget {
                     _SectionLabel('Booking Info'),
                     const SizedBox(height: 12),
                     _InfoRow('Booking Number', booking.bookingNumber),
-                    _InfoRow('Customer ID', _truncateId(booking.customerId),
-                        tooltip: booking.customerId),
+                    _InfoRow(
+                      'Customer ID',
+                      _truncateId(booking.customerId),
+                      tooltip: booking.customerId,
+                    ),
                     _InfoRow('Assignment Type', booking.assignmentType),
                     _InfoRow('Assigned To', assignedToLabel),
                     _InfoRow(
@@ -137,27 +210,29 @@ class BookingDetailsDialog extends ConsumerWidget {
                           : '—',
                     ),
                     _InfoRow('Status', statusLabel),
-                    if (booking.address != null &&
-                        booking.address!.isNotEmpty)
+                    if (booking.address != null && booking.address!.isNotEmpty)
                       _InfoRow('Address', booking.address!),
                     if (booking.notes != null && booking.notes!.isNotEmpty)
                       _InfoRow('Notes', booking.notes!),
                     const SizedBox(height: 20),
 
                     if (booking.items.isNotEmpty) ...[
-                      _SectionLabel(
-                          'Services (${booking.items.length})'),
+                      _SectionLabel('Services (${booking.items.length})'),
                       const SizedBox(height: 12),
-                      ...booking.items.map((item) =>
-                          _ServiceItemRow(item: item, currency: _currency)),
+                      ...booking.items.map(
+                        (item) =>
+                            _ServiceItemRow(item: item, currency: _currency),
+                      ),
                       const SizedBox(height: 20),
                     ],
 
                     _SectionLabel('Financials'),
                     const SizedBox(height: 12),
                     _InfoRow('Subtotal', _currency.format(booking.subtotal)),
-                    _InfoRow('Discount',
-                        _currency.format(booking.discountAmount)),
+                    _InfoRow(
+                      'Discount',
+                      _currency.format(booking.discountAmount),
+                    ),
                     const Divider(height: 16),
                     _InfoRow(
                       'Total Amount',
@@ -171,34 +246,47 @@ class BookingDetailsDialog extends ConsumerWidget {
                     _InfoRow(
                       'Created',
                       booking.createdAt != null
-                          ? DateFormat('dd MMM yyyy, hh:mm a')
-                              .format(booking.createdAt!)
+                          ? DateFormat(
+                              'dd MMM yyyy, hh:mm a',
+                            ).format(booking.createdAt!)
                           : '—',
                     ),
                     _InfoRow(
                       'Updated',
                       booking.updatedAt != null
-                          ? DateFormat('dd MMM yyyy, hh:mm a')
-                              .format(booking.updatedAt!)
+                          ? DateFormat(
+                              'dd MMM yyyy, hh:mm a',
+                            ).format(booking.updatedAt!)
                           : '—',
                     ),
                     const SizedBox(height: 20),
 
+                    if (booking.assignmentType == 'DODO Team' &&
+                        booking.status == 'in_progress') ...[
+                      _SectionLabel('Complete Service'),
+                      const SizedBox(height: 12),
+                      _OtpVerificationCard(
+                        controllers: _otpControllers,
+                        focusNodes: _otpFocusNodes,
+                        isVerifying: _isVerifying,
+                        onVerify: () => _verifyOtp(booking.id),
+                      ),
+                      const SizedBox(height: 20),
+                    ],
+
                     _SectionLabel('Review'),
                     const SizedBox(height: 12),
                     if (booking.review != null) ...[
-                      _InfoRow(
-                        'Rating',
-                        '${booking.review!.rating} / 5',
-                      ),
+                      _InfoRow('Rating', '${booking.review!.rating} / 5'),
                       _StarRatingRow(rating: booking.review!.rating),
                       const SizedBox(height: 8),
                       _InfoRow('Review Text', booking.review!.reviewText),
                       _InfoRow(
                         'Submitted',
                         booking.review!.createdAt != null
-                            ? DateFormat('dd MMM yyyy, hh:mm a')
-                                .format(booking.review!.createdAt!)
+                            ? DateFormat(
+                                'dd MMM yyyy, hh:mm a',
+                              ).format(booking.review!.createdAt!)
                             : '—',
                       ),
                     ] else
@@ -226,44 +314,48 @@ class BookingDetailsDialog extends ConsumerWidget {
               ),
               child: Row(
                 children: [
-                  if (onCancel != null &&
+                  if (widget.onCancel != null &&
                       _cancellableStatuses.contains(booking.status))
                     OutlinedButton.icon(
-                      onPressed: onCancel,
+                      onPressed: widget.onCancel,
                       icon: const Icon(Icons.cancel_outlined, size: 16),
                       label: const Text('Cancel Booking'),
                       style: OutlinedButton.styleFrom(
                         foregroundColor: AppColors.error,
                         side: BorderSide(color: AppColors.error),
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 16, vertical: 12),
+                          horizontal: 16,
+                          vertical: 12,
+                        ),
                       ),
                     ),
                   const Spacer(),
-                  if (onAssign != null)
+                  if (widget.onAssign != null)
                     FilledButton.icon(
-                      onPressed: onAssign,
+                      onPressed: widget.onAssign,
                       icon: Icon(
                         booking.isUnassigned
                             ? Icons.assignment_ind_rounded
                             : Icons.swap_horiz_rounded,
                         size: 16,
                       ),
-                      label: Text(
-                        booking.isUnassigned ? 'Assign' : 'Reassign',
-                      ),
+                      label: Text(booking.isUnassigned ? 'Assign' : 'Reassign'),
                       style: FilledButton.styleFrom(
                         backgroundColor: AppColors.primary,
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 20, vertical: 12),
+                          horizontal: 20,
+                          vertical: 12,
+                        ),
                       ),
                     ),
-                  if (onAssign != null) const SizedBox(width: 10),
+                  if (widget.onAssign != null) const SizedBox(width: 10),
                   OutlinedButton(
                     onPressed: () => Navigator.of(context).pop(),
                     style: OutlinedButton.styleFrom(
                       padding: const EdgeInsets.symmetric(
-                          horizontal: 24, vertical: 12),
+                        horizontal: 24,
+                        vertical: 12,
+                      ),
                     ),
                     child: const Text('Close'),
                   ),
@@ -280,6 +372,141 @@ class BookingDetailsDialog extends ConsumerWidget {
 String _truncateId(String id) {
   if (id.length <= 8) return id;
   return '${id.substring(0, 8)}…';
+}
+
+class _OtpVerificationCard extends StatelessWidget {
+  final List<TextEditingController> controllers;
+  final List<FocusNode> focusNodes;
+  final bool isVerifying;
+  final VoidCallback onVerify;
+
+  const _OtpVerificationCard({
+    required this.controllers,
+    required this.focusNodes,
+    required this.isVerifying,
+    required this.onVerify,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF3E8FF),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: const Color(0xFF6B46C1).withValues(alpha: 0.3),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Ask the customer for their OTP and enter it below to complete the service.',
+            style: TextStyle(
+              fontSize: 13,
+              color: Color(0xFF553C9A),
+            ),
+          ),
+          const SizedBox(height: 16),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: List.generate(
+              6,
+              (i) => _OtpBox(
+                controller: controllers[i],
+                focusNode: focusNodes[i],
+                nextFocus: i < 5 ? focusNodes[i + 1] : null,
+                prevFocus: i > 0 ? focusNodes[i - 1] : null,
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton.icon(
+              onPressed: isVerifying ? null : onVerify,
+              icon: isVerifying
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    )
+                  : const Icon(Icons.verified_user_rounded, size: 16),
+              label: const Text('Verify & Complete Service'),
+              style: FilledButton.styleFrom(
+                backgroundColor: const Color(0xFF6B46C1),
+                padding: const EdgeInsets.symmetric(vertical: 12),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _OtpBox extends StatelessWidget {
+  final TextEditingController controller;
+  final FocusNode focusNode;
+  final FocusNode? nextFocus;
+  final FocusNode? prevFocus;
+
+  const _OtpBox({
+    required this.controller,
+    required this.focusNode,
+    this.nextFocus,
+    this.prevFocus,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 44,
+      height: 52,
+      margin: const EdgeInsets.symmetric(horizontal: 4),
+      child: TextField(
+        controller: controller,
+        focusNode: focusNode,
+        keyboardType: TextInputType.number,
+        textAlign: TextAlign.center,
+        maxLength: 1,
+        style: const TextStyle(
+          fontSize: 20,
+          fontWeight: FontWeight.w700,
+          color: Color(0xFF553C9A),
+        ),
+        decoration: InputDecoration(
+          counterText: '',
+          contentPadding: EdgeInsets.zero,
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(8),
+            borderSide: const BorderSide(color: Color(0xFFD6BCFA)),
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(8),
+            borderSide: const BorderSide(color: Color(0xFFD6BCFA)),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(8),
+            borderSide: const BorderSide(color: Color(0xFF6B46C1), width: 2),
+          ),
+          filled: true,
+          fillColor: Colors.white,
+        ),
+        onChanged: (value) {
+          if (value.isNotEmpty && nextFocus != null) {
+            nextFocus!.requestFocus();
+          } else if (value.isEmpty && prevFocus != null) {
+            prevFocus!.requestFocus();
+          }
+        },
+      ),
+    );
+  }
 }
 
 class _SectionLabel extends StatelessWidget {
@@ -356,8 +583,11 @@ class _ServiceItemRow extends StatelessWidget {
             width: 130,
             child: Row(
               children: [
-                Icon(Icons.check_circle_outline_rounded,
-                    size: 14, color: Color(0xFF38A169)),
+                Icon(
+                  Icons.check_circle_outline_rounded,
+                  size: 14,
+                  color: Color(0xFF38A169),
+                ),
                 SizedBox(width: 6),
               ],
             ),
@@ -366,7 +596,9 @@ class _ServiceItemRow extends StatelessWidget {
             child: Text(
               item.serviceName.isNotEmpty ? item.serviceName : '—',
               style: const TextStyle(
-                  fontSize: 14, color: AppColors.textPrimary),
+                fontSize: 14,
+                color: AppColors.textPrimary,
+              ),
             ),
           ),
           const SizedBox(width: 8),
@@ -385,7 +617,9 @@ class _ServiceItemRow extends StatelessWidget {
                 Text(
                   '${item.quantity} × ${currency.format(item.unitPrice)}',
                   style: TextStyle(
-                      fontSize: 11, color: AppColors.textSecondary),
+                    fontSize: 11,
+                    color: AppColors.textSecondary,
+                  ),
                 ),
             ],
           ),
@@ -401,8 +635,7 @@ class _InfoRow extends StatelessWidget {
   final bool bold;
   final String? tooltip;
 
-  const _InfoRow(this.label, this.value,
-      {this.bold = false, this.tooltip});
+  const _InfoRow(this.label, this.value, {this.bold = false, this.tooltip});
 
   @override
   Widget build(BuildContext context) {

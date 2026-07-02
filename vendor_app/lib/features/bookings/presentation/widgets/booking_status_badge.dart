@@ -9,12 +9,25 @@ class BookingStatusBadge extends StatelessWidget {
   Color get _color => switch (status) {
         'pending' => AppColors.statusPending,
         'assigned' => AppColors.statusAssigned,
+        'assigned_to_dodo_team' => AppColors.primary,
         'in_progress' => AppColors.statusInProgress,
         'awaiting_verification' => AppColors.warning,
         'completed' => AppColors.statusCompleted,
         'cancelled' => AppColors.statusCancelled,
         'rejected' => AppColors.error,
         _ => AppColors.textHint,
+      };
+
+  String get _label => switch (status) {
+        'pending' => 'Pending',
+        'assigned' => 'Assigned',
+        'assigned_to_dodo_team' => 'DODO Assigned',
+        'in_progress' => 'In Progress',
+        'awaiting_verification' => 'Awaiting OTP',
+        'completed' => 'Completed',
+        'cancelled' => 'Cancelled',
+        'rejected' => 'Rejected',
+        _ => status.replaceAll('_', ' '),
       };
 
   @override
@@ -26,7 +39,7 @@ class BookingStatusBadge extends StatelessWidget {
         borderRadius: BorderRadius.circular(4),
       ),
       child: Text(
-        status,
+        _label,
         style: TextStyle(
           color: _color,
           fontSize: 12,

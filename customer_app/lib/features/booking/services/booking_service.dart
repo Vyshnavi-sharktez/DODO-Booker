@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -83,6 +85,11 @@ class BookingService {
       debugPrint('[DODO][Booking] Coupon: id=$couponId discount=₹${discountAmount.toStringAsFixed(2)}');
     }
 
+    // ── Generate OTP before building payload ─────────────────────────────────
+    final completionOtp = (100000 + Random().nextInt(900000)).toString();
+    debugPrint('[OTP][Create] ══════════ OTP GENERATION ══════════');
+    debugPrint('[OTP][Create] Generated OTP: $completionOtp  (len=${completionOtp.length})');
+
     // ── INSERT into bookings ─────────────────────────────────────────────────
     debugPrint('[DODO][Booking] Booking payload — lat=${address.latitude}  lng=${address.longitude}');
     debugPrint('[DODO][Booking] Inserting into bookings table');
@@ -97,10 +104,14 @@ class BookingService {
       'notes': '${service.name} · ${slot.label}',
       'latitude': ?address.latitude,
       'longitude': ?address.longitude,
+      'completion_otp': completionOtp,
     };
+    debugPrint('[OTP][Create] Payload keys    : ${payload.keys.toList()}');
+    debugPrint('[OTP][Create] Payload otp val : ${payload['completion_otp']}');
     debugPrint('BOOKING LAT=${address.latitude}');
     debugPrint('BOOKING LNG=${address.longitude}');
     debugPrint('BOOKING PAYLOAD=$payload');
+
     final bookingData = await _client
         .from('bookings')
         .insert(payload)
@@ -109,6 +120,30 @@ class BookingService {
 
     final bookingId = bookingData['id'] as String;
     debugPrint('[DODO][Booking] Booking created: id=$bookingId');
+
+    // ── Verify OTP was written ────────────────────────────────────────────────
+    final returnedOtp = bookingData['completion_otp'] as String?;
+    debugPrint('[OTP][Create] Returned row keys: ${(bookingData as Map).keys.toList()}');
+    debugPrint('[OTP][Create] Returned otp val : $returnedOtp');
+    if (returnedOtp == null) {
+      // The INSERT ignored completion_otp — almost always a column-level
+      // permission issue (column added after the RLS policy was created).
+      // Fall back to an explicit UPDATE using the same session.
+      debugPrint('[OTP][Create] ⚠ OTP missing from INSERT result — attempting UPDATE fallback');
+      try {
+        await _client
+            .from('bookings')
+            .update({'completion_otp': completionOtp})
+            .eq('id', bookingId);
+        debugPrint('[OTP][Create] ✓ UPDATE fallback succeeded — OTP=$completionOtp');
+      } catch (e) {
+        debugPrint('[OTP][Create] ✗ UPDATE fallback failed: $e');
+        debugPrint('[OTP][Create]   ACTION REQUIRED: grant the customer role '
+            'INSERT/UPDATE on bookings.completion_otp in Supabase dashboard');
+      }
+    } else {
+      debugPrint('[OTP][Create] ✓ OTP written via INSERT: $returnedOtp');
+    }
 
     // ── INSERT into booking_items (non-fatal) ────────────────────────────────
     try {

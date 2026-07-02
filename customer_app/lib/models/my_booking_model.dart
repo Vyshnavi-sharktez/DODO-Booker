@@ -1,3 +1,5 @@
+import 'package:flutter/foundation.dart';
+
 import 'address_model.dart';
 import 'booking_item.dart';
 import 'booking_status_event.dart';
@@ -5,6 +7,7 @@ import 'booking_status_event.dart';
 class BookingStatus {
   static const String pending = 'pending';
   static const String assigned = 'assigned';
+  static const String assignedToDodoTeam = 'assigned_to_dodo_team';
   static const String accepted = 'accepted';
   static const String enRoute = 'en_route';
   static const String inProgress = 'in_progress';
@@ -13,6 +16,7 @@ class BookingStatus {
   static const String completed = 'completed';
   static const String cancelled = 'cancelled';
 
+  // Stages shown for bookings handled by an external vendor.
   static const List<(String, String)> orderedStages = [
     (pending, 'Booking Placed'),
     (assigned, 'Vendor Assigned'),
@@ -23,8 +27,18 @@ class BookingStatus {
     (completed, 'Service Completed'),
   ];
 
-  static String labelFor(String status) {
-    for (final (s, label) in orderedStages) {
+  // Stages shown for bookings handled by DODO Team (no vendor accept step).
+  static const List<(String, String)> dodoOrderedStages = [
+    (pending, 'Booking Placed'),
+    (assignedToDodoTeam, 'Assigned to DODO Team'),
+    (inProgress, 'Service Started'),
+    (awaitingVerification, 'OTP Verification'),
+    (completed, 'Service Completed'),
+  ];
+
+  static String labelFor(String status, {String assignmentType = 'External Vendor'}) {
+    final stages = assignmentType == 'DODO Team' ? dodoOrderedStages : orderedStages;
+    for (final (s, label) in stages) {
       if (s == status) return label;
     }
     if (status == cancelled) return 'Cancelled';
@@ -33,9 +47,11 @@ class BookingStatus {
 
   static List<BookingStatusEvent> buildTimeline(
     String currentStatus,
-    DateTime base,
-  ) {
-    final stages = orderedStages;
+    DateTime base, {
+    String assignmentType = 'External Vendor',
+  }) {
+    final isDodo = assignmentType == 'DODO Team';
+    final stages = isDodo ? dodoOrderedStages : orderedStages;
     // 'started' is the vendor-app alias for 'in_progress'; treat identically.
     final lookupStatus = currentStatus == started ? inProgress : currentStatus;
     final currentIdx = stages.indexWhere((s) => s.$1 == lookupStatus);
@@ -49,8 +65,6 @@ class BookingStatus {
         label: label,
         isReached: isReached,
         // Only the first step (Booking Placed) uses the real createdAt timestamp.
-        // Other steps have no persisted timestamp yet, so we show reached state
-        // without a fake time.
         timestamp: isReached && i == 0 ? base : null,
       );
     });
@@ -72,6 +86,7 @@ class MyBookingModel {
   final double taxAmount;
   final double totalAmount;
   final String status;
+  final String assignmentType; // 'Unassigned' | 'External Vendor' | 'DODO Team'
   final DateTime createdAt;
   final String? vendorName;
   final String? vendorPhone;
@@ -93,6 +108,7 @@ class MyBookingModel {
     required this.taxAmount,
     required this.totalAmount,
     required this.status,
+    this.assignmentType = 'Unassigned',
     required this.createdAt,
     this.vendorName,
     this.vendorPhone,
@@ -100,9 +116,12 @@ class MyBookingModel {
     this.timeline = const [],
   });
 
+  bool get isDodoTeam => assignmentType == 'DODO Team';
+
   bool get isUpcoming =>
       status == BookingStatus.pending ||
       status == BookingStatus.assigned ||
+      status == BookingStatus.assignedToDodoTeam ||
       status == BookingStatus.accepted;
 
   bool get isOngoing =>
@@ -165,6 +184,13 @@ class MyBookingModel {
         ? AddressModel.fromJson(rawAddress)
         : _parseTextAddress((rawAddress as String?) ?? '');
 
+    final assignmentType =
+        json['assignment_type'] as String? ?? 'Unassigned';
+    final status = json['status'] as String;
+    final rawOtp = json['completion_otp'];
+    debugPrint('[OTP][Model] id=${json['id']}  status=$status  '
+        'json[completion_otp]=$rawOtp  (type: ${rawOtp.runtimeType})');
+
     return MyBookingModel(
       id: json['id'] as String,
       serviceId: serviceId,
@@ -183,18 +209,20 @@ class MyBookingModel {
               0.0,
       taxAmount: (json['tax_amount'] as num?)?.toDouble() ?? 0.0,
       totalAmount: (json['total_amount'] as num?)?.toDouble() ?? 0.0,
-      status: json['status'] as String,
+      status: status,
+      assignmentType: assignmentType,
       createdAt: DateTime.parse(createdAtStr),
       vendorName: (json['vendors'] as Map<String, dynamic>?)?['business_name'] as String?,
       vendorPhone: (json['vendors'] as Map<String, dynamic>?)?['phone'] as String?,
-      completionOtp: json['completion_otp'] as String?,
+      completionOtp: rawOtp as String?,
       timeline: (json['timeline'] as List<dynamic>?)
               ?.map((e) =>
                   BookingStatusEvent.fromJson(e as Map<String, dynamic>))
               .toList() ??
           BookingStatus.buildTimeline(
-            json['status'] as String,
+            status,
             DateTime.parse(createdAtStr),
+            assignmentType: assignmentType,
           ),
     );
   }

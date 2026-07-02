@@ -2,29 +2,27 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/widgets/section_header.dart';
-import '../../../models/banner_model.dart';
-import 'banner_carousel.dart';
+import '../../../models/coupon_model.dart';
+import 'coupon_carousel.dart';
 
 class SpecialOffersSection extends StatelessWidget {
-  final AsyncValue<List<BannerModel>> asyncBanners;
-  final ValueChanged<BannerModel>? onBannerTap;
+  final AsyncValue<List<CouponModel>> asyncCoupons;
   final VoidCallback? onViewAll;
 
   const SpecialOffersSection({
     super.key,
-    required this.asyncBanners,
-    this.onBannerTap,
+    required this.asyncCoupons,
     this.onViewAll,
   });
 
   @override
   Widget build(BuildContext context) {
-    final body = asyncBanners.when(
+    final body = asyncCoupons.when(
       loading: () => const _LoadingSkeleton(),
-      error: (_, _) => const _EmptyState(),
-      data: (banners) => banners.isEmpty
+      error: (_, __) => const _EmptyState(),
+      data: (coupons) => coupons.isEmpty
           ? const _EmptyState()
-          : BannerCarousel(banners: banners, onBannerTap: onBannerTap),
+          : CouponCarousel(coupons: coupons),
     );
 
     return Column(

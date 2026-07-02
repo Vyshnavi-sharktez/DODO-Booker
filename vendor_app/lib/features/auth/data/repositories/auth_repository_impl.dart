@@ -19,9 +19,7 @@ class AuthRepositoryImpl implements IAuthRepository {
   }) async {
     await _datasource.verifyOtp(phone: phone, otp: token);
     await _datasource.savePhone(phone);
-    final vendorRow = await _datasource.getVendorByPhone(phone);
-    if (vendorRow == null) return VendorUserModel.fromPhone(phone);
-    return VendorUserModel.fromVendorRow(row: vendorRow, phone: phone);
+    return _resolveUser(phone);
   }
 
   @override
@@ -29,13 +27,23 @@ class AuthRepositoryImpl implements IAuthRepository {
     final phone = await _datasource.getSavedPhone();
     debugPrint('[AUTH] getCurrentUser — savedPhone : ${phone == null ? "NULL (no session)" : '"$phone" (len=${phone.length})'}');
     if (phone == null) return null;
+    return _resolveUser(phone);
+  }
+
+  // Resolves a phone to a VendorUser: checks vendors first, then dodo_teams.
+  Future<VendorUser> _resolveUser(String phone) async {
     final vendorRow = await _datasource.getVendorByPhone(phone);
-    if (vendorRow == null) {
-      debugPrint('[AUTH] getCurrentUser — vendor row NOT found, using phone as id');
-      return VendorUserModel.fromPhone(phone);
+    if (vendorRow != null) {
+      debugPrint('[AUTH] _resolveUser — vendor row FOUND id=${vendorRow['id']}');
+      return VendorUserModel.fromVendorRow(row: vendorRow, phone: phone);
     }
-    debugPrint('[AUTH] getCurrentUser — vendor row FOUND id=${vendorRow['id']}');
-    return VendorUserModel.fromVendorRow(row: vendorRow, phone: phone);
+    final dodoRow = await _datasource.getDodoTeamByPhone(phone);
+    if (dodoRow != null) {
+      debugPrint('[AUTH] _resolveUser — DODO team row FOUND id=${dodoRow['id']}');
+      return VendorUserModel.fromDodoTeamRow(row: dodoRow, phone: phone);
+    }
+    debugPrint('[AUTH] _resolveUser — no row found, using phone as id');
+    return VendorUserModel.fromPhone(phone);
   }
 
   @override

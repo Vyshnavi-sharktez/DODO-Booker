@@ -6,6 +6,7 @@ class Booking {
     required this.bookingNumber,
     required this.customerId,
     required this.status,
+    this.assignmentType = 'External Vendor',
     required this.subtotal,
     required this.totalAmount,
     this.serviceDate,
@@ -27,6 +28,8 @@ class Booking {
   final String bookingNumber;
   final String customerId;
   final String status;
+  // 'External Vendor' | 'DODO Team' | 'Unassigned'
+  final String assignmentType;
   final double subtotal;
   final double totalAmount;
   final DateTime? serviceDate;
@@ -43,6 +46,8 @@ class Booking {
   final DateTime? otpVerifiedAt;
   final List<BookingItem> items;
 
+  bool get isDodoTeam => assignmentType == 'DODO Team';
+
   factory Booking.fromMap(Map<String, dynamic> map) {
     final rawItems = map['booking_items'] as List<dynamic>? ?? [];
     final items = rawItems
@@ -54,6 +59,7 @@ class Booking {
       bookingNumber: map['booking_number'] as String? ?? '',
       customerId: map['customer_id'] as String? ?? '',
       status: map['status'] as String? ?? 'pending',
+      assignmentType: map['assignment_type'] as String? ?? 'External Vendor',
       subtotal: (map['subtotal'] as num?)?.toDouble() ?? 0.0,
       totalAmount: (map['total_amount'] as num?)?.toDouble() ?? 0.0,
       discountAmount: (map['discount_amount'] as num?)?.toDouble() ?? 0.0,
@@ -83,6 +89,7 @@ class Booking {
       bookingNumber: bookingNumber,
       customerId: customerId,
       status: status ?? this.status,
+      assignmentType: assignmentType,
       subtotal: subtotal,
       totalAmount: totalAmount,
       discountAmount: discountAmount,

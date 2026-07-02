@@ -39,7 +39,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
     final errorMessage = authState.hasError ? authState.error.toString() : null;
 
     return Scaffold(
-      backgroundColor: AppColors.primary,
+      backgroundColor: const Color(0xFF111111),
       body: Center(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(24),

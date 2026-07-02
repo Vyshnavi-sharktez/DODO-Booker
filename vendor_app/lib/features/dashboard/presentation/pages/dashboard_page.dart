@@ -49,21 +49,21 @@ class DashboardPage extends ConsumerWidget {
             onRefresh: () async => ref.invalidate(dashboardStatsProvider),
             child: SingleChildScrollView(
               physics: const AlwaysScrollableScrollPhysics(),
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
+              padding: const EdgeInsets.fromLTRB(16, 20, 16, 40),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   // ── Welcome ────────────────────────────────────────────────
                   _WelcomeHeader(greeting: greeting, name: vendorName),
-                  const SizedBox(height: 20),
+                  const SizedBox(height: 24),
 
                   // ── Overview ───────────────────────────────────────────────
                   const _SectionHeader('Overview'),
-                  const SizedBox(height: 10),
+                  const SizedBox(height: 12),
                   GridView.count(
                     crossAxisCount: 2,
-                    crossAxisSpacing: 10,
-                    mainAxisSpacing: 10,
+                    crossAxisSpacing: 12,
+                    mainAxisSpacing: 12,
                     childAspectRatio: 1.55,
                     shrinkWrap: true,
                     physics: const NeverScrollableScrollPhysics(),
@@ -110,7 +110,7 @@ class DashboardPage extends ConsumerWidget {
                       ),
                     ],
                   ),
-                  const SizedBox(height: 10),
+                  const SizedBox(height: 12),
                   Row(
                     children: [
                       Expanded(
@@ -121,7 +121,7 @@ class DashboardPage extends ConsumerWidget {
                           color: AppColors.success,
                         ),
                       ),
-                      const SizedBox(width: 10),
+                      const SizedBox(width: 12),
                       Expanded(
                         child: StatsCard(
                           label: "Today's Bookings",
@@ -136,24 +136,24 @@ class DashboardPage extends ConsumerWidget {
                       ),
                     ],
                   ),
-                  const SizedBox(height: 24),
+                  const SizedBox(height: 28),
 
                   // ── Earnings ───────────────────────────────────────────────
                   const _SectionHeader('Earnings'),
-                  const SizedBox(height: 10),
+                  const SizedBox(height: 12),
                   _EarningsCard(
                     today: stats.todayEarnings,
                     weekly: stats.weeklyEarnings,
                     monthly: stats.monthlyEarnings,
                   ),
-                  const SizedBox(height: 24),
+                  const SizedBox(height: 28),
 
                   // ── Performance ────────────────────────────────────────────
                   const _SectionHeader('Performance'),
-                  const SizedBox(height: 10),
+                  const SizedBox(height: 12),
                   GridView.count(
                     crossAxisCount: 3,
-                    crossAxisSpacing: 10,
+                    crossAxisSpacing: 12,
                     mainAxisSpacing: 0,
                     childAspectRatio: 1.1,
                     shrinkWrap: true,
@@ -183,32 +183,32 @@ class DashboardPage extends ConsumerWidget {
                       ),
                     ],
                   ),
-                  const SizedBox(height: 24),
+                  const SizedBox(height: 28),
 
                   // ── Upcoming Schedule ──────────────────────────────────────
                   const _SectionHeader('Upcoming Schedule'),
-                  const SizedBox(height: 10),
+                  const SizedBox(height: 12),
                   stats.upcomingBookings.isEmpty
                       ? const _EmptyUpcoming()
                       : _UpcomingSchedule(
                           bookings: stats.upcomingBookings),
-                  const SizedBox(height: 24),
+                  const SizedBox(height: 28),
 
                   // ── Recent Activity ────────────────────────────────────────
                   const _SectionHeader('Recent Activity'),
-                  const SizedBox(height: 10),
+                  const SizedBox(height: 12),
                   stats.recentBookings.isEmpty
                       ? const _EmptyRecent()
                       : _RecentActivity(bookings: stats.recentBookings),
-                  const SizedBox(height: 24),
+                  const SizedBox(height: 28),
 
                   // ── Quick Actions ──────────────────────────────────────────
                   const _SectionHeader('Quick Actions'),
-                  const SizedBox(height: 10),
+                  const SizedBox(height: 12),
                   GridView.count(
                     crossAxisCount: 2,
-                    crossAxisSpacing: 10,
-                    mainAxisSpacing: 10,
+                    crossAxisSpacing: 12,
+                    mainAxisSpacing: 12,
                     childAspectRatio: 2.4,
                     shrinkWrap: true,
                     physics: const NeverScrollableScrollPhysics(),
@@ -264,31 +264,75 @@ class _WelcomeHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [AppColors.primary, Color(0xFF4285F4)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(14),
+        color: AppColors.primary,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.primary.withValues(alpha: 0.28),
+            blurRadius: 16,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Row(
         children: [
-          Text(
-            '$greeting, $name!',
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 18,
-              fontWeight: FontWeight.w700,
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  greeting,
+                  style: TextStyle(
+                    color: Colors.white.withValues(alpha: 0.62),
+                    fontSize: 13,
+                    fontWeight: FontWeight.w400,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  name,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 22,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: -0.3,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    Icon(
+                      Icons.calendar_today_outlined,
+                      size: 11,
+                      color: Colors.white.withValues(alpha: 0.50),
+                    ),
+                    const SizedBox(width: 5),
+                    Text(
+                      DateFormat('EEE, d MMMM yyyy').format(DateTime.now()),
+                      style: TextStyle(
+                        color: Colors.white.withValues(alpha: 0.50),
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
             ),
           ),
-          const SizedBox(height: 4),
-          Text(
-            DateFormat('EEEE, d MMMM yyyy').format(DateTime.now()),
-            style: const TextStyle(color: Colors.white70, fontSize: 13),
+          Container(
+            width: 48,
+            height: 48,
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.10),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: const Icon(
+              Icons.store_rounded,
+              color: Colors.white,
+              size: 24,
+            ),
           ),
         ],
       ),
@@ -304,18 +348,31 @@ class _SectionHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Text(
-      title,
-      style: const TextStyle(
-        fontSize: 15,
-        fontWeight: FontWeight.w700,
-        color: AppColors.textPrimary,
-      ),
+    return Row(
+      children: [
+        Container(
+          width: 3,
+          height: 16,
+          decoration: BoxDecoration(
+            color: AppColors.primary,
+            borderRadius: BorderRadius.circular(2),
+          ),
+        ),
+        const SizedBox(width: 8),
+        Text(
+          title,
+          style: const TextStyle(
+            fontSize: 15,
+            fontWeight: FontWeight.w700,
+            color: AppColors.textPrimary,
+          ),
+        ),
+      ],
     );
   }
 }
 
-// ── Earnings card (Today / This Week / This Month) ────────────────────────────
+// ── Earnings card ─────────────────────────────────────────────────────────────
 
 class _EarningsCard extends StatelessWidget {
   const _EarningsCard({
@@ -331,25 +388,48 @@ class _EarningsCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       decoration: BoxDecoration(
         color: AppColors.surface,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.border),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.border.withValues(alpha: 0.7)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
-      child: Row(
+      child: Column(
         children: [
-          _EarningsColumn(label: 'Today', amount: today),
-          _divider(),
-          _EarningsColumn(label: 'This Week', amount: weekly),
-          _divider(),
-          _EarningsColumn(label: 'This Month', amount: monthly),
+          Container(
+            height: 3,
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                colors: [AppColors.primary, AppColors.accent],
+              ),
+              borderRadius: BorderRadius.vertical(top: Radius.circular(13)),
+            ),
+          ),
+          Padding(
+            padding:
+                const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
+            child: Row(
+              children: [
+                _EarningsColumn(label: 'Today', amount: today),
+                _vDivider(),
+                _EarningsColumn(label: 'This Week', amount: weekly),
+                _vDivider(),
+                _EarningsColumn(label: 'This Month', amount: monthly),
+              ],
+            ),
+          ),
         ],
       ),
     );
   }
 
-  Widget _divider() => Container(
+  Widget _vDivider() => Container(
         width: 1,
         height: 38,
         color: AppColors.border,
@@ -372,7 +452,7 @@ class _EarningsColumn extends StatelessWidget {
           Text(
             FormatUtils.compact(amount),
             style: const TextStyle(
-              fontSize: 16,
+              fontSize: 17,
               fontWeight: FontWeight.w700,
               color: AppColors.textPrimary,
             ),
@@ -393,7 +473,7 @@ class _EarningsColumn extends StatelessWidget {
   }
 }
 
-// ── Performance card (compact 3-column) ──────────────────────────────────────
+// ── Performance card ──────────────────────────────────────────────────────────
 
 class _PerformanceCard extends StatelessWidget {
   const _PerformanceCard({
@@ -412,45 +492,67 @@ class _PerformanceCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: AppColors.surface,
-      borderRadius: BorderRadius.circular(12),
-      child: InkWell(
-        onTap: onTap,
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: AppColors.surface,
         borderRadius: BorderRadius.circular(12),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: AppColors.border),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
           ),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(icon, size: 22, color: color),
-              const SizedBox(height: 6),
-              Text(
-                value,
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w700,
-                  color: AppColors.textPrimary,
-                  height: 1.1,
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(12),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(12),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                  color: AppColors.border.withValues(alpha: 0.7)),
+            ),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Container(
+                  width: 32,
+                  height: 32,
+                  decoration: BoxDecoration(
+                    color: color.withValues(alpha: 0.10),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(icon, size: 17, color: color),
                 ),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 2),
-              Text(
-                label,
-                style: const TextStyle(
-                  fontSize: 10,
-                  color: AppColors.textSecondary,
+                const SizedBox(height: 6),
+                Text(
+                  value,
+                  style: const TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.textPrimary,
+                    height: 1.1,
+                  ),
+                  textAlign: TextAlign.center,
                 ),
-                textAlign: TextAlign.center,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ],
+                const SizedBox(height: 2),
+                Text(
+                  label,
+                  style: const TextStyle(
+                    fontSize: 10,
+                    color: AppColors.textSecondary,
+                  ),
+                  textAlign: TextAlign.center,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -469,11 +571,18 @@ class _UpcomingSchedule extends StatelessWidget {
     return Container(
       decoration: BoxDecoration(
         color: AppColors.surface,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.border),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.border.withValues(alpha: 0.7)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(11),
+        borderRadius: BorderRadius.circular(13),
         child: ListView.separated(
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
@@ -506,15 +615,15 @@ class _UpcomingTile extends StatelessWidget {
         pathParameters: {'id': booking.id},
       ),
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
         child: Row(
           children: [
             Container(
               width: 40,
               height: 40,
               decoration: BoxDecoration(
-                color: AppColors.primary.withValues(alpha: 0.10),
-                borderRadius: BorderRadius.circular(8),
+                color: AppColors.primaryLight,
+                borderRadius: BorderRadius.circular(10),
               ),
               child: const Icon(
                 Icons.calendar_today_outlined,
@@ -563,11 +672,18 @@ class _EmptyUpcoming extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(vertical: 28),
+      padding: const EdgeInsets.symmetric(vertical: 32),
       decoration: BoxDecoration(
         color: AppColors.surface,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.border),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.border.withValues(alpha: 0.7)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
       child: const Center(
         child: Column(
@@ -575,7 +691,7 @@ class _EmptyUpcoming extends StatelessWidget {
           children: [
             Icon(Icons.event_available_outlined,
                 size: 36, color: AppColors.textHint),
-            SizedBox(height: 8),
+            SizedBox(height: 10),
             Text(
               'No upcoming bookings',
               style: TextStyle(
@@ -602,11 +718,18 @@ class _RecentActivity extends StatelessWidget {
     return Container(
       decoration: BoxDecoration(
         color: AppColors.surface,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.border),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.border.withValues(alpha: 0.7)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(11),
+        borderRadius: BorderRadius.circular(13),
         child: ListView.separated(
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
@@ -638,7 +761,7 @@ class _RecentBookingTile extends StatelessWidget {
         pathParameters: {'id': booking.id},
       ),
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
         child: Row(
           children: [
             Expanded(
@@ -695,11 +818,18 @@ class _EmptyRecent extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(vertical: 28),
+      padding: const EdgeInsets.symmetric(vertical: 32),
       decoration: BoxDecoration(
         color: AppColors.surface,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.border),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.border.withValues(alpha: 0.7)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
       child: const Center(
         child: Column(
@@ -707,7 +837,7 @@ class _EmptyRecent extends StatelessWidget {
           children: [
             Icon(Icons.book_online_outlined,
                 size: 36, color: AppColors.textHint),
-            SizedBox(height: 8),
+            SizedBox(height: 10),
             Text(
               'No bookings yet',
               style: TextStyle(
@@ -723,7 +853,7 @@ class _EmptyRecent extends StatelessWidget {
   }
 }
 
-// ── Quick action button ───────────────────────────────────────────────────────
+// ── Quick action ──────────────────────────────────────────────────────────────
 
 class _QuickAction extends StatelessWidget {
   const _QuickAction({
@@ -738,32 +868,58 @@ class _QuickAction extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Clickable(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-        decoration: BoxDecoration(
-          color: AppColors.surface,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: AppColors.border),
-        ),
-        child: Row(
-          children: [
-            Icon(icon, size: 20, color: AppColors.primary),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Text(
-                label,
-                style: const TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w500,
-                  color: AppColors.textPrimary,
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Clickable(
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+                color: AppColors.border.withValues(alpha: 0.7)),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 34,
+                height: 34,
+                decoration: BoxDecoration(
+                  color: AppColors.primaryLight,
+                  borderRadius: BorderRadius.circular(8),
                 ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
+                child: Icon(icon, size: 17, color: AppColors.primary),
               ),
-            ),
-          ],
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  label,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.textPrimary,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              const Icon(
+                Icons.chevron_right_rounded,
+                size: 16,
+                color: AppColors.textHint,
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -800,8 +956,8 @@ class _ErrorState extends StatelessWidget {
             const SizedBox(height: 6),
             Text(
               message,
-              style:
-                  const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+              style: const TextStyle(
+                  fontSize: 12, color: AppColors.textSecondary),
               textAlign: TextAlign.center,
               maxLines: 3,
               overflow: TextOverflow.ellipsis,

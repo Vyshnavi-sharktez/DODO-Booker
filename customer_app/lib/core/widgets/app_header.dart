@@ -1,3 +1,4 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -11,48 +12,82 @@ import '../../features/cart/utils/cart_launcher.dart';
 
 /// Persistent DODO BOOKER header used as the [Scaffold.appBar] across the
 /// main navigation shell. Implements [PreferredSizeWidget] so Flutter can
-/// correctly position the body below it and clear top-padding for children.
+/// correctly position the body below it.
 class AppHeader extends ConsumerWidget implements PreferredSizeWidget {
   final VoidCallback onLogoTap;
   final VoidCallback onProfileTap;
+  final bool isScrolled;
 
   const AppHeader({
     super.key,
     required this.onLogoTap,
     required this.onProfileTap,
+    this.isScrolled = false,
   });
 
-  // 84px gives the 76px desktop logo 4px breathing room on each side.
-  // Tablet (60px) and mobile (50px) logos are comfortably centered in this space.
   @override
   Size get preferredSize => const Size.fromHeight(84);
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final isWide = MediaQuery.of(context).size.width >= 768;
+    final isWide = MediaQuery.sizeOf(context).width >= 768;
 
     return Material(
-      color: AppColors.surface,
+      color: Colors.transparent,
       elevation: 0,
-      child: SafeArea(
-        bottom: false,
-        child: Container(
-          height: 84,
-          decoration: const BoxDecoration(
-            color: AppColors.surface,
-            border: Border(
-              bottom: BorderSide(color: AppColors.divider, width: 0.8),
-            ),
-          ),
-          child: Align(
-            alignment: Alignment.center,
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 1440),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 24),
-                child: isWide
-                    ? _WideRow(onLogoTap: onLogoTap, onProfileTap: onProfileTap)
-                    : _MobileRow(onLogoTap: onLogoTap, onProfileTap: onProfileTap),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 250),
+        curve: Curves.easeOut,
+        decoration: BoxDecoration(
+          boxShadow: isScrolled
+              ? [
+                  BoxShadow(
+                    color: Colors.black.withAlpha(18),
+                    blurRadius: 20,
+                    spreadRadius: 0,
+                    offset: const Offset(0, 4),
+                  ),
+                ]
+              : const [],
+        ),
+        child: ClipRect(
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+            child: SafeArea(
+              bottom: false,
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 250),
+                curve: Curves.easeOut,
+                height: 84,
+                decoration: BoxDecoration(
+                  color: Colors.white
+                      .withAlpha(isScrolled ? 224 : 247),
+                  border: Border(
+                    bottom: BorderSide(
+                      color: AppColors.divider
+                          .withAlpha(isScrolled ? 127 : 255),
+                      width: 0.8,
+                    ),
+                  ),
+                ),
+                child: Align(
+                  alignment: Alignment.center,
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 1440),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 24),
+                      child: isWide
+                          ? _WideRow(
+                              onLogoTap: onLogoTap,
+                              onProfileTap: onProfileTap,
+                            )
+                          : _MobileRow(
+                              onLogoTap: onLogoTap,
+                              onProfileTap: onProfileTap,
+                            ),
+                    ),
+                  ),
+                ),
               ),
             ),
           ),
@@ -83,19 +118,25 @@ class _WideRow extends StatelessWidget {
           ),
         ),
         const SizedBox(width: 20),
+
+        // Search bar
         Expanded(
           child: Center(
             child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 480),
+              constraints: const BoxConstraints(maxWidth: 540),
               child: const _GlobalSearchBar(),
             ),
           ),
         ),
-        const SizedBox(width: 12),
-        _NotifButton(onTap: () => AppModalDialog.show(
-          context: context,
-          child: const NotificationsModal(),
-        )),
+        const SizedBox(width: 20),
+
+        // Action buttons
+        _NotifButton(
+          onTap: () => AppModalDialog.show(
+            context: context,
+            child: const NotificationsModal(),
+          ),
+        ),
         const SizedBox(width: 8),
         const _CartButton(),
         const SizedBox(width: 8),
@@ -133,10 +174,12 @@ class _MobileRow extends StatelessWidget {
         const SizedBox(width: 4),
         const _CartButton(),
         const SizedBox(width: 4),
-        _NotifButton(onTap: () => AppModalDialog.show(
-          context: context,
-          child: const NotificationsModal(),
-        )),
+        _NotifButton(
+          onTap: () => AppModalDialog.show(
+            context: context,
+            child: const NotificationsModal(),
+          ),
+        ),
         const SizedBox(width: 6),
         _ProfileAvatar(onTap: onProfileTap),
       ],
@@ -151,8 +194,7 @@ class _DodoBrand extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final w = MediaQuery.of(context).size.width;
-    // Desktop ≥1024 → 72px | Tablet 768–1024 → 62px | Mobile <768 → 50px
+    final w = MediaQuery.sizeOf(context).width;
     final logoHeight = w >= 1024 ? 72.0 : w >= 768 ? 62.0 : 50.0;
 
     return Image.asset(
@@ -165,7 +207,6 @@ class _DodoBrand extends StatelessWidget {
   }
 }
 
-// Shown only if the asset fails to load (e.g. missing during development).
 class _FallbackBrand extends StatelessWidget {
   const _FallbackBrand();
 
@@ -217,7 +258,7 @@ class _FallbackBrand extends StatelessWidget {
   }
 }
 
-// ── Global search bar (wide layout only) ─────────────────────────────────────
+// ── Global search bar ─────────────────────────────────────────────────────────
 
 class _GlobalSearchBar extends StatefulWidget {
   const _GlobalSearchBar();
@@ -228,10 +269,21 @@ class _GlobalSearchBar extends StatefulWidget {
 
 class _GlobalSearchBarState extends State<_GlobalSearchBar> {
   final _controller = TextEditingController();
+  final _focusNode = FocusNode();
+  bool _focused = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _focusNode.addListener(() {
+      setState(() => _focused = _focusNode.hasFocus);
+    });
+  }
 
   @override
   void dispose() {
     _controller.dispose();
+    _focusNode.dispose();
     super.dispose();
   }
 
@@ -243,18 +295,38 @@ class _GlobalSearchBarState extends State<_GlobalSearchBar> {
   @override
   Widget build(BuildContext context) {
     final tt = Theme.of(context).textTheme;
-    return Container(
-      height: 38,
+
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 180),
+      height: 44,
       decoration: BoxDecoration(
-        color: AppColors.surfaceVariant,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: AppColors.border, width: 0.8),
+        color: _focused ? Colors.white : AppColors.surfaceVariant,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(
+          color: _focused
+              ? AppColors.gold.withAlpha(153)
+              : AppColors.border,
+          width: _focused ? 1.5 : 0.8,
+        ),
+        boxShadow: _focused
+            ? [
+                BoxShadow(
+                  color: AppColors.gold.withAlpha(26),
+                  blurRadius: 12,
+                  spreadRadius: 0,
+                ),
+              ]
+            : null,
       ),
       child: Row(
         children: [
-          const SizedBox(width: 12),
-          const Icon(Icons.search_rounded, size: 18, color: AppColors.textHint),
-          const SizedBox(width: 8),
+          const SizedBox(width: 14),
+          Icon(
+            Icons.search_rounded,
+            size: 18,
+            color: _focused ? AppColors.gold : AppColors.textHint,
+          ),
+          const SizedBox(width: 10),
           Expanded(
             child: Theme(
               data: Theme.of(context).copyWith(
@@ -264,12 +336,19 @@ class _GlobalSearchBarState extends State<_GlobalSearchBar> {
               ),
               child: TextField(
                 controller: _controller,
+                focusNode: _focusNode,
                 textInputAction: TextInputAction.search,
                 onSubmitted: (_) => _submit(),
-                style: tt.bodySmall?.copyWith(color: AppColors.textPrimary),
+                style: tt.bodySmall?.copyWith(
+                  color: AppColors.textPrimary,
+                  fontSize: 14,
+                ),
                 decoration: InputDecoration(
                   hintText: 'Search for services...',
-                  hintStyle: tt.bodySmall?.copyWith(color: AppColors.textHint),
+                  hintStyle: tt.bodySmall?.copyWith(
+                    color: AppColors.textHint,
+                    fontSize: 14,
+                  ),
                   border: InputBorder.none,
                   enabledBorder: InputBorder.none,
                   focusedBorder: InputBorder.none,
@@ -290,9 +369,9 @@ class _GlobalSearchBarState extends State<_GlobalSearchBar> {
                     mouseCursor: SystemMouseCursors.click,
                     onTap: _controller.clear,
                     child: const Padding(
-                      padding: EdgeInsets.symmetric(horizontal: 10),
+                      padding: EdgeInsets.symmetric(horizontal: 12),
                       child: Icon(Icons.clear_rounded,
-                          size: 15, color: AppColors.textHint),
+                          size: 16, color: AppColors.textHint),
                     ),
                   ),
           ),
@@ -304,40 +383,55 @@ class _GlobalSearchBarState extends State<_GlobalSearchBar> {
 
 // ── Notification button ───────────────────────────────────────────────────────
 
-class _NotifButton extends ConsumerWidget {
+class _NotifButton extends ConsumerStatefulWidget {
   final VoidCallback onTap;
 
   const _NotifButton({required this.onTap});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_NotifButton> createState() => _NotifButtonState();
+}
+
+class _NotifButtonState extends ConsumerState<_NotifButton> {
+  bool _hovered = false;
+
+  @override
+  Widget build(BuildContext context) {
     final unreadCount = ref.watch(unreadCountProvider);
 
     return MouseRegion(
       cursor: SystemMouseCursors.click,
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
       child: GestureDetector(
-        onTap: onTap,
-        child: Container(
-          width: 38,
-          height: 38,
+        onTap: widget.onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 150),
+          width: 40,
+          height: 40,
           decoration: BoxDecoration(
-            color: AppColors.surfaceVariant,
-            borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: AppColors.border, width: 0.8),
+            color: _hovered ? AppColors.goldLight : AppColors.surfaceVariant,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: _hovered
+                  ? AppColors.gold.withAlpha(100)
+                  : AppColors.border,
+              width: 0.8,
+            ),
           ),
           child: Stack(
             alignment: Alignment.center,
             clipBehavior: Clip.none,
             children: [
-              const Icon(
+              Icon(
                 Icons.notifications_outlined,
                 size: 20,
-                color: AppColors.textPrimary,
+                color: _hovered ? AppColors.primary : AppColors.textPrimary,
               ),
               if (unreadCount > 0)
                 Positioned(
-                  top: 7,
-                  right: 7,
+                  top: 8,
+                  right: 8,
                   child: Container(
                     width: 7,
                     height: 7,
@@ -357,36 +451,51 @@ class _NotifButton extends ConsumerWidget {
 
 // ── Cart button with badge ────────────────────────────────────────────────────
 
-class _CartButton extends ConsumerWidget {
+class _CartButton extends ConsumerStatefulWidget {
   const _CartButton();
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_CartButton> createState() => _CartButtonState();
+}
+
+class _CartButtonState extends ConsumerState<_CartButton> {
+  bool _hovered = false;
+
+  @override
+  Widget build(BuildContext context) {
     final count = ref.watch(cartItemCountProvider);
 
     return MouseRegion(
       cursor: SystemMouseCursors.click,
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
       child: GestureDetector(
         onTap: () {
           ScaffoldMessenger.of(context).clearSnackBars();
           openCart(context);
         },
-        child: Container(
-          width: 38,
-          height: 38,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 150),
+          width: 40,
+          height: 40,
           decoration: BoxDecoration(
-            color: AppColors.surfaceVariant,
-            borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: AppColors.border, width: 0.8),
+            color: _hovered ? AppColors.goldLight : AppColors.surfaceVariant,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: _hovered
+                  ? AppColors.gold.withAlpha(100)
+                  : AppColors.border,
+              width: 0.8,
+            ),
           ),
           child: Stack(
             alignment: Alignment.center,
             clipBehavior: Clip.none,
             children: [
-              const Icon(
+              Icon(
                 Icons.shopping_cart_outlined,
                 size: 20,
-                color: AppColors.textPrimary,
+                color: _hovered ? AppColors.primary : AppColors.textPrimary,
               ),
               if (count > 0)
                 Positioned(
@@ -422,27 +531,42 @@ class _CartButton extends ConsumerWidget {
 
 // ── Small icon button (mobile) ────────────────────────────────────────────────
 
-class _HeaderIconBtn extends StatelessWidget {
+class _HeaderIconBtn extends StatefulWidget {
   final IconData icon;
   final VoidCallback onTap;
 
   const _HeaderIconBtn({required this.icon, required this.onTap});
 
   @override
+  State<_HeaderIconBtn> createState() => _HeaderIconBtnState();
+}
+
+class _HeaderIconBtnState extends State<_HeaderIconBtn> {
+  bool _hovered = false;
+
+  @override
   Widget build(BuildContext context) {
     return MouseRegion(
       cursor: SystemMouseCursors.click,
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
       child: GestureDetector(
-        onTap: onTap,
-        child: Container(
+        onTap: widget.onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 150),
           width: 38,
           height: 38,
           decoration: BoxDecoration(
-            color: AppColors.surfaceVariant,
+            color: _hovered ? AppColors.goldLight : AppColors.surfaceVariant,
             borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: AppColors.border, width: 0.8),
+            border: Border.all(
+              color: _hovered
+                  ? AppColors.gold.withAlpha(100)
+                  : AppColors.border,
+              width: 0.8,
+            ),
           ),
-          child: Icon(icon, size: 20, color: AppColors.textPrimary),
+          child: Icon(widget.icon, size: 20, color: AppColors.textPrimary),
         ),
       ),
     );
@@ -451,33 +575,52 @@ class _HeaderIconBtn extends StatelessWidget {
 
 // ── Profile avatar ────────────────────────────────────────────────────────────
 
-class _ProfileAvatar extends ConsumerWidget {
+class _ProfileAvatar extends ConsumerStatefulWidget {
   final VoidCallback onTap;
 
   const _ProfileAvatar({required this.onTap});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final profileAsync = ref.watch(profileProvider);
+  ConsumerState<_ProfileAvatar> createState() => _ProfileAvatarState();
+}
 
-    final initials = profileAsync.when(
-      data: (p) => p.initials,
-      loading: () => '',
-      error: (e, st) => '',
-    );
+class _ProfileAvatarState extends ConsumerState<_ProfileAvatar> {
+  bool _hovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final initials = ref.watch(profileProvider).when(
+          data: (p) => p.initials,
+          loading: () => '',
+          error: (e, st) => '',
+        );
 
     return MouseRegion(
       cursor: SystemMouseCursors.click,
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
       child: GestureDetector(
-        onTap: onTap,
-        child: Container(
-          width: 38,
-          height: 38,
+        onTap: widget.onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 150),
+          width: 40,
+          height: 40,
           decoration: BoxDecoration(
             color: AppColors.textPrimary,
-            borderRadius: BorderRadius.circular(10),
+            shape: BoxShape.circle,
             border: Border.all(
-                color: AppColors.gold.withAlpha(80), width: 1.5),
+              color: _hovered ? AppColors.gold : AppColors.gold.withAlpha(80),
+              width: _hovered ? 2.0 : 1.5,
+            ),
+            boxShadow: _hovered
+                ? [
+                    BoxShadow(
+                      color: AppColors.gold.withAlpha(64),
+                      blurRadius: 10,
+                      spreadRadius: 0,
+                    ),
+                  ]
+                : null,
           ),
           child: initials.isNotEmpty
               ? Center(
@@ -485,12 +628,16 @@ class _ProfileAvatar extends ConsumerWidget {
                     initials,
                     style: const TextStyle(
                       color: Colors.white,
-                      fontSize: 13,
+                      fontSize: 14,
                       fontWeight: FontWeight.w700,
                     ),
                   ),
                 )
-              : const Icon(Icons.person_rounded, color: Colors.white, size: 20),
+              : const Icon(
+                  Icons.person_rounded,
+                  color: Colors.white,
+                  size: 20,
+                ),
         ),
       ),
     );

@@ -1,6 +1,10 @@
+import 'dart:math';
+
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../domain/models/booking.dart';
+
+String _generateOtp() => (100000 + Random().nextInt(900000)).toString();
 
 const _reviewSelect = '''
   *,
@@ -41,7 +45,8 @@ class BookingsRepository {
 
   // Status is derived automatically:
   //   Unassigned      → pending
-  //   External Vendor / DODO Team → assigned
+  //   External Vendor → assigned
+  //   DODO Team       → assigned_to_dodo_team (no vendor accept step)
   Future<Booking> updateBookingAssignment(
     String id, {
     required String assignmentType,
@@ -50,9 +55,11 @@ class BookingsRepository {
     required DateTime serviceDate,
     String? notes,
   }) async {
-    final status = assignmentType == kAssignmentTypeUnassigned
-        ? 'pending'
-        : 'assigned';
+    final status = switch (assignmentType) {
+      kAssignmentTypeUnassigned => 'pending',
+      kAssignmentTypeTeam => 'assigned_to_dodo_team',
+      _ => 'assigned',
+    };
 
     final Map<String, dynamic> payload = {
       'service_date': serviceDate.toIso8601String().split('T').first,
@@ -113,6 +120,7 @@ class BookingsRepository {
           'subtotal': subtotal,
           'discount_amount': 0.0,
           'total_amount': subtotal,
+          'completion_otp': _generateOtp(),
         })
         .select('id')
         .single();
@@ -140,6 +148,53 @@ class BookingsRepository {
         .single();
     return Booking.fromMap(data);
   }
+
+  Future<Booking> startDodoTeamService(String id) async {
+    final existing = await _supabase
+        .from('bookings')
+        .select('completion_otp')
+        .eq('id', id)
+        .single();
+
+    final payload = <String, dynamic>{'status': 'in_progress'};
+    if (existing['completion_otp'] == null) {
+      payload['completion_otp'] = _generateOtp();
+    }
+
+    final data = await _supabase
+        .from('bookings')
+        .update(payload)
+        .eq('id', id)
+        .select(_reviewSelect)
+        .single();
+    return Booking.fromMap(data);
+  }
+  Future<Booking> completeDodoTeamBooking(
+  String id,
+  String enteredOtp,
+) async {
+  final booking = await _supabase
+      .from('bookings')
+      .select('completion_otp')
+      .eq('id', id)
+      .single();
+
+  if (booking['completion_otp'] != enteredOtp) {
+    throw Exception('Invalid OTP');
+  }
+
+  final data = await _supabase
+      .from('bookings')
+      .update({
+        'status': 'completed',
+        'otp_verified_at': DateTime.now().toIso8601String(),
+      })
+      .eq('id', id)
+      .select(_reviewSelect)
+      .single();
+
+  return Booking.fromMap(data);
+}
 
   Future<void> deleteBooking(String id) async {
     await _supabase.from('bookings').delete().eq('id', id);

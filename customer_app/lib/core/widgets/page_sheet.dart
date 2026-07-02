@@ -1,5 +1,6 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:flutter/gestures.dart' show PointerDeviceKind;
 import 'package:flutter/services.dart';
 import '../constants/app_colors.dart';
 
@@ -52,7 +53,7 @@ class PageSheet extends StatelessWidget {
     final size = MediaQuery.of(context).size;
     // Fixed dimensions shared by every dialog — never grow or shrink with content.
     final modalW = (size.width * 0.9).clamp(320.0, 900.0);
-    final modalH = size.height * 0.82;
+    final modalH = (size.height * 0.88).clamp(400.0, size.height * 0.95);
 
     final cardColor = isDark ? const Color(0xFF0F0F0F) : AppColors.surface;
 
@@ -91,17 +92,29 @@ class PageSheet extends StatelessWidget {
                 clipBehavior: Clip.antiAlias,
                 elevation: 24,
                 shadowColor: Colors.black38,
-                child: Column(
-                  children: [
-                    _SheetHeader(title: title, isDark: isDark),
-                    Expanded(
-                      child: MediaQuery.removePadding(
-                        context: context,
-                        removeTop: true,
-                        child: child,
+                child: ScrollConfiguration(
+                  // Enable mouse-wheel and trackpad scrolling for all
+                  // scrollables hosted inside this sheet on web / desktop.
+                  behavior: ScrollConfiguration.of(context).copyWith(
+                    dragDevices: {
+                      PointerDeviceKind.touch,
+                      PointerDeviceKind.mouse,
+                      PointerDeviceKind.trackpad,
+                      PointerDeviceKind.stylus,
+                    },
+                  ),
+                  child: Column(
+                    children: [
+                      _SheetHeader(title: title, isDark: isDark),
+                      Expanded(
+                        child: MediaQuery.removePadding(
+                          context: context,
+                          removeTop: true,
+                          child: child,
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
             ),

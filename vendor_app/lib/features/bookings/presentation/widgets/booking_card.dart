@@ -55,12 +55,19 @@ class _BookingCardState extends ConsumerState<BookingCard> {
   // ── Start Service ─────────────────────────────────────────────────────────
   // Completion now requires OTP — handled by _handleInitiateCompletion and
   // _handleVerifyOtp instead of the generic _handleAction path.
+  // DODO Team bookings skip the Start Service step (admin starts the service).
+
+  bool get _isDodoBooking => widget.booking.isDodoTeam;
 
   String? get _actionLabel =>
-      widget.booking.status == 'assigned' ? 'Start Service' : null;
+      widget.booking.status == 'assigned' && !_isDodoBooking
+          ? 'Start Service'
+          : null;
 
   String? get _targetStatus =>
-      widget.booking.status == 'assigned' ? 'in_progress' : null;
+      widget.booking.status == 'assigned' && !_isDodoBooking
+          ? 'in_progress'
+          : null;
 
   Future<void> _handleAction() async {
     final targetStatus = _targetStatus;
@@ -176,11 +183,12 @@ class _BookingCardState extends ConsumerState<BookingCard> {
       // vendor still needs to enter the OTP. Setting _processed would
       // permanently disable the Verify button via _busy.
 
+      final providerLabel = _isDodoBooking ? 'DODO Team' : 'the vendor';
       ref.read(bookingsRepositoryProvider).createCustomerNotification(
         customerId: widget.booking.customerId,
         title: 'OTP for Service Completion',
         message: 'Your service is complete. Open your booking to view the OTP '
-            'and share it with the vendor.',
+            'and share it with $providerLabel.',
         notificationType: 'otp_generated',
         entityId: widget.booking.id,
       ).ignore();
@@ -267,9 +275,10 @@ class _BookingCardState extends ConsumerState<BookingCard> {
       // Terminal action: lock the card while it moves to the Completed tab.
       setState(() => _processed = true);
 
+      final completedBy = _isDodoBooking ? 'DODO Team ($_vendorName)' : 'Vendor $_vendorName';
       ref.read(bookingsRepositoryProvider).createAdminNotification(
         title: 'Booking Completed',
-        message: 'Vendor $_vendorName completed booking $_bookingRef via OTP.',
+        message: '$completedBy completed booking $_bookingRef via OTP.',
         notificationType: 'booking_completed',
         entityId: widget.booking.id,
       ).ignore();
@@ -368,14 +377,17 @@ class _BookingCardState extends ConsumerState<BookingCard> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final isAssigned = widget.booking.status == 'assigned';
+    // Vendor: assigned → Start Service → in_progress → Complete Service → awaiting_verification → OTP → completed.
+    // DODO Team: admin handles assignment; team sees in_progress → Complete Service → awaiting_verification → OTP → completed.
+    // isAssigned guards against showing vendor-only buttons if a DODO booking ever lands in 'assigned'.
+    final isAssigned = widget.booking.status == 'assigned' && !_isDodoBooking;
     final isInProgress = widget.booking.status == 'in_progress';
     final isAwaitingVerification = widget.booking.status == 'awaiting_verification';
+    final showOtpPanel = isAwaitingVerification;
     final isRejected = widget.booking.status == 'rejected';
 
-    // Diagnostic: log button state on every rebuild so we can see if
-    // _busy is true and which flag is causing it.
-    if (isAwaitingVerification) {
+    // Diagnostic: log button state on every rebuild for OTP panel cards.
+    if (showOtpPanel) {
       debugPrint(
         '[OTP][BUILD] Card rebuilt — bookingId=${widget.booking.id} '
         '_busy=$_busy (_processed=$_processed _updating=$_updating '
@@ -401,15 +413,18 @@ class _BookingCardState extends ConsumerState<BookingCard> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text(
-                  '#${widget.booking.bookingNumber}',
-                  style: theme.textTheme.titleSmall?.copyWith(
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.textPrimary,
+                Flexible(
+                  child: Text(
+                    '#${widget.booking.bookingNumber}',
+                    style: theme.textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.textPrimary,
+                    ),
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
+                const SizedBox(width: 8),
                 BookingStatusBadge(status: widget.booking.status),
               ],
             ),
@@ -489,33 +504,44 @@ class _BookingCardState extends ConsumerState<BookingCard> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text(
-                  FormatUtils.currency(widget.booking.totalAmount),
-                  style: theme.textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w700,
-                    color: isRejected
-                        ? AppColors.textSecondary
-                        : AppColors.primary,
+                Flexible(
+                  child: Text(
+                    FormatUtils.currency(widget.booking.totalAmount),
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w700,
+                      color: isRejected
+                          ? AppColors.textSecondary
+                          : AppColors.primary,
+                    ),
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
                 if (isRejected && widget.booking.rejectedAt != null)
-                  Text(
-                    'Rejected ${AppDateUtils.relativeLabel(widget.booking.rejectedAt!)}',
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: AppColors.error.withValues(alpha: 0.8),
+                  Flexible(
+                    child: Text(
+                      'Rejected ${AppDateUtils.relativeLabel(widget.booking.rejectedAt!)}',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: AppColors.error.withValues(alpha: 0.8),
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                      textAlign: TextAlign.end,
                     ),
                   )
                 else if (widget.booking.createdAt != null)
-                  Text(
-                    AppDateUtils.relativeLabel(widget.booking.createdAt!),
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: AppColors.textHint,
+                  Flexible(
+                    child: Text(
+                      AppDateUtils.relativeLabel(widget.booking.createdAt!),
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: AppColors.textHint,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                      textAlign: TextAlign.end,
                     ),
                   ),
               ],
             ),
 
-            // ── Actions: Assigned ─────────────────────────────────────────
+            // ── Actions: Assigned (vendor only) ───────────────────────────
             if (isAssigned) ...[
               const SizedBox(height: 12),
               SizedBox(
@@ -555,7 +581,8 @@ class _BookingCardState extends ConsumerState<BookingCard> {
               ),
             ],
 
-            // ── Actions: In Progress → generate OTP ───────────────────────
+            // ── Actions: In Progress → Complete Service (vendor and DODO Team) ──
+            // Triggers OTP generation/notification and moves to awaiting_verification.
             if (isInProgress) ...[
               const SizedBox(height: 12),
               SizedBox(
@@ -576,8 +603,8 @@ class _BookingCardState extends ConsumerState<BookingCard> {
               ),
             ],
 
-            // ── Actions: Awaiting Verification → enter OTP ─────────────────
-            if (isAwaitingVerification) ...[
+            // ── Actions: Enter OTP (awaiting_verification — both roles) ──────
+            if (showOtpPanel) ...[
               const SizedBox(height: 12),
               Container(
                 padding: const EdgeInsets.all(12),

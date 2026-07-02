@@ -5,6 +5,7 @@ import '../../../../core/widgets/empty_state_view.dart';
 import '../../../../core/widgets/error_view.dart';
 import '../../../../core/widgets/vendor_scaffold.dart';
 import '../../domain/models/booking.dart';
+import '../../../auth/presentation/providers/auth_controller.dart';
 import '../providers/bookings_provider.dart';
 import '../widgets/booking_card.dart';
 
@@ -20,8 +21,11 @@ class BookingsPage extends ConsumerStatefulWidget {
 class _BookingsPageState extends ConsumerState<BookingsPage>
     with SingleTickerProviderStateMixin {
   late final TabController _tabController;
+  late final bool _isDodoTeam;
 
-  static const _tabs = [
+  // Vendor: full pipeline including Assigned and Rejected tabs.
+  // DODO Team: skips Assigned (admin handles that) and Rejected (no reject action).
+  static const _vendorTabs = [
     'Assigned',
     'In Progress',
     'Completed',
@@ -29,10 +33,19 @@ class _BookingsPageState extends ConsumerState<BookingsPage>
     'Cancelled',
     'Today',
   ];
+  static const _dodoTabs = [
+    'In Progress',
+    'Completed',
+    'Cancelled',
+    'Today',
+  ];
+
+  List<String> get _tabs => _isDodoTeam ? _dodoTabs : _vendorTabs;
 
   @override
   void initState() {
     super.initState();
+    _isDodoTeam = ref.read(currentVendorUserProvider)?.isDodoTeam ?? false;
     _tabController = TabController(
       length: _tabs.length,
       vsync: this,
@@ -76,14 +89,21 @@ class _BookingsPageState extends ConsumerState<BookingsPage>
               ),
               data: (bookings) => TabBarView(
                 controller: _tabController,
-                children: [
-                  _buildBookingsList(bookings, 'assigned'),
-                  _buildBookingsList(bookings, 'in_progress', 'awaiting_verification'),
-                  _buildBookingsList(bookings, 'completed'),
-                  _buildBookingsList(bookings, 'rejected'),
-                  _buildBookingsList(bookings, 'cancelled'),
-                  _buildTodayList(bookings),
-                ],
+                children: _isDodoTeam
+                    ? [
+                        _buildBookingsList(bookings, 'in_progress', 'awaiting_verification'),
+                        _buildBookingsList(bookings, 'completed'),
+                        _buildBookingsList(bookings, 'cancelled'),
+                        _buildTodayList(bookings),
+                      ]
+                    : [
+                        _buildBookingsList(bookings, 'assigned'),
+                        _buildBookingsList(bookings, 'in_progress', 'awaiting_verification'),
+                        _buildBookingsList(bookings, 'completed'),
+                        _buildBookingsList(bookings, 'rejected'),
+                        _buildBookingsList(bookings, 'cancelled'),
+                        _buildTodayList(bookings),
+                      ],
               ),
             ),
           ),
@@ -141,7 +161,9 @@ class _BookingsPageState extends ConsumerState<BookingsPage>
     final label = status.replaceAll('_', ' ');
     final subtitle = switch (status) {
       'assigned' => 'New bookings will appear here once assigned to you.',
-      'in_progress' => 'Tap "Start Service" on an assigned booking to begin.',
+      'in_progress' => _isDodoTeam
+          ? 'Bookings started by admin will appear here.'
+          : 'Tap "Start Service" on an assigned booking to begin.',
       'rejected' => 'Bookings you reject will appear here for your records.',
       _ => null,
     };

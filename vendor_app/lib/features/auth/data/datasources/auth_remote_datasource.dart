@@ -77,6 +77,27 @@ class AuthRemoteDatasource {
     }
   }
 
+  /// Checks if the phone belongs to a DODO Team (supervisor phone).
+  Future<Map<String, dynamic>?> getDodoTeamByPhone(String phone) async {
+    debugPrint('[AUTH] getDodoTeamByPhone — value: "$phone"');
+    try {
+      final rows = await _client
+          .from('dodo_teams')
+          .select()
+          .eq('phone', phone)
+          .limit(1);
+      if (rows.isEmpty) {
+        debugPrint('[AUTH] getDodoTeamByPhone — no match');
+        return null;
+      }
+      debugPrint('[AUTH] getDodoTeamByPhone — FOUND id=${rows.first['id']}');
+      return rows.first;
+    } catch (e) {
+      debugPrint('[AUTH] getDodoTeamByPhone — EXCEPTION: $e');
+      rethrow;
+    }
+  }
+
   // ── Session ──────────────────────────────────────────────────────────────────
   // Session = phone number stored in SharedPreferences (mirrors Customer App).
 

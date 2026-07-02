@@ -2,9 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/constants/app_colors.dart';
-import '../../../models/banner_model.dart';
 import '../../../models/category_model.dart';
 import '../../../models/service_model.dart';
+import '../../booking/services/coupon_providers.dart';
 import '../../service/utils/service_detail_launcher.dart';
 import '../services/home_providers.dart';
 import '../widgets/customer_reviews_section.dart';
@@ -21,7 +21,7 @@ class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
 
   Future<void> _onRefresh(WidgetRef ref) async {
-    ref.invalidate(homeBannersProvider);
+    ref.invalidate(activeCouponsProvider);
     ref.invalidate(featuredCategoriesProvider);
     ref.invalidate(featuredServicesProvider);
     ref.invalidate(popularServicesProvider);
@@ -30,7 +30,7 @@ class HomeScreen extends ConsumerWidget {
     ref.invalidate(homeReviewsProvider);
     try {
       await Future.wait([
-        ref.read(homeBannersProvider.future),
+        ref.read(activeCouponsProvider.future),
         ref.read(featuredCategoriesProvider.future),
         ref.read(featuredServicesProvider.future),
         ref.read(popularServicesProvider.future),
@@ -49,19 +49,9 @@ class HomeScreen extends ConsumerWidget {
     ServiceSelectionModal.show(context, category);
   }
 
-  void _onBannerTap(BuildContext context, BannerModel banner) {
-    final type = banner.redirectType;
-    final id = banner.redirectId;
-    if (type == 'service' && id != null && id.isNotEmpty) {
-      context.push('/service-detail/$id');
-    } else {
-      context.push('/categories');
-    }
-  }
-
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final homeBanners      = ref.watch(homeBannersProvider);
+    final activeCoupons      = ref.watch(activeCouponsProvider);
     final featuredCategories = ref.watch(featuredCategoriesProvider);
     // final featuredServices = ref.watch(featuredServicesProvider);
     // final popularServices  = ref.watch(popularServicesProvider);
@@ -69,122 +59,111 @@ class HomeScreen extends ConsumerWidget {
     final newServices      = ref.watch(newServicesProvider);
     final reviews          = ref.watch(homeReviewsProvider);
 
-    // Only show banners section while loading or when there is real data.
-    final showBanners = homeBanners.isLoading ||
-        (homeBanners.asData?.value.isNotEmpty ?? false);
+    // Only show offers section while loading or when there are active coupons.
+    final showCoupons = activeCoupons.isLoading ||
+        (activeCoupons.asData?.value.isNotEmpty ?? false);
 
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: SafeArea(
-        child: Align(
-          alignment: Alignment.topCenter,
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 1280),
-            child: RefreshIndicator(
-              color: AppColors.gold,
-              onRefresh: () => _onRefresh(ref),
-              child: ScrollConfiguration(
-                behavior: ScrollConfiguration.of(context)
-                    .copyWith(scrollbars: false),
-                child: CustomScrollView(
-                  physics: const AlwaysScrollableScrollPhysics(),
-                  slivers: [
-                    // ── Greeting row ───────────────────────────────────
-                    const SliverToBoxAdapter(child: HomeHeaderSection()),
+        child: RefreshIndicator(
+          color: AppColors.gold,
+          onRefresh: () => _onRefresh(ref),
+          child: ScrollConfiguration(
+            behavior: ScrollConfiguration.of(context)
+                .copyWith(scrollbars: false),
+            child: CustomScrollView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              slivers: [
+                // ── All constrained page sections (max-width 1280) ─────
+                SliverToBoxAdapter(
+                  child: Align(
+                    alignment: Alignment.topCenter,
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 1280),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          // ── Greeting row ───────────────────────────
+                          const HomeHeaderSection(),
 
-                    // ── Premium Hero Section ────────────────────────────
-                    const SliverToBoxAdapter(child: SizedBox(height: 16)),
-                    SliverToBoxAdapter(
-                      child: HeroSection(
-                        onBookNow: () => context.push('/categories'),
-                        onExplore: () => context.push('/categories'),
+                          // ── Premium Hero Section ───────────────────
+                          const SizedBox(height: 16),
+                          HeroSection(
+                            onBookNow: () => context.push('/categories'),
+                            onExplore: () => context.push('/categories'),
+                          ),
+
+                          // ── Special offers (active coupons) ───────────
+                          if (showCoupons) ...[
+                            const SizedBox(height: 28),
+                            SpecialOffersSection(asyncCoupons: activeCoupons),
+                          ],
+
+                          // ── Service categories (circular) ──────────
+                          const SizedBox(height: 28),
+                          HomeCategoriesSection(
+                            asyncCategories: featuredCategories,
+                            onCategorySelected: (c) =>
+                                _onCategoryTap(context, c),
+                            onSeeAll: () => context.push('/categories'),
+                          ),
+
+                          // ── Featured services ──────────────────────
+                          // const SizedBox(height: 32),
+                          // TrendingServicesSection(
+                          //   asyncServices: featuredServices,
+                          //   onServiceTap: (s) => _onServiceTap(context, s),
+                          //   onSeeAll: () => context.push('/categories'),
+                          //   title: 'Featured Services',
+                          // ),
+
+                          // ── Popular services ───────────────────────
+                          // const SizedBox(height: 32),
+                          // TrendingServicesSection(
+                          //   asyncServices: popularServices,
+                          //   onServiceTap: (s) => _onServiceTap(context, s),
+                          //   onSeeAll: () => context.push('/categories'),
+                          //   title: 'Popular Services',
+                          // ),
+
+                          // ── Most booked services ───────────────────
+                          const SizedBox(height: 32),
+                          TrendingServicesSection(
+                            asyncServices: trendingServices,
+                            onServiceTap: (s) => _onServiceTap(context, s),
+                            onSeeAll: () => context.push('/categories'),
+                            title: 'Most Booked Services',
+                          ),
+
+                          // ── New services ───────────────────────────
+                          const SizedBox(height: 32),
+                          TrendingServicesSection(
+                            asyncServices: newServices,
+                            onServiceTap: (s) => _onServiceTap(context, s),
+                            onSeeAll: () => context.push('/categories'),
+                            title: 'New Services',
+                          ),
+
+                          // ── Customer reviews ───────────────────────
+                          const SizedBox(height: 32),
+                          CustomerReviewsSection(asyncReviews: reviews),
+
+                          // ── Why choose DODO Booker ─────────────────
+                          const SizedBox(height: 32),
+                          const WhyDodoSection(),
+
+                          const SizedBox(height: 48),
+                        ],
                       ),
                     ),
-
-                    // ── Promotional banners (hidden when empty / error) ─
-                    if (showBanners) ...[
-                      const SliverToBoxAdapter(child: SizedBox(height: 28)),
-                      SliverToBoxAdapter(
-                        child: SpecialOffersSection(
-                          asyncBanners: homeBanners,
-                          onBannerTap: (b) => _onBannerTap(context, b),
-                        ),
-                      ),
-                    ],
-
-                    // ── Service categories (circular) ──────────────────
-                    const SliverToBoxAdapter(child: SizedBox(height: 28)),
-                    SliverToBoxAdapter(
-                      child: HomeCategoriesSection(
-                        asyncCategories: featuredCategories,
-                        onCategorySelected: (c) =>
-                            _onCategoryTap(context, c),
-                        onSeeAll: () => context.push('/categories'),
-                      ),
-                    ),
-
-                    // ── Featured services ──────────────────────────────
-                    // const SliverToBoxAdapter(child: SizedBox(height: 32)),
-                    // SliverToBoxAdapter(
-                    //   child: TrendingServicesSection(
-                    //     asyncServices: featuredServices,
-                    //     onServiceTap: (s) => _onServiceTap(context, s),
-                    //     onSeeAll: () => context.push('/categories'),
-                    //     title: 'Featured Services',
-                    //   ),
-                    // ),
-
-                    // ── Popular services ───────────────────────────────
-                    // const SliverToBoxAdapter(child: SizedBox(height: 32)),
-                    // SliverToBoxAdapter(
-                    //   child: TrendingServicesSection(
-                    //     asyncServices: popularServices,
-                    //     onServiceTap: (s) => _onServiceTap(context, s),
-                    //     onSeeAll: () => context.push('/categories'),
-                    //     title: 'Popular Services',
-                    //   ),
-                    // ),
-
-                    // ── Most booked services ───────────────────────────
-                    const SliverToBoxAdapter(child: SizedBox(height: 32)),
-                    SliverToBoxAdapter(
-                      child: TrendingServicesSection(
-                        asyncServices: trendingServices,
-                        onServiceTap: (s) => _onServiceTap(context, s),
-                        onSeeAll: () => context.push('/categories'),
-                        title: 'Most Booked Services',
-                      ),
-                    ),
-
-                    // ── New services ───────────────────────────────────
-                    const SliverToBoxAdapter(child: SizedBox(height: 32)),
-                    SliverToBoxAdapter(
-                      child: TrendingServicesSection(
-                        asyncServices: newServices,
-                        onServiceTap: (s) => _onServiceTap(context, s),
-                        onSeeAll: () => context.push('/categories'),
-                        title: 'New Services',
-                      ),
-                    ),
-
-                    // ── Customer reviews ───────────────────────────────
-                    const SliverToBoxAdapter(child: SizedBox(height: 32)),
-                    SliverToBoxAdapter(
-                      child: CustomerReviewsSection(asyncReviews: reviews),
-                    ),
-
-                    // ── Why choose DODO Booker ─────────────────────────
-                    const SliverToBoxAdapter(child: SizedBox(height: 32)),
-                    const SliverToBoxAdapter(child: WhyDodoSection()),
-
-                    // ── Site footer ────────────────────────────────────
-                    const SliverToBoxAdapter(child: SizedBox(height: 48)),
-                    const SliverToBoxAdapter(child: FooterSection()),
-
-                    const SliverToBoxAdapter(child: SizedBox(height: 32)),
-                  ],
+                  ),
                 ),
-              ),
+
+                // ── Site footer – full browser width ───────────────────
+                const SliverToBoxAdapter(child: FooterSection()),
+                const SliverToBoxAdapter(child: SizedBox(height: 32)),
+              ],
             ),
           ),
         ),

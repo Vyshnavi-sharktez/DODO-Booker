@@ -40,6 +40,11 @@ class _BookingFlowModalState extends ConsumerState<BookingFlowModal>
   bool _applyingCoupon = false;
   String? _couponError;
 
+  // Shared scroll controller for the content area across all steps and the
+  // success view. Lets the Scrollbar attach and allows us to jump back to the
+  // top when the user advances or goes back between steps.
+  final _contentScrollCtrl = ScrollController();
+
   late final AnimationController _successCtrl;
   late final Animation<double> _successScale;
 
@@ -66,7 +71,14 @@ class _BookingFlowModalState extends ConsumerState<BookingFlowModal>
   void dispose() {
     _couponCtrl.dispose();
     _successCtrl.dispose();
+    _contentScrollCtrl.dispose();
     super.dispose();
+  }
+
+  void _scrollToTop() {
+    if (_contentScrollCtrl.hasClients) {
+      _contentScrollCtrl.jumpTo(0);
+    }
   }
 
   // ── Navigation ────────────────────────────────────────────────────────────────
@@ -78,6 +90,9 @@ class _BookingFlowModalState extends ConsumerState<BookingFlowModal>
       setState(() {
         _step--;
         _errorMessage = null;
+      });
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _scrollToTop();
       });
     }
   }
@@ -94,6 +109,9 @@ class _BookingFlowModalState extends ConsumerState<BookingFlowModal>
       setState(() {
         _step++;
         _errorMessage = null;
+      });
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _scrollToTop();
       });
       return;
     }
@@ -120,6 +138,9 @@ class _BookingFlowModalState extends ConsumerState<BookingFlowModal>
       setState(() {
         _isCreating = false;
         _showSuccess = true;
+      });
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _scrollToTop();
       });
       _successCtrl.forward();
     } catch (e) {
@@ -216,6 +237,7 @@ class _BookingFlowModalState extends ConsumerState<BookingFlowModal>
           _buildStepper(),
           Expanded(
             child: SingleChildScrollView(
+              controller: _contentScrollCtrl,
               padding: const EdgeInsets.fromLTRB(24, 20, 24, 8),
               child: _buildStepContent(
                   selectedCoupon: selectedCoupon, discount: discount),
@@ -746,53 +768,54 @@ class _BookingFlowModalState extends ConsumerState<BookingFlowModal>
       children: [
         Expanded(
           child: SingleChildScrollView(
+            controller: _contentScrollCtrl,
             padding: const EdgeInsets.fromLTRB(24, 0, 24, 16),
             child: Column(
-              children: [
-                const SizedBox(height: 32),
-                ScaleTransition(
-                  scale: _successScale,
-                  child: Container(
-                    width: 72,
-                    height: 72,
-                    decoration: BoxDecoration(
-                      color: AppColors.success,
-                      shape: BoxShape.circle,
-                      boxShadow: [
-                        BoxShadow(
-                          color: AppColors.success.withAlpha(60),
-                          blurRadius: 20,
-                          spreadRadius: 2,
-                        ),
-                      ],
-                    ),
-                    child: const Icon(Icons.check_rounded,
-                        size: 38, color: Colors.white),
-                  ),
-                ),
-                const SizedBox(height: 18),
-                Text(
-                  'Booking Confirmed!',
-                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                        fontWeight: FontWeight.w800,
+                children: [
+                  const SizedBox(height: 32),
+                  ScaleTransition(
+                    scale: _successScale,
+                    child: Container(
+                      width: 72,
+                      height: 72,
+                      decoration: BoxDecoration(
+                        color: AppColors.success,
+                        shape: BoxShape.circle,
+                        boxShadow: [
+                          BoxShadow(
+                            color: AppColors.success.withAlpha(60),
+                            blurRadius: 20,
+                            spreadRadius: 2,
+                          ),
+                        ],
                       ),
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  "We'll see you on ${_dateStr()}",
-                  style: Theme.of(context)
-                      .textTheme
-                      .bodyMedium
-                      ?.copyWith(color: AppColors.textSecondary),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 28),
-                _buildSuccessCard(),
-                const SizedBox(height: 24),
-              ],
+                      child: const Icon(Icons.check_rounded,
+                          size: 38, color: Colors.white),
+                    ),
+                  ),
+                  const SizedBox(height: 18),
+                  Text(
+                    'Booking Confirmed!',
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                          fontWeight: FontWeight.w800,
+                        ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    "We'll see you on ${_dateStr()}",
+                    style: Theme.of(context)
+                        .textTheme
+                        .bodyMedium
+                        ?.copyWith(color: AppColors.textSecondary),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 28),
+                  _buildSuccessCard(),
+                  const SizedBox(height: 24),
+                ],
+              ),
             ),
           ),
-        ),
         Container(
           padding: const EdgeInsets.fromLTRB(20, 10, 20, 16),
           decoration: const BoxDecoration(
