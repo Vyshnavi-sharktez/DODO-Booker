@@ -54,80 +54,111 @@ class _LoginPageState extends ConsumerState<LoginPage> {
     return AuthLoadingOverlay(
       isLoading: isLoading,
       child: Scaffold(
+        backgroundColor: const Color(0xFF111111),
         body: SafeArea(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.symmetric(horizontal: 24),
-            child: Form(
-              key: _formKey,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  const SizedBox(height: 64),
-                  const Icon(
-                    Icons.store_rounded,
-                    size: 64,
-                    color: AppColors.primary,
-                  ),
-                  const SizedBox(height: 16),
-                  Text(
-                    'DODO Booker',
-                    textAlign: TextAlign.center,
-                    style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                          fontWeight: FontWeight.w800,
-                          color: AppColors.textPrimary,
+          child: Center(
+            child: SingleChildScrollView(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 24, vertical: 48),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 420),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // ── Brand header ──────────────────────────────────────────
+                    const _BrandHeader(),
+                    const SizedBox(height: 36),
+
+                    // ── Login card ────────────────────────────────────────────
+                    Form(
+                      key: _formKey,
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(20),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.18),
+                              blurRadius: 40,
+                              offset: const Offset(0, 10),
+                            ),
+                          ],
                         ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    'Vendor Portal',
-                    textAlign: TextAlign.center,
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: AppColors.textSecondary,
-                          letterSpacing: 1.5,
+                        padding: const EdgeInsets.all(32),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'Sign in to continue',
+                              style: TextStyle(
+                                fontSize: 20,
+                                fontWeight: FontWeight.w700,
+                                color: AppColors.textPrimary,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            const Text(
+                              'Enter your registered mobile number to receive a one-time password.',
+                              style: TextStyle(
+                                fontSize: 13,
+                                color: AppColors.textSecondary,
+                                height: 1.5,
+                              ),
+                            ),
+                            const SizedBox(height: 28),
+                            const Text(
+                              'Mobile Number',
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                                color: AppColors.textPrimary,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            PhoneNumberField(
+                              controller: _phoneController,
+                              countryCode: _countryCode,
+                              onSubmitted: _handleSendOtp,
+                              validator: (value) {
+                                if (value == null || value.trim().isEmpty) {
+                                  return 'Enter your mobile number';
+                                }
+                                if (value.trim().length < 10) {
+                                  return 'Enter a valid 10-digit number';
+                                }
+                                return null;
+                              },
+                            ),
+                            if (errorMessage != null) ...[
+                              const SizedBox(height: 14),
+                              _AuthErrorBanner(message: errorMessage),
+                            ],
+                            const SizedBox(height: 28),
+                            SizedBox(
+                              width: double.infinity,
+                              height: 48,
+                              child: AppButton(
+                                label: 'Send OTP',
+                                isLoading: isLoading,
+                                onPressed: isLoading ? null : _handleSendOtp,
+                              ),
+                            ),
+                          ],
                         ),
-                  ),
-                  const SizedBox(height: 56),
-                  Text(
-                    'Welcome back',
-                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                          fontWeight: FontWeight.w700,
-                          color: AppColors.textPrimary,
-                        ),
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    'Enter your mobile number to receive an OTP',
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: AppColors.textSecondary,
-                        ),
-                  ),
-                  const SizedBox(height: 28),
-                  PhoneNumberField(
-                    controller: _phoneController,
-                    countryCode: _countryCode,
-                    onSubmitted: _handleSendOtp,
-                    validator: (value) {
-                      if (value == null || value.trim().isEmpty) {
-                        return 'Enter your mobile number';
-                      }
-                      if (value.trim().length < 10) {
-                        return 'Enter a valid 10-digit number';
-                      }
-                      return null;
-                    },
-                  ),
-                  if (errorMessage != null) ...[
-                    const SizedBox(height: 12),
-                    _AuthErrorBanner(message: errorMessage),
+                      ),
+                    ),
+
+                    const SizedBox(height: 28),
+                    Text(
+                      '© ${DateTime.now().year} DODO Booker. All rights reserved.',
+                      style: TextStyle(
+                        color: Colors.white.withValues(alpha: 0.45),
+                        fontSize: 11,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
                   ],
-                  const SizedBox(height: 28),
-                  AppButton(
-                    label: 'Send OTP',
-                    isLoading: isLoading,
-                    onPressed: isLoading ? null : _handleSendOtp,
-                  ),
-                  const SizedBox(height: 24),
-                ],
+                ),
               ),
             ),
           ),
@@ -136,6 +167,61 @@ class _LoginPageState extends ConsumerState<LoginPage> {
     );
   }
 }
+
+// ── Brand header ──────────────────────────────────────────────────────────────
+
+class _BrandHeader extends StatelessWidget {
+  const _BrandHeader();
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Image.asset(
+          'assets/images/logo.png',
+          height: 88,
+          fit: BoxFit.contain,
+          filterQuality: FilterQuality.high,
+          errorBuilder: (context, error, stack) => Container(
+            width: 80,
+            height: 80,
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.15),
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: const Icon(
+              Icons.store_rounded,
+              size: 40,
+              color: Colors.white,
+            ),
+          ),
+        ),
+        const SizedBox(height: 20),
+        const Text(
+          'DODO BOOKER',
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: 26,
+            fontWeight: FontWeight.w800,
+            letterSpacing: 1.5,
+          ),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          'Vendor Portal',
+          style: TextStyle(
+            color: Colors.white.withValues(alpha: 0.72),
+            fontSize: 15,
+            fontWeight: FontWeight.w400,
+            letterSpacing: 0.4,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// ── Error banner ──────────────────────────────────────────────────────────────
 
 class _AuthErrorBanner extends StatelessWidget {
   const _AuthErrorBanner({required this.message});

@@ -25,27 +25,29 @@ const double _wDate = 110;
 const double _wStatus = 130;
 const double _wTotal = 140;
 const double _wRating = 120;
-const double _wActions = 176;
+const double _wActions = 200;
 const double _tableMinWidth =
     _wId + _wAssigned + _wService + _wDate + _wStatus + _wTotal + _wRating + _wActions;
 
 // ── Status display config ─────────────────────────────────────────────────────
 
 const _statusConfig = <String, (String, Color, Color)>{
-  'pending':     ('Pending',     Color(0xFFDD6B20), Color(0xFFFEEBC8)),
-  'assigned':    ('Assigned',    Color(0xFF3182CE), Color(0xFFEBF8FF)),
-  'accepted':    ('Accepted',    Color(0xFF2C7A7B), Color(0xFFE6FFFA)),
-  'on_the_way':  ('On The Way',  Color(0xFF4A6FA5), Color(0xFFEBF4FF)),
-  'arrived':     ('Arrived',     Color(0xFF6B46C1), Color(0xFFF3E8FF)),
-  'in_progress': ('In Progress', Color(0xFF805AD5), Color(0xFFFAF5FF)),
-  'completed':   ('Completed',   Color(0xFF38A169), Color(0xFFF0FFF4)),
-  'rejected':    ('Rejected',    Color(0xFFC05621), Color(0xFFFEEBC8)),
-  'cancelled':   ('Cancelled',   Color(0xFFE53E3E), Color(0xFFFFF5F5)),
+  'pending':               ('Pending',            Color(0xFFDD6B20), Color(0xFFFEEBC8)),
+  'assigned':              ('Assigned',            Color(0xFF3182CE), Color(0xFFEBF8FF)),
+  'assigned_to_dodo_team': ('DODO Assigned',       Color(0xFF6B46C1), Color(0xFFF3E8FF)),
+  'accepted':              ('Accepted',            Color(0xFF2C7A7B), Color(0xFFE6FFFA)),
+  'on_the_way':            ('On The Way',          Color(0xFF4A6FA5), Color(0xFFEBF4FF)),
+  'arrived':               ('Arrived',             Color(0xFF6B46C1), Color(0xFFF3E8FF)),
+  'in_progress':           ('In Progress',         Color(0xFF805AD5), Color(0xFFFAF5FF)),
+  'completed':             ('Completed',           Color(0xFF38A169), Color(0xFFF0FFF4)),
+  'rejected':              ('Rejected',            Color(0xFFC05621), Color(0xFFFEEBC8)),
+  'cancelled':             ('Cancelled',           Color(0xFFE53E3E), Color(0xFFFFF5F5)),
 };
 
 const _allStatuses = [
   'pending',
   'assigned',
+  'assigned_to_dodo_team',
   'accepted',
   'on_the_way',
   'arrived',
@@ -57,7 +59,7 @@ const _allStatuses = [
 
 // Statuses that admin can still cancel from (active lifecycle)
 const _cancellableStatuses = {
-  'pending', 'assigned', 'accepted', 'on_the_way', 'arrived', 'in_progress',
+  'pending', 'assigned', 'assigned_to_dodo_team', 'accepted', 'on_the_way', 'arrived', 'in_progress',
 };
 
 // Sentinel for the "Unassigned" option in the Assigned To filter.
@@ -367,6 +369,72 @@ class _BookingsPageState extends ConsumerState<BookingsPage> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Cancel failed: $e'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _startDodoService(Booking booking) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape:
+            RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        title: const Text('Start Service'),
+        content: Text(
+          'Start service for booking "${booking.bookingNumber}"?\n\n'
+          'The DODO Team will be notified that the service is now in progress.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            style: FilledButton.styleFrom(backgroundColor: AppColors.primary),
+            child: const Text('Start Service'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    try {
+      await ref
+          .read(bookingsNotifierProvider.notifier)
+          .startDodoTeamService(booking.id);
+
+      // Notify customer that service has started.
+      try {
+        await ref
+            .read(notificationsNotifierProvider.notifier)
+            .createNotification(
+              userType: 'customer',
+              userId: booking.customerId,
+              title: 'Service Started',
+              message: 'Your service is now in progress by the DODO Team.',
+              notificationType: 'vendor_started',
+              entityType: 'booking',
+              entityId: booking.id,
+            );
+      } catch (_) {}
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+                'Service started for booking #${booking.bookingNumber}'),
+            backgroundColor: AppColors.primary,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to start service: $e'),
             backgroundColor: AppColors.error,
           ),
         );
@@ -721,6 +789,7 @@ class _BookingsPageState extends ConsumerState<BookingsPage> {
                   onView: _openDetails,
                   onAssign: _openAssignDialog,
                   onHistory: _openHistoryDialog,
+                  onStartDodoService: _startDodoService,
                   onCancel: _confirmCancel,
                   onDelete: _confirmDelete,
                 );
@@ -742,6 +811,7 @@ class _BookingsTable extends StatelessWidget {
   final void Function(Booking) onView;
   final void Function(Booking) onAssign;
   final void Function(Booking) onHistory;
+  final void Function(Booking) onStartDodoService;
   final void Function(Booking) onCancel;
   final void Function(Booking) onDelete;
 
@@ -752,6 +822,7 @@ class _BookingsTable extends StatelessWidget {
     required this.onView,
     required this.onAssign,
     required this.onHistory,
+    required this.onStartDodoService,
     required this.onCancel,
     required this.onDelete,
   });
@@ -798,6 +869,7 @@ class _BookingsTable extends StatelessWidget {
                                   onView: () => onView(b),
                                   onAssign: () => onAssign(b),
                                   onHistory: () => onHistory(b),
+                                  onStartDodoService: () => onStartDodoService(b),
                                   onCancel: () => onCancel(b),
                                   onDelete: () => onDelete(b),
                                 );
@@ -861,6 +933,7 @@ class _BookingRow extends StatelessWidget {
   final VoidCallback onView;
   final VoidCallback onAssign;
   final VoidCallback onHistory;
+  final VoidCallback onStartDodoService;
   final VoidCallback onCancel;
   final VoidCallback onDelete;
 
@@ -870,6 +943,7 @@ class _BookingRow extends StatelessWidget {
     required this.onView,
     required this.onAssign,
     required this.onHistory,
+    required this.onStartDodoService,
     required this.onCancel,
     required this.onDelete,
   });
@@ -983,6 +1057,14 @@ class _BookingRow extends StatelessWidget {
                   tooltip: 'Assignment history',
                   visualDensity: VisualDensity.compact,
                 ),
+                if (booking.status == 'assigned_to_dodo_team')
+                  IconButton(
+                    onPressed: onStartDodoService,
+                    icon: Icon(Icons.play_arrow_rounded,
+                        size: 16, color: AppColors.primary),
+                    tooltip: 'Start Service (DODO Team)',
+                    visualDensity: VisualDensity.compact,
+                  ),
                 if (_cancellableStatuses.contains(booking.status))
                   IconButton(
                     onPressed: onCancel,

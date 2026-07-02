@@ -239,7 +239,7 @@ class _NotificationsPanelDialogState
                         return ListView.separated(
                           shrinkWrap: true,
                           itemCount: sorted.length,
-                          separatorBuilder: (_, __) =>
+                          separatorBuilder: (context, index) =>
                               const Divider(height: 1),
                           itemBuilder: (ctx, i) {
                             final n = sorted[i];

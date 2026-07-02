@@ -216,12 +216,17 @@ class BookingCard extends StatelessWidget {
       return (AppColors.warning, 'Pending');
     case BookingStatus.assigned:
       return (AppColors.primary, 'Assigned');
+    case BookingStatus.assignedToDodoTeam:
+      return (const Color(0xFF6B46C1), 'DODO Team Assigned');
     case BookingStatus.accepted:
       return (const Color(0xFF00ACC1), 'Accepted');
     case BookingStatus.enRoute:
       return (const Color(0xFF5C6BC0), 'En Route');
+    case BookingStatus.inProgress:
     case BookingStatus.started:
       return (const Color(0xFFFF6D00), 'In Progress');
+    case BookingStatus.awaitingVerification:
+      return (AppColors.warning, 'OTP Verification');
     case BookingStatus.completed:
       return (AppColors.success, 'Completed');
     case BookingStatus.cancelled:

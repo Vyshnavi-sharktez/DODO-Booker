@@ -17,6 +17,12 @@ class BookingsRepositoryImpl implements IBookingsRepository {
   }
 
   @override
+  Future<List<Booking>> getDodoTeamBookings(String dodoTeamId) async {
+    final rows = await _datasource.fetchDodoTeamBookings(dodoTeamId);
+    return rows.map(Booking.fromMap).toList();
+  }
+
+  @override
   Future<Booking?> getBookingById(String bookingId) async {
     final row = await _datasource.fetchBookingById(bookingId);
     if (row == null) return null;

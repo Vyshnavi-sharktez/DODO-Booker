@@ -73,6 +73,27 @@ class BookingsNotifier extends StateNotifier<AsyncValue<List<Booking>>> {
     state = AsyncValue.data([created, ...current]);
   }
 
+  Future<void> startDodoTeamService(String id) async {
+    final updated = await _repo.startDodoTeamService(id);
+    final current = state.valueOrNull;
+    if (current != null) {
+      state = AsyncValue.data(
+        current.map((b) => b.id == id ? updated : b).toList(),
+      );
+    }
+  }
+
+  Future<void> completeDodoTeamBooking(String id, String otp) async {
+    final updated = await _repo.completeDodoTeamBooking(id, otp);
+
+    final current = state.valueOrNull;
+    if (current != null) {
+      state = AsyncValue.data(
+        current.map((b) => b.id == id ? updated : b).toList(),
+      );
+    }
+  }
+
   Future<void> deleteBooking(String id) async {
     await _repo.deleteBooking(id);
     final current = state.valueOrNull;
@@ -84,5 +105,5 @@ class BookingsNotifier extends StateNotifier<AsyncValue<List<Booking>>> {
 
 final bookingsNotifierProvider =
     StateNotifierProvider<BookingsNotifier, AsyncValue<List<Booking>>>((ref) {
-  return BookingsNotifier(ref.watch(bookingsRepositoryProvider));
-});
+      return BookingsNotifier(ref.watch(bookingsRepositoryProvider));
+    });

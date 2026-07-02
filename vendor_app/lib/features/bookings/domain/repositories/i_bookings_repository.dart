@@ -2,6 +2,7 @@ import '../models/booking.dart';
 
 abstract class IBookingsRepository {
   Future<List<Booking>> getVendorBookings(String vendorId);
+  Future<List<Booking>> getDodoTeamBookings(String dodoTeamId);
   Future<Booking?> getBookingById(String bookingId);
   Future<void> updateBookingStatus(String bookingId, String newStatus);
   Future<void> rejectBooking({

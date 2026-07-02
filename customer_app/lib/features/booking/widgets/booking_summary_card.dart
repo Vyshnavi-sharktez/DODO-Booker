@@ -126,7 +126,7 @@ class BookingSummaryCard extends StatelessWidget {
               children: [
                 const Icon(Icons.schedule_rounded, size: 16, color: AppColors.primary),
                 const SizedBox(width: 8),
-                Text(slot.label, style: tt.bodySmall?.copyWith(fontWeight: FontWeight.w500)),
+                Expanded(child: Text(slot.label, style: tt.bodySmall?.copyWith(fontWeight: FontWeight.w500))),
                 const SizedBox(width: 6),
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
@@ -188,12 +188,16 @@ class _PriceRow extends StatelessWidget {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text(
-          label,
-          style: isTotal
-              ? tt.titleSmall?.copyWith(fontWeight: FontWeight.w700)
-              : tt.bodySmall?.copyWith(color: AppColors.textSecondary),
+        Flexible(
+          child: Text(
+            label,
+            style: isTotal
+                ? tt.titleSmall?.copyWith(fontWeight: FontWeight.w700)
+                : tt.bodySmall?.copyWith(color: AppColors.textSecondary),
+            overflow: TextOverflow.ellipsis,
+          ),
         ),
+        const SizedBox(width: 8),
         Text(
           '₹${amount.toStringAsFixed(2)}',
           style: isTotal
@@ -217,10 +221,14 @@ class _DiscountRow extends StatelessWidget {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text(
-          label,
-          style: tt.bodySmall?.copyWith(color: AppColors.success),
+        Flexible(
+          child: Text(
+            label,
+            style: tt.bodySmall?.copyWith(color: AppColors.success),
+            overflow: TextOverflow.ellipsis,
+          ),
         ),
+        const SizedBox(width: 8),
         Text(
           '−₹${amount.toStringAsFixed(2)}',
           style: tt.bodySmall?.copyWith(

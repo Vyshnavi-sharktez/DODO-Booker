@@ -48,6 +48,7 @@ class Booking {
   final List<BookingItem> items;
   final double? latitude;
   final double? longitude;
+  final String? completionOtp;
 
   const Booking({
     required this.id,
@@ -71,6 +72,7 @@ class Booking {
     this.items = const [],
     this.latitude,
     this.longitude,
+    this.completionOtp,
   });
 
   bool get isUnassigned => assignmentType == 'Unassigned';
@@ -125,6 +127,7 @@ class Booking {
       items: items,
       latitude: (map['latitude'] as num?)?.toDouble(),
       longitude: (map['longitude'] as num?)?.toDouble(),
+      completionOtp: map['completion_otp'] as String?,
     );
   }
 
@@ -135,6 +138,7 @@ class Booking {
     DateTime? serviceDate,
     String? status,
     String? notes,
+    String? completionOtp,
   }) {
     return Booking(
       id: id,
@@ -158,6 +162,7 @@ class Booking {
       items: items,
       latitude: latitude,
       longitude: longitude,
+      completionOtp: completionOtp ?? this.completionOtp,
     );
   }
 }

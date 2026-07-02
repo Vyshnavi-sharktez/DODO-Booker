@@ -6,6 +6,7 @@ import '../../data/repositories/bookings_repository_impl.dart';
 import '../../domain/models/booking.dart';
 import '../../domain/repositories/i_bookings_repository.dart';
 import '../../domain/usecases/get_vendor_bookings_usecase.dart';
+import '../../domain/usecases/get_dodo_team_bookings_usecase.dart';
 import '../../domain/usecases/initiate_completion_usecase.dart';
 import '../../domain/usecases/reject_booking_usecase.dart';
 import '../../domain/usecases/update_booking_status_usecase.dart';
@@ -25,6 +26,10 @@ final getVendorBookingsUseCaseProvider = Provider<GetVendorBookingsUseCase>(
   (ref) => GetVendorBookingsUseCase(ref.watch(bookingsRepositoryProvider)),
 );
 
+final getDodoTeamBookingsUseCaseProvider = Provider<GetDodoTeamBookingsUseCase>(
+  (ref) => GetDodoTeamBookingsUseCase(ref.watch(bookingsRepositoryProvider)),
+);
+
 final updateBookingStatusUseCaseProvider = Provider<UpdateBookingStatusUseCase>(
   (ref) => UpdateBookingStatusUseCase(ref.watch(bookingsRepositoryProvider)),
 );
@@ -42,12 +47,17 @@ final verifyCompletionOtpUseCaseProvider = Provider<VerifyCompletionOtpUseCase>(
 );
 
 // ── Live bookings (Supabase) ──────────────────────────────────────────────────
-// Includes rejected bookings because vendor_id is preserved on rejection.
+// For DODO Team members, bookings are fetched by dodo_team_id.
+// For external vendors, bookings are fetched by vendor_id (includes rejected,
+// because vendor_id is preserved on rejection).
 
 final vendorBookingsProvider =
     FutureProvider.autoDispose<List<Booking>>((ref) {
   final user = ref.watch(currentVendorUserProvider);
   if (user == null) return Future.value([]);
+  if (user.isDodoTeam && user.dodoTeamId != null) {
+    return ref.read(getDodoTeamBookingsUseCaseProvider).call(user.dodoTeamId!);
+  }
   return ref.read(getVendorBookingsUseCaseProvider).call(user.id);
 });
 

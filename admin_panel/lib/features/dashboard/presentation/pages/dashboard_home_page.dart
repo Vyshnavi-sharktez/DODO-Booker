@@ -57,8 +57,6 @@ class DashboardHomePage extends ConsumerWidget {
           const SizedBox(height: 24),
           const _ChartsRow2(),
           const SizedBox(height: 24),
-          const _RecentBookingsSection(),
-          const SizedBox(height: 24),
           const _BottomInfoRow(),
           const SizedBox(height: 24),
           const _QuickActionsRow(),
@@ -1003,186 +1001,6 @@ class _VendorPerfCard extends ConsumerWidget {
   }
 }
 
-// ── Recent Bookings table ─────────────────────────────────────────────────────
-
-class _RecentBookingsSection extends ConsumerWidget {
-  const _RecentBookingsSection();
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final bookingsAsync = ref.watch(bookingsNotifierProvider);
-    final customers = ref.watch(customersNotifierProvider).valueOrNull ?? [];
-    final vendors = ref.watch(vendorsNotifierProvider).valueOrNull ?? [];
-
-    final customerMap = {for (final c in customers) c.id: c.fullName};
-    final vendorMap = {for (final v in vendors) v.id: v.businessName};
-
-    return _SectionCard(
-      title: 'Recent Bookings',
-      icon: Icons.receipt_long_rounded,
-      trailing: TextButton.icon(
-        onPressed: () => context.go('/dashboard/bookings'),
-        icon: const Icon(Icons.arrow_forward_rounded, size: 14),
-        label: const Text('View All', style: TextStyle(fontSize: 12)),
-        style: TextButton.styleFrom(
-          foregroundColor: AppColors.primary,
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-        ),
-      ),
-      child: bookingsAsync.isLoading
-          ? const _LoadingPlaceholder(height: 180)
-          : bookingsAsync.hasError
-              ? _ErrorPlaceholder(message: bookingsAsync.error.toString())
-              : (bookingsAsync.valueOrNull?.isEmpty == true)
-                  ? const _EmptyPlaceholder(message: 'No bookings yet')
-                  : _RecentBookingsTable(
-                      bookings:
-                          (bookingsAsync.valueOrNull ?? []).take(8).toList(),
-                      customerMap: customerMap,
-                      vendorMap: vendorMap,
-                    ),
-    );
-  }
-}
-
-const _statusColors = <String, Color>{
-  'pending': Color(0xFFDD6B20),
-  'assigned': Color(0xFF3182CE),
-  'in_progress': Color(0xFF805AD5),
-  'completed': Color(0xFF38A169),
-  'cancelled': Color(0xFFE53E3E),
-};
-
-const _statusLabels = <String, String>{
-  'pending': 'Pending',
-  'assigned': 'Assigned',
-  'in_progress': 'In Progress',
-  'completed': 'Completed',
-  'cancelled': 'Cancelled',
-};
-
-class _RecentBookingsTable extends StatelessWidget {
-  final List<dynamic> bookings;
-  final Map<String, String> customerMap;
-  final Map<String, String> vendorMap;
-
-  const _RecentBookingsTable({
-    required this.bookings,
-    required this.customerMap,
-    required this.vendorMap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      child: DataTable(
-        headingRowHeight: 36,
-        dataRowMinHeight: 44,
-        dataRowMaxHeight: 44,
-        columnSpacing: 16,
-        headingTextStyle: const TextStyle(
-          fontSize: 11,
-          fontWeight: FontWeight.w600,
-          color: AppColors.textSecondary,
-        ),
-        columns: const [
-          DataColumn(label: Text('BOOKING #')),
-          DataColumn(label: Text('CUSTOMER')),
-          DataColumn(label: Text('SERVICE')),
-          DataColumn(label: Text('ASSIGNED TO')),
-          DataColumn(label: Text('STATUS')),
-          DataColumn(label: Text('AMOUNT'), numeric: true),
-          DataColumn(label: Text('DATE')),
-        ],
-        rows: bookings.map((b) {
-          final customerName = customerMap[b.customerId] ?? '—';
-          final firstService = b.items.isNotEmpty
-              ? (b.items.first.serviceName.isNotEmpty
-                  ? b.items.first.serviceName
-                  : '—')
-              : '—';
-          final assignedTo = switch (b.assignmentType) {
-            'External Vendor' => vendorMap[b.vendorId] ?? '—',
-            'DODO Team' => 'DODO Team',
-            _ => '—',
-          };
-          final statusColor =
-              _statusColors[b.status] ?? AppColors.textSecondary;
-          final statusLabel = _statusLabels[b.status] ?? b.status;
-
-          return DataRow(
-            cells: [
-              DataCell(Text(
-                '#${b.bookingNumber}',
-                style: const TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  fontFamily: 'monospace',
-                ),
-              )),
-              DataCell(SizedBox(
-                width: 110,
-                child: Text(
-                  customerName,
-                  style: const TextStyle(fontSize: 12),
-                  overflow: TextOverflow.ellipsis,
-                ),
-              )),
-              DataCell(SizedBox(
-                width: 120,
-                child: Text(
-                  firstService,
-                  style: const TextStyle(fontSize: 12),
-                  overflow: TextOverflow.ellipsis,
-                ),
-              )),
-              DataCell(SizedBox(
-                width: 110,
-                child: Text(
-                  assignedTo,
-                  style: const TextStyle(fontSize: 12),
-                  overflow: TextOverflow.ellipsis,
-                ),
-              )),
-              DataCell(
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 8, vertical: 3),
-                  decoration: BoxDecoration(
-                    color: statusColor.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Text(
-                    statusLabel,
-                    style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w600,
-                      color: statusColor,
-                    ),
-                  ),
-                ),
-              ),
-              DataCell(Text(
-                _currency.format(b.totalAmount),
-                style: const TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                ),
-              )),
-              DataCell(Text(
-                b.createdAt != null ? _dateFmt.format(b.createdAt!) : '—',
-                style: const TextStyle(
-                    fontSize: 11, color: AppColors.textSecondary),
-              )),
-            ],
-          );
-        }).toList(),
-      ),
-    );
-  }
-}
-
 // ── Bottom info row: Vendor Activity + Settlement + Customer Summary ───────────
 
 class _BottomInfoRow extends ConsumerWidget {
@@ -1669,13 +1487,11 @@ class _SectionCard extends StatelessWidget {
   final String title;
   final IconData icon;
   final Widget child;
-  final Widget? trailing;
 
   const _SectionCard({
     required this.title,
     required this.icon,
     required this.child,
-    this.trailing,
   });
 
   @override
@@ -1705,7 +1521,6 @@ class _SectionCard extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
-              ?trailing,
             ],
           ),
           const SizedBox(height: 14),

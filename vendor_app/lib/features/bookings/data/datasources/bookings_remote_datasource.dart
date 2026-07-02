@@ -8,7 +8,8 @@ class BookingsRemoteDatasource {
   final SupabaseClient _client;
 
   static const _select = '''
-    id, booking_number, customer_id, vendor_id, service_date,
+    id, booking_number, customer_id, vendor_id, dodo_team_id,
+    assignment_type, service_date,
     status, subtotal, discount_amount, total_amount,
     address, notes, created_at, rejection_reason, rejected_at,
     completion_otp, otp_verified_at,
@@ -28,6 +29,20 @@ class BookingsRemoteDatasource {
         .from('bookings')
         .select(_select)
         .eq('vendor_id', vendorId)
+        .order('created_at', ascending: false);
+    return List<Map<String, dynamic>>.from(data as List);
+  }
+
+  Future<List<Map<String, dynamic>>> fetchDodoTeamBookings(
+    String dodoTeamId,
+  ) async {
+    // Exclude assigned_to_dodo_team: DODO Team only sees bookings once
+    // the admin has started the service (in_progress and beyond).
+    final data = await _client
+        .from('bookings')
+        .select(_select)
+        .eq('dodo_team_id', dodoTeamId)
+        .neq('status', 'assigned_to_dodo_team')
         .order('created_at', ascending: false);
     return List<Map<String, dynamic>>.from(data as List);
   }
@@ -66,11 +81,22 @@ class BookingsRemoteDatasource {
   }
 
   Future<void> initiateCompletion(String bookingId) async {
-    final otp = (100000 + Random().nextInt(900000)).toString();
-    await _client.from('bookings').update({
-      'status': 'awaiting_verification',
-      'completion_otp': otp,
-    }).eq('id', bookingId);
+    // Preserve an OTP already set at booking creation; only generate as fallback
+    // for bookings created before the OTP-at-creation change was deployed.
+    final row = await _client
+        .from('bookings')
+        .select('completion_otp')
+        .eq('id', bookingId)
+        .single();
+    final existingOtp = row['completion_otp'] as String?;
+
+    final payload = <String, dynamic>{'status': 'awaiting_verification'};
+    if (existingOtp == null || existingOtp.isEmpty) {
+      payload['completion_otp'] =
+          (100000 + Random().nextInt(900000)).toString();
+    }
+
+    await _client.from('bookings').update(payload).eq('id', bookingId);
   }
 
   // Returns true and sets status=completed when OTP matches; false otherwise.
