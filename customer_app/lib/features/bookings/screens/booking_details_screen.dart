@@ -3,8 +3,10 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/widgets/app_modal_dialog.dart';
+import '../../../core/widgets/page_sheet.dart';
 import '../../../models/booking_item.dart';
 import '../../../models/my_booking_model.dart';
+import '../../booking/modals/rebook_flow_modal.dart';
 import '../services/bookings_providers.dart';
 import '../widgets/booking_status_timeline.dart';
 import '../../notifications/services/notification_providers.dart';
@@ -153,8 +155,10 @@ class _BookingDetailsScreenState extends ConsumerState<BookingDetailsScreen> {
   }
 
   void _rebook(MyBookingModel b) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Rebook feature coming soon')),
+    PageSheet.show(
+      context,
+      title: 'Rebook Service',
+      child: RebookFlowModal(booking: b),
     );
   }
 
