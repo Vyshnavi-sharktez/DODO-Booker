@@ -21,6 +21,7 @@ class BookingSummaryScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    debugPrint('SUMMARY SCREEN ACTIVE');
     final tt = Theme.of(context).textTheme;
 
     return SingleChildScrollView(
