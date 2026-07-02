@@ -8,6 +8,7 @@ import '../../../features/auth/widgets/otp_login_modal.dart';
 import '../../../features/auth/widgets/otp_verification_modal.dart';
 import '../../../features/auth/widgets/profile_completion_modal.dart';
 import '../../../models/service_model.dart';
+import '../../../models/service_attribute_model.dart';
 import '../modals/address_modal.dart';
 import '../modals/datetime_modal.dart';
 import '../modals/booking_summary_modal.dart';
@@ -23,8 +24,9 @@ import '../services/coupon_providers.dart';
 Future<void> launchBookingFlow(
   BuildContext context,
   WidgetRef ref,
-  ServiceModel service,
-) async {
+  ServiceModel service, {
+  List<SelectedAttributeOption> selectedAttributes = const [],
+}) async {
   // ── Step 1: Authentication ────────────────────────────────────────────────
   if (!ref.read(isAuthenticatedProvider)) {
     // Capture context synchronously before each await
@@ -62,7 +64,10 @@ Future<void> launchBookingFlow(
     await PageSheet.show(
       context,
       title: service.name,
-      child: BookingFlowModal(service: service),
+      child: BookingFlowModal(
+        service: service,
+        selectedAttributes: selectedAttributes,
+      ),
     );
     return;
   }
@@ -90,6 +95,7 @@ Future<void> launchBookingFlow(
   // Reset any leftover coupon from a previous booking attempt.
   ref.read(selectedCouponProvider.notifier).state = null;
 
+  final priceAdjustment = totalPriceAdjustment(selectedAttributes);
   final summaryFuture = AppModalDialog.show<bool>(
     context: context,
     child: BookingSummaryModal(
@@ -97,6 +103,8 @@ Future<void> launchBookingFlow(
       address: address,
       date: date,
       slot: slot,
+      priceAdjustment: priceAdjustment,
+      selectedAttributes: selectedAttributes,
     ),
   );
   final confirmed = await summaryFuture;
@@ -104,7 +112,7 @@ Future<void> launchBookingFlow(
 
   // Read coupon state after the summary modal closes.
   final selectedCoupon = ref.read(selectedCouponProvider);
-  final subtotal = service.startingPrice * 1.18;
+  final subtotal = (service.startingPrice + priceAdjustment) * 1.18;
   final discountAmount = selectedCoupon?.calculateDiscount(subtotal) ?? 0.0;
   final finalTotal = (subtotal - discountAmount).clamp(0.0, double.infinity);
 
@@ -129,6 +137,7 @@ Future<void> launchBookingFlow(
           slot: slot,
           couponId: selectedCoupon?.id,
           discountAmount: discountAmount,
+          priceAdjustment: priceAdjustment,
         );
     ref.read(selectedCouponProvider.notifier).state = null;
     if (!context.mounted) return;

@@ -4,9 +4,12 @@ import 'package:go_router/go_router.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/widgets/clickable.dart';
 import '../../../models/service_model.dart';
+import '../../../models/service_attribute_model.dart';
+import '../../../features/category/services/category_providers.dart';
 import '../widgets/service_image_carousel.dart';
 import '../widgets/service_info_section.dart';
 import '../widgets/faq_section.dart';
+import '../widgets/service_attribute_section.dart';
 import '../../booking/utils/booking_gate.dart';
 import '../../wishlist/widgets/heart_button.dart';
 import '../../reviews/widgets/service_reviews_section.dart';
@@ -14,20 +17,45 @@ import '../../cart/providers/cart_provider.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../../auth/utils/auth_modal_gate.dart';
 
-class ServiceDetailsScreen extends ConsumerWidget {
+class ServiceDetailsScreen extends ConsumerStatefulWidget {
   final ServiceModel service;
 
   const ServiceDetailsScreen({super.key, required this.service});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<ServiceDetailsScreen> createState() =>
+      _ServiceDetailsScreenState();
+}
+
+class _ServiceDetailsScreenState extends ConsumerState<ServiceDetailsScreen> {
+  final Map<String, String> _selections = {};
+  double _priceAdjustment = 0.0;
+
+  void _onOptionSelected(
+      String attrId, String optId, List<ServiceAttributeModel> attrs) {
+    setState(() {
+      _selections[attrId] = optId;
+      _priceAdjustment = attrs.fold(0.0, (sum, attr) {
+        final sel = _selections[attr.id];
+        if (sel == null) return sum;
+        final opt = attr.options.where((o) => o.id == sel).firstOrNull;
+        return sum + (opt?.priceAdjustment ?? 0.0);
+      });
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final service = widget.service;
     final tt = Theme.of(context).textTheme;
+    final attrs =
+        ref.watch(serviceAttributesProvider(service.id)).valueOrNull ?? [];
+    final displayPrice = service.startingPrice + _priceAdjustment;
 
     return Scaffold(
       backgroundColor: AppColors.background,
       body: CustomScrollView(
         slivers: [
-          // Expandable image header
           SliverAppBar(
             expandedHeight: 280,
             pinned: true,
@@ -46,19 +74,26 @@ class ServiceDetailsScreen extends ConsumerWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Name + chips
                 ServiceInfoSection(service: service),
 
-                // Description
+                // Attribute selection — fires live price recalculation
+                ServiceAttributeSection(
+                  attrs: attrs,
+                  selections: _selections,
+                  onChanged: (attrId, optId) =>
+                      _onOptionSelected(attrId, optId, attrs),
+                ),
+
                 if (service.description != null) ...[
                   Padding(
-                    padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
+                    padding: const EdgeInsets.fromLTRB(20, 24, 20, 0),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
                           'About this service',
-                          style: tt.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+                          style: tt.titleMedium
+                              ?.copyWith(fontWeight: FontWeight.w700),
                         ),
                         const SizedBox(height: 8),
                         Text(
@@ -73,13 +108,13 @@ class ServiceDetailsScreen extends ConsumerWidget {
                   ),
                 ],
 
-                // Add-ons
                 if (service.addOns.isNotEmpty) ...[
                   Padding(
                     padding: const EdgeInsets.fromLTRB(20, 24, 20, 0),
                     child: Text(
                       'Add-ons',
-                      style: tt.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+                      style: tt.titleMedium
+                          ?.copyWith(fontWeight: FontWeight.w700),
                     ),
                   ),
                   const SizedBox(height: 12),
@@ -90,18 +125,14 @@ class ServiceDetailsScreen extends ConsumerWidget {
                       scrollDirection: Axis.horizontal,
                       itemCount: service.addOns.length,
                       separatorBuilder: (_, _) => const SizedBox(width: 12),
-                      itemBuilder: (_, i) => _AddOnCard(addOn: service.addOns[i]),
+                      itemBuilder: (_, i) =>
+                          _AddOnCard(addOn: service.addOns[i]),
                     ),
                   ),
                 ],
 
-                // FAQs
                 FaqSection(faqs: service.faqs),
-
-                // Reviews
                 ServiceReviewsSection(serviceId: service.id),
-
-                // Bottom padding for sticky bar
                 const SizedBox(height: 100),
               ],
             ),
@@ -109,8 +140,13 @@ class ServiceDetailsScreen extends ConsumerWidget {
         ],
       ),
 
-      // Sticky booking bar
-      bottomNavigationBar: _BookingBar(service: service),
+      bottomNavigationBar: _BookingBar(
+        service: service,
+        attrs: attrs,
+        selections: _selections,
+        displayPrice: displayPrice,
+        priceAdjustment: _priceAdjustment,
+      ),
     );
   }
 }
@@ -119,7 +155,6 @@ class ServiceDetailsScreen extends ConsumerWidget {
 
 class _AddOnCard extends StatefulWidget {
   final dynamic addOn;
-
   const _AddOnCard({required this.addOn});
 
   @override
@@ -172,8 +207,10 @@ class _AddOnCardState extends State<_AddOnCard> {
                     borderRadius: BorderRadius.circular(6),
                   ),
                   child: _added
-                      ? const Icon(Icons.check_rounded, size: 16, color: Colors.white)
-                      : const Icon(Icons.add_rounded, size: 16, color: AppColors.textHint),
+                      ? const Icon(Icons.check_rounded,
+                          size: 16, color: Colors.white)
+                      : const Icon(Icons.add_rounded,
+                          size: 16, color: AppColors.textHint),
                 ),
               ),
             ],
@@ -205,20 +242,34 @@ class _AddOnCardState extends State<_AddOnCard> {
 
 class _BookingBar extends ConsumerWidget {
   final ServiceModel service;
+  final List<ServiceAttributeModel> attrs;
+  final Map<String, String> selections;
+  final double displayPrice;
+  final double priceAdjustment;
 
-  const _BookingBar({required this.service});
+  const _BookingBar({
+    required this.service,
+    required this.attrs,
+    required this.selections,
+    required this.displayPrice,
+    required this.priceAdjustment,
+  });
+
+  bool get _requiredFilled => attrs
+      .where((a) => a.isRequired && a.hasOptions)
+      .every((a) => selections.containsKey(a.id));
+
+  bool get _hasRequiredAttrs => attrs.any((a) => a.isRequired && a.hasOptions);
 
   Future<void> _addToCart(BuildContext context, WidgetRef ref) async {
-    // ── Auth guard ───────────────────────────────────────────────────────────
     if (!ref.read(isAuthenticatedProvider)) {
       final proceed = await showDialog<bool>(
         context: context,
         builder: (ctx) => AlertDialog(
-          shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16)),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           title: const Text('Login Required'),
-          content: const Text(
-              'Please log in to add items to your cart.'),
+          content: const Text('Please log in to add items to your cart.'),
           actions: [
             TextButton(
               onPressed: () => Navigator.of(ctx).pop(false),
@@ -232,33 +283,37 @@ class _BookingBar extends ConsumerWidget {
         ),
       );
       if (!context.mounted || proceed != true) return;
-
       final authed = await requireAuth(context, ref);
       if (!context.mounted || !authed) return;
     }
 
-    // ── Add item ─────────────────────────────────────────────────────────────
-    ref.read(cartProvider.notifier).addToCart(service);
+    ref
+        .read(cartProvider.notifier)
+        .addToCart(service, priceAdjustment: priceAdjustment);
 
-    // ── Feedback ─────────────────────────────────────────────────────────────
     if (!context.mounted) return;
     final currentPath = GoRouterState.of(context).uri.path;
-    if (currentPath == '/cart') return; // already visible — no snackbar needed
+    if (currentPath == '/cart') return;
 
     ScaffoldMessenger.of(context)
       ..clearSnackBars()
-      ..showSnackBar(
-        const SnackBar(
-          content: Text('Added to cart'),
-          duration: Duration(seconds: 2),
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
+      ..showSnackBar(const SnackBar(
+        content: Text('Added to cart'),
+        duration: Duration(seconds: 2),
+        behavior: SnackBarBehavior.floating,
+      ));
+  }
+
+  Future<void> _book(BuildContext context, WidgetRef ref) async {
+    final selectedAttrs = buildSelectedAttributes(attrs, selections);
+    await launchBookingFlow(context, ref, service,
+        selectedAttributes: selectedAttrs);
   }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final tt = Theme.of(context).textTheme;
+    final canBook = !_hasRequiredAttrs || _requiredFilled;
 
     return Container(
       padding: EdgeInsets.fromLTRB(
@@ -284,14 +339,14 @@ class _BookingBar extends ConsumerWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                '₹${service.startingPrice.toInt()}',
+                '₹${displayPrice.toInt()}',
                 style: tt.headlineSmall?.copyWith(
                   color: AppColors.primary,
                   fontWeight: FontWeight.w800,
                 ),
               ),
               Text(
-                'onwards',
+                priceAdjustment > 0 ? 'incl. adjustments' : 'onwards',
                 style: tt.labelSmall?.copyWith(color: AppColors.textHint),
               ),
             ],
@@ -309,11 +364,17 @@ class _BookingBar extends ConsumerWidget {
           const SizedBox(width: 8),
           Expanded(
             child: FilledButton(
-              onPressed: () => launchBookingFlow(context, ref, service),
+              onPressed: canBook ? () => _book(context, ref) : null,
               style: FilledButton.styleFrom(
                 minimumSize: const Size.fromHeight(48),
               ),
-              child: const Text('Book Now', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+              child: Text(
+                canBook
+                    ? 'Book Now'
+                    : 'Select options',
+                style:
+                    const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+              ),
             ),
           ),
         ],

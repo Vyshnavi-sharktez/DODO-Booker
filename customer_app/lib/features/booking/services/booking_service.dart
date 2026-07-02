@@ -66,6 +66,7 @@ class BookingService {
     required TimeSlotModel slot,
     String? couponId,
     double discountAmount = 0.0,
+    double priceAdjustment = 0.0,
   }) async {
     debugPrint('[DODO][Booking] createBooking started');
     debugPrint('[DODO][Booking] Service: ${service.name} (id=${service.id})');
@@ -76,7 +77,7 @@ class BookingService {
     final customerId = await _getCustomerId();
     debugPrint('[DODO][Booking] customer_id=$customerId');
 
-    final subtotal = service.startingPrice;
+    final subtotal = service.startingPrice + priceAdjustment;
     final tax = subtotal * 0.18;
     final grossAmount = subtotal + tax;
     final totalAmount = (grossAmount - discountAmount).clamp(0.0, double.infinity);
@@ -148,7 +149,7 @@ class BookingService {
 
     // ── INSERT into booking_items (non-fatal) ────────────────────────────────
     try {
-      debugPrint('[DODO][Booking] Inserting booking_item: service_id=${service.id}');
+      debugPrint('[DODO][Booking] Inserting booking_item: service_id=${service.id} unit_price=$subtotal');
       await _client.from('booking_items').insert({
         'booking_id': bookingId,
         'service_id': service.id,
