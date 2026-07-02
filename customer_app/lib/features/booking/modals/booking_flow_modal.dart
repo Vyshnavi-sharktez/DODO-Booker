@@ -12,7 +12,6 @@ import '../services/booking_providers.dart';
 import '../services/coupon_providers.dart';
 import '../widgets/date_selector.dart';
 import '../widgets/time_slot_card.dart';
-import '../widgets/booking_summary_card.dart';
 import '../widgets/available_coupons_sheet.dart';
 
 /// Desktop booking flow rendered inside [PageSheet].
@@ -453,23 +452,143 @@ class _BookingFlowModalState extends ConsumerState<BookingFlowModal>
     required CouponModel? selectedCoupon,
     required double discount,
   }) {
+    debugPrint('FLOW SUMMARY ACTIVE');
+    final tt = Theme.of(context).textTheme;
+    final basePrice = widget.service.startingPrice;
+    final tax = basePrice * 0.18;
+    final total = (basePrice + tax - discount).clamp(0.0, double.infinity);
+
+    const weekdays = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+    const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+    final formattedDate = '${weekdays[_date.weekday - 1]}, ${_date.day} ${months[_date.month - 1]} ${_date.year}';
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
+      mainAxisSize: MainAxisSize.min,
       children: [
-        BookingSummaryCard(
-          service: widget.service,
-          address: _address!,
-          date: _date,
-          slot: _slot!,
-          discountAmount: discount,
-          couponCode: selectedCoupon?.code,
+        // ── 1. Service + Address + Date & Time ──────────────────────────────
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: AppColors.surface,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: AppColors.border),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _SectionLabel('Service'),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Container(
+                    width: 44,
+                    height: 44,
+                    decoration: BoxDecoration(
+                      color: AppColors.primaryLight,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Icon(Icons.home_repair_service_rounded,
+                        color: AppColors.primary, size: 22),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(widget.service.name,
+                            style: tt.titleSmall
+                                ?.copyWith(fontWeight: FontWeight.w700)),
+                        if (widget.service.subcategoryName != null)
+                          Text(widget.service.subcategoryName!,
+                              style: tt.labelSmall
+                                  ?.copyWith(color: AppColors.textSecondary)),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 12),
+                  child: Divider(height: 1)),
+              _SectionLabel('Address'),
+              const SizedBox(height: 8),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Icon(Icons.location_on_rounded,
+                      size: 18, color: AppColors.primary),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(_address!.label,
+                            style: tt.labelMedium
+                                ?.copyWith(fontWeight: FontWeight.w600)),
+                        Text(_address!.fullAddress,
+                            style: tt.bodySmall
+                                ?.copyWith(color: AppColors.textSecondary)),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 12),
+                  child: Divider(height: 1)),
+              _SectionLabel('Date & Time'),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  const Icon(Icons.calendar_today_rounded,
+                      size: 16, color: AppColors.primary),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(formattedDate,
+                        style: tt.bodySmall
+                            ?.copyWith(fontWeight: FontWeight.w500)),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 6),
+              Row(
+                children: [
+                  const Icon(Icons.schedule_rounded,
+                      size: 16, color: AppColors.primary),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(_slot!.label,
+                        style: tt.bodySmall
+                            ?.copyWith(fontWeight: FontWeight.w500)),
+                  ),
+                  const SizedBox(width: 6),
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: AppColors.primaryLight,
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text(
+                      _slot!.period.label,
+                      style: const TextStyle(
+                          fontSize: 10,
+                          color: AppColors.primary,
+                          fontWeight: FontWeight.w600),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
         ),
         const SizedBox(height: 16),
 
-        // Coupon section
+        // ── 2. Coupon ────────────────────────────────────────────────────────
         _SectionLabel('Have a coupon?'),
         const SizedBox(height: 10),
-
         if (selectedCoupon == null) ...[
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -481,10 +600,10 @@ class _BookingFlowModalState extends ConsumerState<BookingFlowModal>
                   decoration: InputDecoration(
                     hintText: 'Enter coupon code',
                     isDense: true,
-                    contentPadding:
-                        const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                    border:
-                        OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                    contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 12, vertical: 12),
+                    border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8)),
                     errorText: _couponError,
                   ),
                   onSubmitted: (_) => _applyCoupon(),
@@ -492,12 +611,13 @@ class _BookingFlowModalState extends ConsumerState<BookingFlowModal>
               ),
               const SizedBox(width: 10),
               SizedBox(
+                width: 90,
                 height: 44,
                 child: FilledButton(
                   onPressed: _applyingCoupon ? null : _applyCoupon,
                   style: FilledButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(horizontal: 18),
-                  ),
+                      padding:
+                          const EdgeInsets.symmetric(horizontal: 18)),
                   child: _applyingCoupon
                       ? const SizedBox(
                           width: 16,
@@ -533,7 +653,8 @@ class _BookingFlowModalState extends ConsumerState<BookingFlowModal>
           ),
         ] else ...[
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            padding:
+                const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
             decoration: BoxDecoration(
               color: AppColors.success.withAlpha(18),
               borderRadius: BorderRadius.circular(8),
@@ -566,16 +687,88 @@ class _BookingFlowModalState extends ConsumerState<BookingFlowModal>
                 TextButton(
                   onPressed: _removeCoupon,
                   style: TextButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8),
                     foregroundColor: AppColors.error,
                   ),
-                  child: const Text('Remove', style: TextStyle(fontSize: 12)),
+                  child:
+                      const Text('Remove', style: TextStyle(fontSize: 12)),
                 ),
               ],
             ),
           ),
         ],
+        const SizedBox(height: 16),
 
+        // ── 3. Price Details ─────────────────────────────────────────────────
+        _SectionLabel('Price Details'),
+        const SizedBox(height: 10),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Flexible(
+                child: Text('Base Price',
+                    style: tt.bodySmall
+                        ?.copyWith(color: AppColors.textSecondary),
+                    overflow: TextOverflow.ellipsis)),
+            Text('₹${basePrice.toStringAsFixed(2)}',
+                style: tt.bodySmall?.copyWith(
+                    color: AppColors.textPrimary,
+                    fontWeight: FontWeight.w500)),
+          ],
+        ),
+        const SizedBox(height: 6),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Flexible(
+                child: Text('GST (18%)',
+                    style: tt.bodySmall
+                        ?.copyWith(color: AppColors.textSecondary),
+                    overflow: TextOverflow.ellipsis)),
+            Text('₹${tax.toStringAsFixed(2)}',
+                style: tt.bodySmall?.copyWith(
+                    color: AppColors.textPrimary,
+                    fontWeight: FontWeight.w500)),
+          ],
+        ),
+        if (discount > 0) ...[
+          const SizedBox(height: 6),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Flexible(
+                  child: Text(
+                      selectedCoupon != null
+                          ? 'Discount (${selectedCoupon.code})'
+                          : 'Discount',
+                      style: tt.bodySmall
+                          ?.copyWith(color: AppColors.success),
+                      overflow: TextOverflow.ellipsis)),
+              Text('−₹${discount.toStringAsFixed(2)}',
+                  style: tt.bodySmall?.copyWith(
+                      color: AppColors.success,
+                      fontWeight: FontWeight.w600)),
+            ],
+          ),
+        ],
+        const SizedBox(height: 10),
+        const Divider(height: 1),
+        const SizedBox(height: 10),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Flexible(
+                child: Text('Total Amount',
+                    style: tt.titleSmall
+                        ?.copyWith(fontWeight: FontWeight.w700),
+                    overflow: TextOverflow.ellipsis)),
+            Text('₹${total.toStringAsFixed(2)}',
+                style: tt.titleMedium?.copyWith(
+                    color: AppColors.primary,
+                    fontWeight: FontWeight.w800)),
+          ],
+        ),
         const SizedBox(height: 12),
         Row(
           children: [

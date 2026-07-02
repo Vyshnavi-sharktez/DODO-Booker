@@ -116,6 +116,7 @@ class _BookingSummaryModalState extends ConsumerState<BookingSummaryModal> {
 
   @override
   Widget build(BuildContext context) {
+    debugPrint('SUMMARY MODAL ACTIVE');
     final tt = Theme.of(context).textTheme;
     final selectedCoupon = ref.watch(selectedCouponProvider);
     final discount = selectedCoupon?.calculateDiscount(_subtotal) ?? 0.0;

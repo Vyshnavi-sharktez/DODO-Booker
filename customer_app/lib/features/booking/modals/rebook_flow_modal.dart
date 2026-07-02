@@ -70,6 +70,7 @@ class _RebookFlowModalState extends ConsumerState<RebookFlowModal>
     _couponCtrl.dispose();
     _successCtrl.dispose();
     _contentScrollCtrl.dispose();
+    ref.read(selectedCouponProvider.notifier).state = null;
     super.dispose();
   }
 
@@ -500,6 +501,7 @@ class _RebookFlowModalState extends ConsumerState<RebookFlowModal>
               ),
               const SizedBox(width: 10),
               SizedBox(
+                width: 90,
                 height: 44,
                 child: FilledButton(
                   onPressed: _applyingCoupon ? null : _applyCoupon,
