@@ -39,9 +39,10 @@ class ServiceAttributeModel {
   });
 
   bool get hasOptions =>
-      fieldType == 'dropdown' ||
-      fieldType == 'radio' ||
-      fieldType == 'checkbox';
+      (fieldType == 'dropdown' ||
+       fieldType == 'radio' ||
+       fieldType == 'checkbox') &&
+      options.isNotEmpty;
 
   factory ServiceAttributeModel.fromJson(Map<String, dynamic> json) {
     final rawOptions =
@@ -59,3 +60,54 @@ class ServiceAttributeModel {
     );
   }
 }
+
+/// Represents one attribute option that a customer has chosen, carrying
+/// enough information for display, price calculation, and DB persistence.
+class SelectedAttributeOption {
+  final String attributeId;
+  final String attributeName;
+  final String optionId;
+  final String optionName;
+  final double priceAdjustment;
+
+  const SelectedAttributeOption({
+    required this.attributeId,
+    required this.attributeName,
+    required this.optionId,
+    required this.optionName,
+    this.priceAdjustment = 0.0,
+  });
+
+  Map<String, dynamic> toJson() => {
+        'attribute_id': attributeId,
+        'attribute_name': attributeName,
+        'option_id': optionId,
+        'option_name': optionName,
+        'price_adjustment': priceAdjustment,
+      };
+}
+
+/// Builds a [SelectedAttributeOption] list from raw selection state.
+List<SelectedAttributeOption> buildSelectedAttributes(
+  List<ServiceAttributeModel> attrs,
+  Map<String, String> selections,
+) {
+  final result = <SelectedAttributeOption>[];
+  for (final attr in attrs) {
+    final optId = selections[attr.id];
+    if (optId == null) continue;
+    final opt = attr.options.where((o) => o.id == optId).firstOrNull;
+    if (opt == null) continue;
+    result.add(SelectedAttributeOption(
+      attributeId: attr.id,
+      attributeName: attr.name,
+      optionId: opt.id,
+      optionName: opt.optionName,
+      priceAdjustment: opt.priceAdjustment,
+    ));
+  }
+  return result;
+}
+
+double totalPriceAdjustment(List<SelectedAttributeOption> sels) =>
+    sels.fold(0.0, (sum, s) => sum + s.priceAdjustment);

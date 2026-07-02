@@ -3,12 +3,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import '../../../core/constants/app_colors.dart';
 import '../../../core/widgets/clickable.dart';
 import '../../../models/service_model.dart';
+import '../../../models/service_attribute_model.dart';
+import '../../../features/category/services/category_providers.dart';
 import '../widgets/service_image_carousel.dart';
 import '../widgets/service_info_section.dart';
 import '../widgets/faq_section.dart';
+import '../widgets/service_attribute_section.dart';
 import '../../booking/utils/booking_gate.dart';
 import '../../wishlist/widgets/heart_button.dart';
 import '../../reviews/widgets/service_reviews_section.dart';
@@ -20,7 +22,7 @@ import '../../auth/utils/auth_modal_gate.dart';
 /// to a new page. Uses the same backdrop + animation pattern as [PageSheet].
 ///
 /// On mobile, callers fall back to the full-screen route push.
-class ServiceDetailModal extends StatelessWidget {
+class ServiceDetailModal extends ConsumerStatefulWidget {
   final ServiceModel service;
 
   const ServiceDetailModal({super.key, required this.service});
@@ -47,11 +49,37 @@ class ServiceDetailModal extends StatelessWidget {
   }
 
   @override
+  ConsumerState<ServiceDetailModal> createState() => _ServiceDetailModalState();
+}
+
+class _ServiceDetailModalState extends ConsumerState<ServiceDetailModal> {
+  final Map<String, String> _selections = {};
+  double _priceAdjustment = 0.0;
+
+  void _onOptionSelected(
+      String attrId, String optId, List<ServiceAttributeModel> attrs) {
+    setState(() {
+      _selections[attrId] = optId;
+      _priceAdjustment = attrs.fold(0.0, (sum, attr) {
+        final sel = _selections[attr.id];
+        if (sel == null) return sum;
+        final opt = attr.options.where((o) => o.id == sel).firstOrNull;
+        return sum + (opt?.priceAdjustment ?? 0.0);
+      });
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final service = widget.service;
     final cs = Theme.of(context).colorScheme;
     final size = MediaQuery.of(context).size;
     final modalW = (size.width * 0.9).clamp(320.0, 900.0);
     final modalH = size.height * 0.85;
+
+    final attrs =
+        ref.watch(serviceAttributesProvider(service.id)).valueOrNull ?? [];
+    final displayPrice = service.startingPrice + _priceAdjustment;
 
     return Focus(
       autofocus: true,
@@ -100,8 +128,18 @@ class ServiceDetailModal extends StatelessWidget {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             ServiceInfoSection(service: service),
+
+                            // Attribute selection — live price recalculation
+                            ServiceAttributeSection(
+                              attrs: attrs,
+                              selections: _selections,
+                              onChanged: (attrId, optId) =>
+                                  _onOptionSelected(attrId, optId, attrs),
+                            ),
+
                             if (service.description != null)
-                              _DescriptionBlock(description: service.description!),
+                              _DescriptionBlock(
+                                  description: service.description!),
                             if (service.addOns.isNotEmpty)
                               _AddOnsBlock(addOns: service.addOns),
                             FaqSection(faqs: service.faqs),
@@ -113,7 +151,13 @@ class ServiceDetailModal extends StatelessWidget {
                     ),
 
                     // Sticky booking footer
-                    _ModalBookingBar(service: service),
+                    _ModalBookingBar(
+                      service: service,
+                      attrs: attrs,
+                      selections: _selections,
+                      displayPrice: displayPrice,
+                      priceAdjustment: _priceAdjustment,
+                    ),
                   ],
                 ),
               ),
@@ -138,12 +182,12 @@ class _ImageHeader extends StatelessWidget {
       child: Stack(
         fit: StackFit.expand,
         children: [
-          // Carousel
           ServiceImageCarousel(service: service),
 
-          // Top gradient so buttons stay legible on any image
           const Positioned(
-            top: 0, left: 0, right: 0,
+            top: 0,
+            left: 0,
+            right: 0,
             height: 90,
             child: DecoratedBox(
               decoration: BoxDecoration(
@@ -156,21 +200,23 @@ class _ImageHeader extends StatelessWidget {
             ),
           ),
 
-          // Controls — top-right corner
           Positioned(
             top: 10,
             right: 10,
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                _GlassCircle(child: HeartButton(serviceId: service.id, mini: false)),
+                _GlassCircle(
+                    child: HeartButton(serviceId: service.id, mini: false)),
                 const SizedBox(width: 6),
                 _GlassCircle(
                   child: IconButton(
-                    icon: const Icon(Icons.close_rounded, size: 20, color: Colors.white),
+                    icon: const Icon(Icons.close_rounded,
+                        size: 20, color: Colors.white),
                     onPressed: () => Navigator.of(context).pop(),
                     padding: EdgeInsets.zero,
-                    constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
+                    constraints:
+                        const BoxConstraints(minWidth: 40, minHeight: 40),
                     splashRadius: 20,
                   ),
                 ),
@@ -331,7 +377,8 @@ class _AddOnCardState extends State<_AddOnCard> {
             const SizedBox(height: 4),
             Text(
               addOn.description!,
-              style: tt.labelSmall?.copyWith(color: cs.onSurface.withAlpha(120)),
+              style:
+                  tt.labelSmall?.copyWith(color: cs.onSurface.withAlpha(120)),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
             ),
@@ -354,14 +401,32 @@ class _AddOnCardState extends State<_AddOnCard> {
 
 class _ModalBookingBar extends ConsumerWidget {
   final ServiceModel service;
-  const _ModalBookingBar({required this.service});
+  final List<ServiceAttributeModel> attrs;
+  final Map<String, String> selections;
+  final double displayPrice;
+  final double priceAdjustment;
+
+  const _ModalBookingBar({
+    required this.service,
+    required this.attrs,
+    required this.selections,
+    required this.displayPrice,
+    required this.priceAdjustment,
+  });
+
+  bool get _requiredFilled => attrs
+      .where((a) => a.isRequired && a.hasOptions)
+      .every((a) => selections.containsKey(a.id));
+
+  bool get _hasRequiredAttrs => attrs.any((a) => a.isRequired && a.hasOptions);
 
   Future<void> _addToCart(BuildContext context, WidgetRef ref) async {
     if (!ref.read(isAuthenticatedProvider)) {
       final proceed = await showDialog<bool>(
         context: context,
         builder: (ctx) => AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           title: const Text('Login Required'),
           content: const Text('Please log in to add items to your cart.'),
           actions: [
@@ -381,7 +446,9 @@ class _ModalBookingBar extends ConsumerWidget {
       if (!context.mounted || !authed) return;
     }
 
-    ref.read(cartProvider.notifier).addToCart(service);
+    ref
+        .read(cartProvider.notifier)
+        .addToCart(service, priceAdjustment: priceAdjustment);
 
     if (!context.mounted) return;
     try {
@@ -398,10 +465,17 @@ class _ModalBookingBar extends ConsumerWidget {
       ));
   }
 
+  Future<void> _book(BuildContext context, WidgetRef ref) async {
+    final selectedAttrs = buildSelectedAttributes(attrs, selections);
+    await launchBookingFlow(context, ref, service,
+        selectedAttributes: selectedAttrs);
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
+    final canBook = !_hasRequiredAttrs || _requiredFilled;
 
     return Container(
       padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
@@ -425,15 +499,16 @@ class _ModalBookingBar extends ConsumerWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                '₹${service.startingPrice.toInt()}',
+                '₹${displayPrice.toInt()}',
                 style: tt.headlineSmall?.copyWith(
                   color: cs.primary,
                   fontWeight: FontWeight.w800,
                 ),
               ),
               Text(
-                'onwards',
-                style: tt.labelSmall?.copyWith(color: cs.onSurface.withAlpha(120)),
+                priceAdjustment > 0 ? 'incl. adjustments' : 'onwards',
+                style:
+                    tt.labelSmall?.copyWith(color: cs.onSurface.withAlpha(120)),
               ),
             ],
           ),
@@ -450,13 +525,14 @@ class _ModalBookingBar extends ConsumerWidget {
           const SizedBox(width: 8),
           Expanded(
             child: FilledButton(
-              onPressed: () => launchBookingFlow(context, ref, service),
+              onPressed: canBook ? () => _book(context, ref) : null,
               style: FilledButton.styleFrom(
                 minimumSize: const Size.fromHeight(48),
               ),
-              child: const Text(
-                'Book Now',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+              child: Text(
+                canBook ? 'Book Now' : 'Select options',
+                style:
+                    const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
               ),
             ),
           ),

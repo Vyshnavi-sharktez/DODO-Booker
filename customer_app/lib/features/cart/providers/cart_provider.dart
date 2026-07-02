@@ -72,7 +72,7 @@ class CartNotifier extends StateNotifier<List<CartItem>> {
 
   // ── Mutations ─────────────────────────────────────────────────────────────
 
-  void addToCart(ServiceModel service) {
+  void addToCart(ServiceModel service, {double priceAdjustment = 0.0}) {
     debugPrint('[DODO][CartSync][1] addToCart() entered — serviceId=${service.id} name=${service.name}');
     final idx = state.indexWhere((item) => item.serviceId == service.id);
     if (idx >= 0) {
@@ -88,7 +88,7 @@ class CartNotifier extends StateNotifier<List<CartItem>> {
           serviceId: service.id,
           serviceName: service.name,
           imageUrl: service.imageUrl,
-          unitPrice: service.startingPrice,
+          unitPrice: service.startingPrice + priceAdjustment,
           quantity: 1,
         ),
       ];

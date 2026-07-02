@@ -8,6 +8,7 @@ import '../../../models/address_model.dart';
 import '../../../models/time_slot_model.dart';
 import '../../../models/coupon_model.dart';
 import '../../../features/address/modals/address_form_modal.dart';
+import '../../../models/service_attribute_model.dart';
 import '../services/booking_providers.dart';
 import '../services/coupon_providers.dart';
 import '../widgets/date_selector.dart';
@@ -19,7 +20,13 @@ import '../widgets/available_coupons_sheet.dart';
 /// Mobile keeps the sequential [AppModalDialog] flow unchanged.
 class BookingFlowModal extends ConsumerStatefulWidget {
   final ServiceModel service;
-  const BookingFlowModal({super.key, required this.service});
+  final List<SelectedAttributeOption> selectedAttributes;
+
+  const BookingFlowModal({
+    super.key,
+    required this.service,
+    this.selectedAttributes = const [],
+  });
 
   @override
   ConsumerState<BookingFlowModal> createState() => _BookingFlowModalState();
@@ -50,7 +57,10 @@ class _BookingFlowModalState extends ConsumerState<BookingFlowModal>
   String get _dateKey =>
       '${_date.year}-${_date.month.toString().padLeft(2, '0')}-${_date.day.toString().padLeft(2, '0')}';
 
-  double get _subtotal => widget.service.startingPrice * 1.18;
+  double get _subtotal =>
+      (widget.service.startingPrice +
+              totalPriceAdjustment(widget.selectedAttributes)) *
+          1.18;
 
   @override
   void initState() {
@@ -131,6 +141,7 @@ class _BookingFlowModalState extends ConsumerState<BookingFlowModal>
             slot: _slot!,
             couponId: selectedCoupon?.id,
             discountAmount: discountAmount,
+            priceAdjustment: totalPriceAdjustment(widget.selectedAttributes),
           );
       ref.read(selectedCouponProvider.notifier).state = null;
       if (!mounted) return;
@@ -239,7 +250,8 @@ class _BookingFlowModalState extends ConsumerState<BookingFlowModal>
               controller: _contentScrollCtrl,
               padding: const EdgeInsets.fromLTRB(24, 20, 24, 8),
               child: _buildStepContent(
-                  selectedCoupon: selectedCoupon, discount: discount),
+                  selectedCoupon: selectedCoupon,
+                  discount: discount),
             ),
           ),
           if (_errorMessage != null) _buildErrorBanner(),
@@ -341,7 +353,7 @@ class _BookingFlowModalState extends ConsumerState<BookingFlowModal>
     };
   }
 
-  // ── Step 0: Address ───────────────────────────────────────────────────────────
+  // ── Step 0: Address ──────────────────────────────────────────────────────────
 
   Widget _buildAddressStep() {
     final asyncAddresses = ref.watch(addressesProvider);
@@ -455,8 +467,10 @@ class _BookingFlowModalState extends ConsumerState<BookingFlowModal>
     debugPrint('FLOW SUMMARY ACTIVE');
     final tt = Theme.of(context).textTheme;
     final basePrice = widget.service.startingPrice;
-    final tax = basePrice * 0.18;
-    final total = (basePrice + tax - discount).clamp(0.0, double.infinity);
+    final totalAdj = totalPriceAdjustment(widget.selectedAttributes);
+    final adjustedBase = basePrice + totalAdj;
+    final tax = adjustedBase * 0.18;
+    final total = (adjustedBase + tax - discount).clamp(0.0, double.infinity);
 
     const weekdays = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
     const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
@@ -504,6 +518,18 @@ class _BookingFlowModalState extends ConsumerState<BookingFlowModal>
                           Text(widget.service.subcategoryName!,
                               style: tt.labelSmall
                                   ?.copyWith(color: AppColors.textSecondary)),
+                        if (widget.selectedAttributes.isNotEmpty) ...[
+                          const SizedBox(height: 4),
+                          Text(
+                            widget.selectedAttributes
+                                .map((s) => s.optionName)
+                                .join(' · '),
+                            style: tt.labelSmall?.copyWith(
+                              color: AppColors.primary,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ],
                       ],
                     ),
                   ),
@@ -717,6 +743,25 @@ class _BookingFlowModalState extends ConsumerState<BookingFlowModal>
                     fontWeight: FontWeight.w500)),
           ],
         ),
+        for (final sel in widget.selectedAttributes)
+          if (sel.priceAdjustment > 0) ...[
+            const SizedBox(height: 6),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Flexible(
+                    child: Text(
+                        '${sel.attributeName}: ${sel.optionName}',
+                        style: tt.bodySmall
+                            ?.copyWith(color: AppColors.textSecondary),
+                        overflow: TextOverflow.ellipsis)),
+                Text('+₹${sel.priceAdjustment.toStringAsFixed(2)}',
+                    style: tt.bodySmall?.copyWith(
+                        color: AppColors.textPrimary,
+                        fontWeight: FontWeight.w500)),
+              ],
+            ),
+          ],
         const SizedBox(height: 6),
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
