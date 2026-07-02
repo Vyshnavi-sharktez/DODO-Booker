@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../models/time_slot_model.dart';
 import '../../../models/booking_model.dart';
+import '../../../models/booking_item.dart';
 import '../../../models/service_model.dart';
 import '../../../models/address_model.dart';
 import 'coupon_service.dart';
@@ -215,6 +216,139 @@ class BookingService {
       taxAmount: tax,
       totalAmount: totalAmount,
       status: (bookingData['status'] as String?) ?? 'pending',
+      createdAt: bookingData['created_at'] != null
+          ? DateTime.parse(bookingData['created_at'] as String)
+          : DateTime.now(),
+    );
+  }
+
+  // ── Rebook (create new booking from previous items) ─────────────────────────
+
+  Future<BookingModel> rebookBooking({
+    required List<BookingItem> items,
+    required AddressModel address,
+    required DateTime date,
+    required TimeSlotModel slot,
+    String? couponId,
+    double discountAmount = 0.0,
+  }) async {
+    debugPrint('[DODO][Booking] rebookBooking started — ${items.length} items');
+
+    final customerId = await _getCustomerId();
+
+    final subtotal =
+        items.fold(0.0, (sum, i) => sum + i.unitPrice * i.quantity);
+    final tax = subtotal * 0.18;
+    final grossAmount = subtotal + tax;
+    final totalAmount =
+        (grossAmount - discountAmount).clamp(0.0, double.infinity);
+    final serviceDate = date.toIso8601String().substring(0, 10);
+    final firstItemName =
+        items.isNotEmpty ? items.first.serviceName : 'Service';
+
+    final completionOtp = (100000 + Random().nextInt(900000)).toString();
+
+    final payload = {
+      'customer_id': customerId,
+      'service_date': serviceDate,
+      'status': 'pending',
+      'subtotal': subtotal,
+      'discount_amount': discountAmount,
+      'total_amount': totalAmount,
+      'address': address.fullAddress,
+      'notes': '$firstItemName · ${slot.label}',
+      'latitude': ?address.latitude,
+      'longitude': ?address.longitude,
+      'completion_otp': completionOtp,
+    };
+
+    final bookingData =
+        await _client.from('bookings').insert(payload).select().single();
+    final bookingId = bookingData['id'] as String;
+    debugPrint('[DODO][Booking] Rebook booking created: id=$bookingId');
+
+    // Insert all rebooked service items
+    if (items.isNotEmpty) {
+      try {
+        await _client.from('booking_items').insert(
+          items
+              .map((item) => {
+                    'booking_id': bookingId,
+                    'service_id': item.serviceId,
+                    'quantity': item.quantity,
+                    'unit_price': item.unitPrice,
+                    'total_price': item.unitPrice * item.quantity,
+                  })
+              .toList(),
+        );
+      } catch (e) {
+        debugPrint('[DODO][Booking] Warning: rebook booking_items insert failed (non-fatal): $e');
+      }
+    }
+
+    // OTP fallback in case INSERT didn't persist it
+    final returnedOtp = bookingData['completion_otp'] as String?;
+    if (returnedOtp == null) {
+      try {
+        await _client
+            .from('bookings')
+            .update({'completion_otp': completionOtp})
+            .eq('id', bookingId);
+      } catch (_) {}
+    }
+
+    if (couponId != null) {
+      try {
+        await _couponService.incrementUsedCount(couponId);
+      } catch (e) {
+        debugPrint('[DODO][Booking] Warning: coupon used_count increment failed (non-fatal): $e');
+      }
+    }
+
+    try {
+      await _client.from('notifications').insert({
+        'user_type': 'admin',
+        'user_id': 'admin',
+        'title': 'New Booking Received',
+        'message': 'A new booking has been created.',
+        'notification_type': 'booking_created',
+        'is_read': false,
+        'entity_type': 'booking',
+        'entity_id': bookingId,
+      });
+    } catch (e) {
+      debugPrint('[DODO][Booking] Warning: admin notification failed (non-fatal): $e');
+    }
+
+    try {
+      await _client.from('notifications').insert({
+        'user_type': 'customer',
+        'user_id': customerId,
+        'title': 'Booking Created',
+        'message': 'Your booking has been created successfully.',
+        'notification_type': 'booking_created',
+        'is_read': false,
+        'entity_type': 'booking',
+        'entity_id': bookingId,
+      });
+    } catch (e) {
+      debugPrint('[DODO][Booking] Warning: customer notification failed (non-fatal): $e');
+    }
+
+    debugPrint('[DODO][Booking] Rebook flow complete — id=$bookingId');
+
+    return BookingModel(
+      id: bookingId,
+      serviceId: items.isNotEmpty ? items.first.serviceId : '',
+      serviceName: firstItemName,
+      addressId: address.id,
+      addressLabel: address.fullAddress,
+      scheduledDate: date,
+      timeSlot: slot.label,
+      baseAmount: subtotal,
+      taxAmount: tax,
+      totalAmount: totalAmount,
+      status: 'pending',
       createdAt: bookingData['created_at'] != null
           ? DateTime.parse(bookingData['created_at'] as String)
           : DateTime.now(),
