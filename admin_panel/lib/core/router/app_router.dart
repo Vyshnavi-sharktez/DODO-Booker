@@ -6,6 +6,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../features/auth/application/providers/auth_provider.dart';
 import '../../features/auth/presentation/pages/login_page.dart';
+import '../../features/auth/presentation/pages/reset_password_page.dart';
 import '../../features/dashboard/presentation/pages/dashboard_shell.dart';
 import '../../features/dashboard/presentation/pages/dashboard_home_page.dart';
 import '../../features/rbac/presentation/pages/rbac_page.dart';
@@ -69,9 +70,13 @@ class RouterNotifier extends ChangeNotifier {
 
     final location = state.matchedLocation;
     final bool isOnLoginPage = location == '/login';
+    // /reset-password is public: the Supabase recovery session makes the user
+    // technically "logged in", and we must not redirect them away from it.
+    final bool isOnResetPage = location == '/reset-password';
 
-    if (!isLoggedIn && !isOnLoginPage) return '/login';
+    if (!isLoggedIn && !isOnLoginPage && !isOnResetPage) return '/login';
     if (isLoggedIn && isOnLoginPage) return '/dashboard';
+    // Never redirect away from /reset-password (recovery session is active).
 
     // Permission check for protected routes (skip for dashboard and unauthorized).
     if (isLoggedIn && !isOnLoginPage && location != '/dashboard' &&
@@ -120,6 +125,13 @@ final routerProvider = Provider<GoRouter>((ref) {
         name: 'login',
         pageBuilder: (context, state) => const NoTransitionPage(
           child: LoginPage(),
+        ),
+      ),
+      GoRoute(
+        path: '/reset-password',
+        name: 'resetPassword',
+        pageBuilder: (context, state) => const NoTransitionPage(
+          child: ResetPasswordPage(),
         ),
       ),
 

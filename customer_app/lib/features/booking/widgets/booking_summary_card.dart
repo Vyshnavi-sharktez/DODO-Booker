@@ -3,6 +3,8 @@ import '../../../core/constants/app_colors.dart';
 import '../../../models/service_model.dart';
 import '../../../models/address_model.dart';
 import '../../../models/time_slot_model.dart';
+import '../../../models/service_attribute_model.dart';
+import '../../../models/addon_model.dart';
 
 class BookingSummaryCard extends StatelessWidget {
   final ServiceModel service;
@@ -11,6 +13,9 @@ class BookingSummaryCard extends StatelessWidget {
   final TimeSlotModel slot;
   final double discountAmount;
   final String? couponCode;
+  final double priceAdjustment;
+  final List<SelectedAttributeOption> selectedAttributes;
+  final List<SelectedAddon> selectedAddons;
 
   const BookingSummaryCard({
     super.key,
@@ -20,6 +25,9 @@ class BookingSummaryCard extends StatelessWidget {
     required this.slot,
     this.discountAmount = 0.0,
     this.couponCode,
+    this.priceAdjustment = 0.0,
+    this.selectedAttributes = const [],
+    this.selectedAddons = const [],
   });
 
   static const _monthNames = [
@@ -34,8 +42,10 @@ class BookingSummaryCard extends StatelessWidget {
   String get _formattedDate =>
       '${_weekdays[date.weekday - 1]}, ${date.day} ${_monthNames[date.month - 1]} ${date.year}';
 
-  double get _tax => service.startingPrice * 0.18;
-  double get _originalTotal => service.startingPrice + _tax;
+  double get _addonsTotal => totalAddonsPrice(selectedAddons);
+  double get _adjustedBase => service.startingPrice + priceAdjustment + _addonsTotal;
+  double get _tax => _adjustedBase * 0.18;
+  double get _originalTotal => _adjustedBase + _tax;
   double get _finalTotal => (_originalTotal - discountAmount).clamp(0.0, double.infinity);
 
   @override
@@ -151,6 +161,19 @@ class BookingSummaryCard extends StatelessWidget {
             Text('Price Details', style: tt.labelMedium?.copyWith(color: AppColors.textSecondary, fontWeight: FontWeight.w600)),
             const SizedBox(height: 10),
             _PriceRow(label: 'Base Price', amount: service.startingPrice),
+            for (final sel in selectedAttributes)
+              if (sel.priceAdjustment > 0) ...[
+                const SizedBox(height: 6),
+                _PriceRow(
+                  label: '${sel.attributeName}: ${sel.optionName}',
+                  amount: sel.priceAdjustment,
+                  prefix: '+',
+                ),
+              ],
+            for (final addon in selectedAddons) ...[
+              const SizedBox(height: 6),
+              _PriceRow(label: addon.addonName, amount: addon.addonPrice, prefix: '+'),
+            ],
             const SizedBox(height: 6),
             _PriceRow(label: 'GST (18%)', amount: _tax),
             if (hasDiscount) ...[
@@ -179,8 +202,14 @@ class _PriceRow extends StatelessWidget {
   final String label;
   final double amount;
   final bool isTotal;
+  final String prefix;
 
-  const _PriceRow({required this.label, required this.amount, this.isTotal = false});
+  const _PriceRow({
+    required this.label,
+    required this.amount,
+    this.isTotal = false,
+    this.prefix = '',
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -199,7 +228,7 @@ class _PriceRow extends StatelessWidget {
         ),
         const SizedBox(width: 8),
         Text(
-          '₹${amount.toStringAsFixed(2)}',
+          '$prefix₹${amount.toStringAsFixed(2)}',
           style: isTotal
               ? tt.titleMedium?.copyWith(color: AppColors.primary, fontWeight: FontWeight.w800)
               : tt.bodySmall?.copyWith(color: AppColors.textPrimary, fontWeight: FontWeight.w500),

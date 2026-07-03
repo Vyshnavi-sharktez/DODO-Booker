@@ -8,6 +8,7 @@ import '../../../models/address_model.dart';
 import '../../../models/time_slot_model.dart';
 import '../../../models/coupon_model.dart';
 import '../../../models/service_attribute_model.dart';
+import '../../../models/addon_model.dart';
 import '../services/coupon_providers.dart';
 import '../widgets/booking_summary_card.dart';
 import '../widgets/available_coupons_sheet.dart';
@@ -20,6 +21,7 @@ class BookingSummaryModal extends ConsumerStatefulWidget {
   final TimeSlotModel slot;
   final double priceAdjustment;
   final List<SelectedAttributeOption> selectedAttributes;
+  final List<SelectedAddon> selectedAddons;
 
   const BookingSummaryModal({
     super.key,
@@ -29,6 +31,7 @@ class BookingSummaryModal extends ConsumerStatefulWidget {
     required this.slot,
     this.priceAdjustment = 0.0,
     this.selectedAttributes = const [],
+    this.selectedAddons = const [],
   });
 
   @override
@@ -46,9 +49,12 @@ class _BookingSummaryModalState extends ConsumerState<BookingSummaryModal> {
     super.dispose();
   }
 
-  // Subtotal = (base price + attribute adjustments) + 18% GST
+  // Subtotal = (base price + attribute adjustments + add-ons) + 18% GST
   double get _subtotal =>
-      (widget.service.startingPrice + widget.priceAdjustment) * 1.18;
+      (widget.service.startingPrice +
+              widget.priceAdjustment +
+              totalAddonsPrice(widget.selectedAddons)) *
+          1.18;
 
   Future<void> _applyCoupon() async {
     final code = _couponController.text.trim().toUpperCase();
@@ -140,6 +146,9 @@ class _BookingSummaryModalState extends ConsumerState<BookingSummaryModal> {
             slot: widget.slot,
             discountAmount: discount,
             couponCode: selectedCoupon?.code,
+            priceAdjustment: widget.priceAdjustment,
+            selectedAttributes: widget.selectedAttributes,
+            selectedAddons: widget.selectedAddons,
           ),
 
           // ── Coupon input / applied state ──────────────────────────────────

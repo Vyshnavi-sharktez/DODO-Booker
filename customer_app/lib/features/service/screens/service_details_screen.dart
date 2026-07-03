@@ -2,14 +2,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/constants/app_colors.dart';
-import '../../../core/widgets/clickable.dart';
 import '../../../models/service_model.dart';
 import '../../../models/service_attribute_model.dart';
+import '../../../models/addon_model.dart';
 import '../../../features/category/services/category_providers.dart';
 import '../widgets/service_image_carousel.dart';
 import '../widgets/service_info_section.dart';
 import '../widgets/faq_section.dart';
 import '../widgets/service_attribute_section.dart';
+import '../widgets/service_addon_section.dart';
 import '../../booking/utils/booking_gate.dart';
 import '../../wishlist/widgets/heart_button.dart';
 import '../../reviews/widgets/service_reviews_section.dart';
@@ -30,6 +31,7 @@ class ServiceDetailsScreen extends ConsumerStatefulWidget {
 class _ServiceDetailsScreenState extends ConsumerState<ServiceDetailsScreen> {
   final Map<String, String> _selections = {};
   double _priceAdjustment = 0.0;
+  final Set<String> _selectedAddonIds = {};
 
   void _onOptionSelected(
       String attrId, String optId, List<ServiceAttributeModel> attrs) {
@@ -44,13 +46,26 @@ class _ServiceDetailsScreenState extends ConsumerState<ServiceDetailsScreen> {
     });
   }
 
+  void _onAddonToggled(String addonId, bool selected) {
+    setState(() {
+      if (selected) {
+        _selectedAddonIds.add(addonId);
+      } else {
+        _selectedAddonIds.remove(addonId);
+      }
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final service = widget.service;
     final tt = Theme.of(context).textTheme;
     final attrs =
         ref.watch(serviceAttributesProvider(service.id)).valueOrNull ?? [];
-    final displayPrice = service.startingPrice + _priceAdjustment;
+    final addOns =
+        ref.watch(serviceAddonsProvider(service.id)).valueOrNull ?? [];
+    final addonsTotal = totalAddonsPrice(buildSelectedAddons(addOns, _selectedAddonIds));
+    final displayPrice = service.startingPrice + _priceAdjustment + addonsTotal;
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -108,28 +123,11 @@ class _ServiceDetailsScreenState extends ConsumerState<ServiceDetailsScreen> {
                   ),
                 ],
 
-                if (service.addOns.isNotEmpty) ...[
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(20, 24, 20, 0),
-                    child: Text(
-                      'Add-ons',
-                      style: tt.titleMedium
-                          ?.copyWith(fontWeight: FontWeight.w700),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  SizedBox(
-                    height: 100,
-                    child: ListView.separated(
-                      padding: const EdgeInsets.symmetric(horizontal: 20),
-                      scrollDirection: Axis.horizontal,
-                      itemCount: service.addOns.length,
-                      separatorBuilder: (_, _) => const SizedBox(width: 12),
-                      itemBuilder: (_, i) =>
-                          _AddOnCard(addOn: service.addOns[i]),
-                    ),
-                  ),
-                ],
+                ServiceAddonSection(
+                  addOns: addOns,
+                  selectedIds: _selectedAddonIds,
+                  onToggle: _onAddonToggled,
+                ),
 
                 FaqSection(faqs: service.faqs),
                 ServiceReviewsSection(serviceId: service.id),
@@ -144,95 +142,11 @@ class _ServiceDetailsScreenState extends ConsumerState<ServiceDetailsScreen> {
         service: service,
         attrs: attrs,
         selections: _selections,
+        addOns: addOns,
+        selectedAddonIds: _selectedAddonIds,
         displayPrice: displayPrice,
         priceAdjustment: _priceAdjustment,
-      ),
-    );
-  }
-}
-
-// ── Add-on card ───────────────────────────────────────────────────────────────
-
-class _AddOnCard extends StatefulWidget {
-  final dynamic addOn;
-  const _AddOnCard({required this.addOn});
-
-  @override
-  State<_AddOnCard> createState() => _AddOnCardState();
-}
-
-class _AddOnCardState extends State<_AddOnCard> {
-  bool _added = false;
-
-  @override
-  Widget build(BuildContext context) {
-    final tt = Theme.of(context).textTheme;
-    final addOn = widget.addOn;
-
-    return Container(
-      width: 160,
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: _added ? AppColors.primary : AppColors.border,
-          width: _added ? 1.5 : 1,
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  addOn.name,
-                  style: tt.labelMedium?.copyWith(fontWeight: FontWeight.w600),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-              Clickable(
-                onTap: () => setState(() => _added = !_added),
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 180),
-                  width: 24,
-                  height: 24,
-                  decoration: BoxDecoration(
-                    color: _added ? AppColors.primary : Colors.transparent,
-                    border: Border.all(
-                      color: _added ? AppColors.primary : AppColors.border,
-                    ),
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                  child: _added
-                      ? const Icon(Icons.check_rounded,
-                          size: 16, color: Colors.white)
-                      : const Icon(Icons.add_rounded,
-                          size: 16, color: AppColors.textHint),
-                ),
-              ),
-            ],
-          ),
-          if (addOn.description != null) ...[
-            const SizedBox(height: 4),
-            Text(
-              addOn.description!,
-              style: tt.labelSmall?.copyWith(color: AppColors.textHint),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ],
-          const Spacer(),
-          Text(
-            '+ ₹${(addOn.price as double).toInt()}',
-            style: tt.labelMedium?.copyWith(
-              color: AppColors.primary,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-        ],
+        addonsTotal: addonsTotal,
       ),
     );
   }
@@ -244,15 +158,21 @@ class _BookingBar extends ConsumerWidget {
   final ServiceModel service;
   final List<ServiceAttributeModel> attrs;
   final Map<String, String> selections;
+  final List<AddOnModel> addOns;
+  final Set<String> selectedAddonIds;
   final double displayPrice;
   final double priceAdjustment;
+  final double addonsTotal;
 
   const _BookingBar({
     required this.service,
     required this.attrs,
     required this.selections,
+    required this.addOns,
+    required this.selectedAddonIds,
     required this.displayPrice,
     required this.priceAdjustment,
+    required this.addonsTotal,
   });
 
   bool get _requiredFilled => attrs
@@ -289,7 +209,7 @@ class _BookingBar extends ConsumerWidget {
 
     ref
         .read(cartProvider.notifier)
-        .addToCart(service, priceAdjustment: priceAdjustment);
+        .addToCart(service, priceAdjustment: priceAdjustment + addonsTotal);
 
     if (!context.mounted) return;
     final currentPath = GoRouterState.of(context).uri.path;
@@ -306,8 +226,10 @@ class _BookingBar extends ConsumerWidget {
 
   Future<void> _book(BuildContext context, WidgetRef ref) async {
     final selectedAttrs = buildSelectedAttributes(attrs, selections);
+    final selectedAddons = buildSelectedAddons(addOns, selectedAddonIds);
     await launchBookingFlow(context, ref, service,
-        selectedAttributes: selectedAttrs);
+        selectedAttributes: selectedAttrs,
+        selectedAddons: selectedAddons);
   }
 
   @override
@@ -346,7 +268,7 @@ class _BookingBar extends ConsumerWidget {
                 ),
               ),
               Text(
-                priceAdjustment > 0 ? 'incl. adjustments' : 'onwards',
+                (priceAdjustment > 0 || addonsTotal > 0) ? 'incl. adjustments' : 'onwards',
                 style: tt.labelSmall?.copyWith(color: AppColors.textHint),
               ),
             ],
