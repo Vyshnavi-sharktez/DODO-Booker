@@ -6,9 +6,12 @@ class BookingsRepositoryImpl implements IBookingsRepository {
   const BookingsRepositoryImpl(this._datasource);
   final BookingsRemoteDatasource _datasource;
 
-  // Only "Start Service" (assigned→in_progress) goes through updateBookingStatus.
+  // Vendor-initiated status transitions allowed through updateBookingStatus.
   // Completion requires OTP: use initiateCompletion + verifyCompletionOtp instead.
-  static const _validProgressTargets = {'in_progress'};
+  // Rejection goes through rejectBooking, not this method.
+  //   assigned   → accepted    (vendor accepts the booking)
+  //   accepted   → in_progress (vendor starts the service)
+  static const _validProgressTargets = {'accepted', 'in_progress'};
 
   @override
   Future<List<Booking>> getVendorBookings(String vendorId) async {

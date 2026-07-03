@@ -23,14 +23,27 @@ class _BookingCardState extends ConsumerState<BookingCard> {
   bool _updating = false;
   bool _rejecting = false;
   bool _verifying = false;
-  // Set to true after any successful action so buttons stay permanently
-  // disabled while the provider refresh removes the card from its current tab.
-  bool _processed = false;
+
+  // Mirrors the booking's new status immediately after any successful API call,
+  // so the correct next-step UI appears without waiting for the provider refetch.
+  Booking? _localBooking;
 
   final TextEditingController _otpController = TextEditingController();
   String? _otpError;
 
-  bool get _busy => _updating || _rejecting || _verifying || _processed;
+  // Prefers locally-set state; falls back to the parent-supplied booking.
+  Booking get _booking => _localBooking ?? widget.booking;
+
+  // True while any async action is in-flight — prevents double-taps.
+  bool get _busy => _updating || _rejecting || _verifying;
+
+  // Called by every handler after a successful API call.
+  // Updates local state immediately and invalidates the provider in the background.
+  void _applyStatusUpdate(String newStatus) {
+    if (!mounted) return;
+    setState(() => _localBooking = _booking.copyWith(status: newStatus));
+    ref.invalidate(vendorBookingsProvider);
+  }
 
   @override
   void dispose() {
@@ -40,9 +53,9 @@ class _BookingCardState extends ConsumerState<BookingCard> {
 
   // Returns "#<booking_number>" when available, otherwise "#<first-8-uuid-chars>".
   String get _bookingRef {
-    final num = widget.booking.bookingNumber;
+    final num = _booking.bookingNumber;
     if (num.isNotEmpty) return '#$num';
-    final id = widget.booking.id;
+    final id = _booking.id;
     return '#${id.length > 8 ? id.substring(0, 8) : id}';
   }
 
@@ -52,22 +65,30 @@ class _BookingCardState extends ConsumerState<BookingCard> {
     return v?.name ?? v?.phone ?? 'Vendor';
   }
 
-  // ── Start Service ─────────────────────────────────────────────────────────
-  // Completion now requires OTP — handled by _handleInitiateCompletion and
-  // _handleVerifyOtp instead of the generic _handleAction path.
-  // DODO Team bookings skip the Start Service step (admin starts the service).
+  // ── Accept / Start Service ────────────────────────────────────────────────
+  // External vendor flow: assigned → Accept Service → accepted → Start Service
+  // → in_progress → Complete Service → awaiting_verification → OTP → completed.
+  // DODO Team bookings skip accept/start (admin starts the service).
 
-  bool get _isDodoBooking => widget.booking.isDodoTeam;
+  bool get _isDodoBooking => _booking.isDodoTeam;
 
-  String? get _actionLabel =>
-      widget.booking.status == 'assigned' && !_isDodoBooking
-          ? 'Start Service'
-          : null;
+  String? get _actionLabel {
+    if (_isDodoBooking) return null;
+    return switch (_booking.status) {
+      'assigned' => 'Accept Service',
+      'accepted' => 'Start Service',
+      _ => null,
+    };
+  }
 
-  String? get _targetStatus =>
-      widget.booking.status == 'assigned' && !_isDodoBooking
-          ? 'in_progress'
-          : null;
+  String? get _targetStatus {
+    if (_isDodoBooking) return null;
+    return switch (_booking.status) {
+      'assigned' => 'accepted',
+      'accepted' => 'in_progress',
+      _ => null,
+    };
+  }
 
   Future<void> _handleAction() async {
     final targetStatus = _targetStatus;
@@ -75,15 +96,21 @@ class _BookingCardState extends ConsumerState<BookingCard> {
     if (targetStatus == null || label == null) return;
 
     final (title, message, confirmColor) = switch (targetStatus) {
+      'accepted' => (
+          'Accept Service',
+          'Accept booking #${_booking.bookingNumber}?\n\n'
+              'Confirm that you are available to carry out this service.',
+          AppColors.primary,
+        ),
       'in_progress' => (
           'Start Service',
-          'Start service for booking #${widget.booking.bookingNumber}?\n\n'
+          'Start service for booking #${_booking.bookingNumber}?\n\n'
               'Status will change to In Progress.',
           AppColors.primary,
         ),
       'completed' => (
           'Mark Complete',
-          'Mark booking #${widget.booking.bookingNumber} as complete?\n\n'
+          'Mark booking #${_booking.bookingNumber} as complete?\n\n'
               'This action cannot be undone.',
           AppColors.success,
         ),
@@ -105,32 +132,45 @@ class _BookingCardState extends ConsumerState<BookingCard> {
     try {
       await ref
           .read(updateBookingStatusUseCaseProvider)
-          .call(widget.booking.id, targetStatus);
-      if (mounted) setState(() => _processed = true);
+          .call(_booking.id, targetStatus);
+      _applyStatusUpdate(targetStatus);
 
       // Notifications — fire-and-forget; must not block the status update.
-      if (targetStatus == 'in_progress') {
+      if (targetStatus == 'accepted') {
+        ref.read(bookingsRepositoryProvider).createAdminNotification(
+          title: 'Vendor Accepted Booking',
+          message: 'Vendor $_vendorName accepted booking $_bookingRef.',
+          notificationType: 'vendor_accepted',
+          entityId: _booking.id,
+        ).ignore();
+        ref.read(bookingsRepositoryProvider).createCustomerNotification(
+          customerId: _booking.customerId,
+          title: 'Service Accepted',
+          message: 'Your service provider has accepted your booking and will start soon.',
+          notificationType: 'vendor_accepted',
+          entityId: _booking.id,
+        ).ignore();
+      } else if (targetStatus == 'in_progress') {
         ref.read(bookingsRepositoryProvider).createAdminNotification(
           title: 'Vendor Started Service',
           message: 'Vendor $_vendorName started work on booking $_bookingRef.',
           notificationType: 'vendor_started',
-          entityId: widget.booking.id,
+          entityId: _booking.id,
         ).ignore();
         ref.read(bookingsRepositoryProvider).createCustomerNotification(
-          customerId: widget.booking.customerId,
+          customerId: _booking.customerId,
           title: 'Service Started',
           message: 'Your service is now in progress.',
           notificationType: 'vendor_started',
-          entityId: widget.booking.id,
+          entityId: _booking.id,
         ).ignore();
       }
 
-      ref.invalidate(vendorBookingsProvider);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              'Booking #${widget.booking.bookingNumber} updated successfully.',
+              'Booking #${_booking.bookingNumber} updated successfully.',
             ),
             backgroundColor: AppColors.success,
           ),
@@ -146,14 +186,14 @@ class _BookingCardState extends ConsumerState<BookingCard> {
         );
       }
     } finally {
-      if (mounted && !_processed) setState(() => _updating = false);
+      if (mounted) setState(() => _updating = false);
     }
   }
 
   // ── Initiate OTP completion ───────────────────────────────────────────────
 
   Future<void> _handleInitiateCompletion() async {
-    debugPrint('[OTP] Complete Service tapped — bookingId=${widget.booking.id}');
+    debugPrint('[OTP] Complete Service tapped — bookingId=${_booking.id}');
 
     final confirmed = await showDialog<bool>(
       context: context,
@@ -175,25 +215,20 @@ class _BookingCardState extends ConsumerState<BookingCard> {
       debugPrint('[OTP] Calling initiateCompletion…');
       await ref
           .read(initiateCompletionUseCaseProvider)
-          .call(widget.booking.id);
+          .call(_booking.id);
       debugPrint('[OTP] initiateCompletion succeeded — status=awaiting_verification');
-
-      // Do NOT set _processed=true here. This is NOT a terminal action:
-      // the card stays in the In-Progress tab as awaiting_verification and the
-      // vendor still needs to enter the OTP. Setting _processed would
-      // permanently disable the Verify button via _busy.
+      _applyStatusUpdate('awaiting_verification');
 
       final providerLabel = _isDodoBooking ? 'DODO Team' : 'the vendor';
       ref.read(bookingsRepositoryProvider).createCustomerNotification(
-        customerId: widget.booking.customerId,
+        customerId: _booking.customerId,
         title: 'OTP for Service Completion',
         message: 'Your service is complete. Open your booking to view the OTP '
             'and share it with $providerLabel.',
         notificationType: 'otp_generated',
-        entityId: widget.booking.id,
+        entityId: _booking.id,
       ).ignore();
 
-      ref.invalidate(vendorBookingsProvider);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -213,8 +248,6 @@ class _BookingCardState extends ConsumerState<BookingCard> {
         );
       }
     } finally {
-      // Always reset _updating — never gate on _processed here because we
-      // deliberately do not set _processed after initiating completion.
       if (mounted) setState(() => _updating = false);
     }
   }
@@ -224,7 +257,7 @@ class _BookingCardState extends ConsumerState<BookingCard> {
   Future<void> _handleVerifyOtp() async {
     // ── Diagnostic checkpoint 1: confirm function was reached ────────────────
     debugPrint('[OTP][VERIFY] ══════════ _handleVerifyOtp() ENTERED ══════════');
-    debugPrint('[OTP][VERIFY] State at entry — _busy=$_busy _processed=$_processed '
+    debugPrint('[OTP][VERIFY] State at entry — _busy=$_busy '
         '_updating=$_updating _verifying=$_verifying _rejecting=$_rejecting');
 
     // ── Diagnostic checkpoint 2: inspect the raw TextField value ─────────────
@@ -251,10 +284,10 @@ class _BookingCardState extends ConsumerState<BookingCard> {
     try {
       // ── Diagnostic checkpoint 3: confirm use case is invoked ─────────────
       debugPrint('[OTP][VERIFY] Invoking verifyCompletionOtpUseCaseProvider '
-          '— bookingId=${widget.booking.id} otp="$otp"');
+          '— bookingId=${_booking.id} otp="$otp"');
       final verified = await ref
           .read(verifyCompletionOtpUseCaseProvider)
-          .call(widget.booking.id, otp);
+          .call(_booking.id, otp);
       debugPrint('[OTP][VERIFY] Use case returned: verified=$verified');
 
       if (!mounted) {
@@ -271,26 +304,24 @@ class _BookingCardState extends ConsumerState<BookingCard> {
         return;
       }
 
-      debugPrint('[OTP][VERIFY] ✓ OTP accepted — marking card as processed (terminal)');
-      // Terminal action: lock the card while it moves to the Completed tab.
-      setState(() => _processed = true);
+      debugPrint('[OTP][VERIFY] ✓ OTP accepted — updating status to completed');
+      _applyStatusUpdate('completed');
 
       final completedBy = _isDodoBooking ? 'DODO Team ($_vendorName)' : 'Vendor $_vendorName';
       ref.read(bookingsRepositoryProvider).createAdminNotification(
         title: 'Booking Completed',
         message: '$completedBy completed booking $_bookingRef via OTP.',
         notificationType: 'booking_completed',
-        entityId: widget.booking.id,
+        entityId: _booking.id,
       ).ignore();
       ref.read(bookingsRepositoryProvider).createCustomerNotification(
-        customerId: widget.booking.customerId,
+        customerId: _booking.customerId,
         title: 'Service Completed',
         message: 'Your service has been completed. You can now rate the experience.',
         notificationType: 'booking_completed',
-        entityId: widget.booking.id,
+        entityId: _booking.id,
       ).ignore();
 
-      ref.invalidate(vendorBookingsProvider);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -307,8 +338,7 @@ class _BookingCardState extends ConsumerState<BookingCard> {
         });
       }
     } finally {
-      // Reset _verifying unless the card has already been locked as terminal.
-      if (mounted && !_processed) setState(() => _verifying = false);
+      if (mounted) setState(() => _verifying = false);
     }
   }
 
@@ -318,17 +348,17 @@ class _BookingCardState extends ConsumerState<BookingCard> {
     final reason = await showDialog<String>(
       context: context,
       builder: (_) =>
-          RejectDialog(bookingNumber: widget.booking.bookingNumber),
+          RejectDialog(bookingNumber: _booking.bookingNumber),
     );
     if (reason == null || !mounted) return;
 
     setState(() => _rejecting = true);
     try {
       await ref.read(rejectBookingUseCaseProvider).call(
-            bookingId: widget.booking.id,
+            bookingId: _booking.id,
             rejectionReason: reason,
           );
-      if (mounted) setState(() => _processed = true);
+      _applyStatusUpdate('rejected');
 
       // Notifications — fire-and-forget; must not block the rejection.
       ref.read(bookingsRepositoryProvider).createAdminNotification(
@@ -336,23 +366,22 @@ class _BookingCardState extends ConsumerState<BookingCard> {
         message: 'Vendor $_vendorName rejected booking $_bookingRef.\n'
             'Reason: $reason',
         notificationType: 'vendor_rejected',
-        entityId: widget.booking.id,
+        entityId: _booking.id,
       ).ignore();
       ref.read(bookingsRepositoryProvider).createCustomerNotification(
-        customerId: widget.booking.customerId,
+        customerId: _booking.customerId,
         title: 'Vendor Reassignment Required',
         message: 'Your assigned vendor is unavailable. '
             'A new provider will be assigned shortly.',
         notificationType: 'vendor_rejected',
-        entityId: widget.booking.id,
+        entityId: _booking.id,
       ).ignore();
 
-      ref.invalidate(vendorBookingsProvider);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              'Booking #${widget.booking.bookingNumber} moved to Rejected.',
+              'Booking #${_booking.bookingNumber} moved to Rejected.',
             ),
             backgroundColor: AppColors.error,
           ),
@@ -368,7 +397,7 @@ class _BookingCardState extends ConsumerState<BookingCard> {
         );
       }
     } finally {
-      if (mounted && !_processed) setState(() => _rejecting = false);
+      if (mounted) setState(() => _rejecting = false);
     }
   }
 
@@ -377,20 +406,21 @@ class _BookingCardState extends ConsumerState<BookingCard> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    // Vendor: assigned → Start Service → in_progress → Complete Service → awaiting_verification → OTP → completed.
-    // DODO Team: admin handles assignment; team sees in_progress → Complete Service → awaiting_verification → OTP → completed.
-    // isAssigned guards against showing vendor-only buttons if a DODO booking ever lands in 'assigned'.
-    final isAssigned = widget.booking.status == 'assigned' && !_isDodoBooking;
-    final isInProgress = widget.booking.status == 'in_progress';
-    final isAwaitingVerification = widget.booking.status == 'awaiting_verification';
+    // External vendor: assigned → Accept Service → accepted → Start Service
+    // → in_progress → Complete Service → awaiting_verification → OTP → completed.
+    // DODO Team: admin handles assignment + start; team sees in_progress → Complete Service → OTP → completed.
+    final isAssigned = _booking.status == 'assigned' && !_isDodoBooking;
+    final isAccepted = _booking.status == 'accepted' && !_isDodoBooking;
+    final isInProgress = _booking.status == 'in_progress';
+    final isAwaitingVerification = _booking.status == 'awaiting_verification';
     final showOtpPanel = isAwaitingVerification;
-    final isRejected = widget.booking.status == 'rejected';
+    final isRejected = _booking.status == 'rejected';
 
     // Diagnostic: log button state on every rebuild for OTP panel cards.
     if (showOtpPanel) {
       debugPrint(
-        '[OTP][BUILD] Card rebuilt — bookingId=${widget.booking.id} '
-        '_busy=$_busy (_processed=$_processed _updating=$_updating '
+        '[OTP][BUILD] Card rebuilt — bookingId=${_booking.id} '
+        '_busy=$_busy (_updating=$_updating '
         '_verifying=$_verifying _rejecting=$_rejecting) '
         '→ Verify button is ${_busy ? "DISABLED (onPressed=null)" : "ENABLED"}',
       );
@@ -416,7 +446,7 @@ class _BookingCardState extends ConsumerState<BookingCard> {
               children: [
                 Flexible(
                   child: Text(
-                    '#${widget.booking.bookingNumber}',
+                    '#${_booking.bookingNumber}',
                     style: theme.textTheme.titleSmall?.copyWith(
                       fontWeight: FontWeight.w700,
                       color: AppColors.textPrimary,
@@ -425,35 +455,35 @@ class _BookingCardState extends ConsumerState<BookingCard> {
                   ),
                 ),
                 const SizedBox(width: 8),
-                BookingStatusBadge(status: widget.booking.status),
+                BookingStatusBadge(status: _booking.status),
               ],
             ),
             const SizedBox(height: 12),
 
-            if (widget.booking.items.isNotEmpty)
-              _ServicesBlock(items: widget.booking.items)
-            else if (widget.booking.notes != null &&
-                widget.booking.notes!.isNotEmpty)
+            if (_booking.items.isNotEmpty)
+              _ServicesBlock(items: _booking.items)
+            else if (_booking.notes != null &&
+                _booking.notes!.isNotEmpty)
               _InfoRow(
                 icon: Icons.home_repair_service_outlined,
-                label: widget.booking.notes!,
+                label: _booking.notes!,
               ),
-            if (widget.booking.serviceDate != null)
+            if (_booking.serviceDate != null)
               _InfoRow(
                 icon: Icons.calendar_today_outlined,
-                label: AppDateUtils.formatDisplay(widget.booking.serviceDate!),
+                label: AppDateUtils.formatDisplay(_booking.serviceDate!),
               ),
-            if (widget.booking.address != null &&
-                widget.booking.address!.isNotEmpty)
+            if (_booking.address != null &&
+                _booking.address!.isNotEmpty)
               _InfoRow(
                 icon: Icons.location_on_outlined,
-                label: widget.booking.address!,
+                label: _booking.address!,
                 maxLines: 2,
               ),
 
             // ── Rejection reason banner ───────────────────────────────────
             if (isRejected &&
-                (widget.booking.rejectionReason?.isNotEmpty ?? false)) ...[
+                (_booking.rejectionReason?.isNotEmpty ?? false)) ...[
               const SizedBox(height: 8),
               Container(
                 width: double.infinity,
@@ -486,7 +516,7 @@ class _BookingCardState extends ConsumerState<BookingCard> {
                                   TextStyle(fontWeight: FontWeight.w700),
                             ),
                             TextSpan(
-                              text: widget.booking.rejectionReason ?? '',
+                              text: _booking.rejectionReason ?? '',
                             ),
                           ],
                         ),
@@ -506,7 +536,7 @@ class _BookingCardState extends ConsumerState<BookingCard> {
               children: [
                 Flexible(
                   child: Text(
-                    FormatUtils.currency(widget.booking.totalAmount),
+                    FormatUtils.currency(_booking.totalAmount),
                     style: theme.textTheme.titleMedium?.copyWith(
                       fontWeight: FontWeight.w700,
                       color: isRejected
@@ -516,10 +546,10 @@ class _BookingCardState extends ConsumerState<BookingCard> {
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
-                if (isRejected && widget.booking.rejectedAt != null)
+                if (isRejected && _booking.rejectedAt != null)
                   Flexible(
                     child: Text(
-                      'Rejected ${AppDateUtils.relativeLabel(widget.booking.rejectedAt!)}',
+                      'Rejected ${AppDateUtils.relativeLabel(_booking.rejectedAt!)}',
                       style: theme.textTheme.bodySmall?.copyWith(
                         color: AppColors.error.withValues(alpha: 0.8),
                       ),
@@ -527,10 +557,10 @@ class _BookingCardState extends ConsumerState<BookingCard> {
                       textAlign: TextAlign.end,
                     ),
                   )
-                else if (widget.booking.createdAt != null)
+                else if (_booking.createdAt != null)
                   Flexible(
                     child: Text(
-                      AppDateUtils.relativeLabel(widget.booking.createdAt!),
+                      AppDateUtils.relativeLabel(_booking.createdAt!),
                       style: theme.textTheme.bodySmall?.copyWith(
                         color: AppColors.textHint,
                       ),
@@ -541,7 +571,7 @@ class _BookingCardState extends ConsumerState<BookingCard> {
               ],
             ),
 
-            // ── Actions: Assigned (vendor only) ───────────────────────────
+            // ── Actions: Assigned (vendor only) — Accept or Reject ────────
             if (isAssigned) ...[
               const SizedBox(height: 12),
               SizedBox(
@@ -557,7 +587,7 @@ class _BookingCardState extends ConsumerState<BookingCard> {
                   ),
                   child: _updating
                       ? const _Spinner(color: Colors.white)
-                      : const Text('Start Service'),
+                      : const Text('Accept Service'),
                 ),
               ),
               const SizedBox(height: 8),
@@ -577,6 +607,27 @@ class _BookingCardState extends ConsumerState<BookingCard> {
                       ? const _Spinner(color: AppColors.error)
                       : const Icon(Icons.cancel_outlined, size: 16),
                   label: const Text('Reject Service'),
+                ),
+              ),
+            ],
+
+            // ── Actions: Accepted (vendor only) — Start Service ────────────
+            if (isAccepted) ...[
+              const SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton(
+                  onPressed: _busy ? null : _handleAction,
+                  style: FilledButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                  child: _updating
+                      ? const _Spinner(color: Colors.white)
+                      : const Text('Start Service'),
                 ),
               ),
             ],

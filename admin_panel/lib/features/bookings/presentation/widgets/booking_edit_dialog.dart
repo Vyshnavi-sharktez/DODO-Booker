@@ -9,6 +9,7 @@ import '../../domain/models/booking.dart';
 const _statusOptions = [
   ('pending', 'Pending'),
   ('assigned', 'Assigned'),
+  ('accepted', 'Accepted'),
   ('in_progress', 'In Progress'),
   ('completed', 'Completed'),
   ('cancelled', 'Cancelled'),
