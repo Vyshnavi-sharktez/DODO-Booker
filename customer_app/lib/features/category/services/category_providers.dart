@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'category_service.dart';
+import '../../../models/addon_model.dart';
 import '../../../models/category_model.dart';
 import '../../../models/service_attribute_model.dart';
 import '../../../models/service_model.dart';
@@ -32,6 +33,14 @@ final servicesBySubcategoryProvider =
     return ref
         .read(categoryServiceProvider)
         .fetchServicesBySubcategoryId(subcategoryId);
+  },
+);
+
+final serviceAddonsProvider =
+    FutureProvider.family<List<AddOnModel>, String>(
+  (ref, serviceId) {
+    debugPrint('[DODO][Provider] serviceAddonsProvider(serviceId=$serviceId)');
+    return ref.read(categoryServiceProvider).fetchActiveServiceAddons(serviceId);
   },
 );
 

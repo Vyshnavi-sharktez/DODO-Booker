@@ -20,6 +20,22 @@ class AuthRepository {
     await _supabase.auth.signOut();
   }
 
+  Future<void> sendPasswordResetEmail(
+    String email, {
+    required String redirectTo,
+  }) async {
+    await _supabase.auth.resetPasswordForEmail(
+      email.trim(),
+      redirectTo: redirectTo,
+    );
+  }
+
+  Future<void> updatePassword(String newPassword) async {
+    await _supabase.auth.updateUser(
+      UserAttributes(password: newPassword),
+    );
+  }
+
   Future<AdminUser> fetchAdminUser(String userId) async {
     // 1. Fetch admin_users row by auth_user_id
     Map<String, dynamic>? adminRow;

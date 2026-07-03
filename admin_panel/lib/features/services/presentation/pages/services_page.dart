@@ -8,6 +8,7 @@ import '../../../sub_categories/application/providers/sub_categories_providers.d
 import '../../application/providers/services_providers.dart';
 import '../../domain/models/service.dart';
 import '../widgets/service_form_dialog.dart';
+import '../../../service_addons/presentation/widgets/service_addons_dialog.dart';
 
 class ServicesPage extends ConsumerStatefulWidget {
   /// When non-null, only services belonging to this sub-category are shown.
@@ -332,6 +333,16 @@ class _ServicesPageState extends ConsumerState<ServicesPage> {
     }
   }
 
+  void _openAddonsDialog(Service service) {
+    showDialog(
+      context: context,
+      builder: (_) => ServiceAddonsDialog(
+        serviceId: service.id,
+        serviceName: service.name,
+      ),
+    );
+  }
+
   Future<void> _toggle(Service service) async {
     try {
       await ref
@@ -504,6 +515,7 @@ class _ServicesPageState extends ConsumerState<ServicesPage> {
                   onEdit: _openEdit,
                   onDelete: _confirmDelete,
                   onToggle: _toggle,
+                  onManageAddons: _openAddonsDialog,
                 );
               },
             ),
@@ -521,12 +533,14 @@ class _ServicesTable extends StatelessWidget {
   final void Function(Service) onEdit;
   final void Function(Service) onDelete;
   final void Function(Service) onToggle;
+  final void Function(Service) onManageAddons;
 
   const _ServicesTable({
     required this.services,
     required this.onEdit,
     required this.onDelete,
     required this.onToggle,
+    required this.onManageAddons,
   });
 
   static const double _minTableWidth = 780;
@@ -587,6 +601,7 @@ class _ServicesTable extends StatelessWidget {
                                   onEdit: () => onEdit(svc),
                                   onDelete: () => onDelete(svc),
                                   onToggle: () => onToggle(svc),
+                                  onManageAddons: () => onManageAddons(svc),
                                 );
                               },
                             ),
@@ -646,12 +661,14 @@ class _ServiceRow extends StatelessWidget {
   final VoidCallback onEdit;
   final VoidCallback onDelete;
   final VoidCallback onToggle;
+  final VoidCallback onManageAddons;
 
   const _ServiceRow({
     required this.service,
     required this.onEdit,
     required this.onDelete,
     required this.onToggle,
+    required this.onManageAddons,
   });
 
   String _formatDuration(int minutes) {
@@ -747,6 +764,13 @@ class _ServiceRow extends StatelessWidget {
                     activeThumbColor: AppColors.success,
                     materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                   ),
+                ),
+                IconButton(
+                  onPressed: onManageAddons,
+                  icon: Icon(Icons.extension_rounded,
+                      size: 16, color: AppColors.primary),
+                  tooltip: 'Manage Add-ons',
+                  visualDensity: VisualDensity.compact,
                 ),
                 IconButton(
                   onPressed: onEdit,

@@ -9,6 +9,7 @@ import '../../../features/auth/widgets/otp_verification_modal.dart';
 import '../../../features/auth/widgets/profile_completion_modal.dart';
 import '../../../models/service_model.dart';
 import '../../../models/service_attribute_model.dart';
+import '../../../models/addon_model.dart';
 import '../modals/address_modal.dart';
 import '../modals/datetime_modal.dart';
 import '../modals/booking_summary_modal.dart';
@@ -26,6 +27,7 @@ Future<void> launchBookingFlow(
   WidgetRef ref,
   ServiceModel service, {
   List<SelectedAttributeOption> selectedAttributes = const [],
+  List<SelectedAddon> selectedAddons = const [],
 }) async {
   // ── Step 1: Authentication ────────────────────────────────────────────────
   if (!ref.read(isAuthenticatedProvider)) {
@@ -67,6 +69,7 @@ Future<void> launchBookingFlow(
       child: BookingFlowModal(
         service: service,
         selectedAttributes: selectedAttributes,
+        selectedAddons: selectedAddons,
       ),
     );
     return;
@@ -96,6 +99,7 @@ Future<void> launchBookingFlow(
   ref.read(selectedCouponProvider.notifier).state = null;
 
   final priceAdjustment = totalPriceAdjustment(selectedAttributes);
+  final addonsTotal = totalAddonsPrice(selectedAddons);
   final summaryFuture = AppModalDialog.show<bool>(
     context: context,
     child: BookingSummaryModal(
@@ -105,6 +109,7 @@ Future<void> launchBookingFlow(
       slot: slot,
       priceAdjustment: priceAdjustment,
       selectedAttributes: selectedAttributes,
+      selectedAddons: selectedAddons,
     ),
   );
   final confirmed = await summaryFuture;
@@ -112,7 +117,7 @@ Future<void> launchBookingFlow(
 
   // Read coupon state after the summary modal closes.
   final selectedCoupon = ref.read(selectedCouponProvider);
-  final subtotal = (service.startingPrice + priceAdjustment) * 1.18;
+  final subtotal = (service.startingPrice + priceAdjustment + addonsTotal) * 1.18;
   final discountAmount = selectedCoupon?.calculateDiscount(subtotal) ?? 0.0;
   final finalTotal = (subtotal - discountAmount).clamp(0.0, double.infinity);
 
@@ -138,6 +143,7 @@ Future<void> launchBookingFlow(
           couponId: selectedCoupon?.id,
           discountAmount: discountAmount,
           priceAdjustment: priceAdjustment,
+          selectedAddons: selectedAddons,
         );
     ref.read(selectedCouponProvider.notifier).state = null;
     if (!context.mounted) return;

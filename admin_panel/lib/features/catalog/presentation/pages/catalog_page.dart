@@ -6,6 +6,8 @@ import '../../../../core/theme/app_theme.dart';
 import '../../../categories/application/providers/categories_providers.dart';
 import '../../../categories/domain/models/category.dart';
 import '../../../categories/presentation/widgets/category_form_dialog.dart';
+import '../../../service_addons/application/providers/service_addons_providers.dart';
+import '../../../service_addons/presentation/widgets/service_addons_dialog.dart';
 import '../../../service_attributes/application/providers/service_attributes_providers.dart';
 import '../../../services/application/providers/services_providers.dart';
 import '../../../services/domain/models/service.dart';
@@ -720,6 +722,19 @@ class _CatalogPageState extends ConsumerState<CatalogPage> {
     );
   }
 
+  Future<void> _openAddonsDialog(Service service) async {
+    await showDialog<void>(
+      context: context,
+      builder: (_) => ServiceAddonsDialog(
+        serviceId: service.id,
+        serviceName: service.name,
+      ),
+    );
+    if (mounted) {
+      ref.invalidate(serviceAddonsByServiceIdProvider(service.id));
+    }
+  }
+
   // ── Wizard prompts ────────────────────────────────────────────────────────
 
   void _showAddSubCategoryWizard(String categoryName) {
@@ -861,6 +876,7 @@ class _CatalogPageState extends ConsumerState<CatalogPage> {
       onDeleteService: _deleteService,
       onToggleServiceActive: _toggleServiceActive,
       onOpenAttributes: _openAttributesPanel,
+      onManageAddons: _openAddonsDialog,
     );
 
     return Scaffold(

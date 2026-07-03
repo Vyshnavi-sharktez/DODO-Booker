@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/config/supabase_config.dart';
+import '../../../models/addon_model.dart';
 import '../../../models/category_model.dart';
 import '../../../models/service_attribute_model.dart';
 import '../../../models/service_model.dart';
@@ -90,6 +91,25 @@ class CategoryService {
     debugPrint(
         '[DODO][CategoryService] fetchServicesBySubcategoryId($subcategoryId) → ${results.length} service(s) returned');
     return results;
+  }
+
+  // ── Service add-ons ────────────────────────────────────────────────────────
+
+  Future<List<AddOnModel>> fetchActiveServiceAddons(String serviceId) async {
+    if (!_ready) {
+      debugPrint('[DODO][CategoryService] fetchActiveServiceAddons($serviceId) → MOCK');
+      return [];
+    }
+    debugPrint('[DODO][CategoryService] fetchActiveServiceAddons($serviceId) → SUPABASE');
+    final data = await _db
+        .from('addons')
+        .select()
+        .eq('service_id', serviceId)
+        .eq('is_active', true)
+        .order('created_at', ascending: true);
+    return (data as List)
+        .map((e) => AddOnModel.fromJson(e as Map<String, dynamic>))
+        .toList();
   }
 
   // ── Service attributes ─────────────────────────────────────────────────────

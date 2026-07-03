@@ -31,7 +31,7 @@ class ServiceService {
           *,
           sub_categories(name, categories(name)),
           service_faqs(id, question, answer, sort_order),
-          service_add_ons(id, name, description, price, is_active)
+          addons(id, name, description, price, is_active)
         ''')
         .eq('sub_category_id', subcategoryId)
         .eq('is_active', true)
@@ -59,7 +59,7 @@ class ServiceService {
           *,
           sub_categories!inner(name, categories(name)),
           service_faqs(id, question, answer, sort_order),
-          service_add_ons(id, name, description, price, is_active)
+          addons(id, name, description, price, is_active)
         ''')
         .filter('sub_categories.category_id', 'eq', categoryId)
         .eq('is_active', true)
@@ -89,7 +89,7 @@ class ServiceService {
           *,
           sub_categories(name, categories(name)),
           service_faqs(id, question, answer, sort_order),
-          service_add_ons(id, name, description, price, is_active)
+          addons(id, name, description, price, is_active)
         ''')
         .eq('id', serviceId)
         .maybeSingle();

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../application/providers/auth_provider.dart';
 import '../../../../core/theme/app_theme.dart';
+import '../widgets/forgot_password_dialog.dart';
 
 class LoginPage extends ConsumerStatefulWidget {
   const LoginPage({super.key});
@@ -32,11 +33,29 @@ class _LoginPageState extends ConsumerState<LoginPage> {
         );
   }
 
+  void _openForgotPassword() {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const ForgotPasswordDialog(),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final authState = ref.watch(authNotifierProvider);
     final isLoading = authState is AsyncLoading;
     final errorMessage = authState.hasError ? authState.error.toString() : null;
+
+    // Consume and clear any post-reset success message.
+    final successMessage = ref.watch(loginSuccessMessageProvider);
+    if (successMessage != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          ref.read(loginSuccessMessageProvider.notifier).state = null;
+        }
+      });
+    }
 
     return Scaffold(
       backgroundColor: const Color(0xFF111111),
@@ -60,9 +79,11 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                   obscurePassword: _obscurePassword,
                   isLoading: isLoading,
                   errorMessage: errorMessage,
+                  successMessage: successMessage,
                   onTogglePassword: () =>
                       setState(() => _obscurePassword = !_obscurePassword),
                   onSubmit: _submit,
+                  onForgotPassword: _openForgotPassword,
                 ),
               ],
             ),
@@ -123,8 +144,10 @@ class _LoginCard extends StatelessWidget {
     required this.obscurePassword,
     required this.isLoading,
     required this.errorMessage,
+    required this.successMessage,
     required this.onTogglePassword,
     required this.onSubmit,
+    required this.onForgotPassword,
   });
 
   final GlobalKey<FormState> formKey;
@@ -133,8 +156,10 @@ class _LoginCard extends StatelessWidget {
   final bool obscurePassword;
   final bool isLoading;
   final String? errorMessage;
+  final String? successMessage;
   final VoidCallback onTogglePassword;
   final VoidCallback onSubmit;
+  final VoidCallback onForgotPassword;
 
   @override
   Widget build(BuildContext context) {
@@ -173,6 +198,12 @@ class _LoginCard extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 28),
+
+            // Success banner (shown after a successful password reset)
+            if (successMessage != null) ...[
+              _SuccessBanner(message: successMessage!),
+              const SizedBox(height: 20),
+            ],
 
             // Error banner
             if (errorMessage != null) ...[
@@ -244,7 +275,28 @@ class _LoginCard extends StatelessWidget {
                 return null;
               },
             ),
-            const SizedBox(height: 28),
+            const SizedBox(height: 8),
+
+            // Forgot Password link
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton(
+                onPressed: isLoading ? null : onForgotPassword,
+                style: TextButton.styleFrom(
+                  foregroundColor: AppColors.accent,
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 4, vertical: 4),
+                  minimumSize: Size.zero,
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  textStyle: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                child: const Text('Forgot Password?'),
+              ),
+            ),
+            const SizedBox(height: 20),
 
             // Login button
             SizedBox(
@@ -266,6 +318,40 @@ class _LoginCard extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _SuccessBanner extends StatelessWidget {
+  const _SuccessBanner({required this.message});
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: AppColors.success.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: AppColors.success.withValues(alpha: 0.3)),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.check_circle_outline_rounded,
+              color: AppColors.success, size: 18),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              message,
+              style: const TextStyle(
+                color: AppColors.success,
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

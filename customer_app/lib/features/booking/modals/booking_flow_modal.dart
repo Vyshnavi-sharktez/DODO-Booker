@@ -9,6 +9,7 @@ import '../../../models/time_slot_model.dart';
 import '../../../models/coupon_model.dart';
 import '../../../features/address/modals/address_form_modal.dart';
 import '../../../models/service_attribute_model.dart';
+import '../../../models/addon_model.dart';
 import '../services/booking_providers.dart';
 import '../services/coupon_providers.dart';
 import '../widgets/date_selector.dart';
@@ -21,11 +22,13 @@ import '../widgets/available_coupons_sheet.dart';
 class BookingFlowModal extends ConsumerStatefulWidget {
   final ServiceModel service;
   final List<SelectedAttributeOption> selectedAttributes;
+  final List<SelectedAddon> selectedAddons;
 
   const BookingFlowModal({
     super.key,
     required this.service,
     this.selectedAttributes = const [],
+    this.selectedAddons = const [],
   });
 
   @override
@@ -59,7 +62,8 @@ class _BookingFlowModalState extends ConsumerState<BookingFlowModal>
 
   double get _subtotal =>
       (widget.service.startingPrice +
-              totalPriceAdjustment(widget.selectedAttributes)) *
+              totalPriceAdjustment(widget.selectedAttributes) +
+              totalAddonsPrice(widget.selectedAddons)) *
           1.18;
 
   @override
@@ -142,6 +146,7 @@ class _BookingFlowModalState extends ConsumerState<BookingFlowModal>
             couponId: selectedCoupon?.id,
             discountAmount: discountAmount,
             priceAdjustment: totalPriceAdjustment(widget.selectedAttributes),
+            selectedAddons: widget.selectedAddons,
           );
       ref.read(selectedCouponProvider.notifier).state = null;
       if (!mounted) return;
@@ -468,7 +473,8 @@ class _BookingFlowModalState extends ConsumerState<BookingFlowModal>
     final tt = Theme.of(context).textTheme;
     final basePrice = widget.service.startingPrice;
     final totalAdj = totalPriceAdjustment(widget.selectedAttributes);
-    final adjustedBase = basePrice + totalAdj;
+    final addonsTotal = totalAddonsPrice(widget.selectedAddons);
+    final adjustedBase = basePrice + totalAdj + addonsTotal;
     final tax = adjustedBase * 0.18;
     final total = (adjustedBase + tax - discount).clamp(0.0, double.infinity);
 
@@ -526,6 +532,18 @@ class _BookingFlowModalState extends ConsumerState<BookingFlowModal>
                                 .join(' · '),
                             style: tt.labelSmall?.copyWith(
                               color: AppColors.primary,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ],
+                        if (widget.selectedAddons.isNotEmpty) ...[
+                          const SizedBox(height: 4),
+                          Text(
+                            widget.selectedAddons
+                                .map((a) => a.addonName)
+                                .join(' · '),
+                            style: tt.labelSmall?.copyWith(
+                              color: AppColors.secondary,
                               fontWeight: FontWeight.w500,
                             ),
                           ),
@@ -762,6 +780,23 @@ class _BookingFlowModalState extends ConsumerState<BookingFlowModal>
               ],
             ),
           ],
+        for (final addon in widget.selectedAddons) ...[
+          const SizedBox(height: 6),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Flexible(
+                  child: Text(addon.addonName,
+                      style: tt.bodySmall
+                          ?.copyWith(color: AppColors.textSecondary),
+                      overflow: TextOverflow.ellipsis)),
+              Text('+₹${addon.addonPrice.toStringAsFixed(2)}',
+                  style: tt.bodySmall?.copyWith(
+                      color: AppColors.textPrimary,
+                      fontWeight: FontWeight.w500)),
+            ],
+          ),
+        ],
         const SizedBox(height: 6),
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,

@@ -73,7 +73,7 @@ class ServiceModel {
           .cast<Map<String, dynamic>>()
           .map(FaqModel.fromJson)
           .toList(),
-      addOns: ((json['service_add_ons'] as List<dynamic>?) ?? [])
+      addOns: ((json['addons'] as List<dynamic>?) ?? [])
           .cast<Map<String, dynamic>>()
           .where((e) => e['is_active'] != false)
           .map(AddOnModel.fromJson)

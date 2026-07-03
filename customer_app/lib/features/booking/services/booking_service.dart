@@ -8,6 +8,7 @@ import '../../../models/booking_model.dart';
 import '../../../models/booking_item.dart';
 import '../../../models/service_model.dart';
 import '../../../models/address_model.dart';
+import '../../../models/addon_model.dart';
 import 'coupon_service.dart';
 
 class BookingService {
@@ -67,6 +68,7 @@ class BookingService {
     String? couponId,
     double discountAmount = 0.0,
     double priceAdjustment = 0.0,
+    List<SelectedAddon> selectedAddons = const [],
   }) async {
     debugPrint('[DODO][Booking] createBooking started');
     debugPrint('[DODO][Booking] Service: ${service.name} (id=${service.id})');
@@ -77,7 +79,8 @@ class BookingService {
     final customerId = await _getCustomerId();
     debugPrint('[DODO][Booking] customer_id=$customerId');
 
-    final subtotal = service.startingPrice + priceAdjustment;
+    final addonsTotal = totalAddonsPrice(selectedAddons);
+    final subtotal = service.startingPrice + priceAdjustment + addonsTotal;
     final tax = subtotal * 0.18;
     final grossAmount = subtotal + tax;
     final totalAmount = (grossAmount - discountAmount).clamp(0.0, double.infinity);
@@ -160,6 +163,26 @@ class BookingService {
       debugPrint('[DODO][Booking] booking_item inserted');
     } catch (e) {
       debugPrint('[DODO][Booking] Warning: booking_item insert failed (non-fatal): $e');
+    }
+
+    // ── INSERT into booking_addons (non-fatal) ───────────────────────────────
+    if (selectedAddons.isNotEmpty) {
+      try {
+        debugPrint('[DODO][Booking] Inserting ${selectedAddons.length} booking_addon(s)');
+        await _client.from('booking_addons').insert(
+          selectedAddons
+              .map((a) => {
+                    'booking_id': bookingId,
+                    'addon_id': a.addonId,
+                    'addon_name': a.addonName,
+                    'addon_price': a.addonPrice,
+                  })
+              .toList(),
+        );
+        debugPrint('[DODO][Booking] booking_addons inserted');
+      } catch (e) {
+        debugPrint('[DODO][Booking] Warning: booking_addons insert failed (non-fatal): $e');
+      }
     }
 
     // ── Increment coupon used_count ──────────────────────────────────────────
