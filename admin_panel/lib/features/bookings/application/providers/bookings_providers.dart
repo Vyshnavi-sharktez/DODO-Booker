@@ -3,6 +3,17 @@ import '../../../auth/application/providers/auth_provider.dart';
 import '../../data/bookings_repository.dart';
 import '../../domain/models/booking.dart';
 
+final bookingImagesProvider = FutureProvider.autoDispose
+    .family<List<Map<String, dynamic>>, String>((ref, bookingId) async {
+  final client = ref.watch(supabaseClientProvider);
+  final rows = await client
+      .from('booking_images')
+      .select('image_type, image_url, created_at')
+      .eq('booking_id', bookingId)
+      .order('created_at');
+  return List<Map<String, dynamic>>.from(rows as List);
+});
+
 final bookingsRepositoryProvider = Provider<BookingsRepository>((ref) {
   return BookingsRepository(ref.watch(supabaseClientProvider));
 });

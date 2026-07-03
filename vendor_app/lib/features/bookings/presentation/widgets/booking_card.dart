@@ -9,6 +9,7 @@ import '../../../auth/presentation/providers/auth_controller.dart';
 import '../providers/bookings_provider.dart';
 import 'booking_status_badge.dart';
 import 'reject_dialog.dart';
+import 'service_photo_sheet.dart';
 
 class BookingCard extends ConsumerStatefulWidget {
   const BookingCard({super.key, required this.booking});
@@ -128,6 +129,16 @@ class _BookingCardState extends ConsumerState<BookingCard> {
     );
     if (confirmed != true || !mounted) return;
 
+    // Starting the service requires at least one "before" photo.
+    if (targetStatus == 'in_progress') {
+      final photoDone = await ServicePhotoSheet.show(
+        context,
+        bookingId: _booking.id,
+        imageType: 'before',
+      );
+      if (photoDone != true || !mounted) return;
+    }
+
     setState(() => _updating = true);
     try {
       await ref
@@ -209,6 +220,15 @@ class _BookingCardState extends ConsumerState<BookingCard> {
       debugPrint('[OTP] Initiate cancelled by user');
       return;
     }
+
+    // Require at least one "after" photo before generating the OTP.
+    if (!mounted) return;
+    final photoDone = await ServicePhotoSheet.show(
+      context,
+      bookingId: _booking.id,
+      imageType: 'after',
+    );
+    if (photoDone != true || !mounted) return;
 
     setState(() => _updating = true);
     try {

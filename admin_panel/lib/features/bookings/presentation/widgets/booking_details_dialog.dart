@@ -104,6 +104,7 @@ class _BookingDetailsDialogState extends ConsumerState<BookingDetailsDialog> {
 
     final vendors = ref.watch(vendorsNotifierProvider).valueOrNull ?? [];
     final teams = ref.watch(dodoTeamsNotifierProvider).valueOrNull ?? [];
+    final imagesAsync = ref.watch(bookingImagesProvider(booking.id));
     final vendor = vendors.where((v) => v.id == booking.vendorId).firstOrNull;
     final team = teams.where((t) => t.id == booking.dodoTeamId).firstOrNull;
 
@@ -260,6 +261,14 @@ class _BookingDetailsDialogState extends ConsumerState<BookingDetailsDialog> {
                           : '—',
                     ),
                     const SizedBox(height: 20),
+
+                    // ── Service Photos ────────────────────────────────────────
+                    if (imagesAsync.valueOrNull?.isNotEmpty ?? false) ...[
+                      _SectionLabel('Service Photos'),
+                      const SizedBox(height: 12),
+                      _AdminPhotosGrid(images: imagesAsync.value!),
+                      const SizedBox(height: 20),
+                    ],
 
                     if (booking.assignmentType == 'DODO Team' &&
                         booking.status == 'in_progress') ...[
@@ -625,6 +634,87 @@ class _ServiceItemRow extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _AdminPhotosGrid extends StatelessWidget {
+  final List<Map<String, dynamic>> images;
+
+  const _AdminPhotosGrid({required this.images});
+
+  @override
+  Widget build(BuildContext context) {
+    final before =
+        images.where((i) => i['image_type'] == 'before').toList();
+    final after =
+        images.where((i) => i['image_type'] == 'after').toList();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (before.isNotEmpty) ...[
+          _PhotoRow(label: 'Before', photos: before),
+          if (after.isNotEmpty) const SizedBox(height: 12),
+        ],
+        if (after.isNotEmpty) _PhotoRow(label: 'After', photos: after),
+      ],
+    );
+  }
+}
+
+class _PhotoRow extends StatelessWidget {
+  final String label;
+  final List<Map<String, dynamic>> photos;
+
+  const _PhotoRow({required this.label, required this.photos});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(left: 130),
+          child: Text(
+            label,
+            style: const TextStyle(
+              fontSize: 12,
+              color: AppColors.textSecondary,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+        const SizedBox(height: 6),
+        SizedBox(
+          height: 80,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            itemCount: photos.length,
+            separatorBuilder: (_, _) => const SizedBox(width: 8),
+            itemBuilder: (_, i) {
+              final url = photos[i]['image_url'] as String;
+              return ClipRRect(
+                borderRadius: BorderRadius.circular(6),
+                child: Image.network(
+                  url,
+                  width: 80,
+                  height: 80,
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, _, _) => Container(
+                    width: 80,
+                    height: 80,
+                    color: AppColors.background,
+                    child: const Icon(
+                      Icons.broken_image_outlined,
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+      ],
     );
   }
 }

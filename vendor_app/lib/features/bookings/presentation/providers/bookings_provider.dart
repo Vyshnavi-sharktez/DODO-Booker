@@ -1,7 +1,9 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/network/supabase_client_provider.dart';
 import '../../../auth/presentation/providers/auth_controller.dart';
+import '../../data/datasources/booking_images_datasource.dart';
 import '../../data/datasources/bookings_remote_datasource.dart';
+import '../../data/models/booking_image.dart';
 import '../../data/repositories/bookings_repository_impl.dart';
 import '../../domain/models/booking.dart';
 import '../../domain/repositories/i_bookings_repository.dart';
@@ -67,3 +69,15 @@ final bookingDetailProvider =
     FutureProvider.autoDispose.family<Booking?, String>((ref, bookingId) {
   return ref.read(bookingsRepositoryProvider).getBookingById(bookingId);
 });
+
+// ── Booking images (before/after service photos) ──────────────────────────────
+
+final bookingImagesDatasourceProvider = Provider<BookingImagesDatasource>(
+  (ref) => BookingImagesDatasource(ref.watch(supabaseClientProvider)),
+);
+
+final bookingImagesProvider =
+    FutureProvider.autoDispose.family<List<BookingImage>, String>(
+  (ref, bookingId) =>
+      ref.read(bookingImagesDatasourceProvider).fetchImages(bookingId),
+);
