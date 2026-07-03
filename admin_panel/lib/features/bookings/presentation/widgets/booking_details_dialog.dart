@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../dodo_teams/application/providers/dodo_teams_providers.dart';
 import '../../../vendors/application/providers/vendors_providers.dart';
+import '../../application/invoice_service.dart';
 import '../../application/providers/bookings_providers.dart';
 import '../../domain/models/booking.dart';
 import '../../domain/models/booking_item.dart';
@@ -61,6 +63,7 @@ class _BookingDetailsDialogState extends ConsumerState<BookingDetailsDialog> {
   final List<FocusNode> _otpFocusNodes =
       List.generate(6, (_) => FocusNode());
   bool _isVerifying = false;
+  bool _isDownloadingInvoice = false;
 
   @override
   void dispose() {
@@ -91,6 +94,35 @@ class _BookingDetailsDialogState extends ConsumerState<BookingDetailsDialog> {
       );
     } finally {
       if (mounted) setState(() => _isVerifying = false);
+    }
+  }
+
+  Future<void> _downloadInvoice({
+    required Booking booking,
+    required String assigneeName,
+  }) async {
+    setState(() => _isDownloadingInvoice = true);
+    try {
+      final row = await Supabase.instance.client
+          .from('profiles')
+          .select('full_name, mobile_number, email')
+          .eq('id', booking.customerId)
+          .maybeSingle();
+
+      await InvoiceService.downloadInvoice(
+        booking: booking,
+        customerName: (row?['full_name'] as String?) ?? '',
+        customerPhone: row?['mobile_number'] as String?,
+        customerEmail: row?['email'] as String?,
+        assigneeName: assigneeName.isNotEmpty ? assigneeName : null,
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not generate invoice: $e')),
+      );
+    } finally {
+      if (mounted) setState(() => _isDownloadingInvoice = false);
     }
   }
 
@@ -358,6 +390,32 @@ class _BookingDetailsDialogState extends ConsumerState<BookingDetailsDialog> {
                       ),
                     ),
                   if (widget.onAssign != null) const SizedBox(width: 10),
+                  if (booking.status == 'completed') ...[
+                    OutlinedButton.icon(
+                      onPressed: _isDownloadingInvoice
+                          ? null
+                          : () => _downloadInvoice(
+                                booking: booking,
+                                assigneeName: assignedToLabel,
+                              ),
+                      icon: _isDownloadingInvoice
+                          ? const SizedBox(
+                              width: 14,
+                              height: 14,
+                              child:
+                                  CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.download_rounded, size: 16),
+                      label: const Text('Invoice'),
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 12,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                  ],
                   OutlinedButton(
                     onPressed: () => Navigator.of(context).pop(),
                     style: OutlinedButton.styleFrom(
