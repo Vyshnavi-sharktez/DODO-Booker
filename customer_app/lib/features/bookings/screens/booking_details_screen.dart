@@ -86,6 +86,7 @@ class _BookingDetailsScreenState extends ConsumerState<BookingDetailsScreen> {
                   _OtpDisplayCard(otp: booking.completionOtp!),
                 _BookingInfoCard(booking: booking),
                 _ServiceInfoCard(booking: booking),
+                _ServicePhotosCard(bookingId: booking.id),
                 _AddressCard(booking: booking),
                 if (!booking.isDodoTeam) _VendorCard(booking: booking),
                 _TimelineCard(booking: booking),
@@ -522,6 +523,108 @@ class _BookingItemRow extends StatelessWidget {
                     tt.labelSmall?.copyWith(color: AppColors.textHint),
               ),
           ],
+        ),
+      ],
+    );
+  }
+}
+
+// ── Service Photos Card ───────────────────────────────────────────────────────
+
+class _ServicePhotosCard extends ConsumerWidget {
+  final String bookingId;
+
+  const _ServicePhotosCard({required this.bookingId});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final imagesAsync = ref.watch(bookingImagesProvider(bookingId));
+    return imagesAsync.when(
+      loading: () => const SizedBox.shrink(),
+      error: (_, _) => const SizedBox.shrink(),
+      data: (images) {
+        if (images.isEmpty) return const SizedBox.shrink();
+        final before =
+            images.where((i) => i['image_type'] == 'before').toList();
+        final after =
+            images.where((i) => i['image_type'] == 'after').toList();
+        if (before.isEmpty && after.isEmpty) return const SizedBox.shrink();
+        return _SectionCard(
+          title: 'SERVICE PHOTOS',
+          children: [
+            if (before.isNotEmpty) ...[
+              _PhotoGallery(label: 'Before', photos: before),
+              if (after.isNotEmpty) const SizedBox(height: 14),
+            ],
+            if (after.isNotEmpty)
+              _PhotoGallery(label: 'After', photos: after),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _PhotoGallery extends StatelessWidget {
+  final String label;
+  final List<Map<String, dynamic>> photos;
+
+  const _PhotoGallery({required this.label, required this.photos});
+
+  @override
+  Widget build(BuildContext context) {
+    final tt = Theme.of(context).textTheme;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: tt.labelSmall?.copyWith(
+            color: AppColors.textSecondary,
+            fontWeight: FontWeight.w600,
+            letterSpacing: 0.3,
+          ),
+        ),
+        const SizedBox(height: 8),
+        SizedBox(
+          height: 90,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            itemCount: photos.length,
+            separatorBuilder: (_, _) => const SizedBox(width: 8),
+            itemBuilder: (_, i) {
+              final url = photos[i]['image_url'] as String;
+              return ClipRRect(
+                borderRadius: BorderRadius.circular(8),
+                child: Image.network(
+                  url,
+                  width: 90,
+                  height: 90,
+                  fit: BoxFit.cover,
+                  loadingBuilder: (ctx, child, progress) {
+                    if (progress == null) return child;
+                    return Container(
+                      width: 90,
+                      height: 90,
+                      color: AppColors.background,
+                      child: const Center(
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      ),
+                    );
+                  },
+                  errorBuilder: (_, _, _) => Container(
+                    width: 90,
+                    height: 90,
+                    color: AppColors.background,
+                    child: const Icon(
+                      Icons.broken_image_outlined,
+                      color: AppColors.textHint,
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
         ),
       ],
     );
