@@ -118,4 +118,15 @@ class ServiceAttributesRepository {
               .toList(),
         );
   }
+
+  /// Lightweight fetch for the service picker — returns only id + name.
+  Future<List<({String id, String name})>> fetchServiceDropdowns() async {
+    final data = await _supabase
+        .from('services')
+        .select('id, name')
+        .order('name', ascending: true);
+    return (data as List<dynamic>)
+        .map((r) => (id: r['id'] as String, name: r['name'] as String))
+        .toList();
+  }
 }

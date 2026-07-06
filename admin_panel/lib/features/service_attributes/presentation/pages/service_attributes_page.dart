@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/theme/app_theme.dart';
-import '../../../services/application/providers/services_providers.dart';
 import '../../application/providers/service_attributes_providers.dart';
 import '../../domain/models/service_attribute.dart';
 import '../widgets/attribute_form_dialog.dart';
@@ -56,7 +55,7 @@ class _ServiceAttributesPageState
   }
 
   String _serviceNameFor(String serviceId) {
-    final all = ref.read(servicesNotifierProvider).valueOrNull ?? [];
+    final all = ref.read(serviceDropdownsProvider).valueOrNull ?? [];
     return all.where((s) => s.id == serviceId).firstOrNull?.name ?? '';
   }
 
@@ -187,9 +186,9 @@ class _ServiceAttributesPageState
 
   @override
   Widget build(BuildContext context) {
-    final servicesState = ref.watch(servicesNotifierProvider);
+    final dropdownsAsync = ref.watch(serviceDropdownsProvider);
     final attributesState = ref.watch(serviceAttributesNotifierProvider);
-    final services = servicesState.valueOrNull ?? [];
+    final dropdowns = dropdownsAsync.valueOrNull ?? [];
 
     return Padding(
       padding: const EdgeInsets.all(24),
@@ -261,7 +260,7 @@ class _ServiceAttributesPageState
               ConstrainedBox(
                 constraints: const BoxConstraints(
                     minWidth: 200, maxWidth: 360),
-                child: servicesState.isLoading
+                child: dropdownsAsync.isLoading
                     ? const LinearProgressIndicator()
                     : DropdownButtonFormField<String>(
                         // ignore: deprecated_member_use
@@ -271,7 +270,7 @@ class _ServiceAttributesPageState
                           contentPadding: EdgeInsets.symmetric(
                               horizontal: 16, vertical: 10),
                         ),
-                        items: services
+                        items: dropdowns
                             .map(
                               (s) => DropdownMenuItem(
                                 value: s.id,

@@ -79,4 +79,17 @@ class SubCategoriesRepository {
         .eq('sub_category_id', subCategoryId);
     return (data as List).length;
   }
+
+  /// Lightweight fetch of active categories for the category picker.
+  /// Returns only id + name — no dependency on the categories module.
+  Future<List<({String id, String name})>> fetchCategoryDropdowns() async {
+    final data = await _supabase
+        .from('categories')
+        .select('id, name')
+        .eq('is_active', true)
+        .order('name', ascending: true);
+    return (data as List<dynamic>)
+        .map((r) => (id: r['id'] as String, name: r['name'] as String))
+        .toList();
+  }
 }

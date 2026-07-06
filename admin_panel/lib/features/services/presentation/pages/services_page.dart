@@ -3,8 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import '../../../../core/theme/app_theme.dart';
-import '../../../categories/application/providers/categories_providers.dart';
-import '../../../sub_categories/application/providers/sub_categories_providers.dart';
 import '../../application/providers/services_providers.dart';
 import '../../domain/models/service.dart';
 import '../widgets/service_form_dialog.dart';
@@ -41,17 +39,14 @@ class _ServicesPageState extends ConsumerState<ServicesPage> {
   void _openCreate() {
     final filterSubId = widget.filterSubCategoryId;
     if (filterSubId != null) {
-      final subs = ref.read(subCategoriesNotifierProvider).valueOrNull ?? [];
-      final cats = ref.read(categoriesNotifierProvider).valueOrNull ?? [];
+      final subs =
+          ref.read(serviceSubCategoryDropdownsProvider).valueOrNull ?? [];
       final sub = subs.where((s) => s.id == filterSubId).firstOrNull;
-      final cat = sub != null
-          ? cats.where((c) => c.id == sub.categoryId).firstOrNull
-          : null;
       _openCreateWithSubCategory(
         subCategoryId: filterSubId,
         subCategoryName: sub?.name ?? '',
         categoryId: sub?.categoryId ?? '',
-        categoryName: cat?.name ?? '',
+        categoryName: sub?.categoryName ?? '',
       );
     } else {
       _pickSubCategoryThenCreate();
@@ -59,8 +54,8 @@ class _ServicesPageState extends ConsumerState<ServicesPage> {
   }
 
   void _pickSubCategoryThenCreate() {
-    final subs = ref.read(subCategoriesNotifierProvider).valueOrNull ?? [];
-    final cats = ref.read(categoriesNotifierProvider).valueOrNull ?? [];
+    final subs =
+        ref.read(serviceSubCategoryDropdownsProvider).valueOrNull ?? [];
     if (subs.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -103,14 +98,11 @@ class _ServicesPageState extends ConsumerState<ServicesPage> {
     ).then((subId) {
       if (subId == null || !mounted) return;
       final sub = subs.where((s) => s.id == subId).firstOrNull;
-      final cat = sub != null
-          ? cats.where((c) => c.id == sub.categoryId).firstOrNull
-          : null;
       _openCreateWithSubCategory(
         subCategoryId: subId,
         subCategoryName: sub?.name ?? '',
         categoryId: sub?.categoryId ?? '',
-        categoryName: cat?.name ?? '',
+        categoryName: sub?.categoryName ?? '',
       );
     });
   }
@@ -160,19 +152,15 @@ class _ServicesPageState extends ConsumerState<ServicesPage> {
   }
 
   void _openEdit(Service service) {
-    final subs = ref.read(subCategoriesNotifierProvider).valueOrNull ?? [];
-    final cats = ref.read(categoriesNotifierProvider).valueOrNull ?? [];
-    final sub = subs.where((s) => s.id == service.subCategoryId).firstOrNull;
-    final cat = cats.where((c) => c.id == service.categoryId).firstOrNull;
     showDialog(
       context: context,
       barrierDismissible: false,
       builder: (_) => ServiceFormDialog(
         existing: service,
         categoryId: service.categoryId,
-        categoryName: cat?.name ?? '',
+        categoryName: service.categoryName, // already denormalized on the model
         subCategoryId: service.subCategoryId,
-        subCategoryName: sub?.name ?? '',
+        subCategoryName: service.subCategoryName, // already denormalized
         onSave: ({
           required categoryId,
           required subCategoryId,
@@ -362,11 +350,10 @@ class _ServicesPageState extends ConsumerState<ServicesPage> {
 
   @override
   Widget build(BuildContext context) {
-    // Pre-load so dropdowns are ready when dialogs open
-    ref.watch(categoriesNotifierProvider);
-    final subCategoriesState = ref.watch(subCategoriesNotifierProvider);
+    // Watch the sub-category dropdown data so it is ready when dialogs open.
+    final subDropdowns = ref.watch(serviceSubCategoryDropdownsProvider);
     final filteredSubCategoryName = widget.filterSubCategoryId != null
-        ? subCategoriesState.valueOrNull
+        ? subDropdowns.valueOrNull
             ?.where((s) => s.id == widget.filterSubCategoryId)
             .firstOrNull
             ?.name
