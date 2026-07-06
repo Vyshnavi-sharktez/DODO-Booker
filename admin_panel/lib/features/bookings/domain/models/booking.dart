@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'booking_addon.dart';
 import 'booking_item.dart';
 
 class BookingReview {
@@ -46,6 +47,7 @@ class Booking {
   final String? rejectionReason;
   final DateTime? rejectedAt;
   final List<BookingItem> items;
+  final List<BookingAddon> addons;
   final double? latitude;
   final double? longitude;
   final String? completionOtp;
@@ -70,6 +72,7 @@ class Booking {
     this.rejectionReason,
     this.rejectedAt,
     this.items = const [],
+    this.addons = const [],
     this.latitude,
     this.longitude,
     this.completionOtp,
@@ -95,6 +98,11 @@ class Booking {
     final rawItems = map['booking_items'] as List<dynamic>? ?? [];
     final items = rawItems
         .map((e) => BookingItem.fromMap(e as Map<String, dynamic>))
+        .toList();
+
+    final rawAddons = map['booking_addons'] as List<dynamic>? ?? [];
+    final addons = rawAddons
+        .map((e) => BookingAddon.fromMap(e as Map<String, dynamic>))
         .toList();
 
     return Booking(
@@ -125,6 +133,7 @@ class Booking {
           ? DateTime.tryParse(map['rejected_at'] as String)
           : null,
       items: items,
+      addons: addons,
       latitude: (map['latitude'] as num?)?.toDouble(),
       longitude: (map['longitude'] as num?)?.toDouble(),
       completionOtp: map['completion_otp'] as String?,
@@ -139,6 +148,7 @@ class Booking {
     String? status,
     String? notes,
     String? completionOtp,
+    List<BookingAddon>? addons,
   }) {
     return Booking(
       id: id,
@@ -160,6 +170,7 @@ class Booking {
       rejectionReason: rejectionReason,
       rejectedAt: rejectedAt,
       items: items,
+      addons: addons ?? this.addons,
       latitude: latitude,
       longitude: longitude,
       completionOtp: completionOtp ?? this.completionOtp,

@@ -46,6 +46,15 @@ class CustomersRepository {
     required String email,
     String? profileImageUrl,
     required bool isActive,
+    List<({
+      String line1,
+      String area,
+      String city,
+      String state,
+      String pincode,
+      String landmark,
+      bool isDefault,
+    })> addresses = const [],
   }) async {
     // auth_user_id is intentionally omitted — null marks this as admin-created.
     final data = await _supabase
@@ -60,7 +69,31 @@ class CustomersRepository {
         })
         .select()
         .single();
-    return Customer.fromMap(data);
+    final customer = Customer.fromMap(data);
+
+    if (addresses.isNotEmpty) {
+      final rows = addresses.map((a) {
+        String line2 = a.area;
+        if (a.landmark.isNotEmpty) {
+          line2 = line2.isNotEmpty
+              ? '$line2, Near ${a.landmark}'
+              : 'Near ${a.landmark}';
+        }
+        return {
+          'customer_id': customer.id,
+          'address_type': 'Home',
+          'address_line_1': a.line1,
+          if (line2.isNotEmpty) 'address_line_2': line2,
+          'city': a.city,
+          'state': a.state,
+          'pincode': a.pincode,
+          'is_default': a.isDefault,
+        };
+      }).toList();
+      await _supabase.from('customer_addresses').insert(rows);
+    }
+
+    return customer;
   }
 
   Future<void> updateActive(String id, {required bool isActive}) async {

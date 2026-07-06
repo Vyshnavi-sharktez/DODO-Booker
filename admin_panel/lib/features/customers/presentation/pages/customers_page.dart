@@ -80,6 +80,7 @@ class _CustomersPageState extends ConsumerState<CustomersPage> {
           required email,
           profileImageUrl,
           required isActive,
+          required addresses,
         }) async {
           await ref.read(customersNotifierProvider.notifier).createCustomer(
                 fullName: fullName,
@@ -87,6 +88,7 @@ class _CustomersPageState extends ConsumerState<CustomersPage> {
                 email: email,
                 profileImageUrl: profileImageUrl,
                 isActive: isActive,
+                addresses: addresses,
               );
           ref.invalidate(customerSearchIndexProvider);
           if (mounted) {

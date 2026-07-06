@@ -9,6 +9,7 @@ import '../../../vendors/application/providers/vendors_providers.dart';
 import '../../application/invoice_service.dart';
 import '../../application/providers/bookings_providers.dart';
 import '../../domain/models/booking.dart';
+import '../../domain/models/booking_addon.dart';
 import '../../domain/models/booking_item.dart';
 
 const _statusConfig = <String, (String, Color, Color)>{
@@ -256,6 +257,16 @@ class _BookingDetailsDialogState extends ConsumerState<BookingDetailsDialog> {
                       ...booking.items.map(
                         (item) =>
                             _ServiceItemRow(item: item, currency: _currency),
+                      ),
+                      const SizedBox(height: 20),
+                    ],
+
+                    if (booking.addons.isNotEmpty) ...[
+                      _SectionLabel('Add-ons (${booking.addons.length})'),
+                      const SizedBox(height: 12),
+                      ...booking.addons.map(
+                        (addon) => _AddonItemRow(
+                            addon: addon, currency: _currency),
                       ),
                       const SizedBox(height: 20),
                     ],
@@ -691,6 +702,56 @@ class _ServiceItemRow extends StatelessWidget {
                   ),
                 ),
             ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AddonItemRow extends StatelessWidget {
+  final BookingAddon addon;
+  final NumberFormat currency;
+
+  const _AddonItemRow({required this.addon, required this.currency});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 5),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const SizedBox(
+            width: 130,
+            child: Row(
+              children: [
+                Icon(
+                  Icons.extension_rounded,
+                  size: 14,
+                  color: Color(0xFFD4AF37),
+                ),
+                SizedBox(width: 6),
+              ],
+            ),
+          ),
+          Expanded(
+            child: Text(
+              addon.name.isNotEmpty ? addon.name : '—',
+              style: const TextStyle(
+                fontSize: 14,
+                color: AppColors.textPrimary,
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Text(
+            currency.format(addon.price),
+            style: const TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              color: Color(0xFFD4AF37),
+            ),
           ),
         ],
       ),

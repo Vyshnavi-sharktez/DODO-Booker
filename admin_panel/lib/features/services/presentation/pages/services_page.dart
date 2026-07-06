@@ -8,7 +8,6 @@ import '../../../../core/widgets/highlighted_text.dart';
 import '../../application/providers/services_providers.dart';
 import '../../domain/models/service.dart';
 import '../widgets/service_form_dialog.dart';
-import '../../../service_addons/presentation/widgets/service_addons_dialog.dart';
 
 class ServicesPage extends ConsumerStatefulWidget {
   /// When non-null, only services belonging to this sub-category are shown.
@@ -316,16 +315,6 @@ class _ServicesPageState extends ConsumerState<ServicesPage> {
     }
   }
 
-  void _openAddonsDialog(Service service) {
-    showDialog(
-      context: context,
-      builder: (_) => ServiceAddonsDialog(
-        serviceId: service.id,
-        serviceName: service.name,
-      ),
-    );
-  }
-
   Future<void> _toggle(Service service) async {
     try {
       await ref
@@ -482,7 +471,6 @@ class _ServicesPageState extends ConsumerState<ServicesPage> {
                   onEdit: _openEdit,
                   onDelete: _confirmDelete,
                   onToggle: _toggle,
-                  onManageAddons: _openAddonsDialog,
                   searchQuery: _searchQuery,
                 );
               },
@@ -501,7 +489,6 @@ class _ServicesTable extends StatelessWidget {
   final void Function(Service) onEdit;
   final void Function(Service) onDelete;
   final void Function(Service) onToggle;
-  final void Function(Service) onManageAddons;
   final String searchQuery;
 
   const _ServicesTable({
@@ -509,7 +496,6 @@ class _ServicesTable extends StatelessWidget {
     required this.onEdit,
     required this.onDelete,
     required this.onToggle,
-    required this.onManageAddons,
     this.searchQuery = '',
   });
 
@@ -571,7 +557,6 @@ class _ServicesTable extends StatelessWidget {
                                   onEdit: () => onEdit(svc),
                                   onDelete: () => onDelete(svc),
                                   onToggle: () => onToggle(svc),
-                                  onManageAddons: () => onManageAddons(svc),
                                   searchQuery: searchQuery,
                                 );
                               },
@@ -632,7 +617,6 @@ class _ServiceRow extends StatelessWidget {
   final VoidCallback onEdit;
   final VoidCallback onDelete;
   final VoidCallback onToggle;
-  final VoidCallback onManageAddons;
   final String searchQuery;
 
   const _ServiceRow({
@@ -640,7 +624,6 @@ class _ServiceRow extends StatelessWidget {
     required this.onEdit,
     required this.onDelete,
     required this.onToggle,
-    required this.onManageAddons,
     this.searchQuery = '',
   });
 
@@ -713,8 +696,7 @@ class _ServiceRow extends StatelessWidget {
             flex: 2,
             child: Text(
               _formatDuration(service.estimatedDuration),
-              style: TextStyle(
-                  fontSize: 13, color: AppColors.textSecondary),
+              style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
             ),
           ),
 
@@ -738,13 +720,6 @@ class _ServiceRow extends StatelessWidget {
                     activeThumbColor: AppColors.success,
                     materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                   ),
-                ),
-                IconButton(
-                  onPressed: onManageAddons,
-                  icon: Icon(Icons.extension_rounded,
-                      size: 16, color: AppColors.primary),
-                  tooltip: 'Manage Add-ons',
-                  visualDensity: VisualDensity.compact,
                 ),
                 IconButton(
                   onPressed: onEdit,

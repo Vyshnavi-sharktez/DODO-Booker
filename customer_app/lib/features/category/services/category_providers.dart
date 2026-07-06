@@ -36,13 +36,10 @@ final servicesBySubcategoryProvider =
   },
 );
 
-final serviceAddonsProvider =
-    FutureProvider.family<List<AddOnModel>, String>(
-  (ref, serviceId) {
-    debugPrint('[DODO][Provider] serviceAddonsProvider(serviceId=$serviceId)');
-    return ref.read(categoryServiceProvider).fetchActiveServiceAddons(serviceId);
-  },
-);
+final allActiveAddonsProvider = FutureProvider<List<AddOnModel>>((ref) {
+  debugPrint('[DODO][Provider] allActiveAddonsProvider');
+  return ref.read(categoryServiceProvider).fetchAllActiveAddons();
+});
 
 final serviceAttributesProvider =
     FutureProvider.family<List<ServiceAttributeModel>, String>(

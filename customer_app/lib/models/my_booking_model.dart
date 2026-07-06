@@ -4,6 +4,26 @@ import 'address_model.dart';
 import 'booking_item.dart';
 import 'booking_status_event.dart';
 
+class BookingAddonItem {
+  final String addonId;
+  final String name;
+  final double price;
+
+  const BookingAddonItem({
+    required this.addonId,
+    required this.name,
+    required this.price,
+  });
+
+  factory BookingAddonItem.fromJson(Map<String, dynamic> json) {
+    return BookingAddonItem(
+      addonId: json['addon_id'] as String? ?? '',
+      name: json['addon_name'] as String? ?? '',
+      price: (json['addon_price'] as num?)?.toDouble() ?? 0.0,
+    );
+  }
+}
+
 class BookingStatus {
   static const String pending = 'pending';
   static const String assigned = 'assigned';
@@ -79,6 +99,7 @@ class MyBookingModel {
   final String? categoryIconKey;
   final String? subcategoryName;
   final List<BookingItem> items;
+  final List<BookingAddonItem> addons;
   final AddressModel address;
   final DateTime scheduledDate;
   final String timeSlot;
@@ -101,6 +122,7 @@ class MyBookingModel {
     this.categoryIconKey,
     this.subcategoryName,
     this.items = const [],
+    this.addons = const [],
     required this.address,
     required this.scheduledDate,
     required this.timeSlot,
@@ -145,6 +167,12 @@ class MyBookingModel {
     final rawItems = json['booking_items'] as List<dynamic>? ?? [];
     final bookingItems = rawItems
         .map((e) => BookingItem.fromJson(e as Map<String, dynamic>))
+        .toList();
+
+    // ── Parse booking_addons ──────────────────────────────────────────────
+    final rawAddons = json['booking_addons'] as List<dynamic>? ?? [];
+    final bookingAddons = rawAddons
+        .map((e) => BookingAddonItem.fromJson(e as Map<String, dynamic>))
         .toList();
 
     final firstItem =
@@ -198,6 +226,7 @@ class MyBookingModel {
       categoryName: categoryData?['name'] as String?,
       subcategoryName: subCategoryData?['name'] as String?,
       items: bookingItems,
+      addons: bookingAddons,
       address: address,
       scheduledDate: DateTime.parse(
         ((json['scheduled_date'] ?? json['service_date']) as String?) ??

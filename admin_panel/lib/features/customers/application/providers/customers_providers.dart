@@ -51,6 +51,15 @@ class CustomersNotifier extends StateNotifier<AsyncValue<List<Customer>>> {
     required String email,
     String? profileImageUrl,
     required bool isActive,
+    List<({
+      String line1,
+      String area,
+      String city,
+      String state,
+      String pincode,
+      String landmark,
+      bool isDefault,
+    })> addresses = const [],
   }) async {
     final created = await _repo.createCustomer(
       fullName: fullName,
@@ -58,6 +67,7 @@ class CustomersNotifier extends StateNotifier<AsyncValue<List<Customer>>> {
       email: email,
       profileImageUrl: profileImageUrl,
       isActive: isActive,
+      addresses: addresses,
     );
     final current = state.valueOrNull;
     if (current != null) {

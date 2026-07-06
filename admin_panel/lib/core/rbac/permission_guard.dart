@@ -23,6 +23,7 @@ final hasAnyPermissionProvider =
 const Map<String, String> routePermissions = {
   '/rbac': 'rbac.manage',
   '/catalog': 'category.view',
+  '/addons': 'category.view',
   '/categories': 'category.view',
   '/sub-categories': 'category.view',
   '/services': 'service.view',

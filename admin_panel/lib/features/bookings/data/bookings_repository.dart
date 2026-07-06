@@ -3,9 +3,12 @@ import 'dart:math';
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../domain/models/booking.dart';
+import '../domain/models/booking_addon.dart';
 
 String _generateOtp() => (100000 + Random().nextInt(900000)).toString();
 
+// booking_addons is NOT embedded here — PostgREST cannot resolve the join
+// without a recognised FK. Addons are fetched via a separate query.
 const _reviewSelect = '''
   *,
   customer_reviews!booking_id(id, rating, review_text, created_at),
@@ -28,6 +31,45 @@ class BookingsRepository {
 
   const BookingsRepository(this._supabase);
 
+  // ── Addons helper ────────────────────────────────────────────────────────────
+  // Fetches booking_addons for a list of booking IDs using a plain filter
+  // (no PostgREST embedded join required). Returns a map keyed by booking_id.
+  Future<Map<String, List<BookingAddon>>> _fetchAddonsByBookingId(
+    List<String> bookingIds,
+  ) async {
+    if (bookingIds.isEmpty) return {};
+    try {
+      final data = await _supabase
+          .from('booking_addons')
+          .select('booking_id, addon_id, addon_name, addon_price')
+          .inFilter('booking_id', bookingIds);
+      final result = <String, List<BookingAddon>>{};
+      for (final row in data as List<dynamic>) {
+        final m = row as Map<String, dynamic>;
+        final bid = m['booking_id'] as String;
+        result.putIfAbsent(bid, () => []).add(BookingAddon.fromMap(m));
+      }
+      return result;
+    } catch (e) {
+      debugPrint('[DODO][Bookings] Warning: booking_addons fetch failed: $e');
+      return {};
+    }
+  }
+
+  // Merges an addons map into a bookings list in-place.
+  List<Booking> _mergeAddons(
+    List<Booking> bookings,
+    Map<String, List<BookingAddon>> addonsByBookingId,
+  ) {
+    if (addonsByBookingId.isEmpty) return bookings;
+    return bookings.map((b) {
+      final addons = addonsByBookingId[b.id];
+      return addons != null ? b.copyWith(addons: addons) : b;
+    }).toList();
+  }
+
+  // ── Read ─────────────────────────────────────────────────────────────────────
+
   Future<List<Booking>> fetchBookings() async {
     final data = await _supabase
         .from('bookings')
@@ -36,12 +78,19 @@ class BookingsRepository {
     final bookings = (data as List<dynamic>)
         .map((r) => Booking.fromMap(r as Map<String, dynamic>))
         .toList();
+
     final reviewedCount = bookings.where((b) => b.review != null).length;
     debugPrint(
       '[DODO][Bookings] Review loaded: $reviewedCount of ${bookings.length} bookings have reviews',
     );
-    return bookings;
+
+    final addonMap = await _fetchAddonsByBookingId(
+      bookings.map((b) => b.id).toList(),
+    );
+    return _mergeAddons(bookings, addonMap);
   }
+
+  // ── Mutations ────────────────────────────────────────────────────────────────
 
   // Status is derived automatically:
   //   Unassigned      → pending
@@ -105,9 +154,12 @@ class BookingsRepository {
     required String address,
     String? notes,
     required List<({String serviceId, int quantity, double unitPrice})> items,
+    List<({String addonId, String addonName, double addonPrice})> addons =
+        const [],
   }) async {
-    final subtotal =
+    final serviceTotal =
         items.fold(0.0, (sum, e) => sum + e.unitPrice * e.quantity);
+    final addonsTotal = addons.fold(0.0, (sum, a) => sum + a.addonPrice);
 
     final bookingData = await _supabase
         .from('bookings')
@@ -117,9 +169,9 @@ class BookingsRepository {
           'service_date': serviceDate.toIso8601String().split('T').first,
           'address': address.isNotEmpty ? address : null,
           'notes': notes,
-          'subtotal': subtotal,
+          'subtotal': serviceTotal,
           'discount_amount': 0.0,
-          'total_amount': subtotal,
+          'total_amount': serviceTotal + addonsTotal,
           'completion_otp': _generateOtp(),
         })
         .select('id')
@@ -141,12 +193,38 @@ class BookingsRepository {
       );
     }
 
+    // Insert addons — non-fatal: table may not be set up yet in this environment.
+    List<BookingAddon> insertedAddons = [];
+    if (addons.isNotEmpty) {
+      try {
+        await _supabase.from('booking_addons').insert(
+          addons
+              .map((a) => {
+                    'booking_id': bookingId,
+                    'addon_id': a.addonId,
+                    'addon_name': a.addonName,
+                    'addon_price': a.addonPrice,
+                  })
+              .toList(),
+        );
+        insertedAddons = addons
+            .map((a) => BookingAddon(
+                  addonId: a.addonId,
+                  name: a.addonName,
+                  price: a.addonPrice,
+                ))
+            .toList();
+      } catch (e) {
+        debugPrint('[DODO][Bookings] Warning: booking_addons insert failed: $e');
+      }
+    }
+
     final data = await _supabase
         .from('bookings')
         .select(_reviewSelect)
         .eq('id', bookingId)
         .single();
-    return Booking.fromMap(data);
+    return Booking.fromMap(data).copyWith(addons: insertedAddons);
   }
 
   Future<Booking> startDodoTeamService(String id) async {
@@ -169,32 +247,33 @@ class BookingsRepository {
         .single();
     return Booking.fromMap(data);
   }
+
   Future<Booking> completeDodoTeamBooking(
-  String id,
-  String enteredOtp,
-) async {
-  final booking = await _supabase
-      .from('bookings')
-      .select('completion_otp')
-      .eq('id', id)
-      .single();
+    String id,
+    String enteredOtp,
+  ) async {
+    final booking = await _supabase
+        .from('bookings')
+        .select('completion_otp')
+        .eq('id', id)
+        .single();
 
-  if (booking['completion_otp'] != enteredOtp) {
-    throw Exception('Invalid OTP');
+    if (booking['completion_otp'] != enteredOtp) {
+      throw Exception('Invalid OTP');
+    }
+
+    final data = await _supabase
+        .from('bookings')
+        .update({
+          'status': 'completed',
+          'otp_verified_at': DateTime.now().toIso8601String(),
+        })
+        .eq('id', id)
+        .select(_reviewSelect)
+        .single();
+
+    return Booking.fromMap(data);
   }
-
-  final data = await _supabase
-      .from('bookings')
-      .update({
-        'status': 'completed',
-        'otp_verified_at': DateTime.now().toIso8601String(),
-      })
-      .eq('id', id)
-      .select(_reviewSelect)
-      .single();
-
-  return Booking.fromMap(data);
-}
 
   Future<void> deleteBooking(String id) async {
     await _supabase.from('bookings').delete().eq('id', id);

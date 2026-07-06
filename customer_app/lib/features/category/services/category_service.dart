@@ -93,20 +93,19 @@ class CategoryService {
     return results;
   }
 
-  // ── Service add-ons ────────────────────────────────────────────────────────
+  // ── Add-ons (all active) ───────────────────────────────────────────────────
 
-  Future<List<AddOnModel>> fetchActiveServiceAddons(String serviceId) async {
+  Future<List<AddOnModel>> fetchAllActiveAddons() async {
     if (!_ready) {
-      debugPrint('[DODO][CategoryService] fetchActiveServiceAddons($serviceId) → MOCK');
+      debugPrint('[DODO][CategoryService] fetchAllActiveAddons → MOCK');
       return [];
     }
-    debugPrint('[DODO][CategoryService] fetchActiveServiceAddons($serviceId) → SUPABASE');
+    debugPrint('[DODO][CategoryService] fetchAllActiveAddons → SUPABASE');
     final data = await _db
         .from('addons')
         .select()
-        .eq('service_id', serviceId)
         .eq('is_active', true)
-        .order('created_at', ascending: true);
+        .order('name', ascending: true);
     return (data as List)
         .map((e) => AddOnModel.fromJson(e as Map<String, dynamic>))
         .toList();

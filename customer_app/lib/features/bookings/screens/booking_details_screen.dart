@@ -89,6 +89,7 @@ class _BookingDetailsScreenState extends ConsumerState<BookingDetailsScreen> {
                   _OtpDisplayCard(otp: booking.completionOtp!),
                 _BookingInfoCard(booking: booking),
                 _ServiceInfoCard(booking: booking),
+                _AddonsCard(booking: booking),
                 _ServicePhotosCard(bookingId: booking.id),
                 _AddressCard(booking: booking),
                 if (!booking.isDodoTeam) _VendorCard(booking: booking),
@@ -420,6 +421,49 @@ class _BookingInfoCard extends StatelessWidget {
           label: 'Booked On',
           value: _createdDate,
         ),
+      ],
+    );
+  }
+}
+
+class _AddonsCard extends StatelessWidget {
+  final MyBookingModel booking;
+
+  const _AddonsCard({required this.booking});
+
+  @override
+  Widget build(BuildContext context) {
+    final addons = booking.addons;
+    if (addons.isEmpty) return const SizedBox.shrink();
+    return _SectionCard(
+      title: 'ADD-ONS (${addons.length})',
+      children: [
+        for (int i = 0; i < addons.length; i++) ...[
+          Row(
+            children: [
+              const Icon(Icons.extension_rounded,
+                  size: 14, color: AppColors.primary),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  addons[i].name,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        fontWeight: FontWeight.w500,
+                        color: AppColors.textPrimary,
+                      ),
+                ),
+              ),
+              Text(
+                '+ ₹${addons[i].price % 1 == 0 ? addons[i].price.toInt() : addons[i].price.toStringAsFixed(2)}',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.textPrimary,
+                    ),
+              ),
+            ],
+          ),
+          if (i < addons.length - 1) const SizedBox(height: 8),
+        ],
       ],
     );
   }
