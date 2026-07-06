@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import '../../../../core/theme/app_theme.dart';
+import '../../../../core/widgets/admin_search_bar.dart';
+import '../../../../core/widgets/highlighted_text.dart';
 import '../../../../features/auth/application/providers/auth_provider.dart';
 import '../../../bookings/application/providers/bookings_providers.dart';
 import '../../../bookings/domain/models/booking.dart';
@@ -42,15 +44,8 @@ class VendorAssignmentPage extends ConsumerStatefulWidget {
 
 class _VendorAssignmentPageState
     extends ConsumerState<VendorAssignmentPage> {
-  final _searchController = TextEditingController();
   String _searchQuery = '';
   _AssignFilter _filter = _AssignFilter.all;
-
-  @override
-  void dispose() {
-    _searchController.dispose();
-    super.dispose();
-  }
 
   // ── Helpers ────────────────────────────────────────────────────────────────
 
@@ -342,30 +337,10 @@ class _VendorAssignmentPageState
             runSpacing: 8,
             crossAxisAlignment: WrapCrossAlignment.center,
             children: [
-              SizedBox(
+              AdminSearchBar(
+                hintText: 'Search booking number…',
                 width: 240,
-                child: TextField(
-                  controller: _searchController,
-                  decoration: InputDecoration(
-                    hintText: 'Search booking number…',
-                    prefixIcon:
-                        const Icon(Icons.search_rounded, size: 18),
-                    suffixIcon: _searchQuery.isNotEmpty
-                        ? IconButton(
-                            icon: const Icon(Icons.clear_rounded,
-                                size: 18),
-                            onPressed: () {
-                              _searchController.clear();
-                              setState(() => _searchQuery = '');
-                            },
-                          )
-                        : null,
-                    contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 16, vertical: 10),
-                  ),
-                  onChanged: (v) =>
-                      setState(() => _searchQuery = v.trim()),
-                ),
+                onChanged: (q) => setState(() => _searchQuery = q),
               ),
               _Chip(
                 label: 'All',
@@ -518,6 +493,7 @@ class _VendorAssignmentPageState
                         vendorNameResolver: _vendorName,
                         onAssign: _openAssignDialog,
                         onHistory: _openHistoryDialog,
+                        searchQuery: _searchQuery,
                       ),
                     ),
                   ],
@@ -649,6 +625,7 @@ class _AssignmentTable extends StatelessWidget {
   final String Function(String) vendorNameResolver;
   final void Function(Booking) onAssign;
   final void Function(Booking) onHistory;
+  final String searchQuery;
 
   const _AssignmentTable({
     required this.bookings,
@@ -658,6 +635,7 @@ class _AssignmentTable extends StatelessWidget {
     required this.vendorNameResolver,
     required this.onAssign,
     required this.onHistory,
+    this.searchQuery = '',
   });
 
   @override
@@ -707,6 +685,7 @@ class _AssignmentTable extends StatelessWidget {
                     isFocused: bookings[i].id == focusBookingId,
                     onAssign: () => onAssign(bookings[i]),
                     onHistory: () => onHistory(bookings[i]),
+                    searchQuery: searchQuery,
                   );
                 },
               ),
@@ -762,6 +741,7 @@ class _BookingAssignRow extends StatelessWidget {
   final bool isFocused;
   final VoidCallback onAssign;
   final VoidCallback onHistory;
+  final String searchQuery;
 
   const _BookingAssignRow({
     required this.booking,
@@ -770,6 +750,7 @@ class _BookingAssignRow extends StatelessWidget {
     required this.isFocused,
     required this.onAssign,
     required this.onHistory,
+    this.searchQuery = '',
   });
 
   @override
@@ -793,8 +774,9 @@ class _BookingAssignRow extends StatelessWidget {
           // Booking number
           Expanded(
             flex: 2,
-            child: Text(
-              b.bookingNumber,
+            child: HighlightedText(
+              text: b.bookingNumber,
+              query: searchQuery,
               style: const TextStyle(
                 fontSize: 13,
                 fontWeight: FontWeight.w600,

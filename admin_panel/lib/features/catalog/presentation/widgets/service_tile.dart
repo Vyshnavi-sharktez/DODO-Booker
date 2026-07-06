@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/theme/app_theme.dart';
+import '../../../../core/widgets/highlighted_text.dart';
 import '../../../service_addons/application/providers/service_addons_providers.dart';
 import '../../../service_addons/domain/models/service_addon.dart';
 import '../../../services/domain/models/service.dart';
@@ -15,10 +16,12 @@ class ServiceTile extends ConsumerWidget {
     super.key,
     required this.service,
     required this.callbacks,
+    this.searchQuery = '',
   });
 
   final Service service;
   final CatalogCallbacks callbacks;
+  final String searchQuery;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -53,8 +56,9 @@ class ServiceTile extends ConsumerWidget {
                   ),
                   const SizedBox(width: 10),
                   Expanded(
-                    child: Text(
-                      service.name,
+                    child: HighlightedText(
+                      text: service.name,
+                      query: searchQuery,
                       style: const TextStyle(
                         fontWeight: FontWeight.w500,
                         fontSize: 13,

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../core/theme/app_theme.dart';
+import '../../../../core/widgets/admin_search_bar.dart';
 import '../../../categories/application/providers/categories_providers.dart';
 import '../../../categories/domain/models/category.dart';
 import '../../../categories/presentation/widgets/category_form_dialog.dart';
@@ -41,16 +42,9 @@ class CatalogPage extends ConsumerStatefulWidget {
 }
 
 class _CatalogPageState extends ConsumerState<CatalogPage> {
-  final _searchController = TextEditingController();
   String _searchQuery = '';
   final Set<String> _expandedCategories = {};
   final Set<String> _expandedSubCategories = {};
-
-  @override
-  void dispose() {
-    _searchController.dispose();
-    super.dispose();
-  }
 
   // ── Expand / collapse ────────────────────────────────────────────────────────
 
@@ -938,38 +932,10 @@ class _CatalogPageState extends ConsumerState<CatalogPage> {
     return Container(
       color: AppColors.surface,
       padding: const EdgeInsets.fromLTRB(32, 0, 32, 16),
-      child: TextField(
-        controller: _searchController,
-        onChanged: (v) =>
-            setState(() => _searchQuery = v.trim().toLowerCase()),
-        decoration: InputDecoration(
-          hintText: 'Search catalog...',
-          prefixIcon: const Icon(Icons.search, size: 20),
-          suffixIcon: _searchQuery.isNotEmpty
-              ? IconButton(
-                  icon: const Icon(Icons.clear, size: 18),
-                  onPressed: () {
-                    _searchController.clear();
-                    setState(() => _searchQuery = '');
-                  },
-                )
-              : null,
-          isDense: true,
-          contentPadding:
-              const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(8),
-            borderSide: const BorderSide(color: AppColors.border),
-          ),
-          enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(8),
-            borderSide: const BorderSide(color: AppColors.border),
-          ),
-          focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(8),
-            borderSide: const BorderSide(color: AppColors.accent),
-          ),
-        ),
+      child: AdminSearchBar(
+        hintText: 'Search catalog...',
+        width: double.infinity,
+        onChanged: (q) => setState(() => _searchQuery = q.toLowerCase()),
       ),
     );
   }
@@ -1094,6 +1060,7 @@ class _CatalogPageState extends ConsumerState<CatalogPage> {
                 isSearching || _expandedSubCategories.contains(subId),
             onToggleSub: _toggleSubCategory,
             callbacks: callbacks,
+            searchQuery: _searchQuery,
           ),
         const SizedBox(height: 8),
         OutlinedButton.icon(

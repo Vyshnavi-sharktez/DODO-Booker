@@ -40,6 +40,29 @@ class CustomersRepository {
     return Customer.fromMap(data);
   }
 
+  Future<Customer> createCustomer({
+    required String fullName,
+    required String phone,
+    required String email,
+    String? profileImageUrl,
+    required bool isActive,
+  }) async {
+    // auth_user_id is intentionally omitted — null marks this as admin-created.
+    final data = await _supabase
+        .from('customers')
+        .insert({
+          'full_name': fullName,
+          'phone': phone,
+          'email': email,
+          if (profileImageUrl?.isNotEmpty == true)
+            'profile_image_url': profileImageUrl,
+          'is_active': isActive,
+        })
+        .select()
+        .single();
+    return Customer.fromMap(data);
+  }
+
   Future<void> updateActive(String id, {required bool isActive}) async {
     await _supabase
         .from('customers')

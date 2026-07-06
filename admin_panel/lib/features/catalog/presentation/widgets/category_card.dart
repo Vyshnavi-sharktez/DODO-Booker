@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../../core/theme/app_theme.dart';
+import '../../../../core/widgets/highlighted_text.dart';
 import '../../../categories/domain/models/category.dart';
 import '../../../services/domain/models/service.dart';
 import '../../../sub_categories/domain/models/sub_category.dart';
@@ -21,6 +22,7 @@ class CategoryCard extends StatelessWidget {
     required this.isSubExpanded,
     required this.onToggleSub,
     required this.callbacks,
+    this.searchQuery = '',
   });
 
   final Category category;
@@ -39,6 +41,7 @@ class CategoryCard extends StatelessWidget {
   final void Function(SubCategory) onToggleSub;
 
   final CatalogCallbacks callbacks;
+  final String searchQuery;
 
   int get _totalServices => subCategories.fold(
         0,
@@ -61,6 +64,7 @@ class CategoryCard extends StatelessWidget {
               isExpanded: isSubExpanded(sub.id),
               onToggle: () => onToggleSub(sub),
               callbacks: callbacks,
+              searchQuery: searchQuery,
             ),
           _addSubCategoryButton(),
         ],
@@ -103,8 +107,9 @@ class CategoryCard extends StatelessWidget {
               ),
               const SizedBox(width: 10),
               Expanded(
-                child: Text(
-                  category.name,
+                child: HighlightedText(
+                  text: category.name,
+                  query: searchQuery,
                   style: const TextStyle(
                     fontWeight: FontWeight.w600,
                     fontSize: 14,

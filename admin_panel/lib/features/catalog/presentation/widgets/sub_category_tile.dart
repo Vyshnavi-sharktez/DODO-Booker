@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../../core/theme/app_theme.dart';
+import '../../../../core/widgets/highlighted_text.dart';
 import '../../../services/domain/models/service.dart';
 import '../../../sub_categories/domain/models/sub_category.dart';
 import 'catalog_callbacks.dart';
@@ -17,6 +18,7 @@ class SubCategoryTile extends StatelessWidget {
     required this.isExpanded,
     required this.onToggle,
     required this.callbacks,
+    this.searchQuery = '',
   });
 
   final SubCategory subCategory;
@@ -27,6 +29,7 @@ class SubCategoryTile extends StatelessWidget {
   final bool isExpanded;
   final VoidCallback onToggle;
   final CatalogCallbacks callbacks;
+  final String searchQuery;
 
   @override
   Widget build(BuildContext context) {
@@ -39,7 +42,7 @@ class SubCategoryTile extends StatelessWidget {
           _header(),
           if (isExpanded) ...[
             for (final svc in services)
-              ServiceTile(service: svc, callbacks: callbacks),
+              ServiceTile(service: svc, callbacks: callbacks, searchQuery: searchQuery),
             _addServiceButton(),
           ],
         ],
@@ -81,8 +84,9 @@ class SubCategoryTile extends StatelessWidget {
               ),
               const SizedBox(width: 10),
               Expanded(
-                child: Text(
-                  subCategory.name,
+                child: HighlightedText(
+                  text: subCategory.name,
+                  query: searchQuery,
                   style: const TextStyle(
                     fontWeight: FontWeight.w500,
                     fontSize: 13.5,

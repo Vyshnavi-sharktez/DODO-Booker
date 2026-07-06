@@ -121,6 +121,7 @@ class _ServicesScreenState extends ConsumerState<ServicesScreen> {
                     itemBuilder: (_, i) => ServiceCard(
                       service: filtered[i],
                       onTap: () => openServiceDetail(context, filtered[i]),
+                      searchQuery: _query,
                     ),
                   ),
                 );

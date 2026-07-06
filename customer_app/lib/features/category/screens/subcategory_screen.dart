@@ -86,6 +86,7 @@ class _SubcategoryScreenState extends ConsumerState<SubcategoryScreen> {
             return _SubcategoryGrid(
               subcategories: list,
               categoryColorIndex: _colorIndex(widget.category.id),
+              searchQuery: _query,
             );
           },
         ),
@@ -139,10 +140,12 @@ class _SearchBar extends StatelessWidget {
 class _SubcategoryGrid extends StatelessWidget {
   final List<SubcategoryModel> subcategories;
   final int categoryColorIndex;
+  final String searchQuery;
 
   const _SubcategoryGrid({
     required this.subcategories,
     required this.categoryColorIndex,
+    this.searchQuery = '',
   });
 
   @override
@@ -179,6 +182,7 @@ class _SubcategoryGrid extends StatelessWidget {
               subcategory: sub,
               colorIndex: categoryColorIndex,
               onTap: () => context.push('/services/${sub.id}', extra: sub),
+              searchQuery: searchQuery,
             );
           },
         );
