@@ -19,6 +19,7 @@ import '../../features/dodo_teams/presentation/pages/dodo_teams_page.dart';
 import '../../features/vendors/presentation/pages/vendor_details_page.dart';
 import '../../features/bookings/presentation/pages/bookings_page.dart';
 import '../../features/customers/presentation/pages/customers_page.dart';
+import '../../features/customers/presentation/pages/customer_profile_page.dart';
 import '../../features/coupons/presentation/pages/coupons_page.dart';
 import '../../features/vendor_settlement/presentation/pages/vendor_settlement_page.dart';
 import '../../features/settings/presentation/pages/settings_page.dart';
@@ -239,6 +240,15 @@ final routerProvider = Provider<GoRouter>((ref) {
             name: 'customers',
             pageBuilder: (context, state) => const NoTransitionPage(
               child: CustomersPage(),
+            ),
+          ),
+          GoRoute(
+            path: '/dashboard/customers/:customerId',
+            name: 'customerProfile',
+            pageBuilder: (context, state) => NoTransitionPage(
+              child: CustomerProfilePage(
+                customerId: state.pathParameters['customerId']!,
+              ),
             ),
           ),
           GoRoute(

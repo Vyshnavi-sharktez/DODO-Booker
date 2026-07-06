@@ -1,18 +1,21 @@
 import 'package:flutter/material.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/widgets/clickable.dart';
+import '../../../core/widgets/highlighted_text.dart';
 import '../../../models/subcategory_model.dart';
 
 class SubcategoryCard extends StatelessWidget {
   final SubcategoryModel subcategory;
   final int colorIndex;
   final VoidCallback onTap;
+  final String searchQuery;
 
   const SubcategoryCard({
     super.key,
     required this.subcategory,
     required this.colorIndex,
     required this.onTap,
+    this.searchQuery = '',
   });
 
   static const _bgColors = [
@@ -116,8 +119,9 @@ class SubcategoryCard extends StatelessWidget {
             const SizedBox(height: 10),
 
             // Name
-            Text(
-              subcategory.name,
+            HighlightedText(
+              text: subcategory.name,
+              query: searchQuery,
               style: theme.textTheme.titleSmall?.copyWith(
                 fontWeight: FontWeight.w600,
               ),
@@ -128,8 +132,9 @@ class SubcategoryCard extends StatelessWidget {
             // Description
             if (subcategory.description != null) ...[
               const SizedBox(height: 3),
-              Text(
-                subcategory.description!,
+              HighlightedText(
+                text: subcategory.description!,
+                query: searchQuery,
                 style: theme.textTheme.bodySmall?.copyWith(
                   color: cs.onSurface.withAlpha(120),
                 ),

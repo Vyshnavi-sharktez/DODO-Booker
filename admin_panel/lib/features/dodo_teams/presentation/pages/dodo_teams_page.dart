@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/theme/app_theme.dart';
+import '../../../../core/widgets/admin_search_bar.dart';
+import '../../../../core/widgets/highlighted_text.dart';
 import '../../application/providers/dodo_teams_providers.dart';
 import '../../domain/models/dodo_team.dart';
 import '../widgets/dodo_team_form_dialog.dart';
@@ -31,6 +33,7 @@ class _DodoTeamsPageState extends ConsumerState<DodoTeamsPage> {
     _searchController.dispose();
     super.dispose();
   }
+
 
   List<DodoTeam> _applyFilters(List<DodoTeam> all) {
     var result = all;
@@ -265,28 +268,11 @@ class _DodoTeamsPageState extends ConsumerState<DodoTeamsPage> {
               runSpacing: 8,
               crossAxisAlignment: WrapCrossAlignment.center,
               children: [
-                SizedBox(
+                AdminSearchBar(
+                  hintText: 'Search team or supervisor…',
                   width: 240,
-                  child: TextField(
-                    controller: _searchController,
-                    decoration: InputDecoration(
-                      hintText: 'Search team or supervisor…',
-                      prefixIcon:
-                          const Icon(Icons.search_rounded, size: 18),
-                      suffixIcon: _searchQuery.isNotEmpty
-                          ? IconButton(
-                              icon: const Icon(Icons.clear_rounded, size: 18),
-                              onPressed: () {
-                                _searchController.clear();
-                                setState(() => _searchQuery = '');
-                              },
-                            )
-                          : null,
-                      contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 16, vertical: 10),
-                    ),
-                    onChanged: (v) => setState(() => _searchQuery = v.trim()),
-                  ),
+                  controller: _searchController,
+                  onChanged: (q) => setState(() => _searchQuery = q),
                 ),
 
                 SizedBox(
@@ -419,6 +405,7 @@ class _DodoTeamsPageState extends ConsumerState<DodoTeamsPage> {
                   totalCount: all.length,
                   onEdit: _openEdit,
                   onDelete: _confirmDelete,
+                  searchQuery: _searchQuery,
                 );
               },
             ),
@@ -539,12 +526,14 @@ class _TeamsTable extends StatelessWidget {
   final int totalCount;
   final void Function(DodoTeam) onEdit;
   final void Function(DodoTeam) onDelete;
+  final String searchQuery;
 
   const _TeamsTable({
     required this.teams,
     required this.totalCount,
     required this.onEdit,
     required this.onDelete,
+    this.searchQuery = '',
   });
 
   static const double _minTableWidth = 860;
@@ -606,6 +595,7 @@ class _TeamsTable extends StatelessWidget {
                                   team: t,
                                   onEdit: () => onEdit(t),
                                   onDelete: () => onDelete(t),
+                                  searchQuery: searchQuery,
                                 );
                               },
                             ),
@@ -666,11 +656,13 @@ class _TeamRow extends StatelessWidget {
   final DodoTeam team;
   final VoidCallback onEdit;
   final VoidCallback onDelete;
+  final String searchQuery;
 
   const _TeamRow({
     required this.team,
     required this.onEdit,
     required this.onDelete,
+    this.searchQuery = '',
   });
 
   static String _initials(String name) {
@@ -704,8 +696,9 @@ class _TeamRow extends StatelessWidget {
                 ),
                 const SizedBox(width: 10),
                 Expanded(
-                  child: Text(
-                    team.teamName,
+                  child: HighlightedText(
+                    text: team.teamName,
+                    query: searchQuery,
                     style: TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.w500,
@@ -720,8 +713,9 @@ class _TeamRow extends StatelessWidget {
 
           Expanded(
             flex: 2,
-            child: Text(
-              team.supervisorName ?? '—',
+            child: HighlightedText(
+              text: team.supervisorName ?? '—',
+              query: team.supervisorName != null ? searchQuery : '',
               style: TextStyle(
                   fontSize: 13,
                   color: team.supervisorName != null
@@ -752,8 +746,9 @@ class _TeamRow extends StatelessWidget {
                           size: 13, color: AppColors.textSecondary),
                       const SizedBox(width: 4),
                       Expanded(
-                        child: Text(
-                          team.locality!,
+                        child: HighlightedText(
+                          text: team.locality!,
+                          query: searchQuery,
                           style: TextStyle(
                               fontSize: 13, color: AppColors.textPrimary),
                           overflow: TextOverflow.ellipsis,

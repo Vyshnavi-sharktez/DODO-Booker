@@ -1,13 +1,20 @@
 import 'package:flutter/material.dart';
 import '../../../core/constants/app_colors.dart';
+import '../../../core/widgets/highlighted_text.dart';
 import '../../../models/service_model.dart';
 import '../../wishlist/widgets/heart_button.dart';
 
 class ServiceCard extends StatelessWidget {
   final ServiceModel service;
   final VoidCallback onTap;
+  final String searchQuery;
 
-  const ServiceCard({super.key, required this.service, required this.onTap});
+  const ServiceCard({
+    super.key,
+    required this.service,
+    required this.onTap,
+    this.searchQuery = '',
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -45,8 +52,9 @@ class ServiceCard extends StatelessWidget {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Text(
-                            service.name,
+                          HighlightedText(
+                            text: service.name,
+                            query: searchQuery,
                             style: tt.titleSmall?.copyWith(fontWeight: FontWeight.w600),
                             maxLines: 2,
                             overflow: TextOverflow.ellipsis,

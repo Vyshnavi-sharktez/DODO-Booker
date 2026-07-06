@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import '../../../../core/theme/app_theme.dart';
+import '../../../../core/widgets/admin_search_bar.dart';
 import '../../../../core/widgets/clickable.dart';
+import '../../../../core/widgets/highlighted_text.dart';
 import '../../application/providers/coupons_providers.dart';
 import '../../domain/models/coupon.dart';
 import '../widgets/coupon_form_dialog.dart';
@@ -31,16 +33,9 @@ class CouponsPage extends ConsumerStatefulWidget {
 }
 
 class _CouponsPageState extends ConsumerState<CouponsPage> {
-  final _searchController = TextEditingController();
   String _searchQuery = '';
   _StatusFilter _statusFilter = _StatusFilter.all;
   String? _typeFilter;
-
-  @override
-  void dispose() {
-    _searchController.dispose();
-    super.dispose();
-  }
 
   List<Coupon> _applyFilters(List<Coupon> all) {
     var result = all;
@@ -269,30 +264,10 @@ class _CouponsPageState extends ConsumerState<CouponsPage> {
               crossAxisAlignment: WrapCrossAlignment.center,
               children: [
                 // Search
-                SizedBox(
+                AdminSearchBar(
+                  hintText: 'Search coupon code…',
                   width: 240,
-                  child: TextField(
-                    controller: _searchController,
-                    decoration: InputDecoration(
-                      hintText: 'Search coupon code…',
-                      prefixIcon:
-                          const Icon(Icons.search_rounded, size: 18),
-                      suffixIcon: _searchQuery.isNotEmpty
-                          ? IconButton(
-                              icon: const Icon(Icons.clear_rounded,
-                                  size: 18),
-                              onPressed: () {
-                                _searchController.clear();
-                                setState(() => _searchQuery = '');
-                              },
-                            )
-                          : null,
-                      contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 16, vertical: 10),
-                    ),
-                    onChanged: (v) =>
-                        setState(() => _searchQuery = v.trim()),
-                  ),
+                  onChanged: (q) => setState(() => _searchQuery = q),
                 ),
 
                 // Status filter chips
@@ -426,6 +401,7 @@ class _CouponsPageState extends ConsumerState<CouponsPage> {
                   onEdit: _openEdit,
                   onDelete: _confirmDelete,
                   onToggle: _toggle,
+                  searchQuery: _searchQuery,
                 );
               },
             ),
@@ -492,6 +468,7 @@ class _CouponsTable extends StatelessWidget {
   final void Function(Coupon) onEdit;
   final void Function(Coupon) onDelete;
   final void Function(Coupon) onToggle;
+  final String searchQuery;
 
   const _CouponsTable({
     required this.coupons,
@@ -499,6 +476,7 @@ class _CouponsTable extends StatelessWidget {
     required this.onEdit,
     required this.onDelete,
     required this.onToggle,
+    this.searchQuery = '',
   });
 
   @override
@@ -539,6 +517,7 @@ class _CouponsTable extends StatelessWidget {
                               onEdit: () => onEdit(c),
                               onDelete: () => onDelete(c),
                               onToggle: () => onToggle(c),
+                              searchQuery: searchQuery,
                             );
                           },
                         ),
@@ -625,12 +604,14 @@ class _CouponRow extends StatelessWidget {
   final VoidCallback onEdit;
   final VoidCallback onDelete;
   final VoidCallback onToggle;
+  final String searchQuery;
 
   const _CouponRow({
     required this.coupon,
     required this.onEdit,
     required this.onDelete,
     required this.onToggle,
+    this.searchQuery = '',
   });
 
   @override
@@ -651,8 +632,9 @@ class _CouponRow extends StatelessWidget {
           // Code
           SizedBox(
             width: 130,
-            child: Text(
-              coupon.code,
+            child: HighlightedText(
+              text: coupon.code,
+              query: searchQuery,
               style: TextStyle(
                 fontSize: 13,
                 fontWeight: FontWeight.w700,

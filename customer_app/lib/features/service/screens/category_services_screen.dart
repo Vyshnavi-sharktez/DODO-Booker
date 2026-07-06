@@ -122,6 +122,7 @@ class _CategoryServicesScreenState
                     itemBuilder: (_, i) => ServiceCard(
                       service: filtered[i],
                       onTap: () => openServiceDetail(context, filtered[i]),
+                      searchQuery: _query,
                     ),
                   ),
                 );

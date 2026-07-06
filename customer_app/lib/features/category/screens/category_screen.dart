@@ -67,6 +67,7 @@ class _CategoryScreenState extends ConsumerState<CategoryScreen> {
               category: cat,
               colorIndex: index,
               onTap: () => context.push('/subcategory/${cat.id}', extra: cat),
+              searchQuery: _query,
             );
           },
           childCount: categories.length,

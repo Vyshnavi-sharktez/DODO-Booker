@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import '../../../../core/theme/app_theme.dart';
+import '../../../../core/widgets/admin_search_bar.dart';
+import '../../../../core/widgets/highlighted_text.dart';
 import '../../../auth/application/providers/auth_provider.dart';
 import '../../../notifications/application/providers/notifications_providers.dart';
 import '../../../vendor_assignment/application/providers/vendor_assignment_providers.dart';
@@ -78,17 +80,10 @@ class BookingsPage extends ConsumerStatefulWidget {
 }
 
 class _BookingsPageState extends ConsumerState<BookingsPage> {
-  final _searchController = TextEditingController();
   String _searchQuery = '';
   String? _statusFilter;
   String? _assignedToFilter; // null = All, _kUnassigned = Unassigned, vendorId = specific vendor
   DateTime? _dateFilter;
-
-  @override
-  void dispose() {
-    _searchController.dispose();
-    super.dispose();
-  }
 
   // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -572,30 +567,10 @@ class _BookingsPageState extends ConsumerState<BookingsPage> {
             crossAxisAlignment: WrapCrossAlignment.center,
             children: [
               // Search
-              SizedBox(
+              AdminSearchBar(
+                hintText: 'Search booking ID…',
                 width: 240,
-                child: TextField(
-                  controller: _searchController,
-                  decoration: InputDecoration(
-                    hintText: 'Search booking ID…',
-                    prefixIcon:
-                        const Icon(Icons.search_rounded, size: 18),
-                    suffixIcon: _searchQuery.isNotEmpty
-                        ? IconButton(
-                            icon: const Icon(Icons.clear_rounded,
-                                size: 18),
-                            onPressed: () {
-                              _searchController.clear();
-                              setState(() => _searchQuery = '');
-                            },
-                          )
-                        : null,
-                    contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 16, vertical: 10),
-                  ),
-                  onChanged: (v) =>
-                      setState(() => _searchQuery = v.trim()),
-                ),
+                onChanged: (q) => setState(() => _searchQuery = q),
               ),
 
               // Status
@@ -792,6 +767,7 @@ class _BookingsPageState extends ConsumerState<BookingsPage> {
                   onStartDodoService: _startDodoService,
                   onCancel: _confirmCancel,
                   onDelete: _confirmDelete,
+                  searchQuery: _searchQuery,
                 );
               },
             ),
@@ -814,6 +790,7 @@ class _BookingsTable extends StatelessWidget {
   final void Function(Booking) onStartDodoService;
   final void Function(Booking) onCancel;
   final void Function(Booking) onDelete;
+  final String searchQuery;
 
   const _BookingsTable({
     required this.bookings,
@@ -825,6 +802,7 @@ class _BookingsTable extends StatelessWidget {
     required this.onStartDodoService,
     required this.onCancel,
     required this.onDelete,
+    this.searchQuery = '',
   });
 
   @override
@@ -872,6 +850,7 @@ class _BookingsTable extends StatelessWidget {
                                   onStartDodoService: () => onStartDodoService(b),
                                   onCancel: () => onCancel(b),
                                   onDelete: () => onDelete(b),
+                                  searchQuery: searchQuery,
                                 );
                               },
                             ),
@@ -936,6 +915,7 @@ class _BookingRow extends StatelessWidget {
   final VoidCallback onStartDodoService;
   final VoidCallback onCancel;
   final VoidCallback onDelete;
+  final String searchQuery;
 
   const _BookingRow({
     required this.booking,
@@ -946,6 +926,7 @@ class _BookingRow extends StatelessWidget {
     required this.onStartDodoService,
     required this.onCancel,
     required this.onDelete,
+    this.searchQuery = '',
   });
 
   @override
@@ -962,10 +943,11 @@ class _BookingRow extends StatelessWidget {
           // Booking ID
           SizedBox(
             width: _wId,
-            child: Text(
-              booking.bookingNumber.isNotEmpty
+            child: HighlightedText(
+              text: booking.bookingNumber.isNotEmpty
                   ? booking.bookingNumber
                   : booking.id.substring(0, 8),
+              query: searchQuery,
               style: TextStyle(
                 fontSize: 13,
                 fontWeight: FontWeight.w700,

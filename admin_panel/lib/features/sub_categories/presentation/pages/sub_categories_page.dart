@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import '../../../../core/theme/app_theme.dart';
+import '../../../../core/widgets/admin_search_bar.dart';
+import '../../../../core/widgets/highlighted_text.dart';
 import '../../application/providers/sub_categories_providers.dart';
 import '../../domain/models/sub_category.dart';
 import '../widgets/sub_category_form_dialog.dart';
@@ -18,14 +20,7 @@ class SubCategoriesPage extends ConsumerStatefulWidget {
 }
 
 class _SubCategoriesPageState extends ConsumerState<SubCategoriesPage> {
-  final _searchController = TextEditingController();
   String _searchQuery = '';
-
-  @override
-  void dispose() {
-    _searchController.dispose();
-    super.dispose();
-  }
 
   List<SubCategory> _applySearch(List<SubCategory> all) {
     if (_searchQuery.isEmpty) return all;
@@ -383,24 +378,9 @@ class _SubCategoriesPageState extends ConsumerState<SubCategoriesPage> {
           const SizedBox(height: 20),
 
           // ── Search ───────────────────────────────────────────────────────
-          TextField(
-            controller: _searchController,
-            decoration: InputDecoration(
-              hintText: 'Search by name…',
-              prefixIcon: const Icon(Icons.search_rounded, size: 18),
-              suffixIcon: _searchQuery.isNotEmpty
-                  ? IconButton(
-                      icon: const Icon(Icons.clear_rounded, size: 18),
-                      onPressed: () {
-                        _searchController.clear();
-                        setState(() => _searchQuery = '');
-                      },
-                    )
-                  : null,
-              contentPadding:
-                  const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-            ),
-            onChanged: (v) => setState(() => _searchQuery = v.trim()),
+          AdminSearchBar(
+            hintText: 'Search by name or category…',
+            onChanged: (q) => setState(() => _searchQuery = q),
           ),
           const SizedBox(height: 20),
 
@@ -468,6 +448,7 @@ class _SubCategoriesPageState extends ConsumerState<SubCategoriesPage> {
                   onEdit: _openEdit,
                   onDelete: _confirmDelete,
                   onToggle: _toggle,
+                  searchQuery: _searchQuery,
                 );
               },
             ),
@@ -485,12 +466,14 @@ class _SubCategoriesTable extends StatelessWidget {
   final void Function(SubCategory) onEdit;
   final void Function(SubCategory) onDelete;
   final void Function(SubCategory) onToggle;
+  final String searchQuery;
 
   const _SubCategoriesTable({
     required this.subCategories,
     required this.onEdit,
     required this.onDelete,
     required this.onToggle,
+    this.searchQuery = '',
   });
 
   static const double _minTableWidth = 800;
@@ -551,6 +534,7 @@ class _SubCategoriesTable extends StatelessWidget {
                                   onEdit: () => onEdit(sub),
                                   onDelete: () => onDelete(sub),
                                   onToggle: () => onToggle(sub),
+                                  searchQuery: searchQuery,
                                 );
                               },
                             ),
@@ -610,12 +594,14 @@ class _SubCategoryRow extends StatelessWidget {
   final VoidCallback onEdit;
   final VoidCallback onDelete;
   final VoidCallback onToggle;
+  final String searchQuery;
 
   const _SubCategoryRow({
     required this.sub,
     required this.onEdit,
     required this.onDelete,
     required this.onToggle,
+    this.searchQuery = '',
   });
 
   @override
@@ -631,8 +617,9 @@ class _SubCategoryRow extends StatelessWidget {
           // Name
           Expanded(
             flex: 3,
-            child: Text(
-              sub.name,
+            child: HighlightedText(
+              text: sub.name,
+              query: searchQuery,
               style: TextStyle(
                 fontSize: 14,
                 fontWeight: FontWeight.w500,
@@ -645,7 +632,7 @@ class _SubCategoryRow extends StatelessWidget {
           // Parent Category
           Expanded(
             flex: 2,
-            child: _CategoryChip(name: sub.categoryName),
+            child: _CategoryChip(name: sub.categoryName, searchQuery: searchQuery),
           ),
 
           // Slug
@@ -732,7 +719,8 @@ class _SubCategoryRow extends StatelessWidget {
 
 class _CategoryChip extends StatelessWidget {
   final String name;
-  const _CategoryChip({required this.name});
+  final String searchQuery;
+  const _CategoryChip({required this.name, this.searchQuery = ''});
 
   @override
   Widget build(BuildContext context) {
@@ -751,8 +739,9 @@ class _CategoryChip extends StatelessWidget {
           color: AppColors.accent.withValues(alpha: 0.1),
           borderRadius: BorderRadius.circular(6),
         ),
-        child: Text(
-          name,
+        child: HighlightedText(
+          text: name,
+          query: searchQuery,
           style: TextStyle(
             fontSize: 12,
             color: AppColors.accent,

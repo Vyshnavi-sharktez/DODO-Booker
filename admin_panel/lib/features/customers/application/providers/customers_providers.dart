@@ -45,6 +45,26 @@ class CustomersNotifier extends StateNotifier<AsyncValue<List<Customer>>> {
     }
   }
 
+  Future<void> createCustomer({
+    required String fullName,
+    required String phone,
+    required String email,
+    String? profileImageUrl,
+    required bool isActive,
+  }) async {
+    final created = await _repo.createCustomer(
+      fullName: fullName,
+      phone: phone,
+      email: email,
+      profileImageUrl: profileImageUrl,
+      isActive: isActive,
+    );
+    final current = state.valueOrNull;
+    if (current != null) {
+      state = AsyncValue.data([created, ...current]);
+    }
+  }
+
   Future<void> toggleActive(String id, {required bool currentIsActive}) async {
     final newIsActive = !currentIsActive;
     final current = state.valueOrNull;
