@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import '../../../../core/theme/app_theme.dart';
-import '../../../categories/application/providers/categories_providers.dart';
 import '../../application/providers/sub_categories_providers.dart';
 import '../../domain/models/sub_category.dart';
 import '../widgets/sub_category_form_dialog.dart';
@@ -41,18 +40,31 @@ class _SubCategoriesPageState extends ConsumerState<SubCategoriesPage> {
   void _openCreate() {
     final filterCatId = widget.filterCategoryId;
     if (filterCatId != null) {
-      final cats = ref.read(categoriesNotifierProvider).valueOrNull ?? [];
-      final cat = cats.where((c) => c.id == filterCatId).firstOrNull;
-      _openCreateWithCategory(filterCatId, cat?.name ?? '');
+      // Derive the category name from the already-loaded sub-categories
+      // (the categoryName field is denormalized). Fall back to the dropdown
+      // provider if no sub-categories for this category are loaded yet.
+      final subs = ref.read(subCategoriesNotifierProvider).valueOrNull ?? [];
+      final catName = subs
+              .where((s) => s.categoryId == filterCatId)
+              .firstOrNull
+              ?.categoryName ??
+          ref
+              .read(categoryDropdownsProvider)
+              .valueOrNull
+              ?.where((c) => c.id == filterCatId)
+              .firstOrNull
+              ?.name ??
+          '';
+      _openCreateWithCategory(filterCatId, catName);
     } else {
       _pickCategoryThenCreate();
     }
   }
 
   void _pickCategoryThenCreate() {
-    final cats = ref.read(categoriesNotifierProvider).valueOrNull ?? [];
-    final activeCats = cats.where((c) => c.isActive).toList();
-    if (activeCats.isEmpty) {
+    // categoryDropdownsProvider already filters for is_active = true.
+    final cats = ref.read(categoryDropdownsProvider).valueOrNull ?? [];
+    if (cats.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('No active categories found. Create a category first.'),
@@ -71,7 +83,7 @@ class _SubCategoriesPageState extends ConsumerState<SubCategoriesPage> {
             // ignore: deprecated_member_use
             value: picked,
             decoration: const InputDecoration(hintText: 'Choose a category'),
-            items: activeCats
+            items: cats
                 .map((c) => DropdownMenuItem(value: c.id, child: Text(c.name)))
                 .toList(),
             onChanged: (v) => setLocal(() => picked = v),
@@ -93,7 +105,7 @@ class _SubCategoriesPageState extends ConsumerState<SubCategoriesPage> {
       ),
     ).then((catId) {
       if (catId == null || !mounted) return;
-      final cat = activeCats.where((c) => c.id == catId).firstOrNull;
+      final cat = cats.where((c) => c.id == catId).firstOrNull;
       _openCreateWithCategory(catId, cat?.name ?? '');
     });
   }
@@ -133,15 +145,13 @@ class _SubCategoriesPageState extends ConsumerState<SubCategoriesPage> {
   }
 
   void _openEdit(SubCategory sub) {
-    final cats = ref.read(categoriesNotifierProvider).valueOrNull ?? [];
-    final cat = cats.where((c) => c.id == sub.categoryId).firstOrNull;
     showDialog(
       context: context,
       barrierDismissible: false,
       builder: (_) => SubCategoryFormDialog(
         existing: sub,
         categoryId: sub.categoryId,
-        categoryName: cat?.name ?? '',
+        categoryName: sub.categoryName, // already denormalized on the model
         onSave: ({
           required categoryId,
           required name,
@@ -300,16 +310,22 @@ class _SubCategoriesPageState extends ConsumerState<SubCategoriesPage> {
 
   @override
   Widget build(BuildContext context) {
-    // Pre-load categories so they're ready when dialogs open and for header label.
-    final categoriesState = ref.watch(categoriesNotifierProvider);
-    final filteredCategoryName = widget.filterCategoryId != null
-        ? categoriesState.valueOrNull
-            ?.where((c) => c.id == widget.filterCategoryId)
-            .firstOrNull
-            ?.name
-        : null;
-
     final state = ref.watch(subCategoriesNotifierProvider);
+    // Watch category dropdowns so they're ready when dialogs open.
+    final categoryDropdowns = ref.watch(categoryDropdownsProvider);
+
+    // Derive category name from denormalized sub-category data first,
+    // then fall back to the dropdown list (handles the empty-list edge case).
+    final filteredCategoryName = widget.filterCategoryId != null
+        ? state.valueOrNull
+                ?.where((s) => s.categoryId == widget.filterCategoryId)
+                .firstOrNull
+                ?.categoryName ??
+            categoryDropdowns.valueOrNull
+                ?.where((c) => c.id == widget.filterCategoryId)
+                .firstOrNull
+                ?.name
+        : null;
 
     return Padding(
       padding: const EdgeInsets.all(24),

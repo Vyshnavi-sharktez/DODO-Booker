@@ -146,3 +146,11 @@ final singleAttributeProvider =
   final list = ref.watch(serviceAttributesNotifierProvider).valueOrNull ?? [];
   return list.where((a) => a.id == attributeId).firstOrNull;
 });
+
+/// Self-contained service list for the service picker in this module.
+/// Fetches only id + name — no dependency on the services module's provider.
+final serviceDropdownsProvider =
+    FutureProvider<List<({String id, String name})>>((ref) =>
+        ref
+            .watch(serviceAttributesRepositoryProvider)
+            .fetchServiceDropdowns());

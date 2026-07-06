@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../../core/theme/app_theme.dart';
+import '../../../customers/application/providers/customers_providers.dart';
+import '../../../customers/domain/models/customer.dart';
 import '../../../dodo_teams/application/providers/dodo_teams_providers.dart';
 import '../../../vendors/application/providers/vendors_providers.dart';
 import '../../application/invoice_service.dart';
@@ -100,20 +101,17 @@ class _BookingDetailsDialogState extends ConsumerState<BookingDetailsDialog> {
   Future<void> _downloadInvoice({
     required Booking booking,
     required String assigneeName,
+    Customer? customer,
   }) async {
     setState(() => _isDownloadingInvoice = true);
     try {
-      final row = await Supabase.instance.client
-          .from('profiles')
-          .select('full_name, mobile_number, email')
-          .eq('id', booking.customerId)
-          .maybeSingle();
-
       await InvoiceService.downloadInvoice(
         booking: booking,
-        customerName: (row?['full_name'] as String?) ?? '',
-        customerPhone: row?['mobile_number'] as String?,
-        customerEmail: row?['email'] as String?,
+        customerName: customer?.fullName ?? '',
+        customerPhone:
+            customer?.phone.isNotEmpty == true ? customer!.phone : null,
+        customerEmail:
+            customer?.email.isNotEmpty == true ? customer!.email : null,
         assigneeName: assigneeName.isNotEmpty ? assigneeName : null,
       );
     } catch (e) {
@@ -136,9 +134,12 @@ class _BookingDetailsDialogState extends ConsumerState<BookingDetailsDialog> {
 
     final vendors = ref.watch(vendorsNotifierProvider).valueOrNull ?? [];
     final teams = ref.watch(dodoTeamsNotifierProvider).valueOrNull ?? [];
+    final customers = ref.watch(customersNotifierProvider).valueOrNull ?? [];
     final imagesAsync = ref.watch(bookingImagesProvider(booking.id));
     final vendor = vendors.where((v) => v.id == booking.vendorId).firstOrNull;
     final team = teams.where((t) => t.id == booking.dodoTeamId).firstOrNull;
+    final bookingCustomer =
+        customers.where((c) => c.id == booking.customerId).firstOrNull;
 
     final assignedToLabel = switch (booking.assignmentType) {
       'External Vendor' =>
@@ -397,6 +398,7 @@ class _BookingDetailsDialogState extends ConsumerState<BookingDetailsDialog> {
                           : () => _downloadInvoice(
                                 booking: booking,
                                 assigneeName: assignedToLabel,
+                                customer: bookingCustomer,
                               ),
                       icon: _isDownloadingInvoice
                           ? const SizedBox(

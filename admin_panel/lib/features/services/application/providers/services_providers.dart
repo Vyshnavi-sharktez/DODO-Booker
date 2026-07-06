@@ -96,3 +96,18 @@ final servicesNotifierProvider =
     StateNotifierProvider<ServicesNotifier, AsyncValue<List<Service>>>((ref) {
   return ServicesNotifier(ref.watch(servicesRepositoryProvider));
 });
+
+/// Self-contained sub-category list (with parent category info) for the
+/// sub-category picker in this module. Fetches id + name + categoryId +
+/// categoryName — no dependency on the categories or sub_categories modules.
+final serviceSubCategoryDropdownsProvider = FutureProvider<
+    List<
+        ({
+          String id,
+          String name,
+          String categoryId,
+          String categoryName
+        })>>(
+  (ref) =>
+      ref.watch(servicesRepositoryProvider).fetchSubCategoryDropdowns(),
+);
