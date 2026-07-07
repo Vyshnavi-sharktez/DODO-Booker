@@ -10,8 +10,10 @@ import '../../booking/modals/rebook_flow_modal.dart';
 import '../services/bookings_providers.dart';
 import '../widgets/booking_status_timeline.dart';
 import '../../notifications/services/notification_providers.dart';
+import '../../profile/services/profile_providers.dart';
 import '../../reviews/services/review_providers.dart';
 import '../../reviews/widgets/review_modal.dart';
+import '../services/invoice_service.dart';
 
 class BookingDetailsScreen extends ConsumerStatefulWidget {
   final MyBookingModel booking;
@@ -30,6 +32,7 @@ class BookingDetailsScreen extends ConsumerStatefulWidget {
 
 class _BookingDetailsScreenState extends ConsumerState<BookingDetailsScreen> {
   bool _isCancelling = false;
+  bool _isDownloadingInvoice = false;
 
   @override
   void initState() {
@@ -86,6 +89,7 @@ class _BookingDetailsScreenState extends ConsumerState<BookingDetailsScreen> {
                   _OtpDisplayCard(otp: booking.completionOtp!),
                 _BookingInfoCard(booking: booking),
                 _ServiceInfoCard(booking: booking),
+                _ServicePhotosCard(bookingId: booking.id),
                 _AddressCard(booking: booking),
                 if (!booking.isDodoTeam) _VendorCard(booking: booking),
                 _TimelineCard(booking: booking),
@@ -95,9 +99,11 @@ class _BookingDetailsScreenState extends ConsumerState<BookingDetailsScreen> {
                   booking: booking,
                   isLoading: _isCancelling,
                   hasReview: reviewAsync?.valueOrNull != null,
+                  isDownloadingInvoice: _isDownloadingInvoice,
                   onCancel: () => _confirmCancel(booking),
                   onRebook: () => _rebook(booking),
                   onRate: () => _openReviewModal(booking),
+                  onDownloadInvoice: () => _downloadInvoice(booking),
                 ),
                 const SizedBox(height: 32),
               ],
@@ -151,6 +157,21 @@ class _BookingDetailsScreenState extends ConsumerState<BookingDetailsScreen> {
       );
     } finally {
       if (mounted) setState(() => _isCancelling = false);
+    }
+  }
+
+  Future<void> _downloadInvoice(MyBookingModel b) async {
+    setState(() => _isDownloadingInvoice = true);
+    try {
+      final profile = await ref.read(profileProvider.future);
+      await InvoiceService.downloadInvoice(booking: b, customer: profile);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not generate invoice: $e')),
+      );
+    } finally {
+      if (mounted) setState(() => _isDownloadingInvoice = false);
     }
   }
 
@@ -522,6 +543,108 @@ class _BookingItemRow extends StatelessWidget {
                     tt.labelSmall?.copyWith(color: AppColors.textHint),
               ),
           ],
+        ),
+      ],
+    );
+  }
+}
+
+// ── Service Photos Card ───────────────────────────────────────────────────────
+
+class _ServicePhotosCard extends ConsumerWidget {
+  final String bookingId;
+
+  const _ServicePhotosCard({required this.bookingId});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final imagesAsync = ref.watch(bookingImagesProvider(bookingId));
+    return imagesAsync.when(
+      loading: () => const SizedBox.shrink(),
+      error: (_, _) => const SizedBox.shrink(),
+      data: (images) {
+        if (images.isEmpty) return const SizedBox.shrink();
+        final before =
+            images.where((i) => i['image_type'] == 'before').toList();
+        final after =
+            images.where((i) => i['image_type'] == 'after').toList();
+        if (before.isEmpty && after.isEmpty) return const SizedBox.shrink();
+        return _SectionCard(
+          title: 'SERVICE PHOTOS',
+          children: [
+            if (before.isNotEmpty) ...[
+              _PhotoGallery(label: 'Before', photos: before),
+              if (after.isNotEmpty) const SizedBox(height: 14),
+            ],
+            if (after.isNotEmpty)
+              _PhotoGallery(label: 'After', photos: after),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _PhotoGallery extends StatelessWidget {
+  final String label;
+  final List<Map<String, dynamic>> photos;
+
+  const _PhotoGallery({required this.label, required this.photos});
+
+  @override
+  Widget build(BuildContext context) {
+    final tt = Theme.of(context).textTheme;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: tt.labelSmall?.copyWith(
+            color: AppColors.textSecondary,
+            fontWeight: FontWeight.w600,
+            letterSpacing: 0.3,
+          ),
+        ),
+        const SizedBox(height: 8),
+        SizedBox(
+          height: 90,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            itemCount: photos.length,
+            separatorBuilder: (_, _) => const SizedBox(width: 8),
+            itemBuilder: (_, i) {
+              final url = photos[i]['image_url'] as String;
+              return ClipRRect(
+                borderRadius: BorderRadius.circular(8),
+                child: Image.network(
+                  url,
+                  width: 90,
+                  height: 90,
+                  fit: BoxFit.cover,
+                  loadingBuilder: (ctx, child, progress) {
+                    if (progress == null) return child;
+                    return Container(
+                      width: 90,
+                      height: 90,
+                      color: AppColors.background,
+                      child: const Center(
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      ),
+                    );
+                  },
+                  errorBuilder: (_, _, _) => Container(
+                    width: 90,
+                    height: 90,
+                    color: AppColors.background,
+                    child: const Icon(
+                      Icons.broken_image_outlined,
+                      color: AppColors.textHint,
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
         ),
       ],
     );
@@ -905,22 +1028,28 @@ class _ActionButtons extends StatelessWidget {
   final VoidCallback onCancel;
   final VoidCallback onRebook;
   final VoidCallback onRate;
+  final VoidCallback? onDownloadInvoice;
   final bool isLoading;
   final bool hasReview;
+  final bool isDownloadingInvoice;
 
   const _ActionButtons({
     required this.booking,
     required this.onCancel,
     required this.onRebook,
     required this.onRate,
+    this.onDownloadInvoice,
     this.isLoading = false,
     this.hasReview = false,
+    this.isDownloadingInvoice = false,
   });
 
   @override
   Widget build(BuildContext context) {
-    final showAny =
-        booking.canCancel || booking.canRebook || booking.canReview;
+    final showAny = booking.canCancel ||
+        booking.canRebook ||
+        booking.canReview ||
+        booking.isCompleted;
     if (!showAny) return const SizedBox.shrink();
 
     return Padding(
@@ -939,6 +1068,25 @@ class _ActionButtons extends StatelessWidget {
                 minimumSize: const Size.fromHeight(50),
                 backgroundColor:
                     hasReview ? AppColors.textSecondary : AppColors.warning,
+              ),
+            ),
+            const SizedBox(height: 10),
+          ],
+          if (booking.isCompleted) ...[
+            OutlinedButton.icon(
+              onPressed:
+                  isDownloadingInvoice ? null : onDownloadInvoice,
+              icon: isDownloadingInvoice
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.download_rounded, size: 18),
+              label: Text(
+                  isDownloadingInvoice ? 'Generating…' : 'Download Invoice'),
+              style: OutlinedButton.styleFrom(
+                minimumSize: const Size.fromHeight(50),
               ),
             ),
             const SizedBox(height: 10),

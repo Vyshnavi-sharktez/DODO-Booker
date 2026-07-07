@@ -21,7 +21,8 @@ class _CategoryScreenState extends ConsumerState<CategoryScreen> {
   void initState() {
     super.initState();
     _searchController.addListener(
-      () => setState(() => _query = _searchController.text.trim().toLowerCase()),
+      () =>
+          setState(() => _query = _searchController.text.trim().toLowerCase()),
     );
   }
 
@@ -60,23 +61,21 @@ class _CategoryScreenState extends ConsumerState<CategoryScreen> {
     return SliverPadding(
       padding: EdgeInsets.fromLTRB(hPad, 8, hPad, 48),
       sliver: SliverGrid(
-        delegate: SliverChildBuilderDelegate(
-          (context, index) {
-            final cat = categories[index];
-            return CategoryCard(
-              category: cat,
-              colorIndex: index,
-              onTap: () {
-                if (cat.subcategoryCount > 0) {
-                  context.push('/subcategory/${cat.id}', extra: cat);
-                } else {
-                  context.push('/category-services/${cat.id}', extra: cat);
-                }
-              },
-            );
-          },
-          childCount: categories.length,
-        ),
+        delegate: SliverChildBuilderDelegate((context, index) {
+          final cat = categories[index];
+          return CategoryCard(
+            category: cat,
+            colorIndex: index,
+            onTap: () {
+              if (cat.subcategoryCount > 0) {
+                context.push('/subcategory/${cat.id}', extra: cat);
+              } else {
+                context.push('/category-services/${cat.id}', extra: cat);
+              }
+            },
+            searchQuery: _query,
+          );
+        }, childCount: categories.length),
         gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
           crossAxisCount: cols,
           childAspectRatio: 0.75,
@@ -94,9 +93,8 @@ class _CategoryScreenState extends ConsumerState<CategoryScreen> {
   ) {
     return async.when(
       loading: () => _buildSkeleton(cols, hPad),
-      error: (e, _) => SliverFillRemaining(
-        child: _ErrorState(onRetry: _refresh),
-      ),
+      error: (e, _) =>
+          SliverFillRemaining(child: _ErrorState(onRetry: _refresh)),
       data: (all) {
         final list = _filtered(all);
         if (list.isEmpty) {
@@ -160,16 +158,16 @@ class _CategoryScreenState extends ConsumerState<CategoryScreen> {
             color: AppColors.primary,
             onRefresh: _refresh,
             child: ScrollConfiguration(
-              behavior:
-                  ScrollConfiguration.of(context).copyWith(scrollbars: false),
+              behavior: ScrollConfiguration.of(
+                context,
+              ).copyWith(scrollbars: false),
               child: CustomScrollView(
                 physics: const AlwaysScrollableScrollPhysics(),
                 slivers: [
                   // ── Search bar ─────────────────────────────────────────
                   SliverToBoxAdapter(
                     child: Padding(
-                      padding:
-                          EdgeInsets.fromLTRB(hPad, 16, hPad, 8),
+                      padding: EdgeInsets.fromLTRB(hPad, 16, hPad, 8),
                       child: _SearchBar(controller: _searchController),
                     ),
                   ),
@@ -245,7 +243,11 @@ class _ErrorState extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.wifi_off_rounded, size: 64, color: AppColors.textHint),
+            const Icon(
+              Icons.wifi_off_rounded,
+              size: 64,
+              color: AppColors.textHint,
+            ),
             const SizedBox(height: 16),
             Text(
               'Could not load services',

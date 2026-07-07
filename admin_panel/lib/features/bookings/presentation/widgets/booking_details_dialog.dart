@@ -2,8 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import '../../../../core/theme/app_theme.dart';
+import '../../../customers/application/providers/customers_providers.dart';
+import '../../../customers/domain/models/customer.dart';
 import '../../../dodo_teams/application/providers/dodo_teams_providers.dart';
 import '../../../vendors/application/providers/vendors_providers.dart';
+import '../../application/invoice_service.dart';
 import '../../application/providers/bookings_providers.dart';
 import '../../domain/models/booking.dart';
 import '../../domain/models/booking_item.dart';
@@ -61,6 +64,7 @@ class _BookingDetailsDialogState extends ConsumerState<BookingDetailsDialog> {
   final List<FocusNode> _otpFocusNodes =
       List.generate(6, (_) => FocusNode());
   bool _isVerifying = false;
+  bool _isDownloadingInvoice = false;
 
   @override
   void dispose() {
@@ -94,6 +98,32 @@ class _BookingDetailsDialogState extends ConsumerState<BookingDetailsDialog> {
     }
   }
 
+  Future<void> _downloadInvoice({
+    required Booking booking,
+    required String assigneeName,
+    Customer? customer,
+  }) async {
+    setState(() => _isDownloadingInvoice = true);
+    try {
+      await InvoiceService.downloadInvoice(
+        booking: booking,
+        customerName: customer?.fullName ?? '',
+        customerPhone:
+            customer?.phone.isNotEmpty == true ? customer!.phone : null,
+        customerEmail:
+            customer?.email.isNotEmpty == true ? customer!.email : null,
+        assigneeName: assigneeName.isNotEmpty ? assigneeName : null,
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not generate invoice: $e')),
+      );
+    } finally {
+      if (mounted) setState(() => _isDownloadingInvoice = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final bookings = ref.watch(bookingsNotifierProvider).valueOrNull ?? [];
@@ -104,8 +134,12 @@ class _BookingDetailsDialogState extends ConsumerState<BookingDetailsDialog> {
 
     final vendors = ref.watch(vendorsNotifierProvider).valueOrNull ?? [];
     final teams = ref.watch(dodoTeamsNotifierProvider).valueOrNull ?? [];
+    final customers = ref.watch(customersNotifierProvider).valueOrNull ?? [];
+    final imagesAsync = ref.watch(bookingImagesProvider(booking.id));
     final vendor = vendors.where((v) => v.id == booking.vendorId).firstOrNull;
     final team = teams.where((t) => t.id == booking.dodoTeamId).firstOrNull;
+    final bookingCustomer =
+        customers.where((c) => c.id == booking.customerId).firstOrNull;
 
     final assignedToLabel = switch (booking.assignmentType) {
       'External Vendor' =>
@@ -261,6 +295,14 @@ class _BookingDetailsDialogState extends ConsumerState<BookingDetailsDialog> {
                     ),
                     const SizedBox(height: 20),
 
+                    // ── Service Photos ────────────────────────────────────────
+                    if (imagesAsync.valueOrNull?.isNotEmpty ?? false) ...[
+                      _SectionLabel('Service Photos'),
+                      const SizedBox(height: 12),
+                      _AdminPhotosGrid(images: imagesAsync.value!),
+                      const SizedBox(height: 20),
+                    ],
+
                     if (booking.assignmentType == 'DODO Team' &&
                         booking.status == 'in_progress') ...[
                       _SectionLabel('Complete Service'),
@@ -349,6 +391,33 @@ class _BookingDetailsDialogState extends ConsumerState<BookingDetailsDialog> {
                       ),
                     ),
                   if (widget.onAssign != null) const SizedBox(width: 10),
+                  if (booking.status == 'completed') ...[
+                    OutlinedButton.icon(
+                      onPressed: _isDownloadingInvoice
+                          ? null
+                          : () => _downloadInvoice(
+                                booking: booking,
+                                assigneeName: assignedToLabel,
+                                customer: bookingCustomer,
+                              ),
+                      icon: _isDownloadingInvoice
+                          ? const SizedBox(
+                              width: 14,
+                              height: 14,
+                              child:
+                                  CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.download_rounded, size: 16),
+                      label: const Text('Invoice'),
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 12,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                  ],
                   OutlinedButton(
                     onPressed: () => Navigator.of(context).pop(),
                     style: OutlinedButton.styleFrom(
@@ -625,6 +694,87 @@ class _ServiceItemRow extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _AdminPhotosGrid extends StatelessWidget {
+  final List<Map<String, dynamic>> images;
+
+  const _AdminPhotosGrid({required this.images});
+
+  @override
+  Widget build(BuildContext context) {
+    final before =
+        images.where((i) => i['image_type'] == 'before').toList();
+    final after =
+        images.where((i) => i['image_type'] == 'after').toList();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (before.isNotEmpty) ...[
+          _PhotoRow(label: 'Before', photos: before),
+          if (after.isNotEmpty) const SizedBox(height: 12),
+        ],
+        if (after.isNotEmpty) _PhotoRow(label: 'After', photos: after),
+      ],
+    );
+  }
+}
+
+class _PhotoRow extends StatelessWidget {
+  final String label;
+  final List<Map<String, dynamic>> photos;
+
+  const _PhotoRow({required this.label, required this.photos});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(left: 130),
+          child: Text(
+            label,
+            style: const TextStyle(
+              fontSize: 12,
+              color: AppColors.textSecondary,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+        const SizedBox(height: 6),
+        SizedBox(
+          height: 80,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            itemCount: photos.length,
+            separatorBuilder: (_, _) => const SizedBox(width: 8),
+            itemBuilder: (_, i) {
+              final url = photos[i]['image_url'] as String;
+              return ClipRRect(
+                borderRadius: BorderRadius.circular(6),
+                child: Image.network(
+                  url,
+                  width: 80,
+                  height: 80,
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, _, _) => Container(
+                    width: 80,
+                    height: 80,
+                    color: AppColors.background,
+                    child: const Icon(
+                      Icons.broken_image_outlined,
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+      ],
     );
   }
 }

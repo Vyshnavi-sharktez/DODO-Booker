@@ -3,7 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import '../../../../core/theme/app_theme.dart';
-import '../../../categories/application/providers/categories_providers.dart';
+import '../../../../core/widgets/admin_search_bar.dart';
+import '../../../../core/widgets/highlighted_text.dart';
 import '../../application/providers/sub_categories_providers.dart';
 import '../../domain/models/sub_category.dart';
 import '../widgets/sub_category_form_dialog.dart';
@@ -19,14 +20,7 @@ class SubCategoriesPage extends ConsumerStatefulWidget {
 }
 
 class _SubCategoriesPageState extends ConsumerState<SubCategoriesPage> {
-  final _searchController = TextEditingController();
   String _searchQuery = '';
-
-  @override
-  void dispose() {
-    _searchController.dispose();
-    super.dispose();
-  }
 
   List<SubCategory> _applySearch(List<SubCategory> all) {
     if (_searchQuery.isEmpty) return all;
@@ -41,18 +35,31 @@ class _SubCategoriesPageState extends ConsumerState<SubCategoriesPage> {
   void _openCreate() {
     final filterCatId = widget.filterCategoryId;
     if (filterCatId != null) {
-      final cats = ref.read(categoriesNotifierProvider).valueOrNull ?? [];
-      final cat = cats.where((c) => c.id == filterCatId).firstOrNull;
-      _openCreateWithCategory(filterCatId, cat?.name ?? '');
+      // Derive the category name from the already-loaded sub-categories
+      // (the categoryName field is denormalized). Fall back to the dropdown
+      // provider if no sub-categories for this category are loaded yet.
+      final subs = ref.read(subCategoriesNotifierProvider).valueOrNull ?? [];
+      final catName = subs
+              .where((s) => s.categoryId == filterCatId)
+              .firstOrNull
+              ?.categoryName ??
+          ref
+              .read(categoryDropdownsProvider)
+              .valueOrNull
+              ?.where((c) => c.id == filterCatId)
+              .firstOrNull
+              ?.name ??
+          '';
+      _openCreateWithCategory(filterCatId, catName);
     } else {
       _pickCategoryThenCreate();
     }
   }
 
   void _pickCategoryThenCreate() {
-    final cats = ref.read(categoriesNotifierProvider).valueOrNull ?? [];
-    final activeCats = cats.where((c) => c.isActive).toList();
-    if (activeCats.isEmpty) {
+    // categoryDropdownsProvider already filters for is_active = true.
+    final cats = ref.read(categoryDropdownsProvider).valueOrNull ?? [];
+    if (cats.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('No active categories found. Create a category first.'),
@@ -71,7 +78,7 @@ class _SubCategoriesPageState extends ConsumerState<SubCategoriesPage> {
             // ignore: deprecated_member_use
             value: picked,
             decoration: const InputDecoration(hintText: 'Choose a category'),
-            items: activeCats
+            items: cats
                 .map((c) => DropdownMenuItem(value: c.id, child: Text(c.name)))
                 .toList(),
             onChanged: (v) => setLocal(() => picked = v),
@@ -93,7 +100,7 @@ class _SubCategoriesPageState extends ConsumerState<SubCategoriesPage> {
       ),
     ).then((catId) {
       if (catId == null || !mounted) return;
-      final cat = activeCats.where((c) => c.id == catId).firstOrNull;
+      final cat = cats.where((c) => c.id == catId).firstOrNull;
       _openCreateWithCategory(catId, cat?.name ?? '');
     });
   }
@@ -133,15 +140,13 @@ class _SubCategoriesPageState extends ConsumerState<SubCategoriesPage> {
   }
 
   void _openEdit(SubCategory sub) {
-    final cats = ref.read(categoriesNotifierProvider).valueOrNull ?? [];
-    final cat = cats.where((c) => c.id == sub.categoryId).firstOrNull;
     showDialog(
       context: context,
       barrierDismissible: false,
       builder: (_) => SubCategoryFormDialog(
         existing: sub,
         categoryId: sub.categoryId,
-        categoryName: cat?.name ?? '',
+        categoryName: sub.categoryName, // already denormalized on the model
         onSave: ({
           required categoryId,
           required name,
@@ -300,16 +305,22 @@ class _SubCategoriesPageState extends ConsumerState<SubCategoriesPage> {
 
   @override
   Widget build(BuildContext context) {
-    // Pre-load categories so they're ready when dialogs open and for header label.
-    final categoriesState = ref.watch(categoriesNotifierProvider);
-    final filteredCategoryName = widget.filterCategoryId != null
-        ? categoriesState.valueOrNull
-            ?.where((c) => c.id == widget.filterCategoryId)
-            .firstOrNull
-            ?.name
-        : null;
-
     final state = ref.watch(subCategoriesNotifierProvider);
+    // Watch category dropdowns so they're ready when dialogs open.
+    final categoryDropdowns = ref.watch(categoryDropdownsProvider);
+
+    // Derive category name from denormalized sub-category data first,
+    // then fall back to the dropdown list (handles the empty-list edge case).
+    final filteredCategoryName = widget.filterCategoryId != null
+        ? state.valueOrNull
+                ?.where((s) => s.categoryId == widget.filterCategoryId)
+                .firstOrNull
+                ?.categoryName ??
+            categoryDropdowns.valueOrNull
+                ?.where((c) => c.id == widget.filterCategoryId)
+                .firstOrNull
+                ?.name
+        : null;
 
     return Padding(
       padding: const EdgeInsets.all(24),
@@ -367,24 +378,9 @@ class _SubCategoriesPageState extends ConsumerState<SubCategoriesPage> {
           const SizedBox(height: 20),
 
           // ── Search ───────────────────────────────────────────────────────
-          TextField(
-            controller: _searchController,
-            decoration: InputDecoration(
-              hintText: 'Search by name…',
-              prefixIcon: const Icon(Icons.search_rounded, size: 18),
-              suffixIcon: _searchQuery.isNotEmpty
-                  ? IconButton(
-                      icon: const Icon(Icons.clear_rounded, size: 18),
-                      onPressed: () {
-                        _searchController.clear();
-                        setState(() => _searchQuery = '');
-                      },
-                    )
-                  : null,
-              contentPadding:
-                  const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-            ),
-            onChanged: (v) => setState(() => _searchQuery = v.trim()),
+          AdminSearchBar(
+            hintText: 'Search by name or category…',
+            onChanged: (q) => setState(() => _searchQuery = q),
           ),
           const SizedBox(height: 20),
 
@@ -452,6 +448,7 @@ class _SubCategoriesPageState extends ConsumerState<SubCategoriesPage> {
                   onEdit: _openEdit,
                   onDelete: _confirmDelete,
                   onToggle: _toggle,
+                  searchQuery: _searchQuery,
                 );
               },
             ),
@@ -469,12 +466,14 @@ class _SubCategoriesTable extends StatelessWidget {
   final void Function(SubCategory) onEdit;
   final void Function(SubCategory) onDelete;
   final void Function(SubCategory) onToggle;
+  final String searchQuery;
 
   const _SubCategoriesTable({
     required this.subCategories,
     required this.onEdit,
     required this.onDelete,
     required this.onToggle,
+    this.searchQuery = '',
   });
 
   static const double _minTableWidth = 800;
@@ -535,6 +534,7 @@ class _SubCategoriesTable extends StatelessWidget {
                                   onEdit: () => onEdit(sub),
                                   onDelete: () => onDelete(sub),
                                   onToggle: () => onToggle(sub),
+                                  searchQuery: searchQuery,
                                 );
                               },
                             ),
@@ -594,12 +594,14 @@ class _SubCategoryRow extends StatelessWidget {
   final VoidCallback onEdit;
   final VoidCallback onDelete;
   final VoidCallback onToggle;
+  final String searchQuery;
 
   const _SubCategoryRow({
     required this.sub,
     required this.onEdit,
     required this.onDelete,
     required this.onToggle,
+    this.searchQuery = '',
   });
 
   @override
@@ -615,8 +617,9 @@ class _SubCategoryRow extends StatelessWidget {
           // Name
           Expanded(
             flex: 3,
-            child: Text(
-              sub.name,
+            child: HighlightedText(
+              text: sub.name,
+              query: searchQuery,
               style: TextStyle(
                 fontSize: 14,
                 fontWeight: FontWeight.w500,
@@ -629,7 +632,7 @@ class _SubCategoryRow extends StatelessWidget {
           // Parent Category
           Expanded(
             flex: 2,
-            child: _CategoryChip(name: sub.categoryName),
+            child: _CategoryChip(name: sub.categoryName, searchQuery: searchQuery),
           ),
 
           // Slug
@@ -716,7 +719,8 @@ class _SubCategoryRow extends StatelessWidget {
 
 class _CategoryChip extends StatelessWidget {
   final String name;
-  const _CategoryChip({required this.name});
+  final String searchQuery;
+  const _CategoryChip({required this.name, this.searchQuery = ''});
 
   @override
   Widget build(BuildContext context) {
@@ -735,8 +739,9 @@ class _CategoryChip extends StatelessWidget {
           color: AppColors.accent.withValues(alpha: 0.1),
           borderRadius: BorderRadius.circular(6),
         ),
-        child: Text(
-          name,
+        child: HighlightedText(
+          text: name,
+          query: searchQuery,
           style: TextStyle(
             fontSize: 12,
             color: AppColors.accent,

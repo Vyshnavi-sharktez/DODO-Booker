@@ -1,11 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import '../../../../core/theme/app_theme.dart';
+import '../../../../core/widgets/admin_search_bar.dart';
 import '../../../../core/widgets/clickable.dart';
+import '../../../../core/widgets/highlighted_text.dart';
+import '../../application/providers/customer_search_providers.dart';
 import '../../application/providers/customers_providers.dart';
 import '../../domain/models/customer.dart';
-import '../widgets/customer_details_dialog.dart';
+import '../../domain/models/customer_search_record.dart';
+import '../widgets/customer_create_dialog.dart';
 import '../widgets/customer_edit_dialog.dart';
 
 final _dateFmtShort = DateFormat('dd MMM yyyy');
@@ -24,28 +29,26 @@ class CustomersPage extends ConsumerStatefulWidget {
 }
 
 class _CustomersPageState extends ConsumerState<CustomersPage> {
-  final _searchController = TextEditingController();
   String _searchQuery = '';
   _StatusFilter _statusFilter = _StatusFilter.all;
 
   @override
   void dispose() {
-    _searchController.dispose();
     super.dispose();
   }
 
   // ── Filtering ──────────────────────────────────────────────────────────────
 
-  List<Customer> _applyFilters(List<Customer> all) {
+  List<Customer> _applyFilters(
+      List<Customer> all, Map<String, CustomerSearchRecord>? index) {
     var result = all;
     if (_searchQuery.isNotEmpty) {
-      final q = _searchQuery.toLowerCase();
-      result = result
-          .where((c) =>
-              c.fullName.toLowerCase().contains(q) ||
-              c.phone.toLowerCase().contains(q) ||
-              c.email.toLowerCase().contains(q))
-          .toList();
+      result = result.where((c) {
+        final record = index?[c.id];
+        return record != null
+            ? record.matches(_searchQuery)
+            : _basicMatch(c, _searchQuery.toLowerCase());
+      }).toList();
     }
     switch (_statusFilter) {
       case _StatusFilter.active:
@@ -58,13 +61,46 @@ class _CustomersPageState extends ConsumerState<CustomersPage> {
     return result;
   }
 
+  bool _basicMatch(Customer c, String q) =>
+      c.fullName.toLowerCase().contains(q) ||
+      c.phone.toLowerCase().contains(q) ||
+      c.email.toLowerCase().contains(q) ||
+      c.id.toLowerCase().contains(q);
+
   // ── Actions ────────────────────────────────────────────────────────────────
 
-  void _openDetails(Customer c) {
+  void _openCreate() {
     showDialog(
       context: context,
-      builder: (_) => CustomerDetailsDialog(customer: c),
+      barrierDismissible: false,
+      builder: (_) => CustomerCreateDialog(
+        onSave: ({
+          required fullName,
+          required phone,
+          required email,
+          profileImageUrl,
+          required isActive,
+        }) async {
+          await ref.read(customersNotifierProvider.notifier).createCustomer(
+                fullName: fullName,
+                phone: phone,
+                email: email,
+                profileImageUrl: profileImageUrl,
+                isActive: isActive,
+              );
+          ref.invalidate(customerSearchIndexProvider);
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Customer created successfully')),
+            );
+          }
+        },
+      ),
     );
+  }
+
+  void _openDetails(Customer c) {
+    context.go('/dashboard/customers/${c.id}');
   }
 
   void _openEdit(Customer c) {
@@ -90,6 +126,7 @@ class _CustomersPageState extends ConsumerState<CustomersPage> {
                 profileImageUrl: profileImageUrl,
                 isActive: isActive,
               );
+          ref.invalidate(customerSearchIndexProvider);
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(
@@ -134,6 +171,7 @@ class _CustomersPageState extends ConsumerState<CustomersPage> {
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(customersNotifierProvider);
+    final searchIndex = ref.watch(customerSearchIndexProvider).valueOrNull;
 
     return Padding(
       padding: const EdgeInsets.all(24),
@@ -164,6 +202,17 @@ class _CustomersPageState extends ConsumerState<CustomersPage> {
                   ),
                 ],
               ),
+              const Spacer(),
+              FilledButton.icon(
+                onPressed: _openCreate,
+                icon: const Icon(Icons.person_add_rounded, size: 16),
+                label: const Text('New Customer'),
+                style: FilledButton.styleFrom(
+                  backgroundColor: AppColors.primary,
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 16, vertical: 10),
+                ),
+              ),
             ],
           ),
           const SizedBox(height: 16),
@@ -183,30 +232,11 @@ class _CustomersPageState extends ConsumerState<CustomersPage> {
             runSpacing: 8,
             crossAxisAlignment: WrapCrossAlignment.center,
             children: [
-              SizedBox(
-                width: 280,
-                child: TextField(
-                  controller: _searchController,
-                  decoration: InputDecoration(
-                    hintText: 'Search by name, phone or email…',
-                    prefixIcon:
-                        const Icon(Icons.search_rounded, size: 18),
-                    suffixIcon: _searchQuery.isNotEmpty
-                        ? IconButton(
-                            icon: const Icon(Icons.clear_rounded,
-                                size: 18),
-                            onPressed: () {
-                              _searchController.clear();
-                              setState(() => _searchQuery = '');
-                            },
-                          )
-                        : null,
-                    contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 16, vertical: 10),
-                  ),
-                  onChanged: (v) =>
-                      setState(() => _searchQuery = v.trim()),
-                ),
+              AdminSearchBar(
+                hintText:
+                    'Search name, phone, booking ID, service, vendor…',
+                width: 360,
+                onChanged: (q) => setState(() => _searchQuery = q),
               ),
               _FilterChip(
                 label: 'All',
@@ -266,7 +296,7 @@ class _CustomersPageState extends ConsumerState<CustomersPage> {
                 ),
               ),
               data: (all) {
-                final filtered = _applyFilters(all);
+                final filtered = _applyFilters(all, searchIndex);
                 if (all.isEmpty) {
                   return const _EmptyState(
                     message: 'No customers yet',
@@ -283,6 +313,7 @@ class _CustomersPageState extends ConsumerState<CustomersPage> {
                 return _CustomersTable(
                   customers: filtered,
                   totalCount: all.length,
+                  searchQuery: _searchQuery,
                   onViewDetails: _openDetails,
                   onEdit: _openEdit,
                   onToggleActive: _toggleActive,
@@ -451,6 +482,7 @@ class _FilterChip extends StatelessWidget {
 class _CustomersTable extends StatelessWidget {
   final List<Customer> customers;
   final int totalCount;
+  final String searchQuery;
   final void Function(Customer) onViewDetails;
   final void Function(Customer) onEdit;
   final void Function(Customer) onToggleActive;
@@ -458,6 +490,7 @@ class _CustomersTable extends StatelessWidget {
   const _CustomersTable({
     required this.customers,
     required this.totalCount,
+    required this.searchQuery,
     required this.onViewDetails,
     required this.onEdit,
     required this.onToggleActive,
@@ -517,6 +550,7 @@ class _CustomersTable extends StatelessWidget {
                               itemBuilder: (ctx, i) {
                                 return _CustomerRow(
                                   customer: customers[i],
+                                  searchQuery: searchQuery,
                                   onViewDetails: () =>
                                       onViewDetails(customers[i]),
                                   onEdit: () => onEdit(customers[i]),
@@ -580,12 +614,14 @@ class _HCell extends StatelessWidget {
 
 class _CustomerRow extends StatelessWidget {
   final Customer customer;
+  final String searchQuery;
   final VoidCallback onViewDetails;
   final VoidCallback onEdit;
   final VoidCallback onToggleActive;
 
   const _CustomerRow({
     required this.customer,
+    required this.searchQuery,
     required this.onViewDetails,
     required this.onEdit,
     required this.onToggleActive,
@@ -615,15 +651,34 @@ class _CustomerRow extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  c.fullName.isEmpty ? '—' : c.fullName,
+                HighlightedText(
+                  text: c.fullName.isEmpty ? '—' : c.fullName,
+                  query: searchQuery,
                   style: const TextStyle(
                     fontSize: 13,
                     fontWeight: FontWeight.w600,
                     color: AppColors.textPrimary,
                   ),
-                  overflow: TextOverflow.ellipsis,
                 ),
+                if (c.authUserId == null)
+                  Container(
+                    margin: const EdgeInsets.only(top: 2),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 5, vertical: 1),
+                    decoration: BoxDecoration(
+                      color: AppColors.primary.withValues(alpha: 0.08),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: Text(
+                      'Admin Created',
+                      style: TextStyle(
+                        fontSize: 9,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.primary,
+                        letterSpacing: 0.3,
+                      ),
+                    ),
+                  ),
               ],
             ),
           ),
@@ -631,22 +686,22 @@ class _CustomerRow extends StatelessWidget {
           // Phone
           Expanded(
             flex: 3,
-            child: Text(
-              c.phone.isEmpty ? '—' : c.phone,
+            child: HighlightedText(
+              text: c.phone.isEmpty ? '—' : c.phone,
+              query: searchQuery,
               style: TextStyle(
                   fontSize: 13, color: AppColors.textSecondary),
-              overflow: TextOverflow.ellipsis,
             ),
           ),
 
           // Email
           Expanded(
             flex: 4,
-            child: Text(
-              c.email.isEmpty ? '—' : c.email,
+            child: HighlightedText(
+              text: c.email.isEmpty ? '—' : c.email,
+              query: searchQuery,
               style: TextStyle(
                   fontSize: 13, color: AppColors.textSecondary),
-              overflow: TextOverflow.ellipsis,
             ),
           ),
 

@@ -2,18 +2,21 @@ import 'package:flutter/material.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/utils/icon_registry.dart';
 import '../../../core/utils/service_image_registry.dart';
+import '../../../core/widgets/highlighted_text.dart';
 import '../../../models/category_model.dart';
 
 class CategoryCard extends StatefulWidget {
   final CategoryModel category;
   final int colorIndex;
   final VoidCallback onTap;
+  final String searchQuery;
 
   const CategoryCard({
     super.key,
     required this.category,
     required this.colorIndex,
     required this.onTap,
+    this.searchQuery = '',
   });
 
   @override
@@ -109,8 +112,9 @@ class _CategoryCardState extends State<CategoryCard> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          cat.name,
+                        HighlightedText(
+                          text: cat.name,
+                          query: widget.searchQuery,
                           style: TextStyle(
                             fontSize: 13,
                             fontWeight: FontWeight.w700,

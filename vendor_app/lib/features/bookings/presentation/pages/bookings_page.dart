@@ -97,7 +97,7 @@ class _BookingsPageState extends ConsumerState<BookingsPage>
                         _buildTodayList(bookings),
                       ]
                     : [
-                        _buildBookingsList(bookings, 'assigned'),
+                        _buildBookingsList(bookings, 'assigned', 'accepted'),
                         _buildBookingsList(bookings, 'in_progress', 'awaiting_verification'),
                         _buildBookingsList(bookings, 'completed'),
                         _buildBookingsList(bookings, 'rejected'),

@@ -90,4 +90,32 @@ class ServicesRepository {
         .eq('service_id', serviceId);
     return (data as List).length;
   }
+
+  /// Lightweight fetch of sub-categories with their parent category info,
+  /// used for the sub-category picker in this module.
+  /// Returns id + name + categoryId + categoryName — no dependency on
+  /// the categories or sub_categories module's providers.
+  Future<
+      List<
+          ({
+            String id,
+            String name,
+            String categoryId,
+            String categoryName
+          })>> fetchSubCategoryDropdowns() async {
+    final data = await _supabase
+        .from('sub_categories')
+        .select('id, name, category_id, categories(id, name)')
+        .order('name', ascending: true);
+    return (data as List<dynamic>).map((r) {
+      final cat =
+          r['categories'] as Map<String, dynamic>? ?? const <String, dynamic>{};
+      return (
+        id: r['id'] as String,
+        name: r['name'] as String,
+        categoryId: r['category_id'] as String,
+        categoryName: (cat['name'] as String?) ?? '',
+      );
+    }).toList();
+  }
 }

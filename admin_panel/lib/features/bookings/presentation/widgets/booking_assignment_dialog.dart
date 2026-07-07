@@ -1,4 +1,3 @@
-import 'dart:math' show min;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
@@ -13,8 +12,6 @@ import '../../domain/models/booking.dart';
 import '../../domain/services/vendor_assignment_service.dart';
 
 final _dateFmt = DateFormat('dd MMM yyyy');
-
-enum _AssignMode { auto, manual }
 
 enum _AssigneeType { vendor, team, unassigned }
 
@@ -47,17 +44,16 @@ class _BookingAssignmentDialogState
   late final TextEditingController _notesCtrl;
 
   late _AssigneeType _assigneeType;
-  late _AssignMode _mode;
   late String _vendorId;
   late String _dodoTeamId;
   late DateTime? _serviceDate;
   bool _saving = false;
+  bool _showAllVendors = false;
+  bool _showAllTeams = false;
 
-  bool _autoSelected = false;
-  double? _autoSelectedDistanceKm;
-
-  bool get _bookingHasLocation =>
-      widget.booking.latitude != null && widget.booking.longitude != null;
+  bool get _bookingHasAddress =>
+      widget.booking.address != null &&
+      widget.booking.address!.trim().isNotEmpty;
 
   @override
   void initState() {
@@ -71,7 +67,6 @@ class _BookingAssignmentDialogState
       'Unassigned' => _AssigneeType.unassigned,
       _ => _AssigneeType.vendor,
     };
-    _mode = _bookingHasLocation ? _AssignMode.auto : _AssignMode.manual;
   }
 
   @override
@@ -124,8 +119,7 @@ class _BookingAssignmentDialogState
         vendorId: _assigneeType == _AssigneeType.vendor ? _vendorId : null,
         dodoTeamId: _assigneeType == _AssigneeType.team ? _dodoTeamId : null,
         serviceDate: _serviceDate!,
-        notes:
-            _notesCtrl.text.trim().isEmpty ? null : _notesCtrl.text.trim(),
+        notes: _notesCtrl.text.trim().isEmpty ? null : _notesCtrl.text.trim(),
       );
       if (mounted) Navigator.of(context).pop();
     } catch (e) {
@@ -151,24 +145,16 @@ class _BookingAssignmentDialogState
     final allVendors = vendorsAsync.valueOrNull ?? <Vendor>[];
     final allTeams = dodoTeamsAsync.valueOrNull ?? <DodoTeam>[];
 
-    final candidates =
-        (_assigneeType == _AssigneeType.vendor &&
-                _mode == _AssignMode.auto &&
-                _bookingHasLocation &&
-                vendorsAsync.hasValue &&
-                serviceAreasAsync.hasValue)
-            ? VendorAssignmentService.rankEligibleVendors(
-                bookingLat: widget.booking.latitude!,
-                bookingLng: widget.booking.longitude!,
-                vendors: allVendors,
-                serviceAreasMap: serviceAreasAsync.valueOrNull ?? {},
-              )
-            : <VendorCandidate>[];
+    final vendorResult = VendorAssignmentService.rankVendorAssignees(
+      bookingAddress: widget.booking.address,
+      vendors: allVendors,
+      serviceAreasMap: serviceAreasAsync.valueOrNull ?? {},
+    );
 
-    final selectedVendor =
-        allVendors.where((v) => v.id == _vendorId).firstOrNull;
-    final selectedTeam =
-        allTeams.where((t) => t.id == _dodoTeamId).firstOrNull;
+    final teamResult = VendorAssignmentService.rankTeamAssignees(
+      bookingAddress: widget.booking.address,
+      teams: allTeams,
+    );
 
     return Dialog(
       insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
@@ -180,7 +166,6 @@ class _BookingAssignmentDialogState
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             _buildHeader(),
-
             Flexible(
               child: SingleChildScrollView(
                 padding: const EdgeInsets.all(24),
@@ -189,47 +174,27 @@ class _BookingAssignmentDialogState
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // ── Assignee type (Vendor | DODO Team | Unassigned) ──
                       _buildAssigneeTypeSelector(),
                       const SizedBox(height: 20),
 
-                      // ── Vendor panels ────────────────────────────────────
-                      if (_assigneeType == _AssigneeType.vendor) ...[
-                        _buildModeSelector(),
-                        const SizedBox(height: 20),
-                        if (_mode == _AssignMode.auto)
-                          _buildAutoPanel(
-                            isLoading: vendorsAsync.isLoading ||
-                                serviceAreasAsync.isLoading,
-                            hasError: vendorsAsync.hasError ||
-                                serviceAreasAsync.hasError,
-                            candidates: candidates,
-                          )
-                        else
-                          _buildManualPanel(allVendors),
-                        const SizedBox(height: 20),
-                        if (selectedVendor != null) ...[
-                          _buildVendorSelectedIndicator(selectedVendor),
-                          const SizedBox(height: 16),
-                        ],
-                      ],
+                      if (_assigneeType == _AssigneeType.vendor)
+                        _buildVendorPanel(
+                          result: vendorResult,
+                          isLoading: vendorsAsync.isLoading ||
+                              serviceAreasAsync.isLoading,
+                          hasError: vendorsAsync.hasError ||
+                              serviceAreasAsync.hasError,
+                          allVendors: allVendors,
+                        ),
 
-                      // ── DODO Team panel ──────────────────────────────────
-                      if (_assigneeType == _AssigneeType.team) ...[
-                        _buildDodoTeamPanel(
-                          allTeams,
+                      if (_assigneeType == _AssigneeType.team)
+                        _buildTeamPanel(
+                          result: teamResult,
                           isLoading: dodoTeamsAsync.isLoading,
                           hasError: dodoTeamsAsync.hasError,
                         ),
-                        const SizedBox(height: 20),
-                        if (selectedTeam != null) ...[
-                          _buildTeamSelectedIndicator(selectedTeam),
-                          const SizedBox(height: 16),
-                        ],
-                      ],
 
-                      // ── Unassigned notice ────────────────────────────────
-                      if (_assigneeType == _AssigneeType.unassigned) ...[
+                      if (_assigneeType == _AssigneeType.unassigned)
                         _InfoBanner(
                           icon: Icons.person_off_rounded,
                           color: AppColors.textSecondary,
@@ -237,18 +202,16 @@ class _BookingAssignmentDialogState
                               'Saving will clear any existing vendor or team '
                               'assignment and mark the booking as Unassigned.',
                         ),
-                        const SizedBox(height: 20),
-                      ],
 
-                      // ── Shared fields ─────────────────────────────────────
+                      const SizedBox(height: 20),
+
                       InkWell(
                         onTap: _saving ? null : _pickDate,
                         borderRadius: BorderRadius.circular(8),
                         child: InputDecorator(
                           decoration: const InputDecoration(
                             labelText: 'Service Date *',
-                            prefixIcon:
-                                Icon(Icons.calendar_today_rounded),
+                            prefixIcon: Icon(Icons.calendar_today_rounded),
                           ),
                           child: Text(
                             _serviceDate != null
@@ -282,7 +245,6 @@ class _BookingAssignmentDialogState
                 ),
               ),
             ),
-
             _buildFooter(),
           ],
         ),
@@ -297,8 +259,7 @@ class _BookingAssignmentDialogState
       padding: const EdgeInsets.fromLTRB(24, 20, 16, 20),
       decoration: BoxDecoration(
         color: AppColors.primary,
-        borderRadius:
-            const BorderRadius.vertical(top: Radius.circular(16)),
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
       ),
       child: Row(
         children: [
@@ -341,7 +302,10 @@ class _BookingAssignmentDialogState
             selected: _assigneeType == _AssigneeType.vendor,
             onTap: _saving
                 ? null
-                : () => setState(() => _assigneeType = _AssigneeType.vendor),
+                : () => setState(() {
+                      _assigneeType = _AssigneeType.vendor;
+                      _showAllVendors = false;
+                    }),
           ),
           _ModeTab(
             icon: Icons.groups_rounded,
@@ -349,7 +313,10 @@ class _BookingAssignmentDialogState
             selected: _assigneeType == _AssigneeType.team,
             onTap: _saving
                 ? null
-                : () => setState(() => _assigneeType = _AssigneeType.team),
+                : () => setState(() {
+                      _assigneeType = _AssigneeType.team;
+                      _showAllTeams = false;
+                    }),
           ),
           _ModeTab(
             icon: Icons.person_off_rounded,
@@ -357,65 +324,21 @@ class _BookingAssignmentDialogState
             selected: _assigneeType == _AssigneeType.unassigned,
             onTap: _saving
                 ? null
-                : () => setState(() => _assigneeType = _AssigneeType.unassigned),
+                : () =>
+                    setState(() => _assigneeType = _AssigneeType.unassigned),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildModeSelector() {
-    return Container(
-      height: 42,
-      decoration: BoxDecoration(
-        color: AppColors.background,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: AppColors.border),
-      ),
-      child: Row(
-        children: [
-          _ModeTab(
-            icon: Icons.auto_awesome_rounded,
-            label: 'Auto Assign',
-            selected: _mode == _AssignMode.auto,
-            onTap: _saving
-                ? null
-                : () => setState(() => _mode = _AssignMode.auto),
-          ),
-          _ModeTab(
-            icon: Icons.edit_rounded,
-            label: 'Manual Assign',
-            selected: _mode == _AssignMode.manual,
-            onTap: _saving
-                ? null
-                : () => setState(() {
-                      _mode = _AssignMode.manual;
-                      _autoSelected = false;
-                      _autoSelectedDistanceKm = null;
-                    }),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildAutoPanel({
+  Widget _buildVendorPanel({
+    required ({List<AssigneeCandidate> inArea, List<AssigneeCandidate> all})
+        result,
     required bool isLoading,
     required bool hasError,
-    required List<VendorCandidate> candidates,
+    required List<Vendor> allVendors,
   }) {
-    if (!_bookingHasLocation) {
-      return _InfoBanner(
-        icon: Icons.location_off_rounded,
-        color: AppColors.error,
-        message:
-            'This booking has no location data. Auto-assignment requires '
-            'booking coordinates. Use manual assignment instead.',
-        actionLabel: 'Switch to Manual',
-        onAction: () => setState(() => _mode = _AssignMode.manual),
-      );
-    }
-
     if (isLoading) {
       return const Center(
         child: Padding(
@@ -429,44 +352,125 @@ class _BookingAssignmentDialogState
       return _InfoBanner(
         icon: Icons.error_outline_rounded,
         color: AppColors.error,
-        message: 'Failed to load vendor data. Try manual assignment.',
-        actionLabel: 'Switch to Manual',
-        onAction: () => setState(() => _mode = _AssignMode.manual),
+        message: 'Failed to load vendor data. Please try again.',
       );
     }
 
-    final locRow = Padding(
-      padding: const EdgeInsets.only(bottom: 4),
-      child: Row(
-        children: [
-          Icon(Icons.location_on_rounded,
-              size: 14, color: AppColors.textSecondary),
-          const SizedBox(width: 4),
-          Text(
-            'Booking: '
-            '${widget.booking.latitude!.toStringAsFixed(5)}, '
-            '${widget.booking.longitude!.toStringAsFixed(5)}',
-            style: TextStyle(
-                fontSize: 12, color: AppColors.textSecondary),
-          ),
-        ],
-      ),
-    );
+    // Surface currently-assigned vendor if they are not in the active list
+    // (e.g. deactivated after the booking was made).
+    final currentInList =
+        _vendorId.isEmpty || result.all.any((c) => c.id == _vendorId);
+    Widget? currentAssigneeNote;
+    if (!currentInList) {
+      final existing =
+          allVendors.where((v) => v.id == _vendorId).firstOrNull;
+      currentAssigneeNote = _CurrentAssigneeBanner(
+        name: existing?.businessName ?? 'Unknown vendor',
+        inactive: existing?.isActive == false,
+      );
+    }
 
-    if (candidates.isEmpty) {
+    // Admin explicitly requested the full list.
+    if (_showAllVendors) {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          locRow,
+          ?currentAssigneeNote,
+          if (_bookingHasAddress)
+            _AddressRow(
+              address: widget.booking.address!,
+              trailing: TextButton(
+                onPressed: _saving
+                    ? null
+                    : () => setState(() => _showAllVendors = false),
+                style: TextButton.styleFrom(
+                  minimumSize: Size.zero,
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 8, vertical: 4),
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  textStyle: const TextStyle(fontSize: 12),
+                ),
+                child: const Text('In-area only'),
+              ),
+            ),
+          const SizedBox(height: 4),
+          Text(
+            'All ${result.all.length} active vendor${result.all.length == 1 ? '' : 's'}',
+            style: TextStyle(
+              fontSize: 12,
+              color: AppColors.textSecondary,
+              fontStyle: FontStyle.italic,
+            ),
+          ),
+          const SizedBox(height: 10),
+          if (result.all.isEmpty)
+            _InfoBanner(
+              icon: Icons.search_off_rounded,
+              color: AppColors.textSecondary,
+              message: 'No active vendors available.',
+            )
+          else
+            ..._candidateCards(
+              result.all,
+              selectedId: _vendorId,
+              onSelect: (id) => setState(() => _vendorId = id),
+            ),
+        ],
+      );
+    }
+
+    // No booking address — cannot filter by area; require explicit action.
+    if (!_bookingHasAddress) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          ?currentAssigneeNote,
+          _InfoBanner(
+            icon: Icons.location_off_rounded,
+            color: AppColors.textSecondary,
+            message:
+                'This booking has no address. Location-based filtering '
+                'is unavailable.',
+            actionLabel: 'Show All Vendors',
+            onAction: () => setState(() => _showAllVendors = true),
+          ),
+        ],
+      );
+    }
+
+    // Booking has address — show in-area vendors only.
+    final addressRow = _AddressRow(
+      address: widget.booking.address!,
+      trailing: result.inArea.isNotEmpty
+          ? TextButton(
+              onPressed: _saving
+                  ? null
+                  : () => setState(() => _showAllVendors = true),
+              style: TextButton.styleFrom(
+                minimumSize: Size.zero,
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 8, vertical: 4),
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                textStyle: const TextStyle(fontSize: 12),
+              ),
+              child: Text('Show all (${result.all.length})'),
+            )
+          : null,
+    );
+
+    if (result.inArea.isEmpty) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          ?currentAssigneeNote,
+          addressRow,
           const SizedBox(height: 8),
           _InfoBanner(
             icon: Icons.search_off_rounded,
             color: AppColors.textSecondary,
-            message:
-                'No active vendors found within any service radius for '
-                'this booking location.',
-            actionLabel: 'Switch to Manual',
-            onAction: () => setState(() => _mode = _AssignMode.manual),
+            message: 'No vendors available in this location.',
+            actionLabel: 'Show All Vendors',
+            onAction: () => setState(() => _showAllVendors = true),
           ),
         ],
       );
@@ -475,81 +479,30 @@ class _BookingAssignmentDialogState
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        locRow,
+        ?currentAssigneeNote,
+        addressRow,
+        const SizedBox(height: 4),
         Text(
-          '${candidates.length} eligible vendor'
-          '${candidates.length == 1 ? '' : 's'} within service radius',
+          '${result.inArea.length} vendor${result.inArea.length == 1 ? '' : 's'} serving this area',
           style: TextStyle(
             fontSize: 12,
             color: AppColors.textSecondary,
             fontStyle: FontStyle.italic,
           ),
         ),
-        const SizedBox(height: 12),
-        ...candidates.asMap().entries.map(
-              (e) => _VendorCandidateCard(
-                candidate: e.value,
-                isFirst: e.key == 0,
-                isSelected: _vendorId == e.value.vendor.id,
-                onSelect: _saving
-                    ? null
-                    : () => setState(() {
-                          _vendorId = e.value.vendor.id;
-                          _autoSelected = true;
-                          _autoSelectedDistanceKm = e.value.distanceKm;
-                        }),
-              ),
-            ),
-      ],
-    );
-  }
-
-  Widget _buildManualPanel(List<Vendor> vendors) {
-    final vendorIds = vendors.map((v) => v.id).toSet();
-    final currentKnown = vendorIds.contains(_vendorId);
-    final dropdownValue =
-        (currentKnown && _vendorId.isNotEmpty) ? _vendorId : null;
-
-    return DropdownButtonFormField<String>(
-      // ignore: deprecated_member_use
-      value: dropdownValue,
-      decoration: const InputDecoration(
-        labelText: 'Vendor *',
-        prefixIcon: Icon(Icons.store_rounded),
-      ),
-      isExpanded: true,
-      items: [
-        if (!currentKnown && _vendorId.isNotEmpty)
-          DropdownMenuItem(
-            value: _vendorId,
-            child: Text(
-              'Unknown vendor '
-              '(${_vendorId.substring(0, min(8, _vendorId.length))}…)',
-              style:
-                  TextStyle(color: AppColors.textSecondary, fontSize: 13),
-            ),
-          ),
-        ...vendors.map(
-          (v) => DropdownMenuItem(value: v.id, child: Text(v.businessName)),
+        const SizedBox(height: 10),
+        ..._candidateCards(
+          result.inArea,
+          selectedId: _vendorId,
+          onSelect: (id) => setState(() => _vendorId = id),
         ),
       ],
-      onChanged: _saving
-          ? null
-          : (v) {
-              if (v != null) {
-                setState(() {
-                  _vendorId = v;
-                  _autoSelected = false;
-                  _autoSelectedDistanceKm = null;
-                });
-              }
-            },
-      validator: (v) => (v == null || v.isEmpty) ? 'Required' : null,
     );
   }
 
-  Widget _buildDodoTeamPanel(
-    List<DodoTeam> teams, {
+  Widget _buildTeamPanel({
+    required ({List<AssigneeCandidate> inArea, List<AssigneeCandidate> all})
+        result,
     required bool isLoading,
     required bool hasError,
   }) {
@@ -570,125 +523,148 @@ class _BookingAssignmentDialogState
       );
     }
 
-    if (teams.isEmpty) {
+    if (result.all.isEmpty) {
       return _InfoBanner(
         icon: Icons.groups_outlined,
         color: AppColors.textSecondary,
-        message: 'No DODO Teams available. Create a team first.',
+        message: 'No active DODO Teams available. Create a team first.',
       );
     }
 
-    final teamIds = teams.map((t) => t.id).toSet();
-    final currentKnown = teamIds.contains(_dodoTeamId);
-    final dropdownValue =
-        (currentKnown && _dodoTeamId.isNotEmpty) ? _dodoTeamId : null;
+    // Admin explicitly requested the full list.
+    if (_showAllTeams) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (_bookingHasAddress)
+            _AddressRow(
+              address: widget.booking.address!,
+              trailing: TextButton(
+                onPressed: _saving
+                    ? null
+                    : () => setState(() => _showAllTeams = false),
+                style: TextButton.styleFrom(
+                  minimumSize: Size.zero,
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 8, vertical: 4),
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  textStyle: const TextStyle(fontSize: 12),
+                ),
+                child: const Text('In-area only'),
+              ),
+            ),
+          const SizedBox(height: 4),
+          Text(
+            'All ${result.all.length} active team${result.all.length == 1 ? '' : 's'}',
+            style: TextStyle(
+              fontSize: 12,
+              color: AppColors.textSecondary,
+              fontStyle: FontStyle.italic,
+            ),
+          ),
+          const SizedBox(height: 10),
+          ..._candidateCards(
+            result.all,
+            selectedId: _dodoTeamId,
+            onSelect: (id) => setState(() => _dodoTeamId = id),
+          ),
+        ],
+      );
+    }
 
-    return DropdownButtonFormField<String>(
-      // ignore: deprecated_member_use
-      value: dropdownValue,
-      decoration: const InputDecoration(
-        labelText: 'DODO Team',
-        prefixIcon: Icon(Icons.groups_rounded),
-      ),
-      isExpanded: true,
-      items: teams
-          .map((t) => DropdownMenuItem(value: t.id, child: Text(t.teamName)))
-          .toList(),
-      onChanged: _saving
-          ? null
-          : (v) {
-              if (v != null) setState(() => _dodoTeamId = v);
-            },
+    // No booking address — require explicit action to list teams.
+    if (!_bookingHasAddress) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _InfoBanner(
+            icon: Icons.location_off_rounded,
+            color: AppColors.textSecondary,
+            message:
+                'This booking has no address. Location-based filtering '
+                'is unavailable.',
+            actionLabel: 'Show All Teams',
+            onAction: () => setState(() => _showAllTeams = true),
+          ),
+        ],
+      );
+    }
+
+    // Booking has address — show in-area teams only.
+    final addressRow = _AddressRow(
+      address: widget.booking.address!,
+      trailing: result.inArea.isNotEmpty
+          ? TextButton(
+              onPressed: _saving
+                  ? null
+                  : () => setState(() => _showAllTeams = true),
+              style: TextButton.styleFrom(
+                minimumSize: Size.zero,
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 8, vertical: 4),
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                textStyle: const TextStyle(fontSize: 12),
+              ),
+              child: Text('Show all (${result.all.length})'),
+            )
+          : null,
+    );
+
+    if (result.inArea.isEmpty) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          addressRow,
+          const SizedBox(height: 8),
+          _InfoBanner(
+            icon: Icons.search_off_rounded,
+            color: AppColors.textSecondary,
+            message: 'No teams available in this location.',
+            actionLabel: 'Show All Teams',
+            onAction: () => setState(() => _showAllTeams = true),
+          ),
+        ],
+      );
+    }
+
+    final headerText =
+        '${result.inArea.length} team${result.inArea.length == 1 ? '' : 's'} serving this area · sorted by availability';
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        addressRow,
+        const SizedBox(height: 4),
+        Text(
+          headerText,
+          style: TextStyle(
+            fontSize: 12,
+            color: AppColors.textSecondary,
+            fontStyle: FontStyle.italic,
+          ),
+        ),
+        const SizedBox(height: 10),
+        ..._candidateCards(
+          result.inArea,
+          selectedId: _dodoTeamId,
+          onSelect: (id) => setState(() => _dodoTeamId = id),
+        ),
+      ],
     );
   }
 
-  Widget _buildVendorSelectedIndicator(Vendor vendor) {
-    final annotation = (_autoSelected && _autoSelectedDistanceKm != null)
-        ? 'auto — ${_autoSelectedDistanceKm!.toStringAsFixed(1)} km away'
-        : 'manual';
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      decoration: BoxDecoration(
-        color: AppColors.primaryLight,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(
-            color: AppColors.primary.withValues(alpha: 0.3)),
-      ),
-      child: Row(
-        children: [
-          Icon(Icons.check_circle_rounded,
-              size: 16, color: AppColors.primary),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text.rich(
-              TextSpan(
-                children: [
-                  TextSpan(
-                    text: vendor.businessName,
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                      color: AppColors.primary,
-                    ),
-                  ),
-                  TextSpan(
-                    text: '  ·  $annotation',
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w400,
-                      color: AppColors.primary.withValues(alpha: 0.7),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildTeamSelectedIndicator(DodoTeam team) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      decoration: BoxDecoration(
-        color: AppColors.primaryLight,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(
-            color: AppColors.primary.withValues(alpha: 0.3)),
-      ),
-      child: Row(
-        children: [
-          Icon(Icons.groups_rounded, size: 16, color: AppColors.primary),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text.rich(
-              TextSpan(
-                children: [
-                  TextSpan(
-                    text: team.teamName,
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                      color: AppColors.primary,
-                    ),
-                  ),
-                  if (team.supervisorName != null)
-                    TextSpan(
-                      text: '  ·  ${team.supervisorName}',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: AppColors.primary.withValues(alpha: 0.7),
-                      ),
-                    ),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
+  List<Widget> _candidateCards(
+    List<AssigneeCandidate> candidates, {
+    String? selectedId,
+    void Function(String id)? onSelect,
+  }) {
+    return candidates
+        .map((candidate) => _AssigneeCandidateCard(
+              candidate: candidate,
+              isSelected: selectedId == candidate.id,
+              onSelect: _saving ? null : () => onSelect?.call(candidate.id),
+            ))
+        .toList();
   }
 
   Widget _buildFooter() {
@@ -733,7 +709,225 @@ class _BookingAssignmentDialogState
   }
 }
 
-// ── Private widgets ────────────────────────────────────────────────────────────
+// ── Shared card widget ─────────────────────────────────────────────────────────
+
+class _AssigneeCandidateCard extends StatelessWidget {
+  final AssigneeCandidate candidate;
+  final bool isSelected;
+  final VoidCallback? onSelect;
+
+  const _AssigneeCandidateCard({
+    required this.candidate,
+    required this.isSelected,
+    required this.onSelect,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final statusColor = switch (candidate.status) {
+      AssigneeStatus.available => AppColors.success,
+      AssigneeStatus.busy => const Color(0xFFD69E2E),
+      AssigneeStatus.offline => AppColors.textSecondary,
+    };
+    final statusLabel = switch (candidate.status) {
+      AssigneeStatus.available => 'Available',
+      AssigneeStatus.busy => 'Busy',
+      AssigneeStatus.offline => 'Offline',
+    };
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      decoration: BoxDecoration(
+        color: isSelected ? AppColors.primaryLight : AppColors.surface,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(
+          color: isSelected ? AppColors.primary : AppColors.border,
+          width: isSelected ? 1.5 : 1.0,
+        ),
+      ),
+      padding: const EdgeInsets.all(14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // ── Name / subtitle row ───────────────────────────────────────────
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      candidate.name,
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.textPrimary,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    if (candidate.subtitle != null)
+                      Text(
+                        candidate.subtitle!,
+                        style: TextStyle(
+                            fontSize: 12, color: AppColors.textSecondary),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+
+          // ── Meta row (rating · status) ────────────────────────────────────
+          Row(
+            children: [
+              if (candidate.rating != null) ...[
+                const Icon(Icons.star_rounded,
+                    size: 13, color: Color(0xFFD69E2E)),
+                const SizedBox(width: 3),
+                Text(
+                  candidate.rating!.toStringAsFixed(1),
+                  style: TextStyle(
+                      fontSize: 12, color: AppColors.textPrimary),
+                ),
+                const SizedBox(width: 12),
+              ] else if (candidate.kind == AssigneeKind.vendor) ...[
+                Text(
+                  'No rating',
+                  style: TextStyle(
+                      fontSize: 12, color: AppColors.textSecondary),
+                ),
+                const SizedBox(width: 12),
+              ],
+              Container(
+                width: 6,
+                height: 6,
+                decoration: BoxDecoration(
+                  color: statusColor,
+                  shape: BoxShape.circle,
+                ),
+              ),
+              const SizedBox(width: 4),
+              Text(
+                statusLabel,
+                style: TextStyle(fontSize: 12, color: statusColor),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+
+          // ── Action ────────────────────────────────────────────────────────
+          Align(
+            alignment: Alignment.centerRight,
+            child: isSelected
+                ? Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.check_circle_rounded,
+                          size: 16, color: AppColors.primary),
+                      const SizedBox(width: 4),
+                      Text(
+                        'Selected',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.primary,
+                        ),
+                      ),
+                    ],
+                  )
+                : FilledButton(
+                    onPressed: onSelect,
+                    style: FilledButton.styleFrom(
+                      backgroundColor: AppColors.primary,
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 7),
+                      minimumSize: Size.zero,
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      textStyle: const TextStyle(fontSize: 13),
+                    ),
+                    child: const Text('Assign'),
+                  ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Address row widget ─────────────────────────────────────────────────────────
+
+class _AddressRow extends StatelessWidget {
+  final String address;
+  final Widget? trailing;
+
+  const _AddressRow({required this.address, this.trailing});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 4),
+      child: Row(
+        children: [
+          Icon(Icons.location_on_rounded,
+              size: 14, color: AppColors.textSecondary),
+          const SizedBox(width: 4),
+          Expanded(
+            child: Text(
+              address,
+              style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          ?trailing,
+        ],
+      ),
+    );
+  }
+}
+
+// ── Current assignee banner ────────────────────────────────────────────────────
+
+class _CurrentAssigneeBanner extends StatelessWidget {
+  final String name;
+  final bool inactive;
+
+  const _CurrentAssigneeBanner({required this.name, required this.inactive});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: AppColors.primaryLight,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: AppColors.primary.withValues(alpha: 0.3)),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.check_circle_rounded, size: 16, color: AppColors.primary),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              'Currently assigned: $name${inactive ? ' (inactive)' : ''}',
+              style: TextStyle(
+                fontSize: 13,
+                color: AppColors.primary,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Shared tab widget ──────────────────────────────────────────────────────────
 
 class _ModeTab extends StatelessWidget {
   final IconData icon;
@@ -777,8 +971,7 @@ class _ModeTab extends StatelessWidget {
                   style: TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.w600,
-                    color:
-                        selected ? Colors.white : AppColors.textSecondary,
+                    color: selected ? Colors.white : AppColors.textSecondary,
                   ),
                 ),
               ),
@@ -789,6 +982,8 @@ class _ModeTab extends StatelessWidget {
     );
   }
 }
+
+// ── Info banner ────────────────────────────────────────────────────────────────
 
 class _InfoBanner extends StatelessWidget {
   final IconData icon;
@@ -825,8 +1020,8 @@ class _InfoBanner extends StatelessWidget {
               children: [
                 Text(
                   message,
-                  style: TextStyle(
-                      fontSize: 13, color: AppColors.textPrimary),
+                  style:
+                      TextStyle(fontSize: 13, color: AppColors.textPrimary),
                 ),
                 if (actionLabel != null && onAction != null) ...[
                   const SizedBox(height: 8),
@@ -846,199 +1041,6 @@ class _InfoBanner extends StatelessWidget {
                 ],
               ],
             ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _VendorCandidateCard extends StatelessWidget {
-  final VendorCandidate candidate;
-  final bool isFirst;
-  final bool isSelected;
-  final VoidCallback? onSelect;
-
-  const _VendorCandidateCard({
-    required this.candidate,
-    required this.isFirst,
-    required this.isSelected,
-    required this.onSelect,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final vendor = candidate.vendor;
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      decoration: BoxDecoration(
-        color: isSelected ? AppColors.primaryLight : AppColors.surface,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(
-          color: isSelected ? AppColors.primary : AppColors.border,
-          width: isSelected ? 1.5 : 1.0,
-        ),
-      ),
-      padding: const EdgeInsets.all(14),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              if (isFirst) ...[
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 6, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFFFF3CD),
-                    borderRadius: BorderRadius.circular(4),
-                    border: Border.all(
-                        color: const Color(0xFFD69E2E), width: 0.8),
-                  ),
-                  child: const Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.star_rounded,
-                          size: 10, color: Color(0xFFD69E2E)),
-                      SizedBox(width: 3),
-                      Text(
-                        'NEAREST',
-                        style: TextStyle(
-                          fontSize: 10,
-                          fontWeight: FontWeight.w800,
-                          color: Color(0xFFD69E2E),
-                          letterSpacing: 0.3,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 8),
-              ],
-              Expanded(
-                child: Text(
-                  vendor.businessName,
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                    color: AppColors.textPrimary,
-                  ),
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-              const SizedBox(width: 8),
-              Container(
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 8, vertical: 3),
-                decoration: BoxDecoration(
-                  color: isSelected
-                      ? AppColors.primary.withValues(alpha: 0.12)
-                      : AppColors.background,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: isSelected
-                        ? AppColors.primary.withValues(alpha: 0.4)
-                        : AppColors.border,
-                  ),
-                ),
-                child: Text(
-                  '${candidate.distanceKm.toStringAsFixed(1)} km',
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
-                    color: isSelected
-                        ? AppColors.primary
-                        : AppColors.textPrimary,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-
-          Row(
-            children: [
-              if (vendor.rating != null) ...[
-                const Icon(Icons.star_rounded,
-                    size: 13, color: Color(0xFFD69E2E)),
-                const SizedBox(width: 3),
-                Text(
-                  vendor.rating!.toStringAsFixed(1),
-                  style: TextStyle(
-                      fontSize: 12, color: AppColors.textPrimary),
-                ),
-              ] else
-                Text(
-                  'No rating',
-                  style: TextStyle(
-                      fontSize: 12, color: AppColors.textSecondary),
-                ),
-              const SizedBox(width: 12),
-
-              Container(
-                width: 6,
-                height: 6,
-                decoration: BoxDecoration(
-                  color: vendor.isActive
-                      ? AppColors.success
-                      : AppColors.error,
-                  shape: BoxShape.circle,
-                ),
-              ),
-              const SizedBox(width: 4),
-              Text(
-                vendor.isActive ? 'Active' : 'Inactive',
-                style: TextStyle(
-                    fontSize: 12, color: AppColors.textSecondary),
-              ),
-              const SizedBox(width: 12),
-
-              Icon(Icons.radar_rounded,
-                  size: 13, color: AppColors.textSecondary),
-              const SizedBox(width: 3),
-              Text(
-                'radius ${candidate.effectiveRadiusKm.toStringAsFixed(1)} km',
-                style: TextStyle(
-                    fontSize: 12, color: AppColors.textSecondary),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-
-          Align(
-            alignment: Alignment.centerRight,
-            child: isSelected
-                ? Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.check_circle_rounded,
-                          size: 16, color: AppColors.primary),
-                      const SizedBox(width: 4),
-                      Text(
-                        'Selected',
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                          color: AppColors.primary,
-                        ),
-                      ),
-                    ],
-                  )
-                : FilledButton(
-                    onPressed: onSelect,
-                    style: FilledButton.styleFrom(
-                      backgroundColor: AppColors.primary,
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 16, vertical: 7),
-                      minimumSize: Size.zero,
-                      tapTargetSize:
-                          MaterialTapTargetSize.shrinkWrap,
-                      textStyle: const TextStyle(fontSize: 13),
-                    ),
-                    child: const Text('Select'),
-                  ),
           ),
         ],
       ),

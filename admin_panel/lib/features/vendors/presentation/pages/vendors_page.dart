@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import '../../../../core/theme/app_theme.dart';
+import '../../../../core/widgets/admin_search_bar.dart';
+import '../../../../core/widgets/highlighted_text.dart';
 import '../../application/providers/vendors_providers.dart';
 import '../../domain/models/vendor.dart';
 import '../widgets/vendor_form_dialog.dart';
@@ -26,16 +28,9 @@ class VendorsPage extends ConsumerStatefulWidget {
 }
 
 class _VendorsPageState extends ConsumerState<VendorsPage> {
-  final _searchController = TextEditingController();
   String _searchQuery = '';
   String? _cityFilter;
   String? _statusFilter;
-
-  @override
-  void dispose() {
-    _searchController.dispose();
-    super.dispose();
-  }
 
   List<Vendor> _applyFilters(List<Vendor> all) {
     var result = all;
@@ -237,30 +232,10 @@ class _VendorsPageState extends ConsumerState<VendorsPage> {
               crossAxisAlignment: WrapCrossAlignment.center,
               children: [
                 // Search
-                SizedBox(
+                AdminSearchBar(
+                  hintText: 'Search name, phone, email…',
                   width: 280,
-                  child: TextField(
-                    controller: _searchController,
-                    decoration: InputDecoration(
-                      hintText: 'Search name, phone, email…',
-                      prefixIcon:
-                          const Icon(Icons.search_rounded, size: 18),
-                      suffixIcon: _searchQuery.isNotEmpty
-                          ? IconButton(
-                              icon: const Icon(Icons.clear_rounded,
-                                  size: 18),
-                              onPressed: () {
-                                _searchController.clear();
-                                setState(() => _searchQuery = '');
-                              },
-                            )
-                          : null,
-                      contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 16, vertical: 10),
-                    ),
-                    onChanged: (v) =>
-                        setState(() => _searchQuery = v.trim()),
-                  ),
+                  onChanged: (q) => setState(() => _searchQuery = q),
                 ),
 
                 // City filter
@@ -397,6 +372,7 @@ class _VendorsPageState extends ConsumerState<VendorsPage> {
                   );
                 }
                 return _VendorsTable(
+                  searchQuery: _searchQuery,
                   vendors: filtered,
                   totalCount: all.length,
                   onDelete: _confirmDelete,
@@ -421,6 +397,7 @@ class _VendorsTable extends StatelessWidget {
   final void Function(Vendor) onDelete;
   final void Function(Vendor) onToggle;
   final void Function(Vendor) onViewDetails;
+  final String searchQuery;
 
   const _VendorsTable({
     required this.vendors,
@@ -428,6 +405,7 @@ class _VendorsTable extends StatelessWidget {
     required this.onDelete,
     required this.onToggle,
     required this.onViewDetails,
+    this.searchQuery = '',
   });
 
   static const double _minTableWidth = 800;
@@ -489,6 +467,7 @@ class _VendorsTable extends StatelessWidget {
                                   onDelete: () => onDelete(v),
                                   onToggle: () => onToggle(v),
                                   onViewDetails: () => onViewDetails(v),
+                                  searchQuery: searchQuery,
                                 );
                               },
                             ),
@@ -550,12 +529,14 @@ class _VendorRow extends StatelessWidget {
   final VoidCallback onDelete;
   final VoidCallback onToggle;
   final VoidCallback onViewDetails;
+  final String searchQuery;
 
   const _VendorRow({
     required this.vendor,
     required this.onDelete,
     required this.onToggle,
     required this.onViewDetails,
+    this.searchQuery = '',
   });
 
   static String _initials(String name) {
@@ -589,8 +570,9 @@ class _VendorRow extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        vendor.businessName,
+                      HighlightedText(
+                        text: vendor.businessName,
+                        query: searchQuery,
                         style: TextStyle(
                           fontSize: 14,
                           fontWeight: FontWeight.w500,
@@ -600,8 +582,9 @@ class _VendorRow extends StatelessWidget {
                       ),
                       if (vendor.ownerName != null &&
                           vendor.ownerName!.isNotEmpty)
-                        Text(
-                          vendor.ownerName!,
+                        HighlightedText(
+                          text: vendor.ownerName!,
+                          query: searchQuery,
                           style: TextStyle(
                             fontSize: 11,
                             color: AppColors.textSecondary,
@@ -618,8 +601,9 @@ class _VendorRow extends StatelessWidget {
           // Phone
           Expanded(
             flex: 2,
-            child: Text(
-              vendor.phone,
+            child: HighlightedText(
+              text: vendor.phone,
+              query: searchQuery,
               style: TextStyle(
                   fontSize: 13, color: AppColors.textPrimary),
               overflow: TextOverflow.ellipsis,
@@ -629,8 +613,9 @@ class _VendorRow extends StatelessWidget {
           // Email
           Expanded(
             flex: 3,
-            child: Text(
-              vendor.email,
+            child: HighlightedText(
+              text: vendor.email,
+              query: searchQuery,
               style: TextStyle(
                 fontSize: 13,
                 color: AppColors.accent,

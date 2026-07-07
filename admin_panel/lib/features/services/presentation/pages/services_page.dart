@@ -3,8 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import '../../../../core/theme/app_theme.dart';
-import '../../../categories/application/providers/categories_providers.dart';
-import '../../../sub_categories/application/providers/sub_categories_providers.dart';
+import '../../../../core/widgets/admin_search_bar.dart';
+import '../../../../core/widgets/highlighted_text.dart';
 import '../../application/providers/services_providers.dart';
 import '../../domain/models/service.dart';
 import '../widgets/service_form_dialog.dart';
@@ -21,14 +21,7 @@ class ServicesPage extends ConsumerStatefulWidget {
 }
 
 class _ServicesPageState extends ConsumerState<ServicesPage> {
-  final _searchController = TextEditingController();
   String _searchQuery = '';
-
-  @override
-  void dispose() {
-    _searchController.dispose();
-    super.dispose();
-  }
 
   List<Service> _applySearch(List<Service> all) {
     if (_searchQuery.isEmpty) return all;
@@ -41,17 +34,14 @@ class _ServicesPageState extends ConsumerState<ServicesPage> {
   void _openCreate() {
     final filterSubId = widget.filterSubCategoryId;
     if (filterSubId != null) {
-      final subs = ref.read(subCategoriesNotifierProvider).valueOrNull ?? [];
-      final cats = ref.read(categoriesNotifierProvider).valueOrNull ?? [];
+      final subs =
+          ref.read(serviceSubCategoryDropdownsProvider).valueOrNull ?? [];
       final sub = subs.where((s) => s.id == filterSubId).firstOrNull;
-      final cat = sub != null
-          ? cats.where((c) => c.id == sub.categoryId).firstOrNull
-          : null;
       _openCreateWithSubCategory(
         subCategoryId: filterSubId,
         subCategoryName: sub?.name ?? '',
         categoryId: sub?.categoryId ?? '',
-        categoryName: cat?.name ?? '',
+        categoryName: sub?.categoryName ?? '',
       );
     } else {
       _pickSubCategoryThenCreate();
@@ -59,8 +49,8 @@ class _ServicesPageState extends ConsumerState<ServicesPage> {
   }
 
   void _pickSubCategoryThenCreate() {
-    final subs = ref.read(subCategoriesNotifierProvider).valueOrNull ?? [];
-    final cats = ref.read(categoriesNotifierProvider).valueOrNull ?? [];
+    final subs =
+        ref.read(serviceSubCategoryDropdownsProvider).valueOrNull ?? [];
     if (subs.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -103,14 +93,11 @@ class _ServicesPageState extends ConsumerState<ServicesPage> {
     ).then((subId) {
       if (subId == null || !mounted) return;
       final sub = subs.where((s) => s.id == subId).firstOrNull;
-      final cat = sub != null
-          ? cats.where((c) => c.id == sub.categoryId).firstOrNull
-          : null;
       _openCreateWithSubCategory(
         subCategoryId: subId,
         subCategoryName: sub?.name ?? '',
         categoryId: sub?.categoryId ?? '',
-        categoryName: cat?.name ?? '',
+        categoryName: sub?.categoryName ?? '',
       );
     });
   }
@@ -160,19 +147,15 @@ class _ServicesPageState extends ConsumerState<ServicesPage> {
   }
 
   void _openEdit(Service service) {
-    final subs = ref.read(subCategoriesNotifierProvider).valueOrNull ?? [];
-    final cats = ref.read(categoriesNotifierProvider).valueOrNull ?? [];
-    final sub = subs.where((s) => s.id == service.subCategoryId).firstOrNull;
-    final cat = cats.where((c) => c.id == service.categoryId).firstOrNull;
     showDialog(
       context: context,
       barrierDismissible: false,
       builder: (_) => ServiceFormDialog(
         existing: service,
         categoryId: service.categoryId,
-        categoryName: cat?.name ?? '',
+        categoryName: service.categoryName, // already denormalized on the model
         subCategoryId: service.subCategoryId,
-        subCategoryName: sub?.name ?? '',
+        subCategoryName: service.subCategoryName, // already denormalized
         onSave: ({
           required categoryId,
           required subCategoryId,
@@ -362,11 +345,10 @@ class _ServicesPageState extends ConsumerState<ServicesPage> {
 
   @override
   Widget build(BuildContext context) {
-    // Pre-load so dropdowns are ready when dialogs open
-    ref.watch(categoriesNotifierProvider);
-    final subCategoriesState = ref.watch(subCategoriesNotifierProvider);
+    // Watch the sub-category dropdown data so it is ready when dialogs open.
+    final subDropdowns = ref.watch(serviceSubCategoryDropdownsProvider);
     final filteredSubCategoryName = widget.filterSubCategoryId != null
-        ? subCategoriesState.valueOrNull
+        ? subDropdowns.valueOrNull
             ?.where((s) => s.id == widget.filterSubCategoryId)
             .firstOrNull
             ?.name
@@ -430,24 +412,9 @@ class _ServicesPageState extends ConsumerState<ServicesPage> {
           const SizedBox(height: 20),
 
           // ── Search ────────────────────────────────────────────────────────
-          TextField(
-            controller: _searchController,
-            decoration: InputDecoration(
-              hintText: 'Search by service name…',
-              prefixIcon: const Icon(Icons.search_rounded, size: 18),
-              suffixIcon: _searchQuery.isNotEmpty
-                  ? IconButton(
-                      icon: const Icon(Icons.clear_rounded, size: 18),
-                      onPressed: () {
-                        _searchController.clear();
-                        setState(() => _searchQuery = '');
-                      },
-                    )
-                  : null,
-              contentPadding:
-                  const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-            ),
-            onChanged: (v) => setState(() => _searchQuery = v.trim()),
+          AdminSearchBar(
+            hintText: 'Search by service name…',
+            onChanged: (q) => setState(() => _searchQuery = q),
           ),
           const SizedBox(height: 20),
 
@@ -516,6 +483,7 @@ class _ServicesPageState extends ConsumerState<ServicesPage> {
                   onDelete: _confirmDelete,
                   onToggle: _toggle,
                   onManageAddons: _openAddonsDialog,
+                  searchQuery: _searchQuery,
                 );
               },
             ),
@@ -534,6 +502,7 @@ class _ServicesTable extends StatelessWidget {
   final void Function(Service) onDelete;
   final void Function(Service) onToggle;
   final void Function(Service) onManageAddons;
+  final String searchQuery;
 
   const _ServicesTable({
     required this.services,
@@ -541,6 +510,7 @@ class _ServicesTable extends StatelessWidget {
     required this.onDelete,
     required this.onToggle,
     required this.onManageAddons,
+    this.searchQuery = '',
   });
 
   static const double _minTableWidth = 780;
@@ -602,6 +572,7 @@ class _ServicesTable extends StatelessWidget {
                                   onDelete: () => onDelete(svc),
                                   onToggle: () => onToggle(svc),
                                   onManageAddons: () => onManageAddons(svc),
+                                  searchQuery: searchQuery,
                                 );
                               },
                             ),
@@ -662,6 +633,7 @@ class _ServiceRow extends StatelessWidget {
   final VoidCallback onDelete;
   final VoidCallback onToggle;
   final VoidCallback onManageAddons;
+  final String searchQuery;
 
   const _ServiceRow({
     required this.service,
@@ -669,6 +641,7 @@ class _ServiceRow extends StatelessWidget {
     required this.onDelete,
     required this.onToggle,
     required this.onManageAddons,
+    this.searchQuery = '',
   });
 
   String _formatDuration(int minutes) {
@@ -692,8 +665,9 @@ class _ServiceRow extends StatelessWidget {
           // Service Name
           Expanded(
             flex: 3,
-            child: Text(
-              service.name,
+            child: HighlightedText(
+              text: service.name,
+              query: searchQuery,
               style: TextStyle(
                 fontSize: 14,
                 fontWeight: FontWeight.w500,
