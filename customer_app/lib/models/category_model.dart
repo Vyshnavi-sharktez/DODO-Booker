@@ -5,6 +5,7 @@ class CategoryModel {
   final String? iconUrl;
   final String? imageUrl;
   final int serviceCount;
+  final int subcategoryCount;
   final String? description;
   final bool isActive;
 
@@ -15,11 +16,13 @@ class CategoryModel {
     this.iconUrl,
     this.imageUrl,
     this.serviceCount = 0,
+    this.subcategoryCount = 0,
     this.description,
     this.isActive = true,
   });
 
   factory CategoryModel.fromJson(Map<String, dynamic> json) {
+    final subList = (json['sub_categories'] as List?) ?? [];
     return CategoryModel(
       id: json['id'] as String,
       name: json['name'] as String,
@@ -27,6 +30,7 @@ class CategoryModel {
       iconUrl: json['icon'] as String?,
       imageUrl: json['image_url'] as String?,
       serviceCount: (json['service_count'] as int?) ?? 0,
+      subcategoryCount: subList.length,
       description: json['description'] as String?,
       isActive: (json['is_active'] as bool?) ?? true,
     );

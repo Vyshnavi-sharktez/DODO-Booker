@@ -66,7 +66,13 @@ class _CategoryScreenState extends ConsumerState<CategoryScreen> {
             return CategoryCard(
               category: cat,
               colorIndex: index,
-              onTap: () => context.push('/subcategory/${cat.id}', extra: cat),
+              onTap: () {
+                if (cat.subcategoryCount > 0) {
+                  context.push('/subcategory/${cat.id}', extra: cat);
+                } else {
+                  context.push('/category-services/${cat.id}', extra: cat);
+                }
+              },
             );
           },
           childCount: categories.length,
