@@ -92,7 +92,7 @@ class _ServiceDetailModalState extends ConsumerState<ServiceDetailModal> {
     final attrs =
         ref.watch(serviceAttributesProvider(service.id)).valueOrNull ?? [];
     final addOns =
-        ref.watch(serviceAddonsProvider(service.id)).valueOrNull ?? [];
+        ref.watch(allActiveAddonsProvider).valueOrNull ?? [];
     final addonsTotal = totalAddonsPrice(buildSelectedAddons(addOns, _selectedAddonIds));
     final displayPrice = service.startingPrice + _priceAdjustment + addonsTotal;
 

@@ -19,7 +19,6 @@ class CatalogCallbacks {
     required this.onDeleteService,
     required this.onToggleServiceActive,
     required this.onOpenAttributes,
-    required this.onManageAddons,
   });
 
   final void Function(Category) onEditCategory;
@@ -36,5 +35,4 @@ class CatalogCallbacks {
   final void Function(Service) onDeleteService;
   final void Function(Service, bool) onToggleServiceActive;
   final void Function(Service) onOpenAttributes;
-  final void Function(Service) onManageAddons;
 }

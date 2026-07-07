@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../../../../core/theme/app_theme.dart';
 
 class CustomerCreateDialog extends StatefulWidget {
@@ -8,12 +9,48 @@ class CustomerCreateDialog extends StatefulWidget {
     required String email,
     String? profileImageUrl,
     required bool isActive,
+    required List<({
+      String line1,
+      String area,
+      String city,
+      String state,
+      String pincode,
+      String landmark,
+      bool isDefault,
+    })> addresses,
   }) onSave;
 
   const CustomerCreateDialog({super.key, required this.onSave});
 
   @override
   State<CustomerCreateDialog> createState() => _CustomerCreateDialogState();
+}
+
+class _AddressEntry {
+  _AddressEntry()
+      : line1 = TextEditingController(),
+        area = TextEditingController(),
+        city = TextEditingController(),
+        state = TextEditingController(),
+        pincode = TextEditingController(),
+        landmark = TextEditingController();
+
+  final TextEditingController line1;
+  final TextEditingController area;
+  final TextEditingController city;
+  final TextEditingController state;
+  final TextEditingController pincode;
+  final TextEditingController landmark;
+  bool isDefault = false;
+
+  void dispose() {
+    line1.dispose();
+    area.dispose();
+    city.dispose();
+    state.dispose();
+    pincode.dispose();
+    landmark.dispose();
+  }
 }
 
 class _CustomerCreateDialogState extends State<CustomerCreateDialog> {
@@ -24,6 +61,7 @@ class _CustomerCreateDialogState extends State<CustomerCreateDialog> {
   final _profileImageUrl = TextEditingController();
   bool _isActive = true;
   bool _saving = false;
+  final List<_AddressEntry> _addresses = [];
 
   @override
   void dispose() {
@@ -31,13 +69,55 @@ class _CustomerCreateDialogState extends State<CustomerCreateDialog> {
     _phone.dispose();
     _email.dispose();
     _profileImageUrl.dispose();
+    for (final a in _addresses) {
+      a.dispose();
+    }
     super.dispose();
+  }
+
+  void _addAddress() {
+    setState(() {
+      final entry = _AddressEntry();
+      // First address is default by default
+      if (_addresses.isEmpty) entry.isDefault = true;
+      _addresses.add(entry);
+    });
+  }
+
+  void _removeAddress(int index) {
+    setState(() {
+      _addresses[index].dispose();
+      _addresses.removeAt(index);
+      // Ensure exactly one default if any remain
+      if (_addresses.isNotEmpty &&
+          !_addresses.any((a) => a.isDefault)) {
+        _addresses.first.isDefault = true;
+      }
+    });
+  }
+
+  void _setDefault(int index) {
+    setState(() {
+      for (var i = 0; i < _addresses.length; i++) {
+        _addresses[i].isDefault = i == index;
+      }
+    });
   }
 
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _saving = true);
     try {
+      final addressList = _addresses.map((a) => (
+            line1: a.line1.text.trim(),
+            area: a.area.text.trim(),
+            city: a.city.text.trim(),
+            state: a.state.text.trim(),
+            pincode: a.pincode.text.trim(),
+            landmark: a.landmark.text.trim(),
+            isDefault: a.isDefault,
+          )).toList();
+
       await widget.onSave(
         fullName: _fullName.text.trim(),
         phone: _phone.text.trim(),
@@ -46,6 +126,7 @@ class _CustomerCreateDialogState extends State<CustomerCreateDialog> {
             ? null
             : _profileImageUrl.text.trim(),
         isActive: _isActive,
+        addresses: addressList,
       );
       if (mounted) Navigator.of(context).pop();
     } catch (e) {
@@ -70,7 +151,7 @@ class _CustomerCreateDialogState extends State<CustomerCreateDialog> {
       shape:
           RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 520),
+        constraints: const BoxConstraints(maxWidth: 620),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -246,6 +327,87 @@ class _CustomerCreateDialogState extends State<CustomerCreateDialog> {
                           activeThumbColor: AppColors.success,
                         ),
                       ),
+
+                      // ── Addresses ──────────────────────────────────────
+                      const SizedBox(height: 24),
+                      Row(
+                        children: [
+                          const Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Addresses',
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w600,
+                                    color: AppColors.textPrimary,
+                                  ),
+                                ),
+                                SizedBox(height: 2),
+                                Text(
+                                  'Add one or more saved addresses for this customer',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: AppColors.textSecondary,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          TextButton.icon(
+                            onPressed: _addAddress,
+                            icon: const Icon(Icons.add_rounded, size: 18),
+                            label: const Text('Add Address'),
+                            style: TextButton.styleFrom(
+                              foregroundColor: AppColors.primary,
+                              visualDensity: VisualDensity.compact,
+                            ),
+                          ),
+                        ],
+                      ),
+
+                      if (_addresses.isEmpty)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 10),
+                          child: Container(
+                            padding: const EdgeInsets.all(14),
+                            decoration: BoxDecoration(
+                              color: AppColors.background,
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(
+                                  color: AppColors.border,
+                                  style: BorderStyle.solid),
+                            ),
+                            child: Row(
+                              children: [
+                                Icon(Icons.location_off_outlined,
+                                    size: 16,
+                                    color: AppColors.textSecondary),
+                                const SizedBox(width: 8),
+                                Text(
+                                  'No addresses added — customer can add them later',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: AppColors.textSecondary,
+                                    fontStyle: FontStyle.italic,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        )
+                      else
+                        for (var i = 0; i < _addresses.length; i++) ...[
+                          const SizedBox(height: 12),
+                          _AddressCard(
+                            index: i,
+                            entry: _addresses[i],
+                            canRemove: true,
+                            onRemove: () => _removeAddress(i),
+                            onSetDefault: () => _setDefault(i),
+                          ),
+                        ],
                     ],
                   ),
                 ),
@@ -295,6 +457,223 @@ class _CustomerCreateDialogState extends State<CustomerCreateDialog> {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _AddressCard extends StatefulWidget {
+  final int index;
+  final _AddressEntry entry;
+  final bool canRemove;
+  final VoidCallback onRemove;
+  final VoidCallback onSetDefault;
+
+  const _AddressCard({
+    required this.index,
+    required this.entry,
+    required this.canRemove,
+    required this.onRemove,
+    required this.onSetDefault,
+  });
+
+  @override
+  State<_AddressCard> createState() => _AddressCardState();
+}
+
+class _AddressCardState extends State<_AddressCard> {
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.background,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(
+          color: widget.entry.isDefault
+              ? AppColors.primary.withValues(alpha: 0.5)
+              : AppColors.border,
+          width: widget.entry.isDefault ? 1.5 : 1.0,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Card header
+          Row(
+            children: [
+              Icon(Icons.location_on_rounded,
+                  size: 15, color: AppColors.primary),
+              const SizedBox(width: 6),
+              Text(
+                'Address ${widget.index + 1}',
+                style: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.textPrimary,
+                ),
+              ),
+              if (widget.entry.isDefault) ...[
+                const SizedBox(width: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 7, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: AppColors.primary.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Text(
+                    'Default',
+                    style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.primary,
+                    ),
+                  ),
+                ),
+              ],
+              const Spacer(),
+              if (widget.canRemove)
+                IconButton(
+                  onPressed: widget.onRemove,
+                  icon: const Icon(Icons.remove_circle_outline_rounded,
+                      size: 18),
+                  color: AppColors.error,
+                  tooltip: 'Remove address',
+                  visualDensity: VisualDensity.compact,
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                ),
+            ],
+          ),
+          const SizedBox(height: 12),
+
+          // Address Line 1
+          TextFormField(
+            controller: widget.entry.line1,
+            decoration: const InputDecoration(
+              labelText: 'Address Line *',
+              hintText: 'House/Flat no., Building, Street',
+              isDense: true,
+            ),
+            textCapitalization: TextCapitalization.sentences,
+            validator: (v) =>
+                v == null || v.trim().isEmpty ? 'Address line is required' : null,
+          ),
+          const SizedBox(height: 10),
+
+          // Area / Locality
+          TextFormField(
+            controller: widget.entry.area,
+            decoration: const InputDecoration(
+              labelText: 'Area / Locality',
+              hintText: 'Colony, Area, Locality',
+              isDense: true,
+            ),
+            textCapitalization: TextCapitalization.sentences,
+          ),
+          const SizedBox(height: 10),
+
+          // City + State
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: TextFormField(
+                  controller: widget.entry.city,
+                  decoration: const InputDecoration(
+                    labelText: 'City *',
+                    isDense: true,
+                  ),
+                  textCapitalization: TextCapitalization.words,
+                  validator: (v) =>
+                      v == null || v.trim().isEmpty ? 'Required' : null,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: TextFormField(
+                  controller: widget.entry.state,
+                  decoration: const InputDecoration(
+                    labelText: 'State *',
+                    isDense: true,
+                  ),
+                  textCapitalization: TextCapitalization.words,
+                  validator: (v) =>
+                      v == null || v.trim().isEmpty ? 'Required' : null,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+
+          // Pincode + Landmark
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: TextFormField(
+                  controller: widget.entry.pincode,
+                  decoration: const InputDecoration(
+                    labelText: 'Pincode *',
+                    isDense: true,
+                  ),
+                  keyboardType: TextInputType.number,
+                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                  validator: (v) =>
+                      v == null || v.trim().isEmpty ? 'Required' : null,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: TextFormField(
+                  controller: widget.entry.landmark,
+                  decoration: const InputDecoration(
+                    labelText: 'Landmark',
+                    hintText: 'Near school, temple…',
+                    isDense: true,
+                  ),
+                  textCapitalization: TextCapitalization.sentences,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+
+          // Default toggle
+          InkWell(
+            onTap: widget.entry.isDefault ? null : widget.onSetDefault,
+            borderRadius: BorderRadius.circular(6),
+            child: Row(
+              children: [
+                Icon(
+                  widget.entry.isDefault
+                      ? Icons.radio_button_checked_rounded
+                      : Icons.radio_button_off_rounded,
+                  size: 18,
+                  color: widget.entry.isDefault
+                      ? AppColors.primary
+                      : AppColors.textSecondary,
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  widget.entry.isDefault
+                      ? 'Default address'
+                      : 'Set as default',
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: widget.entry.isDefault
+                        ? AppColors.primary
+                        : AppColors.textSecondary,
+                    fontWeight: widget.entry.isDefault
+                        ? FontWeight.w600
+                        : FontWeight.w400,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }

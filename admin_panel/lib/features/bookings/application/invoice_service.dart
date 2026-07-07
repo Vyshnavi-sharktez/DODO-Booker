@@ -73,6 +73,10 @@ class InvoiceService {
           ),
           pw.SizedBox(height: 24),
           _itemsTable(booking),
+          if (booking.addons.isNotEmpty) ...[
+            pw.SizedBox(height: 16),
+            _addonsTable(booking),
+          ],
           pw.SizedBox(height: 20),
           _totalsBlock(booking),
           pw.SizedBox(height: 28),
@@ -311,9 +315,63 @@ class InvoiceService {
     );
   }
 
+  // ── Add-ons table ──────────────────────────────────────────────────────────
+
+  static pw.Widget _addonsTable(Booking booking) {
+    final addons = booking.addons;
+    return pw.Column(
+      crossAxisAlignment: pw.CrossAxisAlignment.start,
+      children: [
+        _sectionLabel('ADD-ONS'),
+        pw.SizedBox(height: 8),
+        pw.Table(
+          border: pw.TableBorder.all(
+              color: PdfColor.fromHex('E5E7EB'), width: 0.5),
+          columnWidths: const {
+            0: pw.FractionColumnWidth(0.05),
+            1: pw.FractionColumnWidth(0.75),
+            2: pw.FractionColumnWidth(0.20),
+          },
+          children: [
+            pw.TableRow(
+              decoration:
+                  pw.BoxDecoration(color: PdfColor.fromHex('D4AF37')),
+              children: [
+                _tableHeader('#'),
+                _tableHeader('Add-on'),
+                _tableHeader('Price'),
+              ],
+            ),
+            ...addons.asMap().entries.map((e) {
+              final idx = e.key;
+              final addon = e.value;
+              return pw.TableRow(
+                decoration: pw.BoxDecoration(
+                  color: idx.isOdd
+                      ? PdfColor.fromHex('FFFDF0')
+                      : PdfColors.white,
+                ),
+                children: [
+                  _tableCell('${idx + 1}', align: pw.Alignment.center),
+                  _tableCell(addon.name),
+                  _tableCell(
+                    _currency.format(addon.price),
+                    align: pw.Alignment.centerRight,
+                  ),
+                ],
+              );
+            }),
+          ],
+        ),
+      ],
+    );
+  }
+
   // ── Totals ─────────────────────────────────────────────────────────────────
 
   static pw.Widget _totalsBlock(Booking booking) {
+    final addonsTotal =
+        booking.addons.fold(0.0, (sum, a) => sum + a.price);
     return pw.Row(
       mainAxisAlignment: pw.MainAxisAlignment.end,
       children: [
@@ -322,6 +380,8 @@ class InvoiceService {
           child: pw.Column(
             children: [
               _totalRow('Subtotal', _currency.format(booking.subtotal)),
+              if (addonsTotal > 0)
+                _totalRow('Add-ons', _currency.format(addonsTotal)),
               if (booking.discountAmount > 0)
                 _totalRow(
                   'Discount',

@@ -158,6 +158,7 @@ class _BookingsPageState extends ConsumerState<BookingsPage> {
           required address,
           notes,
           required items,
+          required addons,
         }) async {
           await ref.read(bookingsNotifierProvider.notifier).createBooking(
                 customerId: customerId,
@@ -165,6 +166,7 @@ class _BookingsPageState extends ConsumerState<BookingsPage> {
                 address: address,
                 notes: notes,
                 items: items,
+                addons: addons,
               );
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(

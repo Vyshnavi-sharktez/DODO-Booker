@@ -4,10 +4,7 @@ import '../../domain/models/service_addon.dart';
 
 class AddonFormDialog extends StatefulWidget {
   final ServiceAddon? existing;
-  final String serviceId;
-  final String serviceName;
   final Future<void> Function({
-    required String serviceId,
     required String name,
     String? description,
     required double price,
@@ -17,8 +14,6 @@ class AddonFormDialog extends StatefulWidget {
   const AddonFormDialog({
     super.key,
     this.existing,
-    required this.serviceId,
-    required this.serviceName,
     required this.onSave,
   });
 
@@ -56,7 +51,6 @@ class _AddonFormDialogState extends State<AddonFormDialog> {
     setState(() => _saving = true);
     try {
       await widget.onSave(
-        serviceId: widget.serviceId,
         name: _name.text.trim(),
         price: double.parse(_price.text.trim()),
         isActive: _isActive,
@@ -134,14 +128,6 @@ class _AddonFormDialogState extends State<AddonFormDialog> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // Service context (read-only)
-                      _ContextRow(
-                        label: 'Service',
-                        name: widget.serviceName,
-                        icon: Icons.miscellaneous_services_rounded,
-                      ),
-                      const SizedBox(height: 16),
-
                       // Name
                       TextFormField(
                         controller: _name,

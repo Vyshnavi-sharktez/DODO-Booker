@@ -51,7 +51,11 @@ class BookingsNotifier extends StateNotifier<AsyncValue<List<Booking>>> {
     final current = state.valueOrNull;
     if (current != null) {
       state = AsyncValue.data(
-        current.map((b) => b.id == id ? updated : b).toList(),
+        current.map((b) {
+          if (b.id != id) return b;
+          // Preserve existing addons — the repo mutation doesn't re-fetch them.
+          return updated.copyWith(addons: b.addons);
+        }).toList(),
       );
     }
   }
@@ -61,7 +65,10 @@ class BookingsNotifier extends StateNotifier<AsyncValue<List<Booking>>> {
     final current = state.valueOrNull;
     if (current != null) {
       state = AsyncValue.data(
-        current.map((b) => b.id == id ? updated : b).toList(),
+        current.map((b) {
+          if (b.id != id) return b;
+          return updated.copyWith(addons: b.addons);
+        }).toList(),
       );
     }
   }
@@ -72,6 +79,7 @@ class BookingsNotifier extends StateNotifier<AsyncValue<List<Booking>>> {
     required String address,
     String? notes,
     required List<({String serviceId, int quantity, double unitPrice})> items,
+    List<({String addonId, String addonName, double addonPrice})> addons = const [],
   }) async {
     final created = await _repo.createBooking(
       customerId: customerId,
@@ -79,6 +87,7 @@ class BookingsNotifier extends StateNotifier<AsyncValue<List<Booking>>> {
       address: address,
       notes: notes,
       items: items,
+      addons: addons,
     );
     final current = state.valueOrNull ?? [];
     state = AsyncValue.data([created, ...current]);
@@ -89,18 +98,23 @@ class BookingsNotifier extends StateNotifier<AsyncValue<List<Booking>>> {
     final current = state.valueOrNull;
     if (current != null) {
       state = AsyncValue.data(
-        current.map((b) => b.id == id ? updated : b).toList(),
+        current.map((b) {
+          if (b.id != id) return b;
+          return updated.copyWith(addons: b.addons);
+        }).toList(),
       );
     }
   }
 
   Future<void> completeDodoTeamBooking(String id, String otp) async {
     final updated = await _repo.completeDodoTeamBooking(id, otp);
-
     final current = state.valueOrNull;
     if (current != null) {
       state = AsyncValue.data(
-        current.map((b) => b.id == id ? updated : b).toList(),
+        current.map((b) {
+          if (b.id != id) return b;
+          return updated.copyWith(addons: b.addons);
+        }).toList(),
       );
     }
   }

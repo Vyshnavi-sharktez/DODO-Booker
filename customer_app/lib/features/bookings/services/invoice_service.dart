@@ -52,6 +52,10 @@ class InvoiceService {
           _infoSection(booking, customer),
           pw.SizedBox(height: 24),
           _itemsTable(booking),
+          if (booking.addons.isNotEmpty) ...[
+            pw.SizedBox(height: 16),
+            _addonsTable(booking),
+          ],
           pw.SizedBox(height: 20),
           _totalsBlock(
             subtotal: booking.baseAmount,
@@ -282,6 +286,54 @@ class InvoiceService {
                   ),
                   _tableCell(
                     _currency.format(item.totalPrice),
+                    align: pw.Alignment.centerRight,
+                  ),
+                ],
+              );
+            }),
+          ],
+        ),
+      ],
+    );
+  }
+
+  // ── Add-ons table ──────────────────────────────────────────────────────────
+
+  static pw.Widget _addonsTable(MyBookingModel booking) {
+    return pw.Column(
+      crossAxisAlignment: pw.CrossAxisAlignment.start,
+      children: [
+        _sectionLabel('ADD-ONS'),
+        pw.SizedBox(height: 8),
+        pw.Table(
+          border: pw.TableBorder.all(
+              color: PdfColor.fromHex('E5E7EB'), width: 0.5),
+          columnWidths: const {
+            0: pw.FractionColumnWidth(0.65),
+            1: pw.FractionColumnWidth(0.35),
+          },
+          children: [
+            pw.TableRow(
+              decoration: pw.BoxDecoration(
+                  color: PdfColor.fromHex('111111')),
+              children: [
+                _tableHeader('Add-on'),
+                _tableHeader('Price'),
+              ],
+            ),
+            ...booking.addons.asMap().entries.map((e) {
+              final idx = e.key;
+              final addon = e.value;
+              return pw.TableRow(
+                decoration: pw.BoxDecoration(
+                  color: idx.isOdd
+                      ? PdfColor.fromHex('F7F8FA')
+                      : PdfColors.white,
+                ),
+                children: [
+                  _tableCell(addon.name),
+                  _tableCell(
+                    _currency.format(addon.price),
                     align: pw.Alignment.centerRight,
                   ),
                 ],

@@ -38,6 +38,12 @@ const _navItems = <_NavItem>[
     requiredPermission: 'category.view',
   ),
   _NavItem(
+    label: 'Add-ons',
+    icon: Icons.extension_rounded,
+    route: '/dashboard/addons',
+    requiredPermission: 'category.view',
+  ),
+  _NavItem(
     label: 'Vendors',
     icon: Icons.store_rounded,
     route: '/dashboard/vendors',

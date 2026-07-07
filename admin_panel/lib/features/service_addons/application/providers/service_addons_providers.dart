@@ -8,43 +8,35 @@ final serviceAddonsRepositoryProvider =
   return ServiceAddonsRepository(ref.watch(supabaseClientProvider));
 });
 
-class ServiceAddonsNotifier
-    extends StateNotifier<AsyncValue<List<ServiceAddon>>> {
+// ── Global add-ons notifier (standalone Add-ons page) ────────────────────────
+
+class AllAddonsNotifier extends StateNotifier<AsyncValue<List<ServiceAddon>>> {
   final ServiceAddonsRepository _repo;
-  String? _currentServiceId;
 
-  ServiceAddonsNotifier(this._repo) : super(const AsyncValue.data([]));
-
-  Future<void> loadForService(String serviceId) async {
-    _currentServiceId = serviceId;
-    await _reload();
+  AllAddonsNotifier(this._repo) : super(const AsyncValue.data([])) {
+    _load();
   }
 
-  Future<void> refresh() => _reload();
-
-  Future<void> _reload() async {
-    if (_currentServiceId == null) return;
+  Future<void> _load() async {
     state = const AsyncValue.loading();
-    state = await AsyncValue.guard(
-      () => _repo.fetchByService(_currentServiceId!),
-    );
+    state = await AsyncValue.guard(_repo.fetchAll);
   }
+
+  Future<void> refresh() => _load();
 
   Future<void> create({
-    required String serviceId,
     required String name,
     String? description,
     required double price,
     required bool isActive,
   }) async {
     await _repo.create(
-      serviceId: serviceId,
       name: name,
       description: description,
       price: price,
       isActive: isActive,
     );
-    await _reload();
+    await _load();
   }
 
   Future<void> update(
@@ -54,18 +46,12 @@ class ServiceAddonsNotifier
     required double price,
     required bool isActive,
   }) async {
-    await _repo.update(
-      id,
-      name: name,
-      description: description,
-      price: price,
-      isActive: isActive,
-    );
-    await _reload();
+    await _repo.update(id,
+        name: name, description: description, price: price, isActive: isActive);
+    await _load();
   }
 
   Future<void> toggleActive(String id, {required bool isActive}) async {
-    // Optimistic update
     final current = state.valueOrNull;
     if (current != null) {
       state = AsyncValue.data(
@@ -77,28 +63,18 @@ class ServiceAddonsNotifier
     try {
       await _repo.toggleActive(id, isActive: isActive);
     } catch (_) {
-      await _reload(); // revert on failure
+      await _load();
       rethrow;
     }
   }
 
   Future<void> delete(String id) async {
     await _repo.delete(id);
-    await _reload();
+    await _load();
   }
 }
 
-final serviceAddonsNotifierProvider = StateNotifierProvider<
-    ServiceAddonsNotifier, AsyncValue<List<ServiceAddon>>>((ref) {
-  return ServiceAddonsNotifier(ref.watch(serviceAddonsRepositoryProvider));
+final allAddonsNotifierProvider = StateNotifierProvider<AllAddonsNotifier,
+    AsyncValue<List<ServiceAddon>>>((ref) {
+  return AllAddonsNotifier(ref.watch(serviceAddonsRepositoryProvider));
 });
-
-/// Read-only per-service provider used by the catalog tile to display inline
-/// add-on chips. Separate from [serviceAddonsNotifierProvider] so multiple
-/// tiles can display add-ons simultaneously without interfering with the
-/// single-service CRUD dialog state.
-final serviceAddonsByServiceIdProvider =
-    FutureProvider.family<List<ServiceAddon>, String>(
-  (ref, serviceId) =>
-      ref.read(serviceAddonsRepositoryProvider).fetchByService(serviceId),
-);

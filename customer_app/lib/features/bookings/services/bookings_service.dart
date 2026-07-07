@@ -9,6 +9,8 @@ class BookingsService {
 
   // Explicit column list avoids relying on * to include columns that Supabase
   // RLS or PostgREST might silently omit (e.g. completion_otp).
+  // booking_addons is NOT embedded here — PostgREST cannot resolve the join
+  // without a recognised FK. Addons are fetched via a separate query.
   static const _bookingSelect = '''
     id, booking_number, customer_id, vendor_id, dodo_team_id,
     assignment_type, service_date, status,
@@ -61,11 +63,12 @@ class BookingsService {
           .select(_bookingSelect)
           .eq('customer_id', customerId)
           .order('created_at', ascending: false);
-      final rows = data as List;
+      final rows = List<Map<String, dynamic>>.from(data as List);
       debugPrint('[DODO][Bookings] Rows returned: ${rows.length}');
-      final bookings = rows
-          .map((e) => MyBookingModel.fromJson(e as Map<String, dynamic>))
-          .toList();
+
+      await _injectAddons(rows);
+
+      final bookings = rows.map(MyBookingModel.fromJson).toList();
       for (final b in bookings) {
         debugPrint('[DODO][Bookings] Service loaded: ${b.serviceName}');
         debugPrint('[DODO][Bookings] Address loaded: ${b.address.city.isNotEmpty ? b.address.city : b.address.line1}');
@@ -83,23 +86,54 @@ class BookingsService {
 
   Future<MyBookingModel?> fetchBookingById(String id) async {
     debugPrint('[OTP][Customer] fetchBookingById — id=$id');
-    final data = await _client
+    final raw = await _client
         .from('bookings')
         .select(_bookingSelect)
         .eq('id', id)
         .maybeSingle();
-    if (data == null) {
+    if (raw == null) {
       debugPrint('[OTP][Customer] fetchBookingById — no row returned');
       return null;
     }
+    final data = Map<String, dynamic>.from(raw);
     // ── OTP trace ────────────────────────────────────────────────────────────
     debugPrint('[OTP][Customer] raw status         = ${data['status']}');
     debugPrint('[OTP][Customer] raw completion_otp = ${data['completion_otp']}');
     debugPrint('[OTP][Customer] raw keys           = ${data.keys.toList()}');
+
+    await _injectAddons([data]);
+
     final booking = MyBookingModel.fromJson(data);
     debugPrint('[OTP][Customer] model.status       = ${booking.status}');
     debugPrint('[OTP][Customer] model.completionOtp= ${booking.completionOtp}');
     return booking;
+  }
+
+  // Fetches booking_addons via a plain filter (no PostgREST FK join needed)
+  // and injects them into each row map under the key 'booking_addons'.
+  Future<void> _injectAddons(List<Map<String, dynamic>> rows) async {
+    if (rows.isEmpty) return;
+    final ids = rows.map((r) => r['id'] as String).toList();
+    try {
+      final addonsData = await _client
+          .from('booking_addons')
+          .select('booking_id, addon_id, addon_name, addon_price')
+          .inFilter('booking_id', ids);
+      final grouped = <String, List<Map<String, dynamic>>>{};
+      for (final a in addonsData as List<dynamic>) {
+        final m = Map<String, dynamic>.from(a as Map);
+        final bid = m['booking_id'] as String;
+        grouped.putIfAbsent(bid, () => []).add(m);
+      }
+      for (final row in rows) {
+        row['booking_addons'] = grouped[row['id']] ?? [];
+      }
+    } catch (e) {
+      debugPrint('[DODO][Bookings] Warning: booking_addons fetch failed: $e');
+      for (final row in rows) {
+        row.putIfAbsent('booking_addons', () => <Map<String, dynamic>>[]);
+      }
+    }
   }
 
   Future<bool> cancelBooking(String bookingId) async {

@@ -6,11 +6,10 @@ class ServiceAddonsRepository {
 
   const ServiceAddonsRepository(this._supabase);
 
-  Future<List<ServiceAddon>> fetchByService(String serviceId) async {
+  Future<List<ServiceAddon>> fetchAll() async {
     final data = await _supabase
         .from('addons')
         .select()
-        .eq('service_id', serviceId)
         .order('created_at', ascending: true);
     return (data as List<dynamic>)
         .map((r) => ServiceAddon.fromMap(r as Map<String, dynamic>))
@@ -18,7 +17,6 @@ class ServiceAddonsRepository {
   }
 
   Future<ServiceAddon> create({
-    required String serviceId,
     required String name,
     String? description,
     required double price,
@@ -27,7 +25,6 @@ class ServiceAddonsRepository {
     final data = await _supabase
         .from('addons')
         .insert({
-          'service_id': serviceId,
           'name': name,
           if (description != null && description.isNotEmpty)
             'description': description,
