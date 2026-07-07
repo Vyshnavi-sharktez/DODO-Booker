@@ -27,7 +27,7 @@ class CategoryService {
 
     final data = await _db
         .from('categories')
-        .select()
+        .select('*, sub_categories(id)')
         .eq('is_active', true)
         .order('name', ascending: true);
 
@@ -150,14 +150,14 @@ class CategoryService {
 // IDs must stay aligned with HomeService._devCategories ('1'–'8').
 
 final _devCategories = [
-  const CategoryModel(id: '1', name: 'Cleaning', description: 'Professional home & commercial cleaning'),
-  const CategoryModel(id: '2', name: 'Plumbing', description: 'Expert plumbing repairs and installations'),
-  const CategoryModel(id: '3', name: 'Electrical', description: 'Safe and certified electrical services'),
-  const CategoryModel(id: '4', name: 'Painting', description: 'Interior and exterior painting'),
-  const CategoryModel(id: '5', name: 'Carpentry', description: 'Custom woodwork and furniture'),
-  const CategoryModel(id: '6', name: 'Pest Control', description: 'Safe and effective pest management'),
-  const CategoryModel(id: '7', name: 'Appliances', description: 'Service and repair for all appliances'),
-  const CategoryModel(id: '8', name: 'Shifting', description: 'Home and office relocation'),
+  const CategoryModel(id: '1', name: 'Cleaning',    subcategoryCount: 5, description: 'Professional home & commercial cleaning'),
+  const CategoryModel(id: '2', name: 'Plumbing',    subcategoryCount: 5, description: 'Expert plumbing repairs and installations'),
+  const CategoryModel(id: '3', name: 'Electrical',  subcategoryCount: 5, description: 'Safe and certified electrical services'),
+  const CategoryModel(id: '4', name: 'Painting',    subcategoryCount: 4, description: 'Interior and exterior painting'),
+  const CategoryModel(id: '5', name: 'Carpentry',   subcategoryCount: 4, description: 'Custom woodwork and furniture'),
+  const CategoryModel(id: '6', name: 'Pest Control',subcategoryCount: 4, description: 'Safe and effective pest management'),
+  const CategoryModel(id: '7', name: 'Appliances',  subcategoryCount: 5, description: 'Service and repair for all appliances'),
+  const CategoryModel(id: '8', name: 'Shifting',    subcategoryCount: 4, description: 'Home and office relocation'),
 ];
 
 final _devSubcategories = [

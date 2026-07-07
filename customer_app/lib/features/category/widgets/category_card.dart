@@ -138,6 +138,26 @@ class _CategoryCardState extends State<CategoryCard> {
                                   : cs.onSurface.withAlpha(120),
                             ),
                           ),
+                        const SizedBox(height: 4),
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              cat.subcategoryCount > 0 ? 'View' : 'Book Now',
+                              style: TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.w700,
+                                color: _iconColors[idx],
+                              ),
+                            ),
+                            const SizedBox(width: 1),
+                            Icon(
+                              Icons.chevron_right_rounded,
+                              size: 11,
+                              color: _iconColors[idx],
+                            ),
+                          ],
+                        ),
                       ],
                     ),
                   ),
