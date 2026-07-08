@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../models/service_model.dart';
+import '../../../features/catalog/models/catalog_node_model.dart';
 import '../../../models/service_attribute_model.dart';
 import '../../../models/addon_model.dart';
 import '../../../features/category/services/category_providers.dart';
@@ -356,7 +357,8 @@ class _ModalBookingBar extends ConsumerWidget {
 
     ref
         .read(cartProvider.notifier)
-        .addToCart(service, priceAdjustment: priceAdjustment + addonsTotal);
+        .addToCart(CatalogNodeModel.fromServiceModel(service),
+            priceAdjustment: priceAdjustment + addonsTotal);
 
     if (!context.mounted) return;
     try {
@@ -376,7 +378,7 @@ class _ModalBookingBar extends ConsumerWidget {
   Future<void> _book(BuildContext context, WidgetRef ref) async {
     final selectedAttrs = buildSelectedAttributes(attrs, selections);
     final selectedAddons = buildSelectedAddons(addOns, selectedAddonIds);
-    await launchBookingFlow(context, ref, service,
+    await launchBookingFlow(context, ref, CatalogNodeModel.fromServiceModel(service),
         selectedAttributes: selectedAttrs,
         selectedAddons: selectedAddons);
   }

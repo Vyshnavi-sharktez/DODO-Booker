@@ -73,20 +73,30 @@ class CheckoutService {
     debugPrint('[DODO][Checkout] Booking created: id=$bookingId');
 
     // ── INSERT booking_items (one row per cart item) ──────────────────────────
-    try {
-      final rows = items
-          .map((item) => {
-                'booking_id': bookingId,
-                'service_id': item.serviceId,
-                'quantity': item.quantity,
-                'unit_price': item.unitPrice,
-                'total_price': item.totalPrice,
-              })
-          .toList();
-      await _client.from('booking_items').insert(rows);
-      debugPrint('[DODO][Checkout] ${rows.length} booking_item(s) inserted');
-    } catch (e) {
-      debugPrint('[DODO][Checkout] Warning: booking_items insert failed (non-fatal): $e');
+    // booking_items.service_id has a FK to services(id).
+    // Only insert rows for items whose legacyId is non-null (migrated services).
+    // New catalog nodes (legacyId == null) have no services row yet.
+    final rows = items
+        .where((item) => item.legacyId != null)
+        .map((item) => {
+              'booking_id': bookingId,
+              'service_id': item.legacyId,
+              'quantity': item.quantity,
+              'unit_price': item.unitPrice,
+              'total_price': item.totalPrice,
+            })
+        .toList();
+    if (rows.isNotEmpty) {
+      try {
+        await _client.from('booking_items').insert(rows);
+        debugPrint('[DODO][Checkout] ${rows.length} booking_item(s) inserted');
+      } catch (e) {
+        debugPrint('[DODO][Checkout] Warning: booking_items insert failed: $e');
+      }
+    }
+    final skipped = items.length - rows.length;
+    if (skipped > 0) {
+      debugPrint('[DODO][Checkout] Skipped $skipped new catalog node(s) with no services row');
     }
 
     // ── Increment coupon used_count ───────────────────────────────────────────

@@ -1,15 +1,13 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/config/supabase_config.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/utils/icon_registry.dart';
-import '../../../models/category_model.dart';
-import '../../../models/service_model.dart';
-import '../../service/utils/service_detail_launcher.dart';
+import '../../../features/catalog/models/catalog_node_model.dart';
+import '../../../features/catalog/utils/catalog_launcher.dart';
 
 class SearchScreen extends StatefulWidget {
   final String initialQuery;
@@ -26,8 +24,7 @@ class _SearchScreenState extends State<SearchScreen> {
   Timer? _debounce;
 
   bool _loading = false;
-  List<CategoryModel> _catResults = [];
-  List<ServiceModel> _svcResults = [];
+  List<CatalogNodeModel> _results = [];
   String _lastQuery = '';
 
   static bool get _ready =>
@@ -37,8 +34,6 @@ class _SearchScreenState extends State<SearchScreen> {
   @override
   void initState() {
     super.initState();
-    // Set initial query BEFORE adding listener so _onChanged doesn't fire
-    // for the pre-filled value — we trigger the search manually below.
     if (widget.initialQuery.isNotEmpty) {
       _controller.text = widget.initialQuery;
       _lastQuery = widget.initialQuery;
@@ -69,8 +64,7 @@ class _SearchScreenState extends State<SearchScreen> {
     _debounce?.cancel();
     if (query.length < 2) {
       setState(() {
-        _catResults = [];
-        _svcResults = [];
+        _results = [];
         _loading = false;
       });
       return;
@@ -88,27 +82,17 @@ class _SearchScreenState extends State<SearchScreen> {
     }
     try {
       final db = Supabase.instance.client;
-      final results = await Future.wait([
-        db
-            .from('categories')
-            .select()
-            .eq('is_active', true)
-            .ilike('name', '%$query%')
-            .limit(5),
-        db
-            .from('services')
-            .select('*, sub_categories(name, categories(name))')
-            .eq('is_active', true)
-            .ilike('name', '%$query%')
-            .limit(10),
-      ]);
+      final data = await db
+          .from('catalog_nodes_view')
+          .select()
+          .eq('is_active', true)
+          .ilike('name', '%$query%')
+          .order('sort_order', ascending: true)
+          .limit(25);
       if (!mounted) return;
       setState(() {
-        _catResults = (results[0] as List)
-            .map((e) => CategoryModel.fromJson(e as Map<String, dynamic>))
-            .toList();
-        _svcResults = (results[1] as List)
-            .map((e) => ServiceModel.fromJson(e as Map<String, dynamic>))
+        _results = (data as List)
+            .map((e) => CatalogNodeModel.fromMap(e as Map<String, dynamic>))
             .toList();
         _loading = false;
       });
@@ -122,7 +106,7 @@ class _SearchScreenState extends State<SearchScreen> {
     final tt = Theme.of(context).textTheme;
     final query = _controller.text.trim();
     final hasQuery = query.length >= 2;
-    final hasResults = _catResults.isNotEmpty || _svcResults.isNotEmpty;
+    final hasResults = _results.isNotEmpty;
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -200,48 +184,29 @@ class _SearchScreenState extends State<SearchScreen> {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        if (_catResults.isNotEmpty) ...[
-          Text(
-            'Categories',
-            style: tt.titleSmall
-                ?.copyWith(fontWeight: FontWeight.w700),
+        Text(
+          'Results',
+          style: tt.titleSmall?.copyWith(fontWeight: FontWeight.w700),
+        ),
+        const SizedBox(height: 8),
+        ..._results.map(
+          (node) => _NodeResult(
+            node: node,
+            onTap: () => openCatalogNode(context, node),
           ),
-          const SizedBox(height: 8),
-          ..._catResults.map(
-            (cat) => _CategoryResult(
-              category: cat,
-              onTap: () =>
-                  context.push('/subcategory/${cat.id}', extra: cat),
-            ),
-          ),
-          const SizedBox(height: 16),
-        ],
-        if (_svcResults.isNotEmpty) ...[
-          Text(
-            'Services',
-            style: tt.titleSmall
-                ?.copyWith(fontWeight: FontWeight.w700),
-          ),
-          const SizedBox(height: 8),
-          ..._svcResults.map(
-            (svc) => _ServiceResult(
-              service: svc,
-              onTap: () => openServiceDetail(context, svc),
-            ),
-          ),
-        ],
+        ),
       ],
     );
   }
 }
 
-// ── Category result row ───────────────────────────────────────────────────────
+// ── Catalog node result row ───────────────────────────────────────────────────
 
-class _CategoryResult extends StatelessWidget {
-  final CategoryModel category;
+class _NodeResult extends StatelessWidget {
+  final CatalogNodeModel node;
   final VoidCallback onTap;
 
-  const _CategoryResult({required this.category, required this.onTap});
+  const _NodeResult({required this.node, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -252,73 +217,46 @@ class _CategoryResult extends StatelessWidget {
         width: 40,
         height: 40,
         decoration: BoxDecoration(
-          color: AppColors.primaryLight,
+          color: node.isBookable
+              ? AppColors.surfaceVariant
+              : AppColors.primaryLight,
           borderRadius: BorderRadius.circular(10),
         ),
         child: Icon(
-          IconRegistry.resolve(category.iconKey, category.name),
+          node.isBookable
+              ? IconRegistry.resolve(node.iconKey, node.name)
+              : Icons.folder_rounded,
           size: 20,
-          color: AppColors.primary,
+          color: node.isBookable
+              ? AppColors.textSecondary
+              : AppColors.primary,
         ),
       ),
-      title: Text(category.name,
-          style: const TextStyle(
-              fontWeight: FontWeight.w500, fontSize: 14)),
-      subtitle: category.description != null &&
-              category.description!.isNotEmpty
-          ? Text(category.description!,
-              maxLines: 1, overflow: TextOverflow.ellipsis)
+      title: Text(
+        node.name,
+        style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 14),
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+      ),
+      subtitle: node.parentName != null
+          ? Text(
+              node.parentName!,
+              style: const TextStyle(fontSize: 12),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            )
           : null,
-      trailing: const Icon(Icons.chevron_right_rounded,
-          size: 18, color: AppColors.textHint),
-      onTap: onTap,
-    );
-  }
-}
-
-// ── Service result row ────────────────────────────────────────────────────────
-
-class _ServiceResult extends StatelessWidget {
-  final ServiceModel service;
-  final VoidCallback onTap;
-
-  const _ServiceResult({required this.service, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return ListTile(
-      contentPadding:
-          const EdgeInsets.symmetric(horizontal: 4, vertical: 0),
-      leading: Container(
-        width: 40,
-        height: 40,
-        decoration: BoxDecoration(
-          color: AppColors.surfaceVariant,
-          borderRadius: BorderRadius.circular(10),
-        ),
-        child: Icon(
-          IconRegistry.resolve(null, service.categoryName),
-          size: 20,
-          color: AppColors.textSecondary,
-        ),
-      ),
-      title: Text(service.name,
-          style: const TextStyle(
-              fontWeight: FontWeight.w500, fontSize: 14),
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis),
-      subtitle: service.categoryName != null
-          ? Text(service.categoryName!,
-              style: const TextStyle(fontSize: 12))
-          : null,
-      trailing: Text(
-        '₹${service.startingPrice.toInt()}',
-        style: const TextStyle(
-          fontWeight: FontWeight.w700,
-          color: AppColors.primary,
-          fontSize: 13,
-        ),
-      ),
+      trailing: node.isLeafBookable && node.basePrice != null
+          ? Text(
+              '₹${node.basePrice!.toInt()}',
+              style: const TextStyle(
+                fontWeight: FontWeight.w700,
+                color: AppColors.primary,
+                fontSize: 13,
+              ),
+            )
+          : const Icon(Icons.chevron_right_rounded,
+              size: 18, color: AppColors.textHint),
       onTap: onTap,
     );
   }

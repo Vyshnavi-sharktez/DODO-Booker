@@ -6,7 +6,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../models/time_slot_model.dart';
 import '../../../models/booking_model.dart';
 import '../../../models/booking_item.dart';
-import '../../../models/service_model.dart';
+import '../../../features/catalog/models/catalog_node_model.dart';
 import '../../../models/address_model.dart';
 import '../../../models/addon_model.dart';
 import 'coupon_service.dart';
@@ -61,7 +61,7 @@ class BookingService {
   // ── Create booking ──────────────────────────────────────────────────────────
 
   Future<BookingModel> createBooking({
-    required ServiceModel service,
+    required CatalogNodeModel service,
     required AddressModel address,
     required DateTime date,
     required TimeSlotModel slot,
@@ -80,7 +80,7 @@ class BookingService {
     debugPrint('[DODO][Booking] customer_id=$customerId');
 
     final addonsTotal = totalAddonsPrice(selectedAddons);
-    final subtotal = service.startingPrice + priceAdjustment + addonsTotal;
+    final subtotal = (service.basePrice ?? 0.0) + priceAdjustment + addonsTotal;
     final tax = subtotal * 0.18;
     final grossAmount = subtotal + tax;
     final totalAmount = (grossAmount - discountAmount).clamp(0.0, double.infinity);
@@ -150,19 +150,30 @@ class BookingService {
       debugPrint('[OTP][Create] ✓ OTP written via INSERT: $returnedOtp');
     }
 
-    // ── INSERT into booking_items (non-fatal) ────────────────────────────────
-    try {
-      debugPrint('[DODO][Booking] Inserting booking_item: service_id=${service.id} unit_price=$subtotal');
-      await _client.from('booking_items').insert({
-        'booking_id': bookingId,
-        'service_id': service.id,
-        'quantity': 1,
-        'unit_price': subtotal,
-        'total_price': subtotal,
-      });
-      debugPrint('[DODO][Booking] booking_item inserted');
-    } catch (e) {
-      debugPrint('[DODO][Booking] Warning: booking_item insert failed (non-fatal): $e');
+    // ── INSERT into booking_items ─────────────────────────────────────────────
+    // booking_items.service_id has a FK to services(id).
+    // Migrated catalog nodes (legacy_type='service') reuse the original service
+    // UUID as both their id AND legacy_id, so the FK is always satisfied.
+    // Brand-new catalog nodes (legacy_id == null) have no services row yet;
+    // they must be excluded until the schema adds a node_id FK path.
+    final bookingServiceId = service.legacyId;
+    if (bookingServiceId != null) {
+      try {
+        debugPrint('[DODO][Booking] Inserting booking_item: service_id=$bookingServiceId unit_price=$subtotal');
+        await _client.from('booking_items').insert({
+          'booking_id': bookingId,
+          'service_id': bookingServiceId,
+          'quantity': 1,
+          'unit_price': subtotal,
+          'total_price': subtotal,
+        });
+        debugPrint('[DODO][Booking] booking_item inserted');
+      } catch (e) {
+        debugPrint('[DODO][Booking] Warning: booking_item insert failed: $e');
+      }
+    } else {
+      debugPrint('[DODO][Booking] Skipping booking_item: node ${service.id} '
+          'is a new catalog node with no services row (legacy_id = null)');
     }
 
     // ── INSERT into booking_addons (non-fatal) ───────────────────────────────

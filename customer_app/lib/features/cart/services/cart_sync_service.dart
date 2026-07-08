@@ -97,14 +97,35 @@ class CartSyncService {
           .from('cart_items')
           .select('service_id, service_name, image_url, unit_price, quantity')
           .eq('customer_id', customerId);
-      return (rows as List<dynamic>)
-          .map((r) => CartItem(
-                serviceId: r['service_id'] as String,
-                serviceName: r['service_name'] as String,
-                imageUrl: r['image_url'] as String?,
-                unitPrice: (r['unit_price'] as num).toDouble(),
-                quantity: r['quantity'] as int,
-              ))
+
+      final items = rows as List<dynamic>;
+      if (items.isEmpty) return [];
+
+      // Resolve legacy_id for each cart item's catalog node so that
+      // checkout_service can satisfy the booking_items FK to services(id).
+      final nodeIds =
+          items.map((r) => r['service_id'] as String).toSet().toList();
+      final nodeRows = await _client
+          .from('catalog_nodes_view')
+          .select('id, legacy_id')
+          .inFilter('id', nodeIds);
+      final legacyMap = {
+        for (final n in nodeRows as List<dynamic>)
+          n['id'] as String: n['legacy_id'] as String?,
+      };
+
+      return items
+          .map((r) {
+            final sid = r['service_id'] as String;
+            return CartItem(
+              serviceId: sid,
+              serviceName: r['service_name'] as String,
+              imageUrl: r['image_url'] as String?,
+              unitPrice: (r['unit_price'] as num).toDouble(),
+              quantity: r['quantity'] as int,
+              legacyId: legacyMap[sid],
+            );
+          })
           .toList();
     } catch (e) {
       debugPrint('[DODO][CartSync] fetchAll failed: $e');

@@ -5,12 +5,18 @@ class CartItem {
   final double unitPrice;
   final int quantity;
 
+  /// The UUID of the original row in the legacy `services` table.
+  /// Non-null for migrated catalog nodes; null for brand-new catalog nodes.
+  /// Used as `service_id` in `booking_items` to satisfy the FK to services(id).
+  final String? legacyId;
+
   const CartItem({
     required this.serviceId,
     required this.serviceName,
     this.imageUrl,
     required this.unitPrice,
     required this.quantity,
+    this.legacyId,
   });
 
   CartItem copyWith({int? quantity}) => CartItem(
@@ -19,6 +25,7 @@ class CartItem {
         imageUrl: imageUrl,
         unitPrice: unitPrice,
         quantity: quantity ?? this.quantity,
+        legacyId: legacyId,
       );
 
   double get totalPrice => unitPrice * quantity;
@@ -29,6 +36,7 @@ class CartItem {
         'imageUrl': imageUrl,
         'unitPrice': unitPrice,
         'quantity': quantity,
+        if (legacyId != null) 'legacyId': legacyId,
       };
 
   factory CartItem.fromJson(Map<String, dynamic> json) => CartItem(
@@ -37,5 +45,6 @@ class CartItem {
         imageUrl: json['imageUrl'] as String?,
         unitPrice: (json['unitPrice'] as num).toDouble(),
         quantity: json['quantity'] as int,
+        legacyId: json['legacyId'] as String?,
       );
 }

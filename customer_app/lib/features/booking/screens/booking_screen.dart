@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/constants/app_colors.dart';
-import '../../../models/service_model.dart';
+import '../../../features/catalog/models/catalog_node_model.dart';
 import '../../../models/address_model.dart';
 import '../../../models/time_slot_model.dart';
 import '../../../models/booking_model.dart';
@@ -14,7 +14,7 @@ import 'booking_summary_screen.dart';
 import 'booking_success_screen.dart';
 
 class BookingScreen extends ConsumerStatefulWidget {
-  final ServiceModel service;
+  final CatalogNodeModel service;
 
   const BookingScreen({super.key, required this.service});
 

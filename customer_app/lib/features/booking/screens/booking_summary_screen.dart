@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 import '../../../core/constants/app_colors.dart';
-import '../../../models/service_model.dart';
+import '../../../features/catalog/models/catalog_node_model.dart';
 import '../../../models/address_model.dart';
 import '../../../models/time_slot_model.dart';
 import '../widgets/booking_summary_card.dart';
 
 class BookingSummaryScreen extends StatelessWidget {
-  final ServiceModel service;
+  final CatalogNodeModel service;
   final AddressModel address;
   final DateTime date;
   final TimeSlotModel slot;

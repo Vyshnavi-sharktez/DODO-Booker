@@ -460,7 +460,7 @@ class _ServiceEcosystem extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final cats = ref.watch(featuredCategoriesProvider).asData?.value ?? [];
+    final cats = ref.watch(featuredCatalogNodesProvider).asData?.value ?? [];
 
     final catImages = <String, String>{};
     for (final cat in cats) {

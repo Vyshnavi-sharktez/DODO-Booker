@@ -4,7 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/cart_item.dart';
-import '../../../models/service_model.dart';
+import '../../../features/catalog/models/catalog_node_model.dart';
 import '../services/cart_sync_service.dart';
 
 class CartNotifier extends StateNotifier<List<CartItem>> {
@@ -72,7 +72,7 @@ class CartNotifier extends StateNotifier<List<CartItem>> {
 
   // ── Mutations ─────────────────────────────────────────────────────────────
 
-  void addToCart(ServiceModel service, {double priceAdjustment = 0.0}) {
+  void addToCart(CatalogNodeModel service, {double priceAdjustment = 0.0}) {
     debugPrint('[DODO][CartSync][1] addToCart() entered — serviceId=${service.id} name=${service.name}');
     final idx = state.indexWhere((item) => item.serviceId == service.id);
     if (idx >= 0) {
@@ -86,9 +86,10 @@ class CartNotifier extends StateNotifier<List<CartItem>> {
         ...state,
         CartItem(
           serviceId: service.id,
+          legacyId: service.legacyId,
           serviceName: service.name,
           imageUrl: service.imageUrl,
-          unitPrice: service.startingPrice + priceAdjustment,
+          unitPrice: (service.basePrice ?? 0.0) + priceAdjustment,
           quantity: 1,
         ),
       ];

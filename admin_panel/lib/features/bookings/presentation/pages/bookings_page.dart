@@ -973,7 +973,7 @@ class _BookingRow extends StatelessWidget {
           // Service
           SizedBox(
             width: _wService,
-            child: _ServiceCell(items: booking.items),
+            child: _ServiceCell(items: booking.items, notes: booking.notes),
           ),
 
           // Service Date
@@ -1172,16 +1172,32 @@ class _AssignedToCell extends StatelessWidget {
 
 class _ServiceCell extends StatelessWidget {
   final List<BookingItem> items;
+  final String? notes;
 
-  const _ServiceCell({required this.items});
+  const _ServiceCell({required this.items, this.notes});
+
+  /// Extracts the service name from the booking notes field.
+  /// Notes are written as "${service.name} · ${slot.label}" by booking_service.
+  /// Returns empty string when notes cannot be parsed.
+  static String _nameFromNotes(String? notes) {
+    if (notes == null || notes.isEmpty) return '';
+    final idx = notes.indexOf(' · ');
+    return idx > 0 ? notes.substring(0, idx) : notes;
+  }
 
   @override
   Widget build(BuildContext context) {
     if (items.isEmpty) {
+      final fallback = _nameFromNotes(notes);
       return Text(
-        '—',
-        style:
-            TextStyle(fontSize: 13, color: AppColors.textSecondary),
+        fallback.isNotEmpty ? fallback : '—',
+        style: TextStyle(
+            fontSize: 13,
+            color: fallback.isNotEmpty
+                ? AppColors.textPrimary
+                : AppColors.textSecondary),
+        overflow: TextOverflow.ellipsis,
+        maxLines: 1,
       );
     }
     final first = items.first;

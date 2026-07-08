@@ -1,8 +1,8 @@
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/config/supabase_config.dart';
+import '../../../features/catalog/models/catalog_node_model.dart';
 import '../../../models/banner_model.dart';
-import '../../../models/category_model.dart';
 import '../../../models/service_model.dart';
 
 // ── Public review model for home page testimonials ────────────────────────────
@@ -92,20 +92,25 @@ class HomeService {
     }
   }
 
-  // ── Featured categories ────────────────────────────────────────────────────
+  // ── Featured catalog nodes (home carousel) ────────────────────────────────
 
-  Future<List<CategoryModel>> fetchFeaturedCategories() async {
-    if (!_ready) return _devCategories;
-
-    final data = await _db
-        .from('categories')
-        .select()
-        .eq('is_active', true)
-        .order('name', ascending: true);
-
-    return (data as List)
-        .map((e) => CategoryModel.fromJson(e as Map<String, dynamic>))
-        .toList();
+  Future<List<CatalogNodeModel>> fetchFeaturedCatalogNodes() async {
+    if (!_ready) return [];
+    try {
+      final data = await _db
+          .from('catalog_nodes_view')
+          .select()
+          .isFilter('parent_id', null)
+          .eq('is_active', true)
+          .order('sort_order', ascending: true)
+          .order('name', ascending: true);
+      return (data as List)
+          .map((e) => CatalogNodeModel.fromMap(e as Map<String, dynamic>))
+          .toList();
+    } catch (e) {
+      debugPrint('[HomeService] fetchFeaturedCatalogNodes error: $e');
+      return [];
+    }
   }
 
   // ── Featured services ──────────────────────────────────────────────────────
@@ -299,17 +304,6 @@ final _devBanners = [
   ),
 ];
 
-// IDs must match CategoryService._devSubcategories.categoryId values
-final _devCategories = [
-  const CategoryModel(id: '1', name: 'Cleaning', description: 'Home & deep cleaning'),
-  const CategoryModel(id: '2', name: 'Plumbing', description: 'Repairs & installations'),
-  const CategoryModel(id: '3', name: 'Electrical', description: 'Certified electricians'),
-  const CategoryModel(id: '4', name: 'Painting', description: 'Interior & exterior'),
-  const CategoryModel(id: '5', name: 'Carpentry', description: 'Furniture & woodwork'),
-  const CategoryModel(id: '6', name: 'Pest Control', description: 'Safe extermination'),
-  const CategoryModel(id: '7', name: 'Appliances', description: 'AC, washing machine, more'),
-  const CategoryModel(id: '8', name: 'Shifting', description: 'Packing & moving'),
-];
 
 final _devServices = [
   const ServiceModel(id: 'dev-s1', name: 'Home Deep Clean', startingPrice: 999, categoryName: 'Cleaning'),
