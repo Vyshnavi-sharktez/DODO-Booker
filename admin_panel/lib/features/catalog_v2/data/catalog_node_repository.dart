@@ -32,6 +32,7 @@ class CatalogNodeRepository {
     required bool isBookable,
     double? basePrice,
     int? estimatedDuration,
+    double? minimumOrderAmount,
   }) async {
     final data = await _supabase
         .from('catalog_nodes')
@@ -49,6 +50,8 @@ class CatalogNodeRepository {
           if (basePrice != null) 'base_price': basePrice,
           if (estimatedDuration != null)
             'estimated_duration': estimatedDuration,
+          if (minimumOrderAmount != null)
+            'minimum_order_amount': minimumOrderAmount,
         })
         .select()
         .single();
@@ -69,6 +72,7 @@ class CatalogNodeRepository {
     required bool isBookable,
     double? basePrice,
     int? estimatedDuration,
+    double? minimumOrderAmount,
   }) async {
     await _supabase
         .from('catalog_nodes')
@@ -85,6 +89,7 @@ class CatalogNodeRepository {
           'is_bookable': isBookable,
           'base_price': basePrice,
           'estimated_duration': estimatedDuration,
+          'minimum_order_amount': minimumOrderAmount,
         })
         .eq('id', id);
     return _fetchById(id);

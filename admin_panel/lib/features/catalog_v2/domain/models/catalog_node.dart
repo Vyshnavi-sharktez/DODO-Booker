@@ -18,6 +18,7 @@ class CatalogNode {
   /// Only meaningful when [isBookable] is true.
   final double? basePrice;
   final int? estimatedDuration;
+  final double? minimumOrderAmount;
   final double? rating;
   final int reviewCount;
 
@@ -44,6 +45,7 @@ class CatalogNode {
     required this.isBookable,
     this.basePrice,
     this.estimatedDuration,
+    this.minimumOrderAmount,
     this.rating,
     required this.reviewCount,
     required this.childrenCount,
@@ -69,6 +71,7 @@ class CatalogNode {
       isBookable: map['is_bookable'] as bool? ?? false,
       basePrice: (map['base_price'] as num?)?.toDouble(),
       estimatedDuration: map['estimated_duration'] as int?,
+      minimumOrderAmount: (map['minimum_order_amount'] as num?)?.toDouble(),
       rating: (map['rating'] as num?)?.toDouble(),
       reviewCount: map['review_count'] as int? ?? 0,
       childrenCount: map['children_count'] as int? ?? 0,
@@ -94,6 +97,7 @@ class CatalogNode {
     bool? isBookable,
     double? basePrice,
     int? estimatedDuration,
+    double? minimumOrderAmount,
     int? childrenCount,
   }) {
     return CatalogNode(
@@ -111,6 +115,7 @@ class CatalogNode {
       isBookable: isBookable ?? this.isBookable,
       basePrice: basePrice ?? this.basePrice,
       estimatedDuration: estimatedDuration ?? this.estimatedDuration,
+      minimumOrderAmount: minimumOrderAmount ?? this.minimumOrderAmount,
       rating: rating,
       reviewCount: reviewCount,
       childrenCount: childrenCount ?? this.childrenCount,

@@ -41,6 +41,7 @@ class CatalogNodeFormDialog extends StatefulWidget {
     required bool isBookable,
     double? basePrice,
     int? estimatedDuration,
+    double? minimumOrderAmount,
   }) onSave;
 
   @override
@@ -58,6 +59,7 @@ class _CatalogNodeFormDialogState extends State<CatalogNodeFormDialog> {
   late final TextEditingController _sortOrder;
   late final TextEditingController _basePrice;
   late final TextEditingController _duration;
+  late final TextEditingController _minOrderAmount;
 
   late bool _isActive;
   late bool _isBookable;
@@ -82,6 +84,11 @@ class _CatalogNodeFormDialogState extends State<CatalogNodeFormDialog> {
           ? e!.estimatedDuration.toString()
           : '',
     );
+    _minOrderAmount = TextEditingController(
+      text: e?.minimumOrderAmount != null
+          ? e!.minimumOrderAmount!.toStringAsFixed(2)
+          : '',
+    );
     _isActive = e?.isActive ?? true;
     _isBookable = e?.isBookable ?? false;
     _slugEdited = e != null;
@@ -97,6 +104,7 @@ class _CatalogNodeFormDialogState extends State<CatalogNodeFormDialog> {
     _sortOrder.dispose();
     _basePrice.dispose();
     _duration.dispose();
+    _minOrderAmount.dispose();
     super.dispose();
   }
 
@@ -137,6 +145,10 @@ class _CatalogNodeFormDialogState extends State<CatalogNodeFormDialog> {
         estimatedDuration: _isBookable && _duration.text.trim().isNotEmpty
             ? int.tryParse(_duration.text.trim())
             : null,
+        minimumOrderAmount:
+            _isBookable && _minOrderAmount.text.trim().isNotEmpty
+                ? double.tryParse(_minOrderAmount.text.trim())
+                : null,
       );
       if (mounted) Navigator.of(context).pop();
     } catch (e) {
@@ -402,6 +414,23 @@ class _CatalogNodeFormDialogState extends State<CatalogNodeFormDialog> {
                         ],
                       ),
                     ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: _minOrderAmount,
+                  decoration: const InputDecoration(
+                    labelText: 'Min Order Amount (₹)',
+                    hintText: 'Leave blank for no minimum',
+                    prefixIcon: Icon(Icons.production_quantity_limits_rounded),
+                    helperText:
+                        'Customer must meet this amount to proceed with booking.',
+                  ),
+                  keyboardType:
+                      const TextInputType.numberWithOptions(decimal: true),
+                  inputFormatters: [
+                    FilteringTextInputFormatter.allow(
+                        RegExp(r'^\d+\.?\d{0,2}')),
                   ],
                 ),
               ],

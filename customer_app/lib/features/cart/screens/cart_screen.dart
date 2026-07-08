@@ -513,15 +513,24 @@ class _SummaryRow extends StatelessWidget {
 
 // ── Sticky checkout bar — full-screen (mobile) ────────────────────────────────
 
-class _CheckoutBar extends StatelessWidget {
+class _CheckoutBar extends ConsumerWidget {
+  const _CheckoutBar({required this.subtotal});
   final double subtotal;
 
-  const _CheckoutBar({required this.subtotal});
-
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final tt = Theme.of(context).textTheme;
     final grandTotal = subtotal * 1.18;
+    final items = ref.watch(cartProvider);
+
+    final itemsWithMin = items
+        .where((i) => i.minimumOrderAmount != null && i.minimumOrderAmount! > 0)
+        .toList();
+    final failingItem = itemsWithMin
+        .where((i) => subtotal < i.minimumOrderAmount!)
+        .firstOrNull;
+    final hasMinimum = itemsWithMin.isNotEmpty;
+    final canCheckout = failingItem == null;
 
     return Container(
       padding: EdgeInsets.fromLTRB(
@@ -540,37 +549,47 @@ class _CheckoutBar extends StatelessWidget {
           ),
         ],
       ),
-      child: Row(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
+          if (hasMinimum) ...[
+            _MinOrderCard(failingItem: failingItem, currentTotal: subtotal),
+            const SizedBox(height: 10),
+          ],
+          Row(
             children: [
-              Text(
-                '₹${grandTotal.toInt()}',
-                style: tt.headlineSmall?.copyWith(
-                  color: AppColors.primary,
-                  fontWeight: FontWeight.w800,
+              Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '₹${grandTotal.toInt()}',
+                    style: tt.headlineSmall?.copyWith(
+                      color: AppColors.primary,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  Text(
+                    'incl. taxes',
+                    style: tt.labelSmall?.copyWith(color: AppColors.textHint),
+                  ),
+                ],
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: FilledButton(
+                  onPressed: canCheckout ? () => context.go('/cart/checkout') : null,
+                  style: FilledButton.styleFrom(
+                    minimumSize: const Size.fromHeight(48),
+                  ),
+                  child: Text(
+                    canCheckout ? 'Proceed to Checkout' : 'Minimum Order Not Met',
+                    style: const TextStyle(
+                        fontSize: 16, fontWeight: FontWeight.w700),
+                  ),
                 ),
               ),
-              Text(
-                'incl. taxes',
-                style: tt.labelSmall?.copyWith(color: AppColors.textHint),
-              ),
             ],
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: FilledButton(
-              onPressed: () => context.go('/cart/checkout'),
-              style: FilledButton.styleFrom(
-                minimumSize: const Size.fromHeight(48),
-              ),
-              child: const Text(
-                'Proceed to Checkout',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
-              ),
-            ),
           ),
         ],
       ),
@@ -580,15 +599,24 @@ class _CheckoutBar extends StatelessWidget {
 
 // ── Sticky checkout bar — modal variant (desktop) ─────────────────────────────
 
-class _ModalCheckoutBar extends StatelessWidget {
+class _ModalCheckoutBar extends ConsumerWidget {
+  const _ModalCheckoutBar({required this.subtotal});
   final double subtotal;
 
-  const _ModalCheckoutBar({required this.subtotal});
-
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final tt = Theme.of(context).textTheme;
     final grandTotal = subtotal * 1.18;
+    final items = ref.watch(cartProvider);
+
+    final itemsWithMin = items
+        .where((i) => i.minimumOrderAmount != null && i.minimumOrderAmount! > 0)
+        .toList();
+    final failingItem = itemsWithMin
+        .where((i) => subtotal < i.minimumOrderAmount!)
+        .firstOrNull;
+    final hasMinimum = itemsWithMin.isNotEmpty;
+    final canCheckout = failingItem == null;
 
     return Container(
       padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
@@ -596,40 +624,177 @@ class _ModalCheckoutBar extends StatelessWidget {
         color: AppColors.surface,
         border: Border(top: BorderSide(color: AppColors.divider, width: 0.8)),
       ),
-      child: Row(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
+          if (hasMinimum) ...[
+            _MinOrderCard(failingItem: failingItem, currentTotal: subtotal),
+            const SizedBox(height: 10),
+          ],
+          Row(
             children: [
-              Text(
-                '₹${grandTotal.toInt()}',
-                style: tt.headlineSmall?.copyWith(
-                  color: AppColors.primary,
-                  fontWeight: FontWeight.w800,
-                ),
+              Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '₹${grandTotal.toInt()}',
+                    style: tt.headlineSmall?.copyWith(
+                      color: AppColors.primary,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  Text(
+                    'incl. taxes',
+                    style: tt.labelSmall?.copyWith(color: AppColors.textHint),
+                  ),
+                ],
               ),
-              Text(
-                'incl. taxes',
-                style: tt.labelSmall?.copyWith(color: AppColors.textHint),
+              const SizedBox(width: 16),
+              Expanded(
+                child: FilledButton(
+                  onPressed: canCheckout
+                      ? () => PageSheet.show(
+                            context,
+                            title: 'Checkout',
+                            child: const CheckoutScreen(inModal: true),
+                          )
+                      : null,
+                  style: FilledButton.styleFrom(
+                    minimumSize: const Size.fromHeight(48),
+                  ),
+                  child: Text(
+                    canCheckout ? 'Proceed to Checkout' : 'Minimum Order Not Met',
+                    style: const TextStyle(
+                        fontSize: 16, fontWeight: FontWeight.w700),
+                  ),
+                ),
               ),
             ],
           ),
-          const SizedBox(width: 16),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Inline minimum-order status card ─────────────────────────────────────────
+
+class _MinOrderCard extends StatelessWidget {
+  /// The first cart item whose minimum order amount hasn't been reached.
+  /// When null, all items with a minimum have been met — render the success state.
+  /// [currentTotal] is the live cart subtotal (pre-tax), used for both comparison
+  /// and display so the card always matches the Price Summary card.
+  const _MinOrderCard({required this.failingItem, required this.currentTotal});
+  final CartItem? failingItem;
+  final double currentTotal;
+
+  @override
+  Widget build(BuildContext context) {
+    const cardDecoration = BoxDecoration(
+      color: Color(0xFF1C1C1E),
+      borderRadius: BorderRadius.all(Radius.circular(12)),
+    );
+
+    if (failingItem == null) {
+      return Container(
+        padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+        decoration: cardDecoration,
+        child: const Row(
+          children: [
+            Icon(
+              Icons.check_circle_outline_rounded,
+              size: 15,
+              color: Color(0xFF66BB6A),
+            ),
+            SizedBox(width: 9),
+            Expanded(
+              child: Text(
+                'Minimum order reached. You\'re ready to checkout.',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFF66BB6A),
+                  height: 1.3,
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    final minAmt = failingItem!.minimumOrderAmount!;
+    final shortfall = (minAmt - currentTotal).ceil();
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+      decoration: cardDecoration,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Padding(
+            padding: EdgeInsets.only(top: 1),
+            child: Icon(
+              Icons.info_outline_rounded,
+              size: 15,
+              color: Color(0xFFFFA726),
+            ),
+          ),
+          const SizedBox(width: 9),
           Expanded(
-            child: FilledButton(
-              onPressed: () => PageSheet.show(
-                context,
-                title: 'Checkout',
-                child: const CheckoutScreen(inModal: true),
-              ),
-              style: FilledButton.styleFrom(
-                minimumSize: const Size.fromHeight(48),
-              ),
-              child: const Text(
-                'Proceed to Checkout',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
-              ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text(
+                      'Minimum order',
+                      style: TextStyle(
+                          fontSize: 11,
+                          color: Color(0xFF9E9E9E),
+                          height: 1.4),
+                    ),
+                    Text(
+                      '₹${minAmt.toInt()}',
+                      style: const TextStyle(
+                          fontSize: 11,
+                          color: Color(0xFF9E9E9E),
+                          height: 1.4),
+                    ),
+                  ],
+                ),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text(
+                      'Current total',
+                      style: TextStyle(
+                          fontSize: 11,
+                          color: Color(0xFF9E9E9E),
+                          height: 1.4),
+                    ),
+                    Text(
+                      '₹${currentTotal.toInt()}',
+                      style: const TextStyle(
+                          fontSize: 11,
+                          color: Color(0xFF9E9E9E),
+                          height: 1.4),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 5),
+                Text(
+                  'Add ₹$shortfall more to continue.',
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFFFFA726),
+                    height: 1.3,
+                  ),
+                ),
+              ],
             ),
           ),
         ],

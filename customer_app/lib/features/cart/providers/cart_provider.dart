@@ -91,6 +91,7 @@ class CartNotifier extends StateNotifier<List<CartItem>> {
           imageUrl: service.imageUrl,
           unitPrice: (service.basePrice ?? 0.0) + priceAdjustment,
           quantity: 1,
+          minimumOrderAmount: service.minimumOrderAmount,
         ),
       ];
     }

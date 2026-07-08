@@ -43,6 +43,7 @@ class CatalogNodeNotifier
     required bool isBookable,
     double? basePrice,
     int? estimatedDuration,
+    double? minimumOrderAmount,
   }) async {
     await _repo.createNode(
       parentId: parentId,
@@ -56,6 +57,7 @@ class CatalogNodeNotifier
       isBookable: isBookable,
       basePrice: basePrice,
       estimatedDuration: estimatedDuration,
+      minimumOrderAmount: minimumOrderAmount,
     );
     await _load();
   }
@@ -73,6 +75,7 @@ class CatalogNodeNotifier
     required bool isBookable,
     double? basePrice,
     int? estimatedDuration,
+    double? minimumOrderAmount,
   }) async {
     await _repo.updateNode(
       id,
@@ -87,6 +90,7 @@ class CatalogNodeNotifier
       isBookable: isBookable,
       basePrice: basePrice,
       estimatedDuration: estimatedDuration,
+      minimumOrderAmount: minimumOrderAmount,
     );
     await _load();
   }
