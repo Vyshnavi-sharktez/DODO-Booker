@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/constants/app_colors.dart';
+import '../../../core/utils/service_image_registry.dart';
 import '../../../models/faq_model.dart';
 import '../../../models/service_attribute_model.dart';
 import '../../../models/addon_model.dart';
@@ -19,13 +20,12 @@ import '../../wishlist/widgets/heart_button.dart';
 import '../models/catalog_node_model.dart';
 import '../providers/catalog_providers.dart';
 import '../utils/catalog_launcher.dart';
-import '../widgets/catalog_node_card.dart';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // CatalogNodeScreen — generic screen for any catalog node at any depth.
 //
 // Behaviour matrix (data-driven, applies at every depth):
-//   hasChildren  (any)                → navigation grid; booking never shown
+//   hasChildren  (any)                → navigation list; booking never shown
 //   !hasChildren && isBookable        → full service-detail + sticky booking bar
 //   !hasChildren && !isBookable       → informational / Coming Soon state
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -40,7 +40,6 @@ class CatalogNodeScreen extends ConsumerStatefulWidget {
 }
 
 class _CatalogNodeScreenState extends ConsumerState<CatalogNodeScreen> {
-  // Attribute + add-on selection state (used when isBookable).
   final Map<String, String> _selections = {};
   double _priceAdjustment = 0.0;
   final Set<String> _selectedAddonIds = {};
@@ -70,8 +69,6 @@ class _CatalogNodeScreenState extends ConsumerState<CatalogNodeScreen> {
     });
   }
 
-  // ── Build ──────────────────────────────────────────────────────────────────
-
   @override
   Widget build(BuildContext context) {
     final children =
@@ -93,21 +90,40 @@ class _CatalogNodeScreenState extends ConsumerState<CatalogNodeScreen> {
         totalAddonsPrice(buildSelectedAddons(addOns, _selectedAddonIds));
     final displayPrice =
         (node.basePrice ?? 0.0) + _priceAdjustment + addonsTotal;
+    final hasAdjustment = _priceAdjustment > 0 || addonsTotal > 0;
 
-    final hasImage =
-        node.imageUrl != null && node.imageUrl!.isNotEmpty;
-    final width = MediaQuery.of(context).size.width;
+    // Category/navigation nodes always show a hero using the image registry
+    // fallback so every browse page has a themed image.
+    // Service-detail leaf nodes only show a hero when an explicit imageUrl
+    // has been set in the admin panel.
+    final heroUrl = node.hasChildren
+        ? ServiceImageRegistry.resolve(node.imageUrl, node.name)
+        : node.imageUrl;
+    final hasHero = node.hasChildren || (heroUrl != null && heroUrl.isNotEmpty);
 
     return Scaffold(
       backgroundColor: AppColors.background,
-      appBar: hasImage
-          ? null
+      extendBodyBehindAppBar: hasHero,
+      appBar: hasHero
+          ? AppBar(
+              backgroundColor: Colors.transparent,
+              elevation: 0,
+              scrolledUnderElevation: 0,
+              foregroundColor: Colors.white,
+              surfaceTintColor: Colors.transparent,
+              actions: [
+                if (node.isLeafBookable)
+                  HeartButton(serviceId: node.id, mini: false),
+                const SizedBox(width: 4),
+              ],
+            )
           : AppBar(
               title: Text(
                 node.name,
                 style: const TextStyle(
                   fontWeight: FontWeight.w700,
                   fontSize: 17,
+                  color: AppColors.textPrimary,
                 ),
               ),
               backgroundColor: AppColors.background,
@@ -123,41 +139,36 @@ class _CatalogNodeScreenState extends ConsumerState<CatalogNodeScreen> {
             ),
       body: CustomScrollView(
         slivers: [
-          // ── Hero image (if present) ──────────────────────────────────────
-          if (hasImage)
-            SliverAppBar(
-              expandedHeight: 260,
-              pinned: true,
-              backgroundColor: AppColors.primary,
-              foregroundColor: Colors.white,
-              actions: [
-                if (node.isLeafBookable)
-                  HeartButton(serviceId: node.id, mini: false),
-                const SizedBox(width: 4),
-              ],
-              flexibleSpace: FlexibleSpaceBar(
-                background: _HeroImage(url: node.imageUrl!),
-              ),
-            ),
-
           SliverToBoxAdapter(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // ── Breadcrumb ─────────────────────────────────────────────
-                if (!node.isRoot)
-                  _Breadcrumb(
-                    parentName: node.parentName ?? '',
-                    nodeName: node.name,
-                    onParentTap: () => context.pop(),
+                // ── Hero image + floating info card (Stack, no SliverAppBar) ──
+                if (hasHero) ...[
+                  _HeroWithCard(
+                    imageUrl: heroUrl!,
+                    node: node,
+                    displayPrice: displayPrice,
+                    hasAdjustment: hasAdjustment,
                   ),
+                  // Spacer: card extends 60 px below the Stack + 20 px gap.
+                  const SizedBox(height: 80),
+                ],
 
-                // ── Info header ────────────────────────────────────────────
-                _NodeInfoHeader(
-                  node: node,
-                  displayPrice: displayPrice,
-                  hasAdjustment: _priceAdjustment > 0 || addonsTotal > 0,
-                ),
+                // ── No-hero: breadcrumb + info header ──────────────────────
+                if (!hasHero) ...[
+                  if (!node.isRoot)
+                    _Breadcrumb(
+                      parentName: node.parentName ?? '',
+                      nodeName: node.name,
+                      onParentTap: () => context.pop(),
+                    ),
+                  _NodeInfoHeader(
+                    node: node,
+                    displayPrice: displayPrice,
+                    hasAdjustment: hasAdjustment,
+                  ),
+                ],
 
                 // ── Attribute selection ────────────────────────────────────
                 if (node.isLeafBookable && attrs.isNotEmpty)
@@ -171,8 +182,7 @@ class _CatalogNodeScreenState extends ConsumerState<CatalogNodeScreen> {
                 // ── Description ────────────────────────────────────────────
                 if (node.description?.isNotEmpty == true)
                   Padding(
-                    padding:
-                        const EdgeInsets.fromLTRB(20, 24, 20, 0),
+                    padding: const EdgeInsets.fromLTRB(20, 24, 20, 0),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -192,19 +202,18 @@ class _CatalogNodeScreenState extends ConsumerState<CatalogNodeScreen> {
                           style: const TextStyle(
                             fontSize: 14,
                             color: AppColors.textSecondary,
-                            height: 1.6,
+                            height: 1.65,
                           ),
                         ),
                       ],
                     ),
                   ),
 
-                // ── Children grid ──────────────────────────────────────────
+                // ── Children list ──────────────────────────────────────────
                 if (node.hasChildren)
                   _ChildrenSection(
                     node: node,
                     children: children,
-                    screenWidth: width,
                   ),
 
                 // ── Add-ons ────────────────────────────────────────────────
@@ -223,11 +232,11 @@ class _CatalogNodeScreenState extends ConsumerState<CatalogNodeScreen> {
                 if (node.isLeafBookable)
                   ServiceReviewsSection(serviceId: node.id),
 
-                // ── Coming Soon (leaf, not yet bookable) ───────────────────
+                // ── Coming Soon ────────────────────────────────────────────
                 if (!node.hasChildren && !node.isBookable)
                   const _ComingSoonBanner(),
 
-                SizedBox(height: node.isLeafBookable ? 100 : 32),
+                SizedBox(height: node.isLeafBookable ? 100 : 40),
               ],
             ),
           ),
@@ -252,8 +261,7 @@ class _CatalogNodeScreenState extends ConsumerState<CatalogNodeScreen> {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// Deep-link recovery: node was opened without an 'extra' payload
-// (e.g. notification deep-link or browser refresh).
+// Deep-link recovery
 // ═══════════════════════════════════════════════════════════════════════════════
 
 class CatalogNodeFetchScreen extends ConsumerWidget {
@@ -284,6 +292,54 @@ class CatalogNodeFetchScreen extends ConsumerWidget {
   }
 }
 
+// ── Hero + floating card (Stack-based overlap) ────────────────────────────────
+
+class _HeroWithCard extends StatelessWidget {
+  const _HeroWithCard({
+    required this.imageUrl,
+    required this.node,
+    required this.displayPrice,
+    required this.hasAdjustment,
+  });
+
+  final String imageUrl;
+  final CatalogNodeModel node;
+  final double displayPrice;
+  final bool hasAdjustment;
+
+  @override
+  Widget build(BuildContext context) {
+    // Include status bar + AppBar height so the image fills behind the
+    // transparent AppBar when extendBodyBehindAppBar is true.
+    final topInset =
+        MediaQuery.of(context).padding.top + kToolbarHeight;
+    final heroHeight = topInset + 200.0;
+
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        SizedBox(
+          height: heroHeight,
+          width: double.infinity,
+          child: _HeroImage(url: imageUrl),
+        ),
+        // Card positioned so its bottom edge is 60 px below the Stack's
+        // bottom, creating a 60 px visible overlap into the hero image.
+        Positioned(
+          bottom: -60,
+          left: 16,
+          right: 16,
+          child: _FloatingInfoCard(
+            node: node,
+            displayPrice: displayPrice,
+            hasAdjustment: hasAdjustment,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 // ── Hero image ────────────────────────────────────────────────────────────────
 
 class _HeroImage extends StatelessWidget {
@@ -292,20 +348,212 @@ class _HeroImage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Image.network(
-      url,
-      fit: BoxFit.cover,
-      width: double.infinity,
-      height: double.infinity,
-      loadingBuilder: (_, child, p) =>
-          p == null ? child : const ColoredBox(color: Color(0xFFEEEEEE)),
-      errorBuilder: (_, _, _) => Container(
-        color: AppColors.goldLight,
-        alignment: Alignment.center,
-        child: const Icon(
-          Icons.home_repair_service_rounded,
-          size: 48,
-          color: AppColors.gold,
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        Image.network(
+          url,
+          fit: BoxFit.cover,
+          width: double.infinity,
+          height: double.infinity,
+          loadingBuilder: (_, child, p) =>
+              p == null ? child : const ColoredBox(color: Color(0xFFEEEEEE)),
+          errorBuilder: (_, _, _) => Container(
+            color: AppColors.goldLight,
+            alignment: Alignment.center,
+            child: const Icon(
+              Icons.home_repair_service_rounded,
+              size: 48,
+              color: AppColors.gold,
+            ),
+          ),
+        ),
+        // Bottom gradient for AppBar title readability when scrolled
+        Positioned(
+          left: 0,
+          right: 0,
+          bottom: 0,
+          child: Container(
+            height: 100,
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  Colors.transparent,
+                  Colors.black.withAlpha(100),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// ── Floating info card ────────────────────────────────────────────────────────
+
+class _FloatingInfoCard extends StatelessWidget {
+  const _FloatingInfoCard({
+    required this.node,
+    required this.displayPrice,
+    required this.hasAdjustment,
+  });
+
+  final CatalogNodeModel node;
+  final double displayPrice;
+  final bool hasAdjustment;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withAlpha(22),
+            blurRadius: 20,
+            spreadRadius: 0,
+            offset: const Offset(0, 6),
+          ),
+        ],
+      ),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 18, 20, 18),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Parent breadcrumb tag
+            if (!node.isRoot && node.parentName != null) ...[
+              Row(
+                children: [
+                  const Icon(Icons.chevron_left_rounded,
+                      size: 14, color: AppColors.textHint),
+                  const SizedBox(width: 2),
+                  Text(
+                    node.parentName!,
+                    style: const TextStyle(
+                      fontSize: 11,
+                      color: AppColors.textHint,
+                      fontWeight: FontWeight.w500,
+                      letterSpacing: 0.2,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 4),
+            ],
+
+            // Node name
+            Text(
+              node.name,
+              style: const TextStyle(
+                fontSize: 21,
+                fontWeight: FontWeight.w800,
+                color: AppColors.textPrimary,
+                height: 1.2,
+              ),
+            ),
+
+            // Meta row: rating + duration
+            if (node.rating > 0 || node.estimatedDuration != null) ...[
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  if (node.rating > 0) ...[
+                    const Icon(Icons.star_rounded,
+                        size: 14, color: AppColors.gold),
+                    const SizedBox(width: 3),
+                    Text(
+                      node.rating.toStringAsFixed(1),
+                      style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.textPrimary,
+                      ),
+                    ),
+                    if (node.reviewCount > 0) ...[
+                      const SizedBox(width: 3),
+                      Text(
+                        '(${node.reviewCount})',
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: AppColors.textSecondary,
+                        ),
+                      ),
+                    ],
+                    const SizedBox(width: 12),
+                  ],
+                  if (node.estimatedDuration != null) ...[
+                    const Icon(Icons.schedule_rounded,
+                        size: 14, color: AppColors.textSecondary),
+                    const SizedBox(width: 4),
+                    Text(
+                      '${node.estimatedDuration} min',
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ],
+
+            // Price (service detail) or child count (category)
+            if (node.isLeafBookable && node.basePrice != null) ...[
+              const SizedBox(height: 12),
+              const Divider(height: 1, color: AppColors.divider),
+              const SizedBox(height: 12),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.baseline,
+                textBaseline: TextBaseline.alphabetic,
+                children: [
+                  Text(
+                    '₹${displayPrice.toInt()}',
+                    style: const TextStyle(
+                      fontSize: 28,
+                      fontWeight: FontWeight.w800,
+                      color: AppColors.primary,
+                      height: 1.0,
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    hasAdjustment ? 'incl. adjustments' : 'onwards',
+                    style: const TextStyle(
+                      fontSize: 12,
+                      color: AppColors.textHint,
+                    ),
+                  ),
+                ],
+              ),
+            ] else if (node.hasChildren) ...[
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: AppColors.surfaceVariant,
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text(
+                      '${node.childrenCount} ${node.childrenCount == 1 ? 'service' : 'services'} available',
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ],
         ),
       ),
     );
@@ -364,7 +612,7 @@ class _Breadcrumb extends StatelessWidget {
   }
 }
 
-// ── Node info header ──────────────────────────────────────────────────────────
+// ── Node info header (no-image fallback) ──────────────────────────────────────
 
 class _NodeInfoHeader extends StatelessWidget {
   const _NodeInfoHeader({
@@ -386,7 +634,7 @@ class _NodeInfoHeader extends StatelessWidget {
           Text(
             node.name,
             style: const TextStyle(
-              fontSize: 22,
+              fontSize: 24,
               fontWeight: FontWeight.w800,
               color: AppColors.textPrimary,
               height: 1.2,
@@ -434,22 +682,29 @@ class _NodeInfoHeader extends StatelessWidget {
             ],
           ),
           if (node.isLeafBookable && node.basePrice != null) ...[
-            const SizedBox(height: 10),
-            Text(
-              '₹${displayPrice.toInt()}',
-              style: const TextStyle(
-                fontSize: 26,
-                fontWeight: FontWeight.w800,
-                color: AppColors.primary,
-                height: 1.1,
-              ),
-            ),
-            Text(
-              hasAdjustment ? 'incl. adjustments' : 'onwards',
-              style: const TextStyle(
-                fontSize: 12,
-                color: AppColors.textHint,
-              ),
+            const SizedBox(height: 12),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.baseline,
+              textBaseline: TextBaseline.alphabetic,
+              children: [
+                Text(
+                  '₹${displayPrice.toInt()}',
+                  style: const TextStyle(
+                    fontSize: 28,
+                    fontWeight: FontWeight.w800,
+                    color: AppColors.primary,
+                    height: 1.0,
+                  ),
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  hasAdjustment ? 'incl. adjustments' : 'onwards',
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: AppColors.textHint,
+                  ),
+                ),
+              ],
             ),
           ],
         ],
@@ -458,36 +713,26 @@ class _NodeInfoHeader extends StatelessWidget {
   }
 }
 
-// ── Children grid section ─────────────────────────────────────────────────────
+// ── Children list section ─────────────────────────────────────────────────────
 
 class _ChildrenSection extends StatelessWidget {
   const _ChildrenSection({
     required this.node,
     required this.children,
-    required this.screenWidth,
   });
   final CatalogNodeModel node;
   final List<CatalogNodeModel> children;
-  final double screenWidth;
-
-  int get _cols {
-    if (screenWidth < 480) return 2;
-    if (screenWidth < 768) return 3;
-    if (screenWidth < 1100) return 4;
-    return 5;
-  }
 
   @override
   Widget build(BuildContext context) {
-    final cols = _cols;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Padding(
-          padding: EdgeInsets.fromLTRB(20, 24, 20, 14),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(20, 28, 20, 4),
           child: Text(
-            'Browse',
-            style: TextStyle(
+            node.isRoot ? 'All Services' : 'Browse ${node.name}',
+            style: const TextStyle(
               fontSize: 17,
               fontWeight: FontWeight.w700,
               color: AppColors.textPrimary,
@@ -497,40 +742,218 @@ class _ChildrenSection extends StatelessWidget {
 
         if (children.isEmpty)
           const Padding(
-            padding: EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+            padding: EdgeInsets.symmetric(horizontal: 20, vertical: 12),
             child: Text(
               'Loading…',
               style: TextStyle(color: AppColors.textHint, fontSize: 13),
             ),
           )
         else
-          Padding(
-            padding:
-                const EdgeInsets.symmetric(horizontal: 16),
-            child: GridView.builder(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: cols,
-                childAspectRatio: 0.75,
-                crossAxisSpacing: 12,
-                mainAxisSpacing: 12,
-              ),
-              itemCount: children.length,
-              itemBuilder: (ctx, i) => CatalogNodeCard(
-                node: children[i],
-                colorIndex: i,
-                onTap: () => openCatalogNode(ctx, children[i]),
-              ),
+          ListView.separated(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+            itemCount: children.length,
+            separatorBuilder: (_, _) => const SizedBox(height: 10),
+            itemBuilder: (ctx, i) => _ChildListItem(
+              node: children[i],
+              onTap: () => openCatalogNode(ctx, children[i]),
             ),
           ),
+
         const SizedBox(height: 8),
       ],
     );
   }
 }
 
-// ── Coming Soon banner (leaf node, is_bookable = false) ───────────────────────
+// ── Child list item (vertical card) ──────────────────────────────────────────
+
+class _ChildListItem extends StatefulWidget {
+  const _ChildListItem({required this.node, required this.onTap});
+  final CatalogNodeModel node;
+  final VoidCallback onTap;
+
+  @override
+  State<_ChildListItem> createState() => _ChildListItemState();
+}
+
+class _ChildListItemState extends State<_ChildListItem> {
+  bool _pressed = false;
+  bool _navigating = false;
+
+  void _navigate() {
+    if (_navigating) return;
+    _navigating = true;
+    widget.onTap();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _navigating = false;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final node = widget.node;
+    final imageUrl = ServiceImageRegistry.resolve(node.imageUrl, node.name);
+
+    return GestureDetector(
+      onTap: _navigate,
+      onTapDown: (_) => setState(() => _pressed = true),
+      onTapUp: (_) => setState(() => _pressed = false),
+      onTapCancel: () => setState(() => _pressed = false),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 120),
+        curve: Curves.easeOut,
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: AppColors.border, width: 0.8),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withAlpha(_pressed ? 8 : 14),
+              blurRadius: _pressed ? 4 : 12,
+              spreadRadius: 0,
+              offset: Offset(0, _pressed ? 1 : 4),
+            ),
+          ],
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(15),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              // Thumbnail
+              SizedBox(
+                width: 90,
+                height: 90,
+                child: Image.network(
+                  imageUrl,
+                  fit: BoxFit.cover,
+                  loadingBuilder: (_, child, p) =>
+                      p == null
+                          ? child
+                          : const ColoredBox(color: Color(0xFFEEEEEE)),
+                  errorBuilder: (_, _, _) => Container(
+                    color: AppColors.goldLight,
+                    alignment: Alignment.center,
+                    child: const Icon(
+                      Icons.home_repair_service_rounded,
+                      size: 28,
+                      color: AppColors.gold,
+                    ),
+                  ),
+                ),
+              ),
+
+              // Info
+              Expanded(
+                child: Padding(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        node.name,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.textPrimary,
+                          height: 1.3,
+                        ),
+                      ),
+                      if (node.description?.isNotEmpty == true) ...[
+                        const SizedBox(height: 3),
+                        Text(
+                          node.description!,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: AppColors.textSecondary,
+                            height: 1.3,
+                          ),
+                        ),
+                      ],
+                      const SizedBox(height: 6),
+                      // Bottom row: price/options + duration
+                      Row(
+                        children: [
+                          if (node.isLeafBookable && node.basePrice != null) ...[
+                            Text(
+                              '₹${node.basePrice!.toInt()}',
+                              style: const TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w800,
+                                color: AppColors.primary,
+                              ),
+                            ),
+                            const SizedBox(width: 4),
+                            const Text(
+                              'onwards',
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: AppColors.textHint,
+                              ),
+                            ),
+                          ] else if (node.hasChildren)
+                            Text(
+                              '${node.childrenCount} ${node.childrenCount == 1 ? 'option' : 'options'}',
+                              style: const TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w500,
+                                color: AppColors.textSecondary,
+                              ),
+                            ),
+                          if (node.estimatedDuration != null) ...[
+                            const SizedBox(width: 8),
+                            const Icon(Icons.schedule_rounded,
+                                size: 12, color: AppColors.textHint),
+                            const SizedBox(width: 2),
+                            Text(
+                              '${node.estimatedDuration} min',
+                              style: const TextStyle(
+                                fontSize: 11,
+                                color: AppColors.textHint,
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+
+              // Arrow
+              Padding(
+                padding: const EdgeInsets.only(right: 14),
+                child: Container(
+                  width: 32,
+                  height: 32,
+                  decoration: BoxDecoration(
+                    color: AppColors.surfaceVariant,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Icon(
+                    Icons.chevron_right_rounded,
+                    size: 20,
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ── Coming Soon banner ────────────────────────────────────────────────────────
 
 class _ComingSoonBanner extends StatelessWidget {
   const _ComingSoonBanner();
@@ -541,16 +964,16 @@ class _ComingSoonBanner extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(20, 32, 20, 8),
       child: Container(
         width: double.infinity,
-        padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 20),
+        padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 20),
         decoration: BoxDecoration(
           color: AppColors.goldLight,
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(18),
           border: Border.all(color: AppColors.gold.withAlpha(60)),
         ),
         child: Column(
           children: [
-            Icon(Icons.schedule_rounded, size: 32, color: AppColors.gold),
-            const SizedBox(height: 10),
+            const Icon(Icons.schedule_rounded, size: 36, color: AppColors.gold),
+            const SizedBox(height: 12),
             const Text(
               'Coming Soon',
               style: TextStyle(
@@ -566,7 +989,7 @@ class _ComingSoonBanner extends StatelessWidget {
               style: TextStyle(
                 fontSize: 13,
                 color: AppColors.textSecondary,
-                height: 1.5,
+                height: 1.55,
               ),
             ),
           ],
@@ -575,7 +998,6 @@ class _ComingSoonBanner extends StatelessWidget {
     );
   }
 }
-
 
 // ── Sticky booking bar ────────────────────────────────────────────────────────
 
@@ -615,8 +1037,7 @@ class _NodeBookingBar extends ConsumerWidget {
           shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(16)),
           title: const Text('Login Required'),
-          content:
-              const Text('Please log in to add items to your cart.'),
+          content: const Text('Please log in to add items to your cart.'),
           actions: [
             TextButton(
               onPressed: () => Navigator.of(ctx).pop(false),
@@ -657,8 +1078,7 @@ class _NodeBookingBar extends ConsumerWidget {
     final selectedAttrs = buildSelectedAttributes(attrs, selections);
     final selectedAddons = buildSelectedAddons(addOns, selectedAddonIds);
     await launchBookingFlow(context, ref, node,
-        selectedAttributes: selectedAttrs,
-        selectedAddons: selectedAddons);
+        selectedAttributes: selectedAttrs, selectedAddons: selectedAddons);
   }
 
   @override
@@ -668,16 +1088,19 @@ class _NodeBookingBar extends ConsumerWidget {
     return Container(
       padding: EdgeInsets.fromLTRB(
         20,
-        12,
+        14,
         20,
-        12 + MediaQuery.of(context).padding.bottom,
+        14 + MediaQuery.of(context).padding.bottom,
       ),
       decoration: BoxDecoration(
         color: AppColors.surface,
+        border: const Border(
+          top: BorderSide(color: AppColors.border, width: 0.8),
+        ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withAlpha(18),
-            blurRadius: 12,
+            color: Colors.black.withAlpha(16),
+            blurRadius: 16,
             offset: const Offset(0, -4),
           ),
         ],
@@ -713,7 +1136,10 @@ class _NodeBookingBar extends ConsumerWidget {
             label: const Text('Add'),
             style: OutlinedButton.styleFrom(
               minimumSize: const Size(0, 48),
-              padding: const EdgeInsets.symmetric(horizontal: 12),
+              padding: const EdgeInsets.symmetric(horizontal: 14),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
             ),
           ),
           const SizedBox(width: 8),
@@ -722,6 +1148,9 @@ class _NodeBookingBar extends ConsumerWidget {
               onPressed: canBook ? () => _book(context, ref) : null,
               style: FilledButton.styleFrom(
                 minimumSize: const Size.fromHeight(48),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
               ),
               child: Text(
                 canBook ? 'Book Now' : 'Select options',

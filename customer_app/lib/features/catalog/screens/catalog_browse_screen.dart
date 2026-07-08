@@ -72,12 +72,13 @@ class _CatalogBrowseScreenState extends ConsumerState<CatalogBrowseScreen> {
 
     return Scaffold(
       backgroundColor: AppColors.background,
+      extendBodyBehindAppBar: true,
       appBar: AppBar(
         title: const Text('Services'),
-        backgroundColor: AppColors.background,
-        foregroundColor: AppColors.textPrimary,
+        backgroundColor: Colors.transparent,
+        foregroundColor: Colors.white,
         elevation: 0,
-        scrolledUnderElevation: 1,
+        scrolledUnderElevation: 0,
         surfaceTintColor: Colors.transparent,
       ),
       body: Align(
@@ -93,11 +94,21 @@ class _CatalogBrowseScreenState extends ConsumerState<CatalogBrowseScreen> {
               child: CustomScrollView(
                 physics: const AlwaysScrollableScrollPhysics(),
                 slivers: [
+                  // ── Hero banner + floating title card ────────────────────
+                  SliverToBoxAdapter(
+                    child: _BrowseHeroHeader(
+                      nodeCount: async.valueOrNull?.length,
+                    ),
+                  ),
+                  // Space for the card that extends 48 px below the Stack
+                  // plus a 16 px gap before the search bar = 64 px.
+                  const SliverToBoxAdapter(child: SizedBox(height: 64)),
+
                   // ── Search bar ───────────────────────────────────────────
                   SliverToBoxAdapter(
                     child: Padding(
                       padding:
-                          EdgeInsets.fromLTRB(hPad, 16, hPad, 8),
+                          EdgeInsets.fromLTRB(hPad, 0, hPad, 8),
                       child: _SearchBar(controller: _searchController),
                     ),
                   ),
@@ -171,6 +182,135 @@ class _CatalogBrowseScreenState extends ConsumerState<CatalogBrowseScreen> {
           mainAxisSpacing: 14,
         ),
       ),
+    );
+  }
+}
+
+// ── Browse hero banner + floating info card ───────────────────────────────────
+
+class _BrowseHeroHeader extends StatelessWidget {
+  const _BrowseHeroHeader({this.nodeCount});
+  final int? nodeCount;
+
+  @override
+  Widget build(BuildContext context) {
+    final topInset =
+        MediaQuery.of(context).padding.top + kToolbarHeight;
+    final heroHeight = topInset + 140.0;
+
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        // Gradient background fills behind the transparent AppBar
+        Container(
+          height: heroHeight,
+          width: double.infinity,
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [Color(0xFF111111), Color(0xFF2C2C2C)],
+            ),
+          ),
+          child: Stack(
+            children: [
+              // Subtle decorative icon
+              Positioned(
+                right: -24,
+                bottom: -8,
+                child: Icon(
+                  Icons.home_repair_service_rounded,
+                  size: 160,
+                  color: Colors.white.withAlpha(12),
+                ),
+              ),
+            ],
+          ),
+        ),
+
+        // Floating info card — bottom edge 48 px below the Stack
+        Positioned(
+          bottom: -48,
+          left: 16,
+          right: 16,
+          child: Container(
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(20),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withAlpha(22),
+                  blurRadius: 20,
+                  spreadRadius: 0,
+                  offset: const Offset(0, 6),
+                ),
+              ],
+            ),
+            padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Browse Services',
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.w800,
+                          color: AppColors.textPrimary,
+                          height: 1.2,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Professional services at your doorstep',
+                        style: const TextStyle(
+                          fontSize: 13,
+                          color: AppColors.textSecondary,
+                          height: 1.4,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                if (nodeCount != null && nodeCount! > 0) ...[
+                  const SizedBox(width: 12),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 12, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: AppColors.surfaceVariant,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Column(
+                      children: [
+                        Text(
+                          '$nodeCount',
+                          style: const TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.w800,
+                            color: AppColors.textPrimary,
+                            height: 1.0,
+                          ),
+                        ),
+                        const Text(
+                          'categories',
+                          style: TextStyle(
+                            fontSize: 10,
+                            color: AppColors.textSecondary,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

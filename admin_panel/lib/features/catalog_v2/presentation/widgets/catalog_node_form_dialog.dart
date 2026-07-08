@@ -266,17 +266,6 @@ class _CatalogNodeFormDialogState extends State<CatalogNodeFormDialog> {
             ),
             const SizedBox(height: 16),
 
-            // Description
-            TextFormField(
-              controller: _description,
-              decoration: const InputDecoration(
-                labelText: 'Description',
-                hintText: 'Short description shown to customers',
-              ),
-              maxLines: 2,
-            ),
-            const SizedBox(height: 16),
-
             // Sort Order
             SizedBox(
               width: 140,
@@ -299,18 +288,6 @@ class _CatalogNodeFormDialogState extends State<CatalogNodeFormDialog> {
                 prefixIcon: Icon(Icons.image_outlined),
               ),
               keyboardType: TextInputType.url,
-            ),
-            const SizedBox(height: 16),
-
-            // Icon Key
-            TextFormField(
-              controller: _iconKey,
-              decoration: const InputDecoration(
-                labelText: 'Icon Key',
-                hintText: 'e.g. cleaning_services',
-                helperText: 'Flutter icon identifier for root-level nodes.',
-                prefixIcon: Icon(Icons.interests_outlined),
-              ),
             ),
             const SizedBox(height: 20),
 

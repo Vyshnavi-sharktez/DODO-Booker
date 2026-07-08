@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
 
 import '../models/catalog_node_model.dart';
+import '../widgets/catalog_node_modal.dart';
 
-/// Navigate to a catalog node. Always pushes the route so the back-stack is
-/// preserved for multi-level tree traversal.
+/// Opens a catalog node as a centered modal dialog over a blurred backdrop.
+/// Stacks safely — tapping a child node opens another modal on top.
 ///
-/// Prefer this over direct `context.push('/catalog/...')` calls so
-/// Phase 4 can add desktop-modal behaviour in one place.
+/// Deep-link navigation (`/catalog/:nodeId`) continues to use the full-screen
+/// CatalogNodeFetchScreen so push-notification deep-links keep working.
 void openCatalogNode(BuildContext context, CatalogNodeModel node) {
-  context.push('/catalog/${node.id}', extra: node);
+  CatalogNodeModal.open(context, node);
 }
