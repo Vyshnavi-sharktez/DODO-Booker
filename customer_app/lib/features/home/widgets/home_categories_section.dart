@@ -4,7 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/utils/service_image_registry.dart';
 import '../../../core/widgets/section_header.dart';
-import '../../../models/category_model.dart';
+import '../../../features/catalog/models/catalog_node_model.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Layout constants — identical to TrendingServicesSection
@@ -25,8 +25,8 @@ const double _kInfoH  = 120.0;
 // ─────────────────────────────────────────────────────────────────────────────
 
 class HomeCategoriesSection extends StatelessWidget {
-  final AsyncValue<List<CategoryModel>> asyncCategories;
-  final ValueChanged<CategoryModel> onCategorySelected;
+  final AsyncValue<List<CatalogNodeModel>> asyncCategories;
+  final ValueChanged<CatalogNodeModel> onCategorySelected;
   final VoidCallback? onSeeAll;
 
   const HomeCategoriesSection({
@@ -50,13 +50,13 @@ class HomeCategoriesSection extends StatelessWidget {
         asyncCategories.when(
           loading: () => const _Skeleton(),
           error: (_, _) => const SizedBox.shrink(),
-          data: (cats) {
+          data: (nodes) {
             final visible =
-                cats.where((c) => c.name.trim().isNotEmpty).toList();
+                nodes.where((n) => n.name.trim().isNotEmpty).toList();
             return visible.isEmpty
                 ? const SizedBox.shrink()
                 : _Carousel(
-                    categories: visible,
+                    nodes: visible,
                     onSelect: onCategorySelected,
                   );
           },
@@ -71,10 +71,10 @@ class HomeCategoriesSection extends StatelessWidget {
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _Carousel extends StatelessWidget {
-  final List<CategoryModel> categories;
-  final ValueChanged<CategoryModel> onSelect;
+  final List<CatalogNodeModel> nodes;
+  final ValueChanged<CatalogNodeModel> onSelect;
 
-  const _Carousel({required this.categories, required this.onSelect});
+  const _Carousel({required this.nodes, required this.onSelect});
 
   @override
   Widget build(BuildContext context) {
@@ -90,16 +90,16 @@ class _Carousel extends StatelessWidget {
             child: ListView.builder(
               scrollDirection: Axis.horizontal,
               padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
-              itemCount: categories.length,
+              itemCount: nodes.length,
               itemBuilder: (_, i) => Padding(
                 padding: EdgeInsets.only(
-                  right: i < categories.length - 1 ? _kGap : 0,
+                  right: i < nodes.length - 1 ? _kGap : 0,
                 ),
                 child: _CategoryCard(
-                  category: categories[i],
+                  node: nodes[i],
                   cardWidth: size.w,
                   cardHeight: size.h,
-                  onTap: () => onSelect(categories[i]),
+                  onTap: () => onSelect(nodes[i]),
                 ),
               ),
             ),
@@ -115,13 +115,13 @@ class _Carousel extends StatelessWidget {
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _CategoryCard extends StatefulWidget {
-  final CategoryModel category;
+  final CatalogNodeModel node;
   final double cardWidth;
   final double cardHeight;
   final VoidCallback onTap;
 
   const _CategoryCard({
-    required this.category,
+    required this.node,
     required this.cardWidth,
     required this.cardHeight,
     required this.onTap,
@@ -181,13 +181,13 @@ class _CategoryCardState extends State<_CategoryCard> {
               children: [
                 // Image — fills remaining height above info strip
                 Expanded(
-                  child: _CardImage(category: widget.category),
+                  child: _CardImage(node: widget.node),
                 ),
                 // Info strip — fixed 120px, same as service cards
                 SizedBox(
                   height: _kInfoH,
                   child: _CardInfo(
-                    category: widget.category,
+                    node: widget.node,
                     onTap: _navigate,
                   ),
                 ),
@@ -205,15 +205,12 @@ class _CategoryCardState extends State<_CategoryCard> {
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _CardImage extends StatelessWidget {
-  final CategoryModel category;
-  const _CardImage({required this.category});
+  final CatalogNodeModel node;
+  const _CardImage({required this.node});
 
   @override
   Widget build(BuildContext context) {
-    final url = ServiceImageRegistry.resolve(
-      category.imageUrl,
-      category.name,
-    );
+    final url = ServiceImageRegistry.resolve(node.imageUrl, node.name);
     return Image.network(
       url,
       fit: BoxFit.cover,
@@ -239,10 +236,10 @@ class _CardImage extends StatelessWidget {
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _CardInfo extends StatelessWidget {
-  final CategoryModel category;
+  final CatalogNodeModel node;
   final VoidCallback onTap;
 
-  const _CardInfo({required this.category, required this.onTap});
+  const _CardInfo({required this.node, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -254,9 +251,8 @@ class _CardInfo extends StatelessWidget {
           mainAxisSize: MainAxisSize.max,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Category name — 2 lines max, same style as service name
             Text(
-              category.name,
+              node.name,
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
               style: const TextStyle(
@@ -266,11 +262,10 @@ class _CardInfo extends StatelessWidget {
                 height: 1.25,
               ),
             ),
-            // Optional description sub-line
-            if (category.description?.isNotEmpty == true) ...[
+            if (node.description?.isNotEmpty == true) ...[
               const SizedBox(height: 4),
               Text(
-                category.description!,
+                node.description!,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: const TextStyle(
@@ -281,15 +276,23 @@ class _CardInfo extends StatelessWidget {
               ),
             ],
             const Spacer(),
-            // Bottom row: service count (left) + "View" button (right)
-            // Mirrors price + "Book Now" layout from service cards
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                if (category.serviceCount > 0)
+                if (node.isBookable && node.basePrice != null)
                   Text(
-                    '${category.serviceCount} Services',
+                    '₹${node.basePrice!.toInt()}',
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w800,
+                      color: Color(0xFF1A1A1A),
+                      height: 1.2,
+                    ),
+                  )
+                else if (node.childrenCount > 0)
+                  Text(
+                    '${node.childrenCount} ${node.childrenCount == 1 ? 'option' : 'options'}',
                     style: const TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.w800,

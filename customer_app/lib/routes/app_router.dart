@@ -5,6 +5,9 @@ import '../features/auth/screens/login_screen.dart';
 import '../features/auth/screens/otp_screen.dart';
 import '../features/booking/screens/booking_screen.dart';
 import '../features/address/screens/address_screen.dart';
+import '../features/catalog/models/catalog_node_model.dart';
+import '../features/catalog/screens/catalog_browse_screen.dart';
+import '../features/catalog/screens/catalog_node_screen.dart';
 import '../features/category/screens/subcategory_screen.dart';
 import '../features/service/screens/services_screen.dart';
 import '../features/service/screens/category_services_screen.dart';
@@ -12,7 +15,6 @@ import '../features/service/screens/service_details_screen.dart';
 import '../features/booking/screens/booking_success_screen.dart';
 import '../features/bookings/screens/booking_details_screen.dart';
 import '../features/bookings/screens/my_bookings_screen.dart';
-import '../features/bookings/utils/booking_detail_launcher.dart';
 import '../features/bookings/utils/my_bookings_launcher.dart';
 import '../features/profile/screens/profile_screen.dart';
 import '../features/profile/screens/edit_profile_screen.dart';
@@ -21,7 +23,6 @@ import '../features/notifications/screens/notification_booking_screen.dart';
 import '../features/cart/screens/cart_screen.dart';
 import '../features/cart/screens/checkout_screen.dart';
 import '../features/search/screens/search_screen.dart';
-import '../features/category/screens/category_screen.dart';
 import '../features/info/screens/contact_screen.dart';
 import '../features/info/screens/help_screen.dart';
 import '../features/info/screens/refund_policy_screen.dart';
@@ -35,9 +36,16 @@ class AppRoutes {
   static const String home = '/';
   static const String login = '/login';
   static const String otp = '/otp';
+
+  // ── Catalog Engine (Phase 3+) ──────────────────────────────────────────────
+  static const String catalogNode = '/catalog/:nodeId';
+
+  // ── Legacy routes kept for backward-compat until Phase 5 cleanup ──────────
   static const String subcategory = '/subcategory/:categoryId';
   static const String services = '/services/:subcategoryId';
   static const String serviceDetail = '/service-detail/:serviceId';
+  static const String categoryServices = '/category-services/:categoryId';
+
   static const String booking = '/booking';
   static const String bookingSuccess = '/booking-success';
   static const String bookingDetail = '/booking-detail/:id';
@@ -51,7 +59,6 @@ class AppRoutes {
   static const String myBookings = '/my-bookings';
   static const String profile = '/profile';
   static const String categories = '/categories';
-  static const String categoryServices = '/category-services/:categoryId';
   static const String contact = '/contact';
   static const String help = '/help';
   static const String refundPolicy = '/refund-policy';
@@ -73,7 +80,21 @@ final appRouter = GoRouter(
       builder: (context, state) => const OtpScreen(),
     ),
 
-    // Category → Subcategory
+    // ── Catalog Engine ─────────────────────────────────────────────────────
+    GoRoute(
+      path: AppRoutes.catalogNode,
+      builder: (context, state) {
+        final nodeId = state.pathParameters['nodeId']!;
+        final extra = state.extra;
+        if (extra is CatalogNodeModel) {
+          return CatalogNodeScreen(node: extra);
+        }
+        // Deep-link fallback: fetch node by ID from the server.
+        return CatalogNodeFetchScreen(nodeId: nodeId);
+      },
+    ),
+
+    // Category → Subcategory (legacy — no longer navigated to from home)
     GoRoute(
       path: AppRoutes.subcategory,
       builder: (context, state) {
@@ -107,8 +128,8 @@ final appRouter = GoRouter(
     GoRoute(
       path: AppRoutes.booking,
       builder: (context, state) {
-        final service = state.extra;
-        if (service is ServiceModel) return BookingScreen(service: service);
+        final extra = state.extra;
+        if (extra is CatalogNodeModel) return BookingScreen(service: extra);
         return const Scaffold(body: Center(child: Text('Service not found')));
       },
     ),
@@ -192,9 +213,11 @@ final appRouter = GoRouter(
       ),
     ),
 
+    // /categories now shows root catalog nodes (replaced CategoryScreen).
+    // Legacy CategoryScreen import removed; Phase 5 deletes it entirely.
     GoRoute(
       path: AppRoutes.categories,
-      builder: (context, state) => const CategoryScreen(),
+      builder: (context, state) => const CatalogBrowseScreen(),
     ),
 
     // Home category card → services filtered to that category

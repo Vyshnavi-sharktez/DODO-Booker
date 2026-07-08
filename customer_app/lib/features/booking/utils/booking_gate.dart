@@ -7,7 +7,7 @@ import '../../../features/auth/providers/auth_provider.dart';
 import '../../../features/auth/widgets/otp_login_modal.dart';
 import '../../../features/auth/widgets/otp_verification_modal.dart';
 import '../../../features/auth/widgets/profile_completion_modal.dart';
-import '../../../models/service_model.dart';
+import '../../../features/catalog/models/catalog_node_model.dart';
 import '../../../models/service_attribute_model.dart';
 import '../../../models/addon_model.dart';
 import '../modals/address_modal.dart';
@@ -25,7 +25,7 @@ import '../services/coupon_providers.dart';
 Future<void> launchBookingFlow(
   BuildContext context,
   WidgetRef ref,
-  ServiceModel service, {
+  CatalogNodeModel service, {
   List<SelectedAttributeOption> selectedAttributes = const [],
   List<SelectedAddon> selectedAddons = const [],
 }) async {
@@ -117,7 +117,7 @@ Future<void> launchBookingFlow(
 
   // Read coupon state after the summary modal closes.
   final selectedCoupon = ref.read(selectedCouponProvider);
-  final subtotal = (service.startingPrice + priceAdjustment + addonsTotal) * 1.18;
+  final subtotal = ((service.basePrice ?? 0.0) + priceAdjustment + addonsTotal) * 1.18;
   final discountAmount = selectedCoupon?.calculateDiscount(subtotal) ?? 0.0;
   final finalTotal = (subtotal - discountAmount).clamp(0.0, double.infinity);
 

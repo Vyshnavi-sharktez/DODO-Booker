@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/widgets/app_modal_dialog.dart';
 import '../../../core/widgets/clickable.dart';
-import '../../../models/service_model.dart';
+import '../../../features/catalog/models/catalog_node_model.dart';
 import '../../../models/address_model.dart';
 import '../../../models/time_slot_model.dart';
 import '../../../models/coupon_model.dart';
@@ -15,7 +15,7 @@ import '../widgets/available_coupons_sheet.dart';
 
 /// Booking summary modal. Pops with `true` when the user confirms booking.
 class BookingSummaryModal extends ConsumerStatefulWidget {
-  final ServiceModel service;
+  final CatalogNodeModel service;
   final AddressModel address;
   final DateTime date;
   final TimeSlotModel slot;
@@ -51,7 +51,7 @@ class _BookingSummaryModalState extends ConsumerState<BookingSummaryModal> {
 
   // Subtotal = (base price + attribute adjustments + add-ons) + 18% GST
   double get _subtotal =>
-      (widget.service.startingPrice +
+      ((widget.service.basePrice ?? 0.0) +
               widget.priceAdjustment +
               totalAddonsPrice(widget.selectedAddons)) *
           1.18;

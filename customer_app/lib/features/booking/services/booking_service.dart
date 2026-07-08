@@ -6,7 +6,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../models/time_slot_model.dart';
 import '../../../models/booking_model.dart';
 import '../../../models/booking_item.dart';
-import '../../../models/service_model.dart';
+import '../../../features/catalog/models/catalog_node_model.dart';
 import '../../../models/address_model.dart';
 import '../../../models/addon_model.dart';
 import 'coupon_service.dart';
@@ -61,7 +61,7 @@ class BookingService {
   // ── Create booking ──────────────────────────────────────────────────────────
 
   Future<BookingModel> createBooking({
-    required ServiceModel service,
+    required CatalogNodeModel service,
     required AddressModel address,
     required DateTime date,
     required TimeSlotModel slot,
@@ -80,7 +80,7 @@ class BookingService {
     debugPrint('[DODO][Booking] customer_id=$customerId');
 
     final addonsTotal = totalAddonsPrice(selectedAddons);
-    final subtotal = service.startingPrice + priceAdjustment + addonsTotal;
+    final subtotal = (service.basePrice ?? 0.0) + priceAdjustment + addonsTotal;
     final tax = subtotal * 0.18;
     final grossAmount = subtotal + tax;
     final totalAmount = (grossAmount - discountAmount).clamp(0.0, double.infinity);

@@ -2,7 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/constants/app_colors.dart';
-import '../../../models/category_model.dart';
+import '../../../features/catalog/models/catalog_node_model.dart';
+import '../../../features/catalog/utils/catalog_launcher.dart';
 import '../../../models/service_model.dart';
 import '../../booking/services/coupon_providers.dart';
 import '../../service/utils/service_detail_launcher.dart';
@@ -11,7 +12,6 @@ import '../widgets/customer_reviews_section.dart';
 import '../widgets/hero_section.dart';
 import '../widgets/home_categories_section.dart';
 import '../widgets/home_header_section.dart';
-import '../widgets/service_selection_modal.dart';
 import '../widgets/special_offers_section.dart';
 import '../widgets/trending_services_section.dart';
 import '../widgets/footer_section.dart';
@@ -22,18 +22,14 @@ class HomeScreen extends ConsumerWidget {
 
   Future<void> _onRefresh(WidgetRef ref) async {
     ref.invalidate(activeCouponsProvider);
-    ref.invalidate(featuredCategoriesProvider);
-    ref.invalidate(featuredServicesProvider);
-    ref.invalidate(popularServicesProvider);
+    ref.invalidate(featuredCatalogNodesProvider);
     ref.invalidate(trendingServicesProvider);
     ref.invalidate(newServicesProvider);
     ref.invalidate(homeReviewsProvider);
     try {
       await Future.wait([
         ref.read(activeCouponsProvider.future),
-        ref.read(featuredCategoriesProvider.future),
-        ref.read(featuredServicesProvider.future),
-        ref.read(popularServicesProvider.future),
+        ref.read(featuredCatalogNodesProvider.future),
         ref.read(trendingServicesProvider.future),
         ref.read(newServicesProvider.future),
         ref.read(homeReviewsProvider.future),
@@ -45,19 +41,17 @@ class HomeScreen extends ConsumerWidget {
     openServiceDetail(context, service);
   }
 
-  void _onCategoryTap(BuildContext context, CategoryModel category) {
-    ServiceSelectionModal.show(context, category);
+  void _onCatalogNodeTap(BuildContext context, CatalogNodeModel node) {
+    openCatalogNode(context, node);
   }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final activeCoupons      = ref.watch(activeCouponsProvider);
-    final featuredCategories = ref.watch(featuredCategoriesProvider);
-    // final featuredServices = ref.watch(featuredServicesProvider);
-    // final popularServices  = ref.watch(popularServicesProvider);
-    final trendingServices = ref.watch(trendingServicesProvider);
-    final newServices      = ref.watch(newServicesProvider);
-    final reviews          = ref.watch(homeReviewsProvider);
+    final activeCoupons     = ref.watch(activeCouponsProvider);
+    final featuredNodes     = ref.watch(featuredCatalogNodesProvider);
+    final trendingServices  = ref.watch(trendingServicesProvider);
+    final newServices       = ref.watch(newServicesProvider);
+    final reviews           = ref.watch(homeReviewsProvider);
 
     // Only show offers section while loading or when there are active coupons.
     final showCoupons = activeCoupons.isLoading ||
@@ -103,9 +97,9 @@ class HomeScreen extends ConsumerWidget {
                           // ── Service categories (circular) ──────────
                           const SizedBox(height: 28),
                           HomeCategoriesSection(
-                            asyncCategories: featuredCategories,
-                            onCategorySelected: (c) =>
-                                _onCategoryTap(context, c),
+                            asyncCategories: featuredNodes,
+                            onCategorySelected: (node) =>
+                                _onCatalogNodeTap(context, node),
                             onSeeAll: () => context.push('/categories'),
                           ),
 

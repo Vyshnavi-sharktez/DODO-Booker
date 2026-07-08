@@ -1,0 +1,273 @@
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../../../auth/application/providers/auth_provider.dart';
+import '../../../service_attributes/application/providers/service_attributes_providers.dart';
+import '../../../service_attributes/data/service_attributes_repository.dart';
+import '../../../service_attributes/domain/models/service_attribute.dart';
+import '../../../service_attributes/domain/models/service_attribute_option.dart';
+import '../../data/catalog_node_repository.dart';
+import '../../domain/models/catalog_node.dart';
+
+// ── Repository provider ────────────────────────────────────────────────────────
+
+final catalogNodeRepositoryProvider = Provider<CatalogNodeRepository>((ref) {
+  return CatalogNodeRepository(ref.watch(supabaseClientProvider));
+});
+
+// ── Node list notifier ─────────────────────────────────────────────────────────
+
+class CatalogNodeNotifier
+    extends StateNotifier<AsyncValue<List<CatalogNode>>> {
+  final CatalogNodeRepository _repo;
+
+  CatalogNodeNotifier(this._repo) : super(const AsyncValue.loading()) {
+    _load();
+  }
+
+  Future<void> _load() async {
+    state = const AsyncValue.loading();
+    state = await AsyncValue.guard(_repo.fetchAll);
+  }
+
+  Future<void> refresh() => _load();
+
+  Future<void> createNode({
+    String? parentId,
+    required String name,
+    required String slug,
+    String? description,
+    String? imageUrl,
+    String? iconKey,
+    required int sortOrder,
+    required bool isActive,
+    required bool isFeatured,
+    required bool isBookable,
+    double? basePrice,
+    int? estimatedDuration,
+  }) async {
+    await _repo.createNode(
+      parentId: parentId,
+      name: name,
+      slug: slug,
+      description: description,
+      imageUrl: imageUrl,
+      iconKey: iconKey,
+      sortOrder: sortOrder,
+      isActive: isActive,
+      isFeatured: isFeatured,
+      isBookable: isBookable,
+      basePrice: basePrice,
+      estimatedDuration: estimatedDuration,
+    );
+    await _load();
+  }
+
+  Future<void> updateNode(
+    String id, {
+    String? parentId,
+    required String name,
+    required String slug,
+    String? description,
+    String? imageUrl,
+    String? iconKey,
+    required int sortOrder,
+    required bool isActive,
+    required bool isFeatured,
+    required bool isBookable,
+    double? basePrice,
+    int? estimatedDuration,
+  }) async {
+    await _repo.updateNode(
+      id,
+      parentId: parentId,
+      name: name,
+      slug: slug,
+      description: description,
+      imageUrl: imageUrl,
+      iconKey: iconKey,
+      sortOrder: sortOrder,
+      isActive: isActive,
+      isFeatured: isFeatured,
+      isBookable: isBookable,
+      basePrice: basePrice,
+      estimatedDuration: estimatedDuration,
+    );
+    await _load();
+  }
+
+  Future<void> deleteNode(String id) async {
+    await _repo.deleteNode(id);
+    await _load();
+  }
+
+  Future<void> moveNode(String id, String? newParentId) async {
+    await _repo.moveNode(id, newParentId);
+    await _load();
+  }
+
+  Future<void> toggleActive(String id, {required bool isActive}) async {
+    final current = state.valueOrNull;
+    if (current != null) {
+      state = AsyncValue.data(
+        current
+            .map((n) => n.id == id ? n.copyWith(isActive: isActive) : n)
+            .toList(),
+      );
+    }
+    try {
+      await _repo.toggleActive(id, isActive: isActive);
+    } catch (_) {
+      await _load();
+      rethrow;
+    }
+  }
+
+  Future<void> toggleBookable(String id, {required bool isBookable}) async {
+    final current = state.valueOrNull;
+    if (current != null) {
+      state = AsyncValue.data(
+        current
+            .map((n) => n.id == id ? n.copyWith(isBookable: isBookable) : n)
+            .toList(),
+      );
+    }
+    try {
+      await _repo.toggleBookable(id, isBookable: isBookable);
+    } catch (_) {
+      await _load();
+      rethrow;
+    }
+  }
+}
+
+final catalogNodeNotifierProvider = StateNotifierProvider<CatalogNodeNotifier,
+    AsyncValue<List<CatalogNode>>>((ref) {
+  return CatalogNodeNotifier(ref.watch(catalogNodeRepositoryProvider));
+});
+
+// ── Node attributes notifier (separate from serviceAttributesNotifierProvider) ─
+//
+// Queries service_attributes by node_id so it works for both migrated nodes
+// (where node_id = service_id) and brand-new catalog nodes (node_id only).
+
+class CatalogNodeAttributesNotifier
+    extends StateNotifier<AsyncValue<List<ServiceAttribute>>> {
+  final ServiceAttributesRepository _repo;
+  String? _currentNodeId;
+
+  CatalogNodeAttributesNotifier(this._repo)
+      : super(const AsyncValue.data([]));
+
+  Future<void> loadForNode(String nodeId) async {
+    _currentNodeId = nodeId;
+    await _reload();
+  }
+
+  Future<void> _reload() async {
+    if (_currentNodeId == null) return;
+    state = const AsyncValue.loading();
+    state = await AsyncValue.guard(
+      () => _repo.fetchByNode(_currentNodeId!),
+    );
+  }
+
+  Future<void> createAttribute({
+    required String nodeId,
+    required String name,
+    required String fieldType,
+    required bool isRequired,
+  }) async {
+    await _repo.createAttributeForNode(
+      nodeId: nodeId,
+      name: name,
+      fieldType: fieldType,
+      isRequired: isRequired,
+    );
+    await _reload();
+  }
+
+  Future<void> updateAttribute(
+    String id, {
+    required String name,
+    required String fieldType,
+    required bool isRequired,
+  }) async {
+    await _repo.updateAttributeName(
+      id,
+      name: name,
+      fieldType: fieldType,
+      isRequired: isRequired,
+    );
+    await _reload();
+  }
+
+  Future<void> deleteAttribute(String id) async {
+    await _repo.deleteAttribute(id);
+    await _reload();
+  }
+
+  Future<void> createOption({
+    required String attributeId,
+    required String optionName,
+    required double priceAdjustment,
+  }) async {
+    final attrs = state.valueOrNull ?? [];
+    final attr = attrs.where((a) => a.id == attributeId).firstOrNull;
+    final nextSortOrder = attr?.options.length ?? 0;
+    await _repo.createOption(
+      attributeId: attributeId,
+      optionName: optionName,
+      priceAdjustment: priceAdjustment,
+      sortOrder: nextSortOrder,
+    );
+    await _reload();
+  }
+
+  Future<void> updateOption(
+    String optionId, {
+    required String optionName,
+    required double priceAdjustment,
+  }) async {
+    await _repo.updateOption(
+      optionId,
+      optionName: optionName,
+      priceAdjustment: priceAdjustment,
+    );
+    await _reload();
+  }
+
+  Future<void> deleteOption(String optionId) async {
+    await _repo.deleteOption(optionId);
+    await _reload();
+  }
+
+  Future<void> reorderOptions(
+    String attributeId,
+    List<ServiceAttributeOption> reorderedOptions,
+  ) async {
+    final current = state.valueOrNull;
+    if (current != null) {
+      state = AsyncValue.data(
+        current.map((attr) {
+          if (attr.id != attributeId) return attr;
+          return attr.copyWith(options: reorderedOptions);
+        }).toList(),
+      );
+    }
+    await _repo.reorderOptions(
+      reorderedOptions
+          .asMap()
+          .entries
+          .map((e) => (id: e.value.id, sortOrder: e.key))
+          .toList(),
+    );
+  }
+}
+
+final catalogNodeAttributesNotifierProvider = StateNotifierProvider<
+    CatalogNodeAttributesNotifier,
+    AsyncValue<List<ServiceAttribute>>>((ref) {
+  return CatalogNodeAttributesNotifier(
+    ref.watch(serviceAttributesRepositoryProvider),
+  );
+});

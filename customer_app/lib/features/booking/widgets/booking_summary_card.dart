@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
 import '../../../core/constants/app_colors.dart';
-import '../../../models/service_model.dart';
+import '../../../features/catalog/models/catalog_node_model.dart';
 import '../../../models/address_model.dart';
 import '../../../models/time_slot_model.dart';
 import '../../../models/service_attribute_model.dart';
 import '../../../models/addon_model.dart';
 
 class BookingSummaryCard extends StatelessWidget {
-  final ServiceModel service;
+  final CatalogNodeModel service;
   final AddressModel address;
   final DateTime date;
   final TimeSlotModel slot;
@@ -43,7 +43,7 @@ class BookingSummaryCard extends StatelessWidget {
       '${_weekdays[date.weekday - 1]}, ${date.day} ${_monthNames[date.month - 1]} ${date.year}';
 
   double get _addonsTotal => totalAddonsPrice(selectedAddons);
-  double get _adjustedBase => service.startingPrice + priceAdjustment + _addonsTotal;
+  double get _adjustedBase => (service.basePrice ?? 0.0) + priceAdjustment + _addonsTotal;
   double get _tax => _adjustedBase * 0.18;
   double get _originalTotal => _adjustedBase + _tax;
   double get _finalTotal => (_originalTotal - discountAmount).clamp(0.0, double.infinity);
@@ -80,8 +80,8 @@ class BookingSummaryCard extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(service.name, style: tt.titleSmall?.copyWith(fontWeight: FontWeight.w700)),
-                      if (service.subcategoryName != null)
-                        Text(service.subcategoryName!, style: tt.labelSmall?.copyWith(color: AppColors.textSecondary)),
+                      if (service.parentName != null)
+                        Text(service.parentName!, style: tt.labelSmall?.copyWith(color: AppColors.textSecondary)),
                     ],
                   ),
                 ),
@@ -160,7 +160,7 @@ class BookingSummaryCard extends StatelessWidget {
             // ── Price breakdown ───────────────────────────────────────────────
             Text('Price Details', style: tt.labelMedium?.copyWith(color: AppColors.textSecondary, fontWeight: FontWeight.w600)),
             const SizedBox(height: 10),
-            _PriceRow(label: 'Base Price', amount: service.startingPrice),
+            _PriceRow(label: 'Base Price', amount: service.basePrice ?? 0.0),
             for (final sel in selectedAttributes)
               if (sel.priceAdjustment > 0) ...[
                 const SizedBox(height: 6),

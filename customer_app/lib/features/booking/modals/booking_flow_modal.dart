@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../features/bookings/utils/my_bookings_launcher.dart';
 import '../../../core/widgets/app_modal_dialog.dart';
-import '../../../models/service_model.dart';
+import '../../../features/catalog/models/catalog_node_model.dart';
 import '../../../models/address_model.dart';
 import '../../../models/time_slot_model.dart';
 import '../../../models/coupon_model.dart';
@@ -20,7 +20,7 @@ import '../widgets/available_coupons_sheet.dart';
 /// Uses the same light surface + AppColors design language as Profile dialogs.
 /// Mobile keeps the sequential [AppModalDialog] flow unchanged.
 class BookingFlowModal extends ConsumerStatefulWidget {
-  final ServiceModel service;
+  final CatalogNodeModel service;
   final List<SelectedAttributeOption> selectedAttributes;
   final List<SelectedAddon> selectedAddons;
 
@@ -61,7 +61,7 @@ class _BookingFlowModalState extends ConsumerState<BookingFlowModal>
       '${_date.year}-${_date.month.toString().padLeft(2, '0')}-${_date.day.toString().padLeft(2, '0')}';
 
   double get _subtotal =>
-      (widget.service.startingPrice +
+      ((widget.service.basePrice ?? 0.0) +
               totalPriceAdjustment(widget.selectedAttributes) +
               totalAddonsPrice(widget.selectedAddons)) *
           1.18;
@@ -471,7 +471,7 @@ class _BookingFlowModalState extends ConsumerState<BookingFlowModal>
   }) {
     debugPrint('FLOW SUMMARY ACTIVE');
     final tt = Theme.of(context).textTheme;
-    final basePrice = widget.service.startingPrice;
+    final basePrice = widget.service.basePrice ?? 0.0;
     final totalAdj = totalPriceAdjustment(widget.selectedAttributes);
     final addonsTotal = totalAddonsPrice(widget.selectedAddons);
     final adjustedBase = basePrice + totalAdj + addonsTotal;
@@ -520,8 +520,8 @@ class _BookingFlowModalState extends ConsumerState<BookingFlowModal>
                         Text(widget.service.name,
                             style: tt.titleSmall
                                 ?.copyWith(fontWeight: FontWeight.w700)),
-                        if (widget.service.subcategoryName != null)
-                          Text(widget.service.subcategoryName!,
+                        if (widget.service.parentName != null)
+                          Text(widget.service.parentName!,
                               style: tt.labelSmall
                                   ?.copyWith(color: AppColors.textSecondary)),
                         if (widget.selectedAttributes.isNotEmpty) ...[

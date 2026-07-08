@@ -119,6 +119,63 @@ class ServiceAttributesRepository {
         );
   }
 
+  // ── Catalog node variants (Phase 2) ─────────────────────────────────────────
+  // These methods query / write by node_id so they work for both migrated nodes
+  // (where node_id = service_id) and brand-new catalog nodes (node_id only).
+
+  Future<List<ServiceAttribute>> fetchByNode(String nodeId) async {
+    final data = await _supabase
+        .from('service_attributes')
+        .select('*, $_optionsSelect')
+        .eq('node_id', nodeId)
+        .order('name', ascending: true)
+        .order('sort_order',
+            referencedTable: 'service_attribute_options', ascending: true);
+    return (data as List<dynamic>)
+        .map((r) => ServiceAttribute.fromMap(r as Map<String, dynamic>))
+        .toList();
+  }
+
+  Future<ServiceAttribute> createAttributeForNode({
+    required String nodeId,
+    required String name,
+    required String fieldType,
+    required bool isRequired,
+  }) async {
+    final data = await _supabase
+        .from('service_attributes')
+        .insert({
+          'node_id': nodeId,
+          'name': name,
+          'field_type': fieldType,
+          'is_required': isRequired,
+        })
+        .select('*, $_optionsSelect')
+        .single();
+    return ServiceAttribute.fromMap(data);
+  }
+
+  /// Updates only the name/type/required fields of an attribute.
+  /// Used by the catalog node attributes drawer which does not pass serviceId.
+  Future<ServiceAttribute> updateAttributeName(
+    String id, {
+    required String name,
+    required String fieldType,
+    required bool isRequired,
+  }) async {
+    final data = await _supabase
+        .from('service_attributes')
+        .update({
+          'name': name,
+          'field_type': fieldType,
+          'is_required': isRequired,
+        })
+        .eq('id', id)
+        .select('*, $_optionsSelect')
+        .single();
+    return ServiceAttribute.fromMap(data);
+  }
+
   /// Lightweight fetch for the service picker — returns only id + name.
   Future<List<({String id, String name})>> fetchServiceDropdowns() async {
     final data = await _supabase

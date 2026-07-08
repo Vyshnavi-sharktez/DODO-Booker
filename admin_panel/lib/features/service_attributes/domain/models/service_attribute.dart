@@ -33,7 +33,9 @@ class ServiceAttribute {
 
     return ServiceAttribute(
       id: map['id'] as String,
-      serviceId: map['service_id'] as String? ?? '',
+      // service_id is nullable for catalog nodes created after Phase 2.
+      // Fall back to node_id so serviceId is always non-empty.
+      serviceId: (map['service_id'] ?? map['node_id']) as String? ?? '',
       name: map['name'] as String? ?? '',
       fieldType: map['field_type'] as String? ?? 'text',
       isRequired: map['is_required'] as bool? ?? false,
