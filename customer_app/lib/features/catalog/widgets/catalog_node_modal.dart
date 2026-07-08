@@ -7,10 +7,8 @@ import '../../../core/utils/service_image_registry.dart';
 import '../../../models/faq_model.dart';
 import '../../../models/service_attribute_model.dart';
 import '../../../models/addon_model.dart';
-import '../../auth/providers/auth_provider.dart';
-import '../../auth/utils/auth_modal_gate.dart';
-import '../../booking/utils/booking_gate.dart';
 import '../../cart/providers/cart_provider.dart';
+import '../../cart/utils/cart_launcher.dart';
 import '../../category/services/category_providers.dart';
 import '../../reviews/widgets/service_reviews_section.dart';
 import '../../service/widgets/faq_section.dart';
@@ -298,14 +296,10 @@ class _CatalogNodeModalState extends ConsumerState<CatalogNodeModal> {
                             ),
                           ),
 
-                          // ── Sticky Book Now bar ────────────────────────
+                          // ── Sticky cart bar ───────────────────────────
                           if (node.isLeafBookable)
                             _ModalBookingBar(
                               node: node,
-                              attrs: attrs,
-                              selections: _selections,
-                              addOns: addOns,
-                              selectedAddonIds: _selectedAddonIds,
                               displayPrice: displayPrice,
                               priceAdjustment: _priceAdjustment,
                               addonsTotal: addonsTotal,
@@ -945,88 +939,27 @@ class _ModalComingSoon extends StatelessWidget {
   }
 }
 
-// ── Sticky booking bar ────────────────────────────────────────────────────────
+// ── Sticky cart bar ───────────────────────────────────────────────────────────
 
 class _ModalBookingBar extends ConsumerWidget {
   const _ModalBookingBar({
     required this.node,
-    required this.attrs,
-    required this.selections,
-    required this.addOns,
-    required this.selectedAddonIds,
     required this.displayPrice,
     required this.priceAdjustment,
     required this.addonsTotal,
   });
 
   final CatalogNodeModel node;
-  final List<ServiceAttributeModel> attrs;
-  final Map<String, String> selections;
-  final List<AddOnModel> addOns;
-  final Set<String> selectedAddonIds;
   final double displayPrice;
   final double priceAdjustment;
   final double addonsTotal;
 
-  bool get _requiredFilled => attrs
-      .where((a) => a.isRequired && a.hasOptions)
-      .every((a) => selections.containsKey(a.id));
-
-  bool get _hasRequiredAttrs => attrs.any((a) => a.isRequired && a.hasOptions);
-
-  Future<void> _addToCart(BuildContext context, WidgetRef ref) async {
-    if (!ref.read(isAuthenticatedProvider)) {
-      final proceed = await showDialog<bool>(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          title: const Text('Login Required'),
-          content: const Text('Please log in to add items to your cart.'),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(ctx).pop(false),
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.of(ctx).pop(true),
-              child: const Text('Login'),
-            ),
-          ],
-        ),
-      );
-      if (!context.mounted || proceed != true) return;
-      final authed = await requireAuth(context, ref);
-      if (!context.mounted || !authed) return;
-    }
-
-    ref
-        .read(cartProvider.notifier)
-        .addToCart(node, priceAdjustment: priceAdjustment + addonsTotal);
-
-    if (!context.mounted) return;
-    ScaffoldMessenger.of(context)
-      ..clearSnackBars()
-      ..showSnackBar(const SnackBar(
-        content: Text('Added to cart'),
-        duration: Duration(seconds: 2),
-        behavior: SnackBarBehavior.floating,
-      ));
-  }
-
-  Future<void> _book(BuildContext context, WidgetRef ref) async {
-    final selectedAttrs = buildSelectedAttributes(attrs, selections);
-    final selectedAddons = buildSelectedAddons(addOns, selectedAddonIds);
-    await launchBookingFlow(context, ref, node,
-        selectedAttributes: selectedAttrs, selectedAddons: selectedAddons);
-  }
-
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final canBook = !_hasRequiredAttrs || _requiredFilled;
+    final cartItems = ref.watch(cartProvider);
+    final inCart = cartItems.any((item) => item.serviceId == node.id);
 
     return Container(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
       decoration: BoxDecoration(
         color: AppColors.surface,
         border: const Border(
@@ -1040,59 +973,70 @@ class _ModalBookingBar extends ConsumerWidget {
           ),
         ],
       ),
-      child: Row(
-        children: [
-          Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                '₹${displayPrice.toInt()}',
-                style: const TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.w800,
-                  color: AppColors.primary,
-                  height: 1.1,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+        child: Row(
+          children: [
+            Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '₹${displayPrice.toInt()}',
+                  style: const TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.w800,
+                    color: AppColors.primary,
+                    height: 1.1,
+                  ),
                 ),
-              ),
-              Text(
-                (priceAdjustment > 0 || addonsTotal > 0)
-                    ? 'incl. adjustments'
-                    : 'onwards',
-                style: const TextStyle(
-                    fontSize: 10, color: AppColors.textHint),
-              ),
-            ],
-          ),
-          const SizedBox(width: 10),
-          OutlinedButton.icon(
-            onPressed: () => _addToCart(context, ref),
-            icon: const Icon(Icons.shopping_cart_outlined, size: 15),
-            label: const Text('Add'),
-            style: OutlinedButton.styleFrom(
-              minimumSize: const Size(0, 44),
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(11)),
+                Text(
+                  (priceAdjustment > 0 || addonsTotal > 0)
+                      ? 'incl. adjustments'
+                      : 'onwards',
+                  style: const TextStyle(
+                      fontSize: 10, color: AppColors.textHint),
+                ),
+              ],
             ),
-          ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: FilledButton(
-              onPressed: canBook ? () => _book(context, ref) : null,
-              style: FilledButton.styleFrom(
-                minimumSize: const Size.fromHeight(44),
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(11)),
-              ),
-              child: Text(
-                canBook ? 'Book Now' : 'Select options',
-                style: const TextStyle(
-                    fontSize: 15, fontWeight: FontWeight.w700),
-              ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: inCart
+                  ? FilledButton.icon(
+                      onPressed: () => openCart(context),
+                      icon: const Icon(Icons.shopping_cart_rounded, size: 16),
+                      label: const Text(
+                        'View Cart',
+                        style: TextStyle(
+                            fontSize: 15, fontWeight: FontWeight.w700),
+                      ),
+                      style: FilledButton.styleFrom(
+                        minimumSize: const Size.fromHeight(44),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(11)),
+                      ),
+                    )
+                  : FilledButton.icon(
+                      onPressed: () => ref
+                          .read(cartProvider.notifier)
+                          .addToCart(node,
+                              priceAdjustment: priceAdjustment + addonsTotal),
+                      icon: const Icon(Icons.add_shopping_cart_rounded,
+                          size: 16),
+                      label: const Text(
+                        'Add to Cart',
+                        style: TextStyle(
+                            fontSize: 15, fontWeight: FontWeight.w700),
+                      ),
+                      style: FilledButton.styleFrom(
+                        minimumSize: const Size.fromHeight(44),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(11)),
+                      ),
+                    ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

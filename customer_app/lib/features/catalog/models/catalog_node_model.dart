@@ -19,6 +19,7 @@ class CatalogNodeModel {
 
   final double? basePrice;
   final int? estimatedDuration;
+  final double? minimumOrderAmount;
   final double rating;
   final int reviewCount;
 
@@ -50,6 +51,7 @@ class CatalogNodeModel {
     required this.isBookable,
     this.basePrice,
     this.estimatedDuration,
+    this.minimumOrderAmount,
     this.rating = 0.0,
     this.reviewCount = 0,
     this.childrenCount = 0,
@@ -103,6 +105,7 @@ class CatalogNodeModel {
       isBookable: (map['is_bookable'] as bool?) ?? false,
       basePrice: (map['base_price'] as num?)?.toDouble(),
       estimatedDuration: map['estimated_duration'] as int?,
+      minimumOrderAmount: (map['minimum_order_amount'] as num?)?.toDouble(),
       rating: (map['rating'] as num?)?.toDouble() ?? 0.0,
       reviewCount: (map['review_count'] as int?) ?? 0,
       childrenCount: (map['children_count'] as int?) ?? 0,

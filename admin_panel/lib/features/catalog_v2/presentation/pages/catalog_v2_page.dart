@@ -65,6 +65,7 @@ class _CatalogV2PageState extends ConsumerState<CatalogV2Page> {
           required isBookable,
           basePrice,
           estimatedDuration,
+          minimumOrderAmount,
         }) async {
           await ref.read(catalogNodeNotifierProvider.notifier).createNode(
                 parentId: parent?.id,
@@ -78,6 +79,7 @@ class _CatalogV2PageState extends ConsumerState<CatalogV2Page> {
                 isBookable: isBookable,
                 basePrice: basePrice,
                 estimatedDuration: estimatedDuration,
+                minimumOrderAmount: minimumOrderAmount,
               );
           if (mounted && parent != null) {
             setState(() => _expandedIds.add(parent.id));
@@ -110,6 +112,7 @@ class _CatalogV2PageState extends ConsumerState<CatalogV2Page> {
           required isBookable,
           basePrice,
           estimatedDuration,
+          minimumOrderAmount,
         }) async {
           await ref.read(catalogNodeNotifierProvider.notifier).updateNode(
                 node.id,
@@ -124,6 +127,7 @@ class _CatalogV2PageState extends ConsumerState<CatalogV2Page> {
                 isBookable: isBookable,
                 basePrice: basePrice,
                 estimatedDuration: estimatedDuration,
+                minimumOrderAmount: minimumOrderAmount,
               );
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(

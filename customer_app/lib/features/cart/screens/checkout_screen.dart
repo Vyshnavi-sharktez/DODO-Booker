@@ -107,6 +107,19 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       return;
     }
 
+    // ── Minimum order amount ─────────────────────────────────────────────────
+    for (final item in items) {
+      final minAmt = item.minimumOrderAmount;
+      if (minAmt != null && item.totalPrice < minAmt) {
+        _showError(
+          '"${item.serviceName}" requires a minimum order of '
+          '₹${minAmt.toInt()}. '
+          'Current total for this item: ₹${item.totalPrice.toInt()}.',
+        );
+        return;
+      }
+    }
+
     setState(() => _placing = true);
     try {
       final booking = await CheckoutService().createCartBooking(

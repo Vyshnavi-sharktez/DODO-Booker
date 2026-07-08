@@ -107,12 +107,15 @@ class CartSyncService {
           items.map((r) => r['service_id'] as String).toSet().toList();
       final nodeRows = await _client
           .from('catalog_nodes_view')
-          .select('id, legacy_id')
+          .select('id, legacy_id, minimum_order_amount')
           .inFilter('id', nodeIds);
-      final legacyMap = {
-        for (final n in nodeRows as List<dynamic>)
-          n['id'] as String: n['legacy_id'] as String?,
-      };
+      final legacyMap = <String, String?>{};
+      final minAmtMap = <String, double?>{};
+      for (final n in nodeRows as List<dynamic>) {
+        final id = n['id'] as String;
+        legacyMap[id] = n['legacy_id'] as String?;
+        minAmtMap[id] = (n['minimum_order_amount'] as num?)?.toDouble();
+      }
 
       return items
           .map((r) {
@@ -124,6 +127,7 @@ class CartSyncService {
               unitPrice: (r['unit_price'] as num).toDouble(),
               quantity: r['quantity'] as int,
               legacyId: legacyMap[sid],
+              minimumOrderAmount: minAmtMap[sid],
             );
           })
           .toList();

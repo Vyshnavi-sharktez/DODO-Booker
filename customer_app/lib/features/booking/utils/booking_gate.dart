@@ -29,6 +29,15 @@ Future<void> launchBookingFlow(
   List<SelectedAttributeOption> selectedAttributes = const [],
   List<SelectedAddon> selectedAddons = const [],
 }) async {
+  // ── Step 0: Minimum order amount (safety net — UI disables Book Now first) ─
+  final minAmt = service.minimumOrderAmount;
+  if (minAmt != null && minAmt > 0) {
+    final serviceTotal = (service.basePrice ?? 0.0) +
+        totalPriceAdjustment(selectedAttributes) +
+        totalAddonsPrice(selectedAddons);
+    if (serviceTotal < minAmt) return;
+  }
+
   // ── Step 1: Authentication ────────────────────────────────────────────────
   if (!ref.read(isAuthenticatedProvider)) {
     // Capture context synchronously before each await
