@@ -6,11 +6,17 @@ import '../../domain/models/catalog_node.dart';
 
 /// Single form dialog for creating and editing any catalog node at any depth.
 /// The parent context is shown at the top when creating a child node.
+///
+/// When [hasChildren] is true all booking-specific configuration (Bookable
+/// toggle, Base Price, Duration) is hidden — the node acts as a navigation
+/// node regardless of the stored is_bookable flag. Stored values are never
+/// cleared; they reappear automatically once all children are removed.
 class CatalogNodeFormDialog extends StatefulWidget {
   const CatalogNodeFormDialog({
     super.key,
     this.existing,
     this.parentNode,
+    this.hasChildren = false,
     required this.onSave,
   });
 
@@ -20,6 +26,10 @@ class CatalogNodeFormDialog extends StatefulWidget {
   /// Non-null when creating a child — shown as context at the top.
   final CatalogNode? parentNode;
 
+  /// True when the node currently has one or more children. When true,
+  /// all booking UI is hidden (values are preserved in the database).
+  final bool hasChildren;
+
   final Future<void> Function({
     required String name,
     required String slug,
@@ -28,7 +38,6 @@ class CatalogNodeFormDialog extends StatefulWidget {
     String? iconKey,
     required int sortOrder,
     required bool isActive,
-    required bool isFeatured,
     required bool isBookable,
     double? basePrice,
     int? estimatedDuration,
@@ -51,7 +60,6 @@ class _CatalogNodeFormDialogState extends State<CatalogNodeFormDialog> {
   late final TextEditingController _duration;
 
   late bool _isActive;
-  late bool _isFeatured;
   late bool _isBookable;
   bool _slugEdited = false;
   bool _saving = false;
@@ -75,7 +83,6 @@ class _CatalogNodeFormDialogState extends State<CatalogNodeFormDialog> {
           : '',
     );
     _isActive = e?.isActive ?? true;
-    _isFeatured = e?.isFeatured ?? false;
     _isBookable = e?.isBookable ?? false;
     _slugEdited = e != null;
   }
@@ -123,7 +130,6 @@ class _CatalogNodeFormDialogState extends State<CatalogNodeFormDialog> {
         iconKey: _iconKey.text.trim().isEmpty ? null : _iconKey.text.trim(),
         sortOrder: int.tryParse(_sortOrder.text.trim()) ?? 0,
         isActive: _isActive,
-        isFeatured: _isFeatured,
         isBookable: _isBookable,
         basePrice: _isBookable && _basePrice.text.trim().isNotEmpty
             ? double.tryParse(_basePrice.text.trim())
@@ -317,78 +323,111 @@ class _CatalogNodeFormDialogState extends State<CatalogNodeFormDialog> {
               onChanged: (v) => setState(() => _isActive = v),
               activeColor: AppColors.success,
             ),
-            const SizedBox(height: 10),
-            _buildToggleRow(
-              icon: Icons.star_outline_rounded,
-              label: 'Featured',
-              subtitle: 'Highlighted in customer app',
-              value: _isFeatured,
-              onChanged: (v) => setState(() => _isFeatured = v),
-              activeColor: AppColors.warning,
-            ),
-            const SizedBox(height: 10),
-            _buildToggleRow(
-              icon: Icons.bookmark_outline_rounded,
-              label: 'Bookable',
-              subtitle: 'Customer can book this node directly',
-              value: _isBookable,
-              onChanged: (v) => setState(() => _isBookable = v),
-              activeColor: AppColors.accent,
-            ),
 
-            // ── Service fields (only when bookable) ───────────────────────
-            if (_isBookable) ...[
-              const SizedBox(height: 20),
-              const Divider(),
-              const SizedBox(height: 12),
-              const Text(
-                'Booking Details',
-                style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.textPrimary,
+            // ── Booking configuration ─────────────────────────────────────
+            // Hidden when the node has children. A node with children is a
+            // navigation node at every depth — booking is only possible at
+            // childless leaf nodes. Stored values (is_bookable, base_price,
+            // estimated_duration) are never cleared; they reappear here
+            // automatically once all children are removed.
+            if (widget.hasChildren) ...[
+              const SizedBox(height: 16),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 14, vertical: 12),
+                decoration: BoxDecoration(
+                  color: AppColors.primary.withValues(alpha: 0.05),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                    color: AppColors.primary.withValues(alpha: 0.18),
+                  ),
+                ),
+                child: const Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(Icons.account_tree_outlined,
+                        size: 16, color: AppColors.primary),
+                    SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        'Booking configuration is hidden because this node '
+                        'has children. It acts as a navigation node. '
+                        'Remove all children to configure booking details.',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: AppColors.primary,
+                          height: 1.5,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
-              const SizedBox(height: 4),
-              const Text(
-                'Only used when this node is booked directly.',
-                style: TextStyle(
-                    fontSize: 12, color: AppColors.textSecondary),
+            ] else ...[
+              const SizedBox(height: 10),
+              _buildToggleRow(
+                icon: Icons.bookmark_outline_rounded,
+                label: 'Bookable',
+                subtitle: 'Customer can book this node directly',
+                value: _isBookable,
+                onChanged: (v) => setState(() => _isBookable = v),
+                activeColor: AppColors.accent,
               ),
-              const SizedBox(height: 14),
-              Row(
-                children: [
-                  Expanded(
-                    child: TextFormField(
-                      controller: _basePrice,
-                      decoration: const InputDecoration(
-                        labelText: 'Base Price (₹)',
-                        prefixIcon: Icon(Icons.currency_rupee),
-                      ),
-                      keyboardType: const TextInputType.numberWithOptions(
-                          decimal: true),
-                      inputFormatters: [
-                        FilteringTextInputFormatter.allow(
-                            RegExp(r'^\d+\.?\d{0,2}')),
-                      ],
-                    ),
+
+              // ── Service fields (only when bookable) ─────────────────────
+              if (_isBookable) ...[
+                const SizedBox(height: 20),
+                const Divider(),
+                const SizedBox(height: 12),
+                const Text(
+                  'Booking Details',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.textPrimary,
                   ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: TextFormField(
-                      controller: _duration,
-                      decoration: const InputDecoration(
-                        labelText: 'Duration (min)',
-                        prefixIcon: Icon(Icons.timer_outlined),
+                ),
+                const SizedBox(height: 4),
+                const Text(
+                  'Only used when this node is booked directly.',
+                  style: TextStyle(
+                      fontSize: 12, color: AppColors.textSecondary),
+                ),
+                const SizedBox(height: 14),
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextFormField(
+                        controller: _basePrice,
+                        decoration: const InputDecoration(
+                          labelText: 'Base Price (₹)',
+                          prefixIcon: Icon(Icons.currency_rupee),
+                        ),
+                        keyboardType: const TextInputType.numberWithOptions(
+                            decimal: true),
+                        inputFormatters: [
+                          FilteringTextInputFormatter.allow(
+                              RegExp(r'^\d+\.?\d{0,2}')),
+                        ],
                       ),
-                      keyboardType: TextInputType.number,
-                      inputFormatters: [
-                        FilteringTextInputFormatter.digitsOnly,
-                      ],
                     ),
-                  ),
-                ],
-              ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: TextFormField(
+                        controller: _duration,
+                        decoration: const InputDecoration(
+                          labelText: 'Duration (min)',
+                          prefixIcon: Icon(Icons.timer_outlined),
+                        ),
+                        keyboardType: TextInputType.number,
+                        inputFormatters: [
+                          FilteringTextInputFormatter.digitsOnly,
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ],
             ],
           ],
         ),

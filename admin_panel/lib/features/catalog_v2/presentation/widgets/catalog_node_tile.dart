@@ -18,7 +18,7 @@ class NodeCallbacks {
   });
 
   final void Function(CatalogNode parent) onAddChild;
-  final void Function(CatalogNode node) onEdit;
+  final void Function(CatalogNode node, bool hasChildren) onEdit;
   final void Function(CatalogNode node) onMove;
   final void Function(CatalogNode node) onDelete;
   final void Function(CatalogNode node, bool isActive) onToggleActive;
@@ -150,7 +150,9 @@ class CatalogNodeTile extends StatelessWidget {
                 const SizedBox(width: 6),
 
                 // Chips
-                if (node.isBookable) ...[
+                // Booking chips are hidden when the node has children —
+                // a node with children acts as a navigation node only.
+                if (!hasChildren && node.isBookable) ...[
                   _Chip(
                     'Bookable',
                     AppColors.accent.withValues(alpha: 0.12),
@@ -158,7 +160,7 @@ class CatalogNodeTile extends StatelessWidget {
                   ),
                   const SizedBox(width: 4),
                 ],
-                if (node.basePrice != null && node.isBookable) ...[
+                if (!hasChildren && node.basePrice != null && node.isBookable) ...[
                   _Chip(
                     '₹${node.basePrice!.toStringAsFixed(0)}',
                     const Color(0xFFEBF8F0),
@@ -166,7 +168,7 @@ class CatalogNodeTile extends StatelessWidget {
                   ),
                   const SizedBox(width: 4),
                 ],
-                if (children.isNotEmpty) ...[
+                if (hasChildren) ...[
                   _Chip(
                     '${children.length}',
                     AppColors.primary.withValues(alpha: 0.08),
@@ -175,35 +177,38 @@ class CatalogNodeTile extends StatelessWidget {
                   const SizedBox(width: 4),
                 ],
 
-                // is_active switch
+                // is_active switch (always visible)
                 Switch(
                   value: node.isActive,
                   materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                   onChanged: (v) => callbacks.onToggleActive(node, v),
                 ),
 
-                // is_bookable icon toggle
-                Tooltip(
-                  message: node.isBookable
-                      ? 'Bookable — click to disable'
-                      : 'Not Bookable — click to enable',
-                  child: IconButton(
-                    icon: Icon(
-                      node.isBookable
-                          ? Icons.bookmark_rounded
-                          : Icons.bookmark_outline_rounded,
-                      size: 17,
-                      color: node.isBookable
-                          ? AppColors.accent
-                          : AppColors.textSecondary,
+                // Bookable toggle — hidden when node has children.
+                // Values are preserved in DB; the toggle reappears if
+                // all children are removed.
+                if (!hasChildren)
+                  Tooltip(
+                    message: node.isBookable
+                        ? 'Bookable — click to disable'
+                        : 'Not Bookable — click to enable',
+                    child: IconButton(
+                      icon: Icon(
+                        node.isBookable
+                            ? Icons.bookmark_rounded
+                            : Icons.bookmark_outline_rounded,
+                        size: 17,
+                        color: node.isBookable
+                            ? AppColors.accent
+                            : AppColors.textSecondary,
+                      ),
+                      onPressed: () =>
+                          callbacks.onToggleBookable(node, !node.isBookable),
                     ),
-                    onPressed: () =>
-                        callbacks.onToggleBookable(node, !node.isBookable),
                   ),
-                ),
 
-                // Attributes (only for bookable nodes)
-                if (node.isBookable)
+                // Attributes — only for bookable leaf nodes.
+                if (!hasChildren && node.isBookable)
                   IconButton(
                     icon: const Icon(Icons.tune_rounded, size: 17),
                     tooltip: 'Attributes',
@@ -224,7 +229,7 @@ class CatalogNodeTile extends StatelessWidget {
                   icon: const Icon(Icons.edit_outlined, size: 17),
                   tooltip: 'Edit',
                   color: AppColors.textSecondary,
-                  onPressed: () => callbacks.onEdit(node),
+                  onPressed: () => callbacks.onEdit(node, hasChildren),
                 ),
 
                 // Move

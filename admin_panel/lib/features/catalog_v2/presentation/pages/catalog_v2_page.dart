@@ -62,7 +62,6 @@ class _CatalogV2PageState extends ConsumerState<CatalogV2Page> {
           iconKey,
           required sortOrder,
           required isActive,
-          required isFeatured,
           required isBookable,
           basePrice,
           estimatedDuration,
@@ -76,7 +75,6 @@ class _CatalogV2PageState extends ConsumerState<CatalogV2Page> {
                 iconKey: iconKey,
                 sortOrder: sortOrder,
                 isActive: isActive,
-                isFeatured: isFeatured,
                 isBookable: isBookable,
                 basePrice: basePrice,
                 estimatedDuration: estimatedDuration,
@@ -94,12 +92,13 @@ class _CatalogV2PageState extends ConsumerState<CatalogV2Page> {
     );
   }
 
-  void _openEdit(CatalogNode node) {
+  void _openEdit(CatalogNode node, bool hasChildren) {
     showDialog(
       context: context,
       barrierDismissible: false,
       builder: (_) => CatalogNodeFormDialog(
         existing: node,
+        hasChildren: hasChildren,
         onSave: ({
           required name,
           required slug,
@@ -108,7 +107,6 @@ class _CatalogV2PageState extends ConsumerState<CatalogV2Page> {
           iconKey,
           required sortOrder,
           required isActive,
-          required isFeatured,
           required isBookable,
           basePrice,
           estimatedDuration,
@@ -123,7 +121,6 @@ class _CatalogV2PageState extends ConsumerState<CatalogV2Page> {
                 iconKey: iconKey,
                 sortOrder: sortOrder,
                 isActive: isActive,
-                isFeatured: isFeatured,
                 isBookable: isBookable,
                 basePrice: basePrice,
                 estimatedDuration: estimatedDuration,
@@ -312,7 +309,7 @@ class _CatalogV2PageState extends ConsumerState<CatalogV2Page> {
 
     final callbacks = NodeCallbacks(
       onAddChild: (parent) => _openCreate(parent: parent),
-      onEdit: _openEdit,
+      onEdit: (node, hasChildren) => _openEdit(node, hasChildren),
       onMove: _moveNode,
       onDelete: _deleteNode,
       onToggleActive: _toggleActive,

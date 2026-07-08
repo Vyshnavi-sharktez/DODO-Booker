@@ -24,11 +24,10 @@ import '../widgets/catalog_node_card.dart';
 // ═══════════════════════════════════════════════════════════════════════════════
 // CatalogNodeScreen — generic screen for any catalog node at any depth.
 //
-// Behaviour matrix:
-//   hasChildren only  → child-node navigation grid
-//   isBookable only   → full service-detail content + sticky booking bar
-//   both              → children grid above service detail + sticky bar
-//   neither           → informational node (name, description, image)
+// Behaviour matrix (data-driven, applies at every depth):
+//   hasChildren  (any)                → navigation grid; booking never shown
+//   !hasChildren && isBookable        → full service-detail + sticky booking bar
+//   !hasChildren && !isBookable       → informational / Coming Soon state
 // ═══════════════════════════════════════════════════════════════════════════════
 
 class CatalogNodeScreen extends ConsumerStatefulWidget {
@@ -78,15 +77,15 @@ class _CatalogNodeScreenState extends ConsumerState<CatalogNodeScreen> {
     final children =
         ref.watch(catalogNodeChildrenProvider(node.id)).valueOrNull ?? [];
     final attrs =
-        node.isBookable
+        node.isLeafBookable
             ? (ref.watch(serviceAttributesProvider(node.id)).valueOrNull ?? [])
             : <ServiceAttributeModel>[];
     final addOns =
-        node.isBookable
+        node.isLeafBookable
             ? (ref.watch(allActiveAddonsProvider).valueOrNull ?? [])
             : <AddOnModel>[];
     final faqs =
-        node.isBookable
+        node.isLeafBookable
             ? (ref.watch(catalogNodeFaqsProvider(node.id)).valueOrNull ?? [])
             : <FaqModel>[];
 
@@ -117,7 +116,7 @@ class _CatalogNodeScreenState extends ConsumerState<CatalogNodeScreen> {
               scrolledUnderElevation: 1,
               surfaceTintColor: Colors.transparent,
               actions: [
-                if (node.isBookable)
+                if (node.isLeafBookable)
                   HeartButton(serviceId: node.id, mini: false),
                 const SizedBox(width: 4),
               ],
@@ -132,7 +131,7 @@ class _CatalogNodeScreenState extends ConsumerState<CatalogNodeScreen> {
               backgroundColor: AppColors.primary,
               foregroundColor: Colors.white,
               actions: [
-                if (node.isBookable)
+                if (node.isLeafBookable)
                   HeartButton(serviceId: node.id, mini: false),
                 const SizedBox(width: 4),
               ],
@@ -161,7 +160,7 @@ class _CatalogNodeScreenState extends ConsumerState<CatalogNodeScreen> {
                 ),
 
                 // ── Attribute selection ────────────────────────────────────
-                if (node.isBookable && attrs.isNotEmpty)
+                if (node.isLeafBookable && attrs.isNotEmpty)
                   ServiceAttributeSection(
                     attrs: attrs,
                     selections: _selections,
@@ -178,7 +177,7 @@ class _CatalogNodeScreenState extends ConsumerState<CatalogNodeScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          node.isBookable
+                          node.isLeafBookable
                               ? 'About this service'
                               : node.name,
                           style: const TextStyle(
@@ -209,7 +208,7 @@ class _CatalogNodeScreenState extends ConsumerState<CatalogNodeScreen> {
                   ),
 
                 // ── Add-ons ────────────────────────────────────────────────
-                if (node.isBookable && addOns.isNotEmpty)
+                if (node.isLeafBookable && addOns.isNotEmpty)
                   ServiceAddonSection(
                     addOns: addOns,
                     selectedIds: _selectedAddonIds,
@@ -217,14 +216,18 @@ class _CatalogNodeScreenState extends ConsumerState<CatalogNodeScreen> {
                   ),
 
                 // ── FAQs ───────────────────────────────────────────────────
-                if (node.isBookable && faqs.isNotEmpty)
+                if (node.isLeafBookable && faqs.isNotEmpty)
                   FaqSection(faqs: faqs),
 
                 // ── Reviews ────────────────────────────────────────────────
-                if (node.isBookable)
+                if (node.isLeafBookable)
                   ServiceReviewsSection(serviceId: node.id),
 
-                SizedBox(height: node.isBookable ? 100 : 32),
+                // ── Coming Soon (leaf, not yet bookable) ───────────────────
+                if (!node.hasChildren && !node.isBookable)
+                  const _ComingSoonBanner(),
+
+                SizedBox(height: node.isLeafBookable ? 100 : 32),
               ],
             ),
           ),
@@ -232,7 +235,7 @@ class _CatalogNodeScreenState extends ConsumerState<CatalogNodeScreen> {
       ),
 
       // ── Sticky booking bar ───────────────────────────────────────────────
-      bottomNavigationBar: node.isBookable
+      bottomNavigationBar: node.isLeafBookable
           ? _NodeBookingBar(
               node: node,
               attrs: attrs,
@@ -430,7 +433,7 @@ class _NodeInfoHeader extends StatelessWidget {
               ],
             ],
           ),
-          if (node.isBookable && node.basePrice != null) ...[
+          if (node.isLeafBookable && node.basePrice != null) ...[
             const SizedBox(height: 10),
             Text(
               '₹${displayPrice.toInt()}',
@@ -526,6 +529,53 @@ class _ChildrenSection extends StatelessWidget {
     );
   }
 }
+
+// ── Coming Soon banner (leaf node, is_bookable = false) ───────────────────────
+
+class _ComingSoonBanner extends StatelessWidget {
+  const _ComingSoonBanner();
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 32, 20, 8),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 20),
+        decoration: BoxDecoration(
+          color: AppColors.goldLight,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: AppColors.gold.withAlpha(60)),
+        ),
+        child: Column(
+          children: [
+            Icon(Icons.schedule_rounded, size: 32, color: AppColors.gold),
+            const SizedBox(height: 10),
+            const Text(
+              'Coming Soon',
+              style: TextStyle(
+                fontSize: 17,
+                fontWeight: FontWeight.w700,
+                color: AppColors.textPrimary,
+              ),
+            ),
+            const SizedBox(height: 6),
+            const Text(
+              'This service is not yet available for booking.\nCheck back soon.',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 13,
+                color: AppColors.textSecondary,
+                height: 1.5,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 
 // ── Sticky booking bar ────────────────────────────────────────────────────────
 

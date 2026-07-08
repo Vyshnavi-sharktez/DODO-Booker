@@ -13,7 +13,6 @@ class CatalogNode {
 
   /// Admin-controlled. Never derived from child presence.
   final bool isActive;
-  final bool isFeatured;
   final bool isBookable;
 
   /// Only meaningful when [isBookable] is true.
@@ -42,7 +41,6 @@ class CatalogNode {
     this.iconKey,
     required this.sortOrder,
     required this.isActive,
-    required this.isFeatured,
     required this.isBookable,
     this.basePrice,
     this.estimatedDuration,
@@ -68,7 +66,6 @@ class CatalogNode {
       iconKey: map['icon_key'] as String?,
       sortOrder: map['sort_order'] as int? ?? 0,
       isActive: map['is_active'] as bool? ?? true,
-      isFeatured: map['is_featured'] as bool? ?? false,
       isBookable: map['is_bookable'] as bool? ?? false,
       basePrice: (map['base_price'] as num?)?.toDouble(),
       estimatedDuration: map['estimated_duration'] as int?,
@@ -94,7 +91,6 @@ class CatalogNode {
     String? iconKey,
     int? sortOrder,
     bool? isActive,
-    bool? isFeatured,
     bool? isBookable,
     double? basePrice,
     int? estimatedDuration,
@@ -112,7 +108,6 @@ class CatalogNode {
       iconKey: iconKey ?? this.iconKey,
       sortOrder: sortOrder ?? this.sortOrder,
       isActive: isActive ?? this.isActive,
-      isFeatured: isFeatured ?? this.isFeatured,
       isBookable: isBookable ?? this.isBookable,
       basePrice: basePrice ?? this.basePrice,
       estimatedDuration: estimatedDuration ?? this.estimatedDuration,

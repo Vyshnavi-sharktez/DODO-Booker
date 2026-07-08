@@ -26,6 +26,15 @@ class CatalogNodeModel {
   /// possible; zero means this is a leaf regardless of isBookable.
   final int childrenCount;
 
+  /// The UUID of the original row in the legacy `services` table.
+  /// Non-null for nodes migrated from services (legacy_type = 'service').
+  /// Null for brand-new catalog nodes created directly via the admin panel.
+  ///
+  /// Used as `service_id` when inserting into `booking_items`, which still
+  /// carries a FK to `services(id)`. New catalog nodes (legacyId == null)
+  /// cannot populate `booking_items` until the schema is migrated.
+  final String? legacyId;
+
   const CatalogNodeModel({
     required this.id,
     this.parentId,
@@ -44,13 +53,23 @@ class CatalogNodeModel {
     this.rating = 0.0,
     this.reviewCount = 0,
     this.childrenCount = 0,
+    this.legacyId,
   });
 
   bool get hasChildren => childrenCount > 0;
   bool get isRoot => parentId == null;
 
+  /// True only when BOTH conditions are met:
+  ///   1. is_bookable == true  (admin has enabled booking)
+  ///   2. children_count == 0  (no child nodes exist)
+  ///
+  /// A node with children is always a navigation node, never a bookable leaf,
+  /// even when is_bookable is set to true in the database.
+  bool get isLeafBookable => isBookable && !hasChildren;
+
   factory CatalogNodeModel.fromServiceModel(ServiceModel s) => CatalogNodeModel(
         id: s.id,
+        legacyId: s.id,
         name: s.name,
         slug: s.id,
         description: s.description,
@@ -70,6 +89,7 @@ class CatalogNodeModel {
   factory CatalogNodeModel.fromMap(Map<String, dynamic> map) {
     return CatalogNodeModel(
       id: map['id'] as String,
+      legacyId: map['legacy_id'] as String?,
       parentId: map['parent_id'] as String?,
       parentName: map['parent_name'] as String?,
       name: map['name'] as String,

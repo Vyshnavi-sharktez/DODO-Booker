@@ -246,7 +246,7 @@ class _NodeResult extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
             )
           : null,
-      trailing: node.isBookable && node.basePrice != null
+      trailing: node.isLeafBookable && node.basePrice != null
           ? Text(
               '₹${node.basePrice!.toInt()}',
               style: const TextStyle(

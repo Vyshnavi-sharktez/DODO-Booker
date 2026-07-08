@@ -280,7 +280,7 @@ class _CardInfo extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                if (node.isBookable && node.basePrice != null)
+                if (node.isLeafBookable && node.basePrice != null)
                   Text(
                     '₹${node.basePrice!.toInt()}',
                     style: const TextStyle(
