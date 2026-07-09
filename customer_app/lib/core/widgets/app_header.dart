@@ -9,6 +9,8 @@ import '../../features/notifications/services/notification_providers.dart';
 import '../../features/profile/services/profile_providers.dart';
 import '../../features/cart/providers/cart_provider.dart';
 import '../../features/cart/utils/cart_launcher.dart';
+import '../../features/loyalty/providers/loyalty_providers.dart';
+import '../../features/loyalty/screens/loyalty_screen.dart';
 
 /// Persistent DODO BOOKER header used as the [Scaffold.appBar] across the
 /// main navigation shell. Implements [PreferredSizeWidget] so Flutter can
@@ -131,6 +133,8 @@ class _WideRow extends StatelessWidget {
         const SizedBox(width: 20),
 
         // Action buttons
+        const _LoyaltyPill(),
+        const SizedBox(width: 8),
         _NotifButton(
           onTap: () => AppModalDialog.show(
             context: context,
@@ -167,6 +171,8 @@ class _MobileRow extends StatelessWidget {
           ),
         ),
         const Spacer(),
+        const _LoyaltyPill(),
+        const SizedBox(width: 4),
         _HeaderIconBtn(
           icon: Icons.search_rounded,
           onTap: () => context.push('/search'),
@@ -523,6 +529,54 @@ class _CartButtonState extends ConsumerState<_CartButton> {
                 ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+// ── Loyalty points pill ───────────────────────────────────────────────────────
+
+class _LoyaltyPill extends ConsumerWidget {
+  const _LoyaltyPill();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final loyaltyAsync = ref.watch(customerLoyaltyProvider);
+    final points = loyaltyAsync.whenOrNull(data: (l) => l.availablePoints);
+    if (points == null || points == 0) return const SizedBox.shrink();
+
+    return GestureDetector(
+      onTap: () => AppModalDialog.show(
+        context: context,
+        child: const LoyaltyModal(),
+      ),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: const Color(0xFF1A1A2E),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: const Color(0xFFFFD700).withAlpha(100),
+            width: 0.8,
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.stars_rounded,
+                size: 14, color: Color(0xFFFFD700)),
+            const SizedBox(width: 4),
+            Text(
+              '$points',
+              style: const TextStyle(
+                color: Color(0xFFFFD700),
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                height: 1,
+              ),
+            ),
+          ],
         ),
       ),
     );

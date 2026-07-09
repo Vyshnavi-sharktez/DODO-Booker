@@ -26,6 +26,7 @@ import '../../features/settings/presentation/pages/settings_page.dart';
 import '../../features/catalog_v2/presentation/pages/catalog_v2_page.dart';
 import '../../features/service_addons/presentation/pages/addons_page.dart';
 import '../../features/marketing/presentation/pages/abandoned_carts_page.dart';
+import '../../features/loyalty/presentation/pages/loyalty_page.dart';
 import '../../shared/pages/unauthorized_page.dart';
 import '../rbac/permission_guard.dart';
 
@@ -285,6 +286,13 @@ final routerProvider = Provider<GoRouter>((ref) {
             name: 'settings',
             pageBuilder: (context, state) => const NoTransitionPage(
               child: SettingsPage(),
+            ),
+          ),
+          GoRoute(
+            path: '/dashboard/loyalty',
+            name: 'loyalty',
+            pageBuilder: (context, state) => const NoTransitionPage(
+              child: LoyaltyPage(),
             ),
           ),
         ],
