@@ -30,32 +30,104 @@ class BookingService {
     return row['id'] as String;
   }
 
-  // ── Time slots (mock — no DB table yet) ─────────────────────────────────────
+  // ── Time slots (dynamic from service_scheduling table) ──────────────────────
 
-  Future<List<TimeSlotModel>> fetchAvailableSlots(String dateStr) async {
-    debugPrint('[DODO][Booking] fetchAvailableSlots($dateStr) → mock');
-    await Future.delayed(const Duration(milliseconds: 400));
-    final slots = _buildSlots();
+  Future<List<TimeSlotModel>> fetchAvailableSlots(
+    String dateStr,
+    String serviceId,
+  ) async {
+    debugPrint('[DODO][Slots] fetchAvailableSlots(date=$dateStr, service=$serviceId)');
 
-    // Same-day filtering: hide slots within 1-hour lead time of current time.
+    // ── 1. Load scheduling config ────────────────────────────────────────────
+    Map<String, dynamic>? cfg;
+    if (serviceId.isNotEmpty) {
+      try {
+        final rows = await _client
+            .from('service_scheduling')
+            .select()
+            .eq('service_id', serviceId);
+        if (rows.isNotEmpty) {
+          cfg = rows.first;
+        }
+      } catch (e) {
+        debugPrint('[DODO][Slots] Warning: could not load scheduling config: $e');
+      }
+    }
+
+    if (cfg == null) {
+      debugPrint('[DODO][Slots] No scheduling config — no slots available');
+      return [];
+    }
+
+    final isEnabled = (cfg['is_enabled'] as bool?) ?? true;
+    if (!isEnabled) {
+      debugPrint('[DODO][Slots] Scheduling disabled for this service');
+      return [];
+    }
+
+    // ── 2. Check working day ─────────────────────────────────────────────────
+    final date = DateTime.parse(dateStr);
+    // Dart: Mon=1 … Sun=7 → convert to Sun=0 … Sat=6
+    final dayOfWeek = date.weekday == 7 ? 0 : date.weekday;
+    final workingDays = ((cfg['working_days'] as List?)?.cast<int>()) ?? [1, 2, 3, 4, 5];
+    if (!workingDays.contains(dayOfWeek)) {
+      debugPrint('[DODO][Slots] $dateStr (weekday=$dayOfWeek) not in working days $workingDays');
+      return [];
+    }
+
+    // ── 3. Read manual slot list and max bookings ────────────────────────────
+    final labels = ((cfg['slots'] as List?)?.cast<String>()) ?? <String>[];
+    final maxBookings = (cfg['max_bookings_per_slot'] as int?) ?? 5;
+    debugPrint('[DODO][Slots] ${labels.length} manual slots configured');
+
+    // ── 5. Load existing booking counts for this service+date ───────────────
+    final capacityMap = <String, int>{};
+    if (serviceId.isNotEmpty) {
+      try {
+        final rows = await _client
+            .from('bookings')
+            .select('scheduled_time, status')
+            .eq('service_date', dateStr)
+            .eq('service_id', serviceId)
+            .not('scheduled_time', 'is', null);
+        for (final row in rows) {
+          final status = (row['status'] as String?) ?? '';
+          if (status == 'cancelled' || status == 'rejected') continue;
+          final t = row['scheduled_time'] as String?;
+          if (t != null) capacityMap[t] = (capacityMap[t] ?? 0) + 1;
+        }
+        debugPrint('[DODO][Slots] Capacity map: $capacityMap');
+      } catch (e) {
+        debugPrint('[DODO][Slots] Warning: could not load booking counts: $e');
+      }
+    }
+
+    // ── 6. Same-day lead-time filter ─────────────────────────────────────────
     final now = DateTime.now();
     final todayStr = '${now.year}-'
         '${now.month.toString().padLeft(2, '0')}-'
         '${now.day.toString().padLeft(2, '0')}';
-    if (dateStr == todayStr) {
-      final cutoff = now.add(const Duration(hours: 1));
-      final cutoffMinutes = cutoff.hour * 60 + cutoff.minute;
-      debugPrint(
-        '[DODO][Booking] same-day filter: now=${now.hour}:${now.minute.toString().padLeft(2, '0')} '
-        'cutoff=${cutoff.hour}:${cutoff.minute.toString().padLeft(2, '0')} '
-        '($cutoffMinutes min)',
-      );
-      return slots
-          .where((s) => _slotMinutes(s.label) >= cutoffMinutes)
-          .toList();
-    }
+    final isToday = dateStr == todayStr;
+    final cutoffMin = isToday
+        ? now.add(const Duration(hours: 1)).hour * 60 +
+          now.add(const Duration(hours: 1)).minute
+        : 0;
 
-    return slots;
+    // ── 7. Build TimeSlotModel list ──────────────────────────────────────────
+    // Today: remove past slots entirely. Future: keep all, mark capacity.
+    return labels
+        .where((label) => !isToday || _labelToMinutes(label) >= cutoffMin)
+        .map((label) {
+          final slotMin = _labelToMinutes(label);
+          final bookedCount = capacityMap[label] ?? 0;
+          return TimeSlotModel(
+            id: 'ts_${label.replaceAll(RegExp(r'[^0-9]'), '')}',
+            label: label,
+            period: _periodFor(slotMin),
+            isAvailable: bookedCount < maxBookings,
+          );
+        })
+        .toList();
   }
 
   // ── Create booking ──────────────────────────────────────────────────────────
@@ -110,6 +182,8 @@ class BookingService {
       'latitude': ?address.latitude,
       'longitude': ?address.longitude,
       'completion_otp': completionOtp,
+      'scheduled_time': slot.label,
+      if (service.legacyId != null) 'service_id': service.legacyId,
     };
     debugPrint('[OTP][Create] Payload keys    : ${payload.keys.toList()}');
     debugPrint('[OTP][Create] Payload otp val : ${payload['completion_otp']}');
@@ -283,6 +357,8 @@ class BookingService {
 
     final completionOtp = (100000 + Random().nextInt(900000)).toString();
 
+    final rebookServiceId =
+        items.isNotEmpty && items.first.serviceId.isNotEmpty ? items.first.serviceId : null;
     final payload = {
       'customer_id': customerId,
       'service_date': serviceDate,
@@ -295,6 +371,8 @@ class BookingService {
       'latitude': ?address.latitude,
       'longitude': ?address.longitude,
       'completion_otp': completionOtp,
+      'scheduled_time': slot.label,
+      if (rebookServiceId != null) 'service_id': rebookServiceId,
     };
 
     final bookingData =
@@ -391,49 +469,23 @@ class BookingService {
   }
 }
 
-// ── Slot builder ───────────────────────────────────────────────────────────────
+// ── Slot helpers ───────────────────────────────────────────────────────────────
 
-List<TimeSlotModel> _buildSlots() {
-  final raw = [
-    // Morning
-    ('ts_m1', '07:00 AM', SlotPeriod.morning),
-    ('ts_m2', '08:00 AM', SlotPeriod.morning),
-    ('ts_m3', '09:00 AM', SlotPeriod.morning),
-    ('ts_m4', '10:00 AM', SlotPeriod.morning),
-    ('ts_m5', '11:00 AM', SlotPeriod.morning),
-    // Afternoon
-    ('ts_a1', '12:00 PM', SlotPeriod.afternoon),
-    ('ts_a2', '01:00 PM', SlotPeriod.afternoon),
-    ('ts_a3', '02:00 PM', SlotPeriod.afternoon),
-    ('ts_a4', '03:00 PM', SlotPeriod.afternoon),
-    ('ts_a5', '04:00 PM', SlotPeriod.afternoon),
-    // Evening
-    ('ts_e1', '05:00 PM', SlotPeriod.evening),
-    ('ts_e2', '06:00 PM', SlotPeriod.evening),
-    ('ts_e3', '07:00 PM', SlotPeriod.evening),
-    ('ts_e4', '08:00 PM', SlotPeriod.evening),
-    ('ts_e5', '09:00 PM', SlotPeriod.evening),
-  ];
-
-  return List.generate(raw.length, (i) {
-    final (id, label, period) = raw[i];
-    return TimeSlotModel(
-      id: id,
-      label: label,
-      period: period,
-      isAvailable: true,
-    );
-  });
-}
-
-/// Parses a slot label ("07:00 AM" / "01:00 PM") → minutes since midnight.
-int _slotMinutes(String label) {
-  final parts = label.split(' ');       // ["07:00", "AM"]
-  final timeParts = parts[0].split(':'); // ["07", "00"]
+/// "07:00 AM" / "01:00 PM" → minutes since midnight.
+int _labelToMinutes(String label) {
+  final parts = label.split(' ');
+  final timeParts = parts[0].split(':');
   var hour = int.parse(timeParts[0]);
   final minute = int.parse(timeParts[1]);
   final isPm = parts[1] == 'PM';
   if (isPm && hour != 12) hour += 12;
-  if (!isPm && hour == 12) hour = 0;   // 12:00 AM → midnight
+  if (!isPm && hour == 12) hour = 0;
   return hour * 60 + minute;
+}
+
+/// Maps minutes-since-midnight to a SlotPeriod bucket.
+SlotPeriod _periodFor(int totalMinutes) {
+  if (totalMinutes < 12 * 60) return SlotPeriod.morning;
+  if (totalMinutes < 17 * 60) return SlotPeriod.afternoon;
+  return SlotPeriod.evening;
 }

@@ -8,6 +8,7 @@ import '../../../categories/application/providers/categories_providers.dart';
 import '../../../categories/domain/models/category.dart';
 import '../../../categories/presentation/widgets/category_form_dialog.dart';
 import '../../../service_attributes/application/providers/service_attributes_providers.dart';
+import '../../../service_scheduling/presentation/widgets/service_scheduling_dialog.dart';
 import '../../../services/application/providers/services_providers.dart';
 import '../../../services/domain/models/service.dart';
 import '../../../services/presentation/widgets/service_form_dialog.dart';
@@ -691,6 +692,19 @@ class _CatalogPageState extends ConsumerState<CatalogPage> {
     }
   }
 
+  // ── Scheduling panel ──────────────────────────────────────────────────────
+
+  void _openSchedulingPanel(Service service) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => ServiceSchedulingDialog(
+        serviceId: service.id,
+        serviceName: service.name,
+      ),
+    );
+  }
+
   // ── Attributes panel ─────────────────────────────────────────────────────
 
   void _openAttributesPanel(Service service) {
@@ -855,6 +869,7 @@ class _CatalogPageState extends ConsumerState<CatalogPage> {
       onDeleteService: _deleteService,
       onToggleServiceActive: _toggleServiceActive,
       onOpenAttributes: _openAttributesPanel,
+      onOpenScheduling: _openSchedulingPanel,
     );
 
     return Scaffold(

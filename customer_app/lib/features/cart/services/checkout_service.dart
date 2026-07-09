@@ -48,6 +48,7 @@ class CheckoutService {
     debugPrint('[DODO][Checkout] Booking payload — lat=${address.latitude}  lng=${address.longitude}');
 
     // ── INSERT bookings row ──────────────────────────────────────────────────
+    final primaryItem = items.isNotEmpty ? items.first : null;
     final payload = {
       'customer_id': customerId,
       'service_date': serviceDate,
@@ -59,6 +60,8 @@ class CheckoutService {
       'notes': slot.label,
       'latitude': ?address.latitude,
       'longitude': ?address.longitude,
+      'scheduled_time': slot.label,
+      if (primaryItem?.legacyId != null) 'service_id': primaryItem!.legacyId,
     };
     debugPrint('BOOKING LAT=${address.latitude}');
     debugPrint('BOOKING LNG=${address.longitude}');

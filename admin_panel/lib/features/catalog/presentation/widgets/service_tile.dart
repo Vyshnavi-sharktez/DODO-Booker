@@ -87,6 +87,12 @@ class ServiceTile extends StatelessWidget {
                 color: AppColors.accent,
                 onPressed: () => callbacks.onOpenAttributes(service),
               ),
+              IconButton(
+                icon: const Icon(Icons.schedule_rounded, size: 16),
+                tooltip: 'Configure Scheduling',
+                color: AppColors.primary,
+                onPressed: () => callbacks.onOpenScheduling(service),
+              ),
             ],
           ),
         ),

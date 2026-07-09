@@ -86,6 +86,12 @@ const _navItems = <_NavItem>[
     requiredPermission: 'customer.view',
   ),
   _NavItem(
+    label: 'Loyalty',
+    icon: Icons.stars_rounded,
+    route: '/dashboard/loyalty',
+    requiredPermission: 'settings.manage',
+  ),
+  _NavItem(
     label: 'Settings',
     icon: Icons.settings_rounded,
     route: '/dashboard/settings',

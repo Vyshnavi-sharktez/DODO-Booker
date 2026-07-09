@@ -36,6 +36,7 @@ const Map<String, String> routePermissions = {
   '/coupons': 'coupon.view',
   '/vendor-settlement': 'vendor.view',
   '/settings': 'settings.manage',
+  '/loyalty': 'settings.manage',
 };
 
 // ── Permission guard widget ────────────────────────────────────────────────────

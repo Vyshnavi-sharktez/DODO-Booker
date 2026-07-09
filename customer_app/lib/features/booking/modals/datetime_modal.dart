@@ -10,7 +10,8 @@ import '../widgets/time_slot_card.dart';
 /// Date & time slot selection modal.
 /// Pops with a `(DateTime, TimeSlotModel)` record when the user confirms, or null.
 class DateTimeModal extends ConsumerStatefulWidget {
-  const DateTimeModal({super.key});
+  final String serviceId;
+  const DateTimeModal({super.key, required this.serviceId});
 
   @override
   ConsumerState<DateTimeModal> createState() => _DateTimeModalState();
@@ -26,7 +27,9 @@ class _DateTimeModalState extends ConsumerState<DateTimeModal> {
   @override
   Widget build(BuildContext context) {
     final tt = Theme.of(context).textTheme;
-    final slotsAsync = ref.watch(timeSlotsProvider(_dateKey));
+    final slotsAsync = ref.watch(timeSlotsProvider(
+      (date: _dateKey, serviceId: widget.serviceId),
+    ));
 
     return AppModalDialog(
       title: 'Select Date & Time',

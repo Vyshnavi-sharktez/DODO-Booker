@@ -16,6 +16,8 @@ import '../../../features/address/services/address_providers.dart';
 import '../models/cart_item.dart';
 import '../providers/cart_provider.dart';
 import '../services/checkout_service.dart';
+import '../../loyalty/providers/loyalty_providers.dart';
+import '../../loyalty/services/loyalty_service.dart';
 
 class CheckoutScreen extends ConsumerStatefulWidget {
   final bool inModal;
@@ -30,6 +32,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
   DateTime? _selectedDate;
   TimeSlotModel? _selectedSlot;
   CouponModel? _selectedCoupon;
+  bool _usePoints = false;
   bool _placing = false;
 
   static const _monthNames = [
@@ -48,8 +51,32 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
 
   double get _tax => _subtotal * 0.18;
 
+  int get _availablePoints {
+    return ref
+            .read(customerLoyaltyProvider)
+            .whenOrNull(data: (l) => l.availablePoints) ??
+        0;
+  }
+
+  int get _loyaltyRedeemPoints {
+    if (!_usePoints) return 0;
+    final settings = ref
+        .read(loyaltySettingsProvider)
+        .whenOrNull(data: (s) => s);
+    if (settings == null || !settings.isEnabled || !settings.redeemEnabled) {
+      return 0;
+    }
+    if (_availablePoints < settings.minRedeemPoints) return 0;
+    final baseTotal = _subtotal + _tax - _discount;
+    final maxDiscount = baseTotal * settings.maxRedeemPercentage / 100;
+    return _availablePoints.clamp(0, maxDiscount.floor());
+  }
+
+  double get _loyaltyDiscount => _loyaltyRedeemPoints.toDouble();
+
   double get _grandTotal =>
-      (_subtotal + _tax - _discount).clamp(0.0, double.infinity);
+      (_subtotal + _tax - _discount - _loyaltyDiscount)
+          .clamp(0.0, double.infinity);
 
   Future<void> _pickDate() async {
     final now = DateTime.now();
@@ -120,6 +147,8 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       }
     }
 
+    final redeemPoints = _loyaltyRedeemPoints;
+
     setState(() => _placing = true);
     try {
       final booking = await CheckoutService().createCartBooking(
@@ -128,8 +157,22 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         date: _selectedDate!,
         slot: _selectedSlot!,
         couponId: _selectedCoupon?.id,
-        discountAmount: _discount,
+        discountAmount: _discount + _loyaltyDiscount,
       );
+
+      // Record loyalty redemption after booking is confirmed
+      if (redeemPoints > 0) {
+        try {
+          await LoyaltyService().recordRedemption(
+            bookingId: booking.id,
+            points: redeemPoints,
+          );
+          ref.invalidate(customerLoyaltyProvider);
+          ref.invalidate(loyaltyTransactionsProvider);
+        } catch (e) {
+          debugPrint('[DODO][Checkout] Loyalty redemption record failed (non-fatal): $e');
+        }
+      }
 
       ref.read(cartProvider.notifier).clearCart();
 
@@ -189,8 +232,11 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     final addressAsync = ref.watch(addressNotifierProvider);
     final dateStr =
         _selectedDate?.toIso8601String().substring(0, 10);
-    final slotsAsync =
-        dateStr != null ? ref.watch(timeSlotsProvider(dateStr)) : null;
+    final serviceId =
+        items.isNotEmpty ? (items.first.legacyId ?? '') : '';
+    final slotsAsync = dateStr != null
+        ? ref.watch(timeSlotsProvider((date: dateStr, serviceId: serviceId)))
+        : null;
 
     // Pre-select the default address once loaded
     addressAsync.whenData((list) {
@@ -208,221 +254,248 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       }
     });
 
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: widget.inModal
-          ? null
-          : AppBar(
-              title: const Text('Checkout'),
-              backgroundColor: AppColors.surface,
-              foregroundColor: AppColors.textPrimary,
-              elevation: 0,
-              surfaceTintColor: Colors.transparent,
-              bottom: PreferredSize(
-                preferredSize: const Size.fromHeight(0.8),
-                child: Container(height: 0.8, color: AppColors.divider),
+    // ── Shared list content ─────────────────────────────────────────────────
+    final listChildren = <Widget>[
+      // Cart Items (read-only review)
+      _SectionCard(
+        title: 'Order Summary',
+        child: Column(
+          children: [
+            ...items.map((item) => _OrderItemRow(item: item)),
+          ],
+        ),
+      ),
+      const SizedBox(height: 16),
+
+      // Address
+      _SectionCard(
+        title: 'Service Address',
+        trailing: TextButton(
+          onPressed: _openAddressScreen,
+          child: const Text('Manage'),
+        ),
+        child: addressAsync.when(
+          loading: () => const Center(
+              child: Padding(
+            padding: EdgeInsets.all(16),
+            child: CircularProgressIndicator(strokeWidth: 2),
+          )),
+          error: (e, _) => _ErrorRow(
+            message: 'Could not load addresses',
+            onRetry: () => ref.invalidate(addressNotifierProvider),
+          ),
+          data: (list) {
+            if (list.isEmpty) {
+              return Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'No saved addresses.',
+                      style: Theme.of(context)
+                          .textTheme
+                          .bodySmall
+                          ?.copyWith(color: AppColors.textSecondary),
+                    ),
+                    const SizedBox(height: 8),
+                    OutlinedButton.icon(
+                      onPressed: _openAddressScreen,
+                      icon: const Icon(Icons.add_rounded, size: 16),
+                      label: const Text('Add Address'),
+                    ),
+                  ],
+                ),
+              );
+            }
+            return Column(
+              children: list
+                  .map((addr) => _AddressRadioTile(
+                        address: addr,
+                        selected: _selectedAddress?.id == addr.id,
+                        onTap: () =>
+                            setState(() => _selectedAddress = addr),
+                      ))
+                  .toList(),
+            );
+          },
+        ),
+      ),
+      const SizedBox(height: 16),
+
+      // Date
+      _SectionCard(
+        title: 'Service Date',
+        child: Clickable(
+          onTap: _pickDate,
+          child: Container(
+            padding: const EdgeInsets.symmetric(
+                horizontal: 14, vertical: 13),
+            decoration: BoxDecoration(
+              border: Border.all(
+                color: _selectedDate != null
+                    ? AppColors.primary
+                    : AppColors.border,
+                width: _selectedDate != null ? 1.5 : 1,
               ),
+              borderRadius: BorderRadius.circular(10),
+              color: _selectedDate != null
+                  ? AppColors.primary.withAlpha(10)
+                  : AppColors.surfaceVariant,
             ),
-      body: ListView(
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
-        children: [
-          // ── Cart Items (read-only review) ───────────────────────────────
-          _SectionCard(
-            title: 'Order Summary',
-            child: Column(
+            child: Row(
               children: [
-                ...items.map((item) => _OrderItemRow(item: item)),
+                Icon(
+                  Icons.calendar_today_rounded,
+                  size: 18,
+                  color: _selectedDate != null
+                      ? AppColors.primary
+                      : AppColors.textHint,
+                ),
+                const SizedBox(width: 10),
+                Text(
+                  _selectedDate != null
+                      ? _formatDate(_selectedDate!)
+                      : 'Select a date',
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: _selectedDate != null
+                            ? AppColors.textPrimary
+                            : AppColors.textHint,
+                        fontWeight: _selectedDate != null
+                            ? FontWeight.w600
+                            : FontWeight.w400,
+                      ),
+                ),
+                const Spacer(),
+                const Icon(Icons.chevron_right_rounded,
+                    size: 18, color: AppColors.textHint),
               ],
             ),
           ),
-          const SizedBox(height: 16),
+        ),
+      ),
+      const SizedBox(height: 16),
 
-          // ── Address ─────────────────────────────────────────────────────
-          _SectionCard(
-            title: 'Service Address',
-            trailing: TextButton(
-              onPressed: _openAddressScreen,
-              child: const Text('Manage'),
-            ),
-            child: addressAsync.when(
-              loading: () => const Center(
+      // Time Slot
+      _SectionCard(
+        title: 'Time Slot',
+        child: _selectedDate == null
+            ? Text(
+                'Select a date first.',
+                style: Theme.of(context)
+                    .textTheme
+                    .bodySmall
+                    ?.copyWith(color: AppColors.textHint),
+              )
+            : slotsAsync!.when(
+                loading: () => const Center(
                   child: Padding(
-                padding: EdgeInsets.all(16),
-                child: CircularProgressIndicator(strokeWidth: 2),
-              )),
-              error: (e, _) => _ErrorRow(
-                message: 'Could not load addresses',
-                onRetry: () => ref.invalidate(addressNotifierProvider),
-              ),
-              data: (list) {
-                if (list.isEmpty) {
-                  return Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 8),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'No saved addresses.',
-                          style: Theme.of(context)
-                              .textTheme
-                              .bodySmall
-                              ?.copyWith(color: AppColors.textSecondary),
-                        ),
-                        const SizedBox(height: 8),
-                        OutlinedButton.icon(
-                          onPressed: _openAddressScreen,
-                          icon: const Icon(Icons.add_rounded, size: 16),
-                          label: const Text('Add Address'),
-                        ),
-                      ],
-                    ),
-                  );
-                }
-                return Column(
-                  children: list
-                      .map((addr) => _AddressRadioTile(
-                            address: addr,
-                            selected: _selectedAddress?.id == addr.id,
-                            onTap: () =>
-                                setState(() => _selectedAddress = addr),
-                          ))
-                      .toList(),
-                );
-              },
-            ),
-          ),
-          const SizedBox(height: 16),
-
-          // ── Date ─────────────────────────────────────────────────────────
-          _SectionCard(
-            title: 'Service Date',
-            child: Clickable(
-              onTap: _pickDate,
-              child: Container(
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 14, vertical: 13),
-                decoration: BoxDecoration(
-                  border: Border.all(
-                    color: _selectedDate != null
-                        ? AppColors.primary
-                        : AppColors.border,
-                    width: _selectedDate != null ? 1.5 : 1,
+                    padding: EdgeInsets.all(16),
+                    child: CircularProgressIndicator(strokeWidth: 2),
                   ),
-                  borderRadius: BorderRadius.circular(10),
-                  color: _selectedDate != null
-                      ? AppColors.primary.withAlpha(10)
-                      : AppColors.surfaceVariant,
                 ),
-                child: Row(
-                  children: [
-                    Icon(
-                      Icons.calendar_today_rounded,
-                      size: 18,
-                      color: _selectedDate != null
-                          ? AppColors.primary
-                          : AppColors.textHint,
-                    ),
-                    const SizedBox(width: 10),
-                    Text(
-                      _selectedDate != null
-                          ? _formatDate(_selectedDate!)
-                          : 'Select a date',
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                            color: _selectedDate != null
-                                ? AppColors.textPrimary
-                                : AppColors.textHint,
-                            fontWeight: _selectedDate != null
-                                ? FontWeight.w600
-                                : FontWeight.w400,
-                          ),
-                    ),
-                    const Spacer(),
-                    const Icon(Icons.chevron_right_rounded,
-                        size: 18, color: AppColors.textHint),
-                  ],
+                error: (e, _) => _ErrorRow(
+                  message: 'Could not load time slots',
+                  onRetry: () => ref.invalidate(
+                    timeSlotsProvider((date: dateStr!, serviceId: serviceId)),
+                  ),
+                ),
+                data: (slots) => _SlotGrid(
+                  slots: slots,
+                  selected: _selectedSlot,
+                  onSelect: (s) =>
+                      setState(() => _selectedSlot = s),
                 ),
               ),
+      ),
+      const SizedBox(height: 16),
+
+      // Coupon
+      _SectionCard(
+        title: 'Coupon',
+        child: _selectedCoupon == null
+            ? OutlinedButton.icon(
+                onPressed: _pickCoupon,
+                icon: const Icon(Icons.local_offer_outlined, size: 16),
+                label: const Text('Apply Coupon'),
+                style: OutlinedButton.styleFrom(
+                    minimumSize: const Size.fromHeight(44)),
+              )
+            : _AppliedCouponRow(
+                coupon: _selectedCoupon!,
+                subtotal: _subtotal,
+                onRemove: () =>
+                    setState(() => _selectedCoupon = null),
+                onChange: _pickCoupon,
+              ),
+      ),
+      const SizedBox(height: 16),
+
+      // Loyalty Points
+      _LoyaltySection(
+        usePoints: _usePoints,
+        onToggle: (v) => setState(() => _usePoints = v),
+        redeemPoints: _loyaltyRedeemPoints,
+        availablePoints: _availablePoints,
+      ),
+      const SizedBox(height: 16),
+
+      // Price Summary
+      _SectionCard(
+        title: 'Price Summary',
+        child: _PriceSummary(
+          subtotal: _subtotal,
+          discount: _discount,
+          loyaltyDiscount: _loyaltyDiscount,
+          tax: _tax,
+          grandTotal: _grandTotal,
+        ),
+      ),
+    ];
+
+    final placeBar = _PlaceBookingBar(
+      grandTotal: _grandTotal,
+      loading: _placing,
+      enabled: !_placing && items.isNotEmpty,
+      onPressed: _placeBooking,
+    );
+
+    // ── Modal layout: Column with bounded Expanded + sticky footer ───────────
+    // Avoids embedding Scaffold inside PageSheet, which produces zero-size
+    // RenderBox errors during hit-testing (box.dart / shifted_box.dart).
+    if (widget.inModal) {
+      return Column(
+        children: [
+          Expanded(
+            child: ListView(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+              children: listChildren,
             ),
           ),
-          const SizedBox(height: 16),
-
-          // ── Time Slot ─────────────────────────────────────────────────────
-          _SectionCard(
-            title: 'Time Slot',
-            child: _selectedDate == null
-                ? Text(
-                    'Select a date first.',
-                    style: Theme.of(context)
-                        .textTheme
-                        .bodySmall
-                        ?.copyWith(color: AppColors.textHint),
-                  )
-                : slotsAsync!.when(
-                    loading: () => const Center(
-                      child: Padding(
-                        padding: EdgeInsets.all(16),
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      ),
-                    ),
-                    error: (e, _) => _ErrorRow(
-                      message: 'Could not load time slots',
-                      onRetry: () =>
-                          ref.invalidate(timeSlotsProvider(dateStr!)),
-                    ),
-                    data: (slots) => _SlotGrid(
-                      slots: slots,
-                      selected: _selectedSlot,
-                      onSelect: (s) =>
-                          setState(() => _selectedSlot = s),
-                    ),
-                  ),
-          ),
-          const SizedBox(height: 16),
-
-          // ── Coupon ────────────────────────────────────────────────────────
-          _SectionCard(
-            title: 'Coupon',
-            child: _selectedCoupon == null
-                ? OutlinedButton.icon(
-                    onPressed: _pickCoupon,
-                    icon: const Icon(Icons.local_offer_outlined, size: 16),
-                    label: const Text('Apply Coupon'),
-                    style: OutlinedButton.styleFrom(
-                        minimumSize: const Size.fromHeight(44)),
-                  )
-                : _AppliedCouponRow(
-                    coupon: _selectedCoupon!,
-                    subtotal: _subtotal,
-                    onRemove: () =>
-                        setState(() => _selectedCoupon = null),
-                    onChange: _pickCoupon,
-                  ),
-          ),
-          const SizedBox(height: 16),
-
-          // ── Price Summary ─────────────────────────────────────────────────
-          _SectionCard(
-            title: 'Price Summary',
-            child: _PriceSummary(
-              subtotal: _subtotal,
-              discount: _discount,
-              tax: _tax,
-              grandTotal: _grandTotal,
-            ),
-          ),
-
-          // Extra space for sticky button
-          const SizedBox(height: 100),
+          placeBar,
         ],
-      ),
+      );
+    }
 
-      // ── Sticky Place Booking bar ──────────────────────────────────────────
-      bottomNavigationBar: _PlaceBookingBar(
-        grandTotal: _grandTotal,
-        loading: _placing,
-        enabled: !_placing && items.isNotEmpty,
-        onPressed: _placeBooking,
+    // ── Full-screen layout: standard Scaffold ────────────────────────────────
+    return Scaffold(
+      backgroundColor: AppColors.background,
+      appBar: AppBar(
+        title: const Text('Checkout'),
+        backgroundColor: AppColors.surface,
+        foregroundColor: AppColors.textPrimary,
+        elevation: 0,
+        surfaceTintColor: Colors.transparent,
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(0.8),
+          child: Container(height: 0.8, color: AppColors.divider),
+        ),
       ),
+      body: ListView(
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+        children: [...listChildren, const SizedBox(height: 100)],
+      ),
+      bottomNavigationBar: placeBar,
     );
   }
 }
@@ -763,17 +836,120 @@ class _AppliedCouponRow extends StatelessWidget {
   }
 }
 
+// ── Loyalty section ───────────────────────────────────────────────────────────
+
+class _LoyaltySection extends ConsumerWidget {
+  final bool usePoints;
+  final ValueChanged<bool> onToggle;
+  final int redeemPoints;
+  final int availablePoints;
+
+  const _LoyaltySection({
+    required this.usePoints,
+    required this.onToggle,
+    required this.redeemPoints,
+    required this.availablePoints,
+  });
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final settingsAsync = ref.watch(loyaltySettingsProvider);
+
+    return settingsAsync.when(
+      loading: () => const SizedBox.shrink(),
+      error: (_, __) => const SizedBox.shrink(),
+      data: (settings) {
+        if (!settings.isEnabled || !settings.redeemEnabled) {
+          return const SizedBox.shrink();
+        }
+        if (availablePoints == 0) return const SizedBox.shrink();
+
+        final canRedeem = availablePoints >= settings.minRedeemPoints;
+
+        return _SectionCard(
+          title: 'Loyalty Points',
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  const Icon(Icons.stars_rounded,
+                      size: 16, color: Color(0xFFFFD700)),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      '$availablePoints pts available',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: AppColors.textPrimary,
+                            fontWeight: FontWeight.w500,
+                          ),
+                    ),
+                  ),
+                  Switch(
+                    value: usePoints && canRedeem,
+                    onChanged: canRedeem ? onToggle : null,
+                    activeColor: AppColors.primary,
+                  ),
+                ],
+              ),
+              if (!canRedeem) ...[
+                const SizedBox(height: 4),
+                Text(
+                  'Need ${settings.minRedeemPoints} pts minimum to redeem.',
+                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                        color: AppColors.textHint,
+                      ),
+                ),
+              ] else if (usePoints && redeemPoints > 0) ...[
+                const SizedBox(height: 6),
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFFD700).withAlpha(20),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                      color: const Color(0xFFFFD700).withAlpha(80),
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.check_circle_outline_rounded,
+                          size: 14, color: Color(0xFFFFD700)),
+                      const SizedBox(width: 6),
+                      Text(
+                        'Saving ₹$redeemPoints using $redeemPoints pts',
+                        style:
+                            Theme.of(context).textTheme.labelSmall?.copyWith(
+                                  color: const Color(0xFFB8860B),
+                                  fontWeight: FontWeight.w600,
+                                ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
 // ── Price summary ─────────────────────────────────────────────────────────────
 
 class _PriceSummary extends StatelessWidget {
   final double subtotal;
   final double discount;
+  final double loyaltyDiscount;
   final double tax;
   final double grandTotal;
 
   const _PriceSummary({
     required this.subtotal,
     required this.discount,
+    required this.loyaltyDiscount,
     required this.tax,
     required this.grandTotal,
   });
@@ -787,15 +963,23 @@ class _PriceSummary extends StatelessWidget {
         if (discount > 0) ...[
           const SizedBox(height: 8),
           _Row(
-            label: 'Discount',
+            label: 'Coupon Discount',
             value: '- ₹${discount.toStringAsFixed(0)}',
             tt: tt,
             valueColor: AppColors.success,
           ),
         ],
+        if (loyaltyDiscount > 0) ...[
+          const SizedBox(height: 8),
+          _Row(
+            label: 'Loyalty Points',
+            value: '- ₹${loyaltyDiscount.toInt()}',
+            tt: tt,
+            valueColor: const Color(0xFFFFD700),
+          ),
+        ],
         const SizedBox(height: 8),
-        _Row(
-            label: 'Tax (18%)', value: '₹${tax.toInt()}', tt: tt),
+        _Row(label: 'Tax (18%)', value: '₹${tax.toInt()}', tt: tt),
         const Padding(
           padding: EdgeInsets.symmetric(vertical: 12),
           child: Divider(color: AppColors.divider, height: 0),

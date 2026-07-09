@@ -11,6 +11,7 @@ class SelectDatetimeScreen extends ConsumerWidget {
   final TimeSlotModel? selectedSlot;
   final ValueChanged<DateTime> onDateChanged;
   final ValueChanged<TimeSlotModel> onSlotSelected;
+  final String serviceId;
 
   const SelectDatetimeScreen({
     super.key,
@@ -18,6 +19,7 @@ class SelectDatetimeScreen extends ConsumerWidget {
     required this.selectedSlot,
     required this.onDateChanged,
     required this.onSlotSelected,
+    required this.serviceId,
   });
 
   String _dateKey(DateTime d) =>
@@ -26,7 +28,7 @@ class SelectDatetimeScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final dateStr = _dateKey(selectedDate);
-    final slotsAsync = ref.watch(timeSlotsProvider(dateStr));
+    final slotsAsync = ref.watch(timeSlotsProvider((date: dateStr, serviceId: serviceId)));
     final tt = Theme.of(context).textTheme;
 
     return SingleChildScrollView(
