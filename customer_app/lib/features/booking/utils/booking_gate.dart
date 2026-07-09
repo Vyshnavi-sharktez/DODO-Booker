@@ -97,7 +97,7 @@ Future<void> launchBookingFlow(
   // ── Step 4: Date & time ───────────────────────────────────────────────────
   final dtFuture = AppModalDialog.show(
     context: context,
-    child: const DateTimeModal(),
+    child: DateTimeModal(serviceId: service.legacyId ?? ''),
   );
   final dtResult = await dtFuture;
   if (!context.mounted || dtResult == null) return;

@@ -5,6 +5,7 @@ import '../../../../../core/theme/app_theme.dart';
 import '../../../../../core/widgets/admin_search_bar.dart';
 import '../../application/providers/catalog_node_providers.dart';
 import '../../domain/models/catalog_node.dart';
+import '../../../service_scheduling/presentation/widgets/service_scheduling_dialog.dart';
 import '../widgets/catalog_node_attributes_drawer.dart';
 import '../widgets/catalog_node_form_dialog.dart';
 import '../widgets/catalog_node_move_dialog.dart';
@@ -283,6 +284,17 @@ class _CatalogV2PageState extends ConsumerState<CatalogV2Page> {
     );
   }
 
+  void _openScheduling(CatalogNode node) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => ServiceSchedulingDialog(
+        serviceId: node.id,
+        serviceName: node.name,
+      ),
+    );
+  }
+
   void _openAttributes(CatalogNode node) {
     ref
         .read(catalogNodeAttributesNotifierProvider.notifier)
@@ -319,6 +331,7 @@ class _CatalogV2PageState extends ConsumerState<CatalogV2Page> {
       onToggleActive: _toggleActive,
       onToggleBookable: _toggleBookable,
       onOpenAttributes: _openAttributes,
+      onOpenScheduling: _openScheduling,
     );
 
     return Scaffold(

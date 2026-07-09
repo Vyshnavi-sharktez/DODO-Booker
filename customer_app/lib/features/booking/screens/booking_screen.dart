@@ -90,6 +90,7 @@ class _BookingScreenState extends ConsumerState<BookingScreen> {
         return SelectDatetimeScreen(
           selectedDate: _date,
           selectedSlot: _slot,
+          serviceId: widget.service.legacyId ?? '',
           onDateChanged: (date) => setState(() {
             _date = date;
             _slot = null;

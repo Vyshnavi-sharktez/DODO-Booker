@@ -415,7 +415,9 @@ class _BookingFlowModalState extends ConsumerState<BookingFlowModal>
   // ── Step 1: Date & Time ───────────────────────────────────────────────────────
 
   Widget _buildDateTimeStep() {
-    final slotsAsync = ref.watch(timeSlotsProvider(_dateKey));
+    final slotsAsync = ref.watch(timeSlotsProvider(
+      (date: _dateKey, serviceId: widget.service.legacyId ?? ''),
+    ));
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [

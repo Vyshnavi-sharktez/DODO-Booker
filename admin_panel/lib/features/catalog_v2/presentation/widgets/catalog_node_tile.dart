@@ -15,6 +15,7 @@ class NodeCallbacks {
     required this.onToggleActive,
     required this.onToggleBookable,
     required this.onOpenAttributes,
+    required this.onOpenScheduling,
   });
 
   final void Function(CatalogNode parent) onAddChild;
@@ -24,6 +25,7 @@ class NodeCallbacks {
   final void Function(CatalogNode node, bool isActive) onToggleActive;
   final void Function(CatalogNode node, bool isBookable) onToggleBookable;
   final void Function(CatalogNode node) onOpenAttributes;
+  final void Function(CatalogNode node) onOpenScheduling;
 }
 
 /// Renders a single catalog node row and recursively renders its children
@@ -214,6 +216,15 @@ class CatalogNodeTile extends StatelessWidget {
                     tooltip: 'Attributes',
                     color: AppColors.primary,
                     onPressed: () => callbacks.onOpenAttributes(node),
+                  ),
+
+                // Scheduling — only for bookable leaf nodes.
+                if (!hasChildren && node.isBookable)
+                  IconButton(
+                    icon: const Icon(Icons.schedule_rounded, size: 17),
+                    tooltip: 'Scheduling',
+                    color: AppColors.accent,
+                    onPressed: () => callbacks.onOpenScheduling(node),
                   ),
 
                 // Add child

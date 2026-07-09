@@ -232,8 +232,11 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     final addressAsync = ref.watch(addressNotifierProvider);
     final dateStr =
         _selectedDate?.toIso8601String().substring(0, 10);
-    final slotsAsync =
-        dateStr != null ? ref.watch(timeSlotsProvider(dateStr)) : null;
+    final serviceId =
+        items.isNotEmpty ? (items.first.legacyId ?? '') : '';
+    final slotsAsync = dateStr != null
+        ? ref.watch(timeSlotsProvider((date: dateStr, serviceId: serviceId)))
+        : null;
 
     // Pre-select the default address once loaded
     addressAsync.whenData((list) {
@@ -393,8 +396,9 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                 ),
                 error: (e, _) => _ErrorRow(
                   message: 'Could not load time slots',
-                  onRetry: () =>
-                      ref.invalidate(timeSlotsProvider(dateStr!)),
+                  onRetry: () => ref.invalidate(
+                    timeSlotsProvider((date: dateStr!, serviceId: serviceId)),
+                  ),
                 ),
                 data: (slots) => _SlotGrid(
                   slots: slots,
