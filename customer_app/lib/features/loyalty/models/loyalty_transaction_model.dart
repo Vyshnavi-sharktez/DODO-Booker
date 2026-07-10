@@ -21,7 +21,7 @@ class LoyaltyTransactionModel {
     return LoyaltyTransactionModel(
       id: json['id'] as String,
       bookingId: json['booking_id'] as String?,
-      type: json['type'] as String,
+      type: json['transaction_type'] as String,
       points: json['points'] as int,
       description: json['description'] as String?,
       createdAt: DateTime.parse(json['created_at'] as String),

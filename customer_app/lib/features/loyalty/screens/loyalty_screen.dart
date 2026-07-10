@@ -139,7 +139,10 @@ class _HowItWorksSection extends ConsumerWidget {
     final settingsAsync = ref.watch(loyaltySettingsProvider);
 
     return settingsAsync.when(
-      loading: () => const SizedBox.shrink(),
+      loading: () => const SizedBox(
+        height: 120,
+        child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+      ),
       error: (_, __) => const SizedBox.shrink(),
       data: (settings) => Column(
         crossAxisAlignment: CrossAxisAlignment.start,
