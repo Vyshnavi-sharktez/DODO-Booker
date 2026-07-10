@@ -130,43 +130,51 @@ class _BalanceShimmer extends StatelessWidget {
 
 // ── How it works ──────────────────────────────────────────────────────────────
 
-class _HowItWorksSection extends StatelessWidget {
+class _HowItWorksSection extends ConsumerWidget {
   const _HowItWorksSection();
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final tt = Theme.of(context).textTheme;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text('How it works',
-            style: tt.titleSmall?.copyWith(fontWeight: FontWeight.w700)),
-        const SizedBox(height: 12),
-        const _InfoRow(
-          icon: Icons.add_circle_outline_rounded,
-          color: Color(0xFF66BB6A),
-          text: 'Earn 10 points for every ₹100 spent on completed bookings.',
-        ),
-        const SizedBox(height: 10),
-        const _InfoRow(
-          icon: Icons.currency_rupee_rounded,
-          color: Color(0xFFFFD700),
-          text: '1 Point = ₹1.',
-        ),
-        const SizedBox(height: 10),
-        const _InfoRow(
-          icon: Icons.lock_outline_rounded,
-          color: AppColors.textHint,
-          text: 'Minimum 100 points required to redeem.',
-        ),
-        const SizedBox(height: 10),
-        const _InfoRow(
-          icon: Icons.percent_rounded,
-          color: AppColors.textHint,
-          text:
-              'Maximum 20% of the booking amount can be paid using points.',
-        ),
-      ],
+    final settingsAsync = ref.watch(loyaltySettingsProvider);
+
+    return settingsAsync.when(
+      loading: () => const SizedBox.shrink(),
+      error: (_, __) => const SizedBox.shrink(),
+      data: (settings) => Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('How it works',
+              style: tt.titleSmall?.copyWith(fontWeight: FontWeight.w700)),
+          const SizedBox(height: 12),
+          _InfoRow(
+            icon: Icons.add_circle_outline_rounded,
+            color: const Color(0xFF66BB6A),
+            text:
+                'Earn ${settings.earnPer100} points for every ₹100 spent on completed bookings.',
+          ),
+          const SizedBox(height: 10),
+          const _InfoRow(
+            icon: Icons.currency_rupee_rounded,
+            color: Color(0xFFFFD700),
+            text: '1 Point = ₹1.',
+          ),
+          const SizedBox(height: 10),
+          _InfoRow(
+            icon: Icons.lock_outline_rounded,
+            color: AppColors.textHint,
+            text:
+                'Minimum ${settings.minRedeemPoints} points required to redeem.',
+          ),
+          const SizedBox(height: 10),
+          _InfoRow(
+            icon: Icons.percent_rounded,
+            color: AppColors.textHint,
+            text:
+                'Maximum ${settings.maxRedeemPercentage.toStringAsFixed(0)}% of the booking amount can be paid using points.',
+          ),
+        ],
+      ),
     );
   }
 }

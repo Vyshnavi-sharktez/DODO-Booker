@@ -233,7 +233,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     final dateStr =
         _selectedDate?.toIso8601String().substring(0, 10);
     final serviceId =
-        items.isNotEmpty ? (items.first.legacyId ?? '') : '';
+        items.isNotEmpty ? items.first.serviceId : '';
     final slotsAsync = dateStr != null
         ? ref.watch(timeSlotsProvider((date: dateStr, serviceId: serviceId)))
         : null;
