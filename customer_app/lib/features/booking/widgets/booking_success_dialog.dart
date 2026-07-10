@@ -13,23 +13,34 @@ Future<void> showBookingSuccessDialog(
   required VoidCallback onClose,
   required VoidCallback onViewBookings,
 }) {
+  debugPrint('[DODO][SuccessDialog] showBookingSuccessDialog called');
   return showGeneralDialog<void>(
     context: context,
     barrierDismissible: false,
     barrierLabel: '',
     barrierColor: Colors.transparent,
     transitionDuration: const Duration(milliseconds: 260),
-    pageBuilder: (ctx, _, __) => _BookingSuccessDialog(
-      booking: booking,
-      onClose: onClose,
-      onViewBookings: onViewBookings,
-    ),
+    pageBuilder: (ctx, _, __) {
+      debugPrint('[DODO][SuccessDialog] pageBuilder fired — dialog route pushed');
+      return _BookingSuccessDialog(
+        booking: booking,
+        onClose: () {
+          debugPrint('[DODO][SuccessDialog] close/backdrop tapped');
+          onClose();
+        },
+        onViewBookings: () {
+          debugPrint('[DODO][SuccessDialog] view-bookings tapped');
+          onViewBookings();
+        },
+      );
+    },
     transitionBuilder: (ctx, anim, _, child) => FadeTransition(
       opacity: CurvedAnimation(parent: anim, curve: Curves.easeOut),
       child: ScaleTransition(
-        scale: Tween<double>(begin: 0.95, end: 1.0).animate(
-          CurvedAnimation(parent: anim, curve: Curves.easeOutCubic),
-        ),
+        scale: Tween<double>(
+          begin: 0.95,
+          end: 1.0,
+        ).animate(CurvedAnimation(parent: anim, curve: Curves.easeOutCubic)),
         child: child,
       ),
     ),
@@ -48,8 +59,18 @@ class _BookingSuccessDialog extends StatelessWidget {
   });
 
   static const _months = [
-    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec',
   ];
 
   String get _formattedDate {
@@ -106,20 +127,18 @@ class _BookingSuccessDialog extends StatelessWidget {
                     mainAxisSize: MainAxisSize.min,
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      // Close button row
+                      // ── STEP 2: add close button ──
                       Align(
                         alignment: Alignment.centerRight,
                         child: IconButton(
                           icon: const Icon(Icons.close_rounded, size: 20),
                           onPressed: onClose,
-                          style: IconButton.styleFrom(
-                            foregroundColor: AppColors.textSecondary,
-                          ),
+                          style: IconButton.styleFrom(foregroundColor: AppColors.textSecondary),
                         ),
                       ),
                       const SizedBox(height: 4),
 
-                      // Success icon
+                      // ── STEP 3: add success icon ──
                       Center(
                         child: Container(
                           width: 68,
@@ -127,62 +146,42 @@ class _BookingSuccessDialog extends StatelessWidget {
                           decoration: BoxDecoration(
                             color: AppColors.success,
                             shape: BoxShape.circle,
-                            boxShadow: [
-                              BoxShadow(
-                                color: AppColors.success.withAlpha(60),
-                                blurRadius: 20,
-                                spreadRadius: 2,
-                              ),
-                            ],
+                            boxShadow: [BoxShadow(color: AppColors.success.withAlpha(60), blurRadius: 20, spreadRadius: 2)],
                           ),
-                          child: const Icon(
-                            Icons.check_rounded,
-                            size: 34,
-                            color: Colors.white,
-                          ),
+                          child: const Icon(Icons.check_rounded, size: 34, color: Colors.white),
                         ),
                       ),
                       const SizedBox(height: 14),
 
-                      Text(
-                        'Booking Confirmed!',
-                        textAlign: TextAlign.center,
-                        style: tt.titleLarge?.copyWith(
-                          fontWeight: FontWeight.w800,
-                          color: AppColors.textPrimary,
-                        ),
-                      ),
+                      // ── STEP 4: add title ──
+                      Text('Booking Confirmed!', textAlign: TextAlign.center,
+                        style: tt.titleLarge?.copyWith(fontWeight: FontWeight.w800, color: AppColors.textPrimary)),
                       const SizedBox(height: 6),
-                      Text(
-                        'Your booking is confirmed. We\'ll see you on $_formattedDate.',
+
+                      // ── STEP 5: add subtitle ──
+                      Text('Your booking is confirmed. We\'ll see you on $_formattedDate.',
                         textAlign: TextAlign.center,
-                        style: tt.bodySmall?.copyWith(
-                          color: AppColors.textSecondary,
-                          height: 1.4,
-                        ),
-                      ),
+                        style: tt.bodySmall?.copyWith(color: AppColors.textSecondary, height: 1.4)),
                       const SizedBox(height: 22),
 
-                      // Booking summary card
-                      _SummaryCard(
-                        booking: booking,
-                        formattedDate: _formattedDate,
-                      ),
+                      // ── STEP 6: add _SummaryCard ──
+                      _SummaryCard(booking: booking, formattedDate: _formattedDate),
                       const SizedBox(height: 24),
 
-                      // Footer actions — right-aligned
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.end,
+                      // ── STEP 7: add footer row ──
+                      // OverflowBar replaces Row: Row(mainAxisSize.max) reports
+                      // double.infinity as max intrinsic width, which Column(stretch)
+                      // uses as its own cross-axis size, producing
+                      // BoxConstraints.tightFor(width: infinity) for every child.
+                      // OverflowBar computes intrinsic width as max-of-children
+                      // (not sum-toward-infinity) so the Column always gets a
+                      // finite cross size.
+                      OverflowBar(
+                        alignment: MainAxisAlignment.end,
+                        spacing: 8,
                         children: [
-                          TextButton(
-                            onPressed: onClose,
-                            child: const Text('Continue Browsing'),
-                          ),
-                          const SizedBox(width: 8),
-                          FilledButton(
-                            onPressed: onViewBookings,
-                            child: const Text('View My Bookings'),
-                          ),
+                          TextButton(onPressed: onClose, child: const Text('Continue Browsing')),
+                          FilledButton(onPressed: onViewBookings, child: const Text('View My Bookings')),
                         ],
                       ),
                     ],
@@ -256,8 +255,10 @@ class _SummaryCard extends StatelessWidget {
               ),
               const Spacer(),
               Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 3,
+                ),
                 decoration: BoxDecoration(
                   color: AppColors.success.withAlpha(25),
                   borderRadius: BorderRadius.circular(20),
