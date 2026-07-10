@@ -18,6 +18,8 @@ import '../providers/cart_provider.dart';
 import '../services/checkout_service.dart';
 import '../../loyalty/providers/loyalty_providers.dart';
 import '../../loyalty/services/loyalty_service.dart';
+import '../../tax/models/tax_settings_model.dart';
+import '../../tax/providers/tax_provider.dart';
 
 class CheckoutScreen extends ConsumerStatefulWidget {
   final bool inModal;
@@ -34,6 +36,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
   CouponModel? _selectedCoupon;
   bool _usePoints = false;
   bool _placing = false;
+  TaxSettingsModel _taxSettings = TaxSettingsModel.defaults;
 
   static const _monthNames = [
     'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
@@ -49,7 +52,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
   double get _discount =>
       _selectedCoupon?.calculateDiscount(_subtotal) ?? 0.0;
 
-  double get _tax => _subtotal * 0.18;
+  double get _tax => _taxSettings.computeTax(_subtotal);
 
   int get _availablePoints {
     return ref
@@ -158,6 +161,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         slot: _selectedSlot!,
         couponId: _selectedCoupon?.id,
         discountAmount: _discount + _loyaltyDiscount,
+        taxAmount: _tax,
       );
 
       // Record loyalty redemption after booking is confirmed
@@ -230,6 +234,10 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
   Widget build(BuildContext context) {
     final items = ref.watch(cartProvider);
     final addressAsync = ref.watch(addressNotifierProvider);
+
+    // Cache tax settings so _tax getter and _placeBooking() stay in sync.
+    // Falls back to defaults (18% GST) until the provider resolves.
+    ref.watch(taxSettingsProvider).whenData((s) => _taxSettings = s);
     final dateStr =
         _selectedDate?.toIso8601String().substring(0, 10);
     final serviceId =
@@ -449,6 +457,10 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
           loyaltyDiscount: _loyaltyDiscount,
           tax: _tax,
           grandTotal: _grandTotal,
+          taxLabel: _taxSettings.displayLabel,
+          showTaxLine: _taxSettings.isEnabled &&
+              _taxSettings.applyOnServices &&
+              _taxSettings.displaySeparately,
         ),
       ),
     ];
@@ -945,6 +957,8 @@ class _PriceSummary extends StatelessWidget {
   final double loyaltyDiscount;
   final double tax;
   final double grandTotal;
+  final String taxLabel;
+  final bool showTaxLine;
 
   const _PriceSummary({
     required this.subtotal,
@@ -952,6 +966,8 @@ class _PriceSummary extends StatelessWidget {
     required this.loyaltyDiscount,
     required this.tax,
     required this.grandTotal,
+    this.taxLabel = 'GST (18%)',
+    this.showTaxLine = true,
   });
 
   @override
@@ -978,8 +994,10 @@ class _PriceSummary extends StatelessWidget {
             valueColor: const Color(0xFFFFD700),
           ),
         ],
-        const SizedBox(height: 8),
-        _Row(label: 'Tax (18%)', value: '₹${tax.toInt()}', tt: tt),
+        if (showTaxLine && tax > 0) ...[
+          const SizedBox(height: 8),
+          _Row(label: taxLabel, value: '₹${tax.toInt()}', tt: tt),
+        ],
         const Padding(
           padding: EdgeInsets.symmetric(vertical: 12),
           child: Divider(color: AppColors.divider, height: 0),

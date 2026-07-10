@@ -92,6 +92,12 @@ const _navItems = <_NavItem>[
     requiredPermission: 'settings.manage',
   ),
   _NavItem(
+    label: 'Tax Settings',
+    icon: Icons.receipt_long_rounded,
+    route: '/dashboard/tax-settings',
+    requiredPermission: 'settings.manage',
+  ),
+  _NavItem(
     label: 'Global Schedule',
     icon: Icons.schedule_rounded,
     route: '/dashboard/global-scheduling',

@@ -30,6 +30,7 @@ class CheckoutService {
     required TimeSlotModel slot,
     String? couponId,
     double discountAmount = 0.0,
+    double taxAmount = 0.0,
   }) async {
     assert(items.isNotEmpty, 'Cannot create a booking with an empty cart');
     debugPrint('[DODO][Checkout] createCartBooking started — ${items.length} item(s)');
@@ -38,7 +39,7 @@ class CheckoutService {
     debugPrint('[DODO][Checkout] customer_id=$customerId');
 
     final subtotal = items.fold(0.0, (sum, i) => sum + i.totalPrice);
-    final tax = subtotal * 0.18;
+    final tax = taxAmount;
     final gross = subtotal + tax;
     final totalAmount = (gross - discountAmount).clamp(0.0, double.infinity);
     final serviceDate = date.toIso8601String().substring(0, 10);

@@ -6,6 +6,8 @@ import '../../../core/widgets/clickable.dart';
 import '../../../core/widgets/page_sheet.dart';
 import '../models/cart_item.dart';
 import '../providers/cart_provider.dart';
+import '../../tax/models/tax_settings_model.dart';
+import '../../tax/providers/tax_provider.dart';
 import 'checkout_screen.dart';
 
 class CartScreen extends ConsumerWidget {
@@ -419,17 +421,19 @@ class _StepBtn extends StatelessWidget {
 
 // ── Cart summary card (in scroll) ─────────────────────────────────────────────
 
-class _CartSummaryCard extends StatelessWidget {
+class _CartSummaryCard extends ConsumerWidget {
   final List<CartItem> items;
   final double subtotal;
 
   const _CartSummaryCard({required this.items, required this.subtotal});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final tt = Theme.of(context).textTheme;
     final totalItems = items.fold<int>(0, (sum, item) => sum + item.quantity);
-    final tax = subtotal * 0.18;
+    final taxSettings = ref.watch(taxSettingsProvider).valueOrNull ??
+        TaxSettingsModel.defaults;
+    final tax = taxSettings.computeTax(subtotal);
     final grandTotal = subtotal + tax;
 
     return Container(
@@ -458,12 +462,14 @@ class _CartSummaryCard extends StatelessWidget {
           const SizedBox(height: 10),
           _SummaryRow(
               label: 'Subtotal', value: '₹${subtotal.toInt()}', tt: tt),
-          const SizedBox(height: 10),
-          _SummaryRow(
-            label: 'Estimated tax (18%)',
-            value: '₹${tax.toInt()}',
-            tt: tt,
-          ),
+          if (tax > 0) ...[
+            const SizedBox(height: 10),
+            _SummaryRow(
+              label: 'Est. ${taxSettings.displayLabel}',
+              value: '₹${tax.toInt()}',
+              tt: tt,
+            ),
+          ],
           const Padding(
             padding: EdgeInsets.symmetric(vertical: 14),
             child: Divider(color: AppColors.divider, height: 0),

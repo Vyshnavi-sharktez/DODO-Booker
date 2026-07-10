@@ -37,6 +37,7 @@ const Map<String, String> routePermissions = {
   '/vendor-settlement': 'vendor.view',
   '/settings': 'settings.manage',
   '/loyalty': 'settings.manage',
+  '/tax-settings': 'settings.manage',
   '/global-scheduling': 'settings.manage',
 };
 
