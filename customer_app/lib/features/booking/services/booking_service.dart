@@ -39,39 +39,88 @@ class BookingService {
     debugPrint('[DODO][Slots] ══════════ fetchAvailableSlots ══════════');
     debugPrint('[DODO][Slots] date=$dateStr  serviceId="$serviceId"');
 
-    // ── 1. Load scheduling config ────────────────────────────────────────────
-    Map<String, dynamic>? cfg;
-    if (serviceId.isNotEmpty) {
-      try {
-        final rows = await _client
-            .from('service_scheduling')
-            .select()
-            .eq('service_id', serviceId);
-        debugPrint('[DODO][Slots] Supabase returned ${rows.length} row(s) for service_id="$serviceId"');
-        if (rows.isNotEmpty) {
-          cfg = rows.first;
-          debugPrint('[DODO][Slots] Raw cfg: $cfg');
-        } else {
-          debugPrint('[DODO][Slots] ⚠ No row found in service_scheduling for service_id="$serviceId"');
-        }
-      } catch (e) {
-        debugPrint('[DODO][Slots] ✗ Supabase query failed: $e');
+    // ── 1. Fetch global scheduling config ───────────────────────────────────
+    // Always loaded first so the master switch can be checked even when the
+    // service has no service_scheduling row of its own.
+    Map<String, dynamic>? globalCfg;
+    try {
+      final globalRows =
+          await _client.from('global_scheduling').select().limit(1);
+      if (globalRows.isNotEmpty) {
+        globalCfg = globalRows.first as Map<String, dynamic>;
       }
-    } else {
-      debugPrint('[DODO][Slots] ⚠ serviceId is empty — skipping DB query');
+    } catch (e) {
+      debugPrint('[DODO][Slots] Warning: could not load global_scheduling: $e');
     }
 
-    if (cfg == null) {
+    final globalMasterOn = (globalCfg?['is_enabled'] as bool?) ?? false;
+    debugPrint('[DODO][Slots] globalMasterOn=$globalMasterOn');
+
+    // ── 2. Resolve which schedule config to use ──────────────────────────────
+    // Priority:
+    //   1. Global master ON  → all services use global (no service row needed)
+    //   2. Global master OFF + service opted in → this service uses global
+    //   3. Global master OFF + not opted in     → service's own config
+    //
+    // `isEnabled` is tracked separately: global_scheduling.is_enabled is the
+    // master switch, not a per-service scheduling-active flag.
+    Map<String, dynamic>? scheduleCfg;
+    bool isEnabled;
+
+    if (globalMasterOn) {
+      // Master ON → use global for every service without querying service_scheduling.
+      debugPrint('[DODO][Slots] Using global schedule (master override)');
+      scheduleCfg = globalCfg;
+      isEnabled = true;
+    } else {
+      // Master OFF → load the service's own row, then check per-service opt-in.
+      Map<String, dynamic>? serviceCfg;
+      if (serviceId.isNotEmpty) {
+        try {
+          final rows = await _client
+              .from('service_scheduling')
+              .select()
+              .eq('service_id', serviceId);
+          debugPrint('[DODO][Slots] Supabase returned ${rows.length} row(s) for service_id="$serviceId"');
+          if (rows.isNotEmpty) {
+            serviceCfg = rows.first as Map<String, dynamic>;
+            debugPrint('[DODO][Slots] Raw serviceCfg: $serviceCfg');
+          } else {
+            debugPrint('[DODO][Slots] ⚠ No row found in service_scheduling for service_id="$serviceId"');
+          }
+        } catch (e) {
+          debugPrint('[DODO][Slots] ✗ Supabase query failed: $e');
+        }
+      } else {
+        debugPrint('[DODO][Slots] ⚠ serviceId is empty — skipping DB query');
+      }
+
+      isEnabled = (serviceCfg?['is_enabled'] as bool?) ?? true;
+      final serviceOptedIn =
+          (serviceCfg?['use_global_schedule'] as bool?) ?? false;
+      debugPrint('[DODO][Slots] serviceOptedIn=$serviceOptedIn  isEnabled=$isEnabled');
+
+      if (serviceOptedIn && globalCfg != null) {
+        debugPrint('[DODO][Slots] Using global schedule (per-service opt-in)');
+        scheduleCfg = globalCfg;
+      } else {
+        scheduleCfg = serviceCfg;
+      }
+    }
+
+    if (scheduleCfg == null) {
       debugPrint('[DODO][Slots] → returning [] (no scheduling config found)');
       return [];
     }
 
-    final isEnabled = (cfg['is_enabled'] as bool?) ?? true;
     debugPrint('[DODO][Slots] is_enabled=$isEnabled');
     if (!isEnabled) {
       debugPrint('[DODO][Slots] → returning [] (scheduling disabled)');
       return [];
     }
+
+    // All remaining filtering reads from scheduleCfg (not cfg).
+    final cfg = scheduleCfg;
 
     // ── 2. Check working day ─────────────────────────────────────────────────
     final date = DateTime.parse(dateStr);
