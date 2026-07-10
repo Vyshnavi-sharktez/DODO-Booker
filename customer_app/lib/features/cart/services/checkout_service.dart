@@ -31,6 +31,8 @@ class CheckoutService {
     String? couponId,
     double discountAmount = 0.0,
     double taxAmount = 0.0,
+    String paymentMethod = 'cash',
+    String paymentStatus = 'pending',
   }) async {
     assert(items.isNotEmpty, 'Cannot create a booking with an empty cart');
     debugPrint('[DODO][Checkout] createCartBooking started — ${items.length} item(s)');
@@ -63,6 +65,8 @@ class CheckoutService {
       'longitude': ?address.longitude,
       'scheduled_time': slot.label,
       if (primaryItem?.legacyId != null) 'service_id': primaryItem!.legacyId,
+      'payment_method': paymentMethod,
+      'payment_status': paymentStatus,
     };
     debugPrint('BOOKING LAT=${address.latitude}');
     debugPrint('BOOKING LNG=${address.longitude}');

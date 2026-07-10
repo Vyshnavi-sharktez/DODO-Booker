@@ -16,6 +16,7 @@ import '../../../features/address/services/address_providers.dart';
 import '../models/cart_item.dart';
 import '../providers/cart_provider.dart';
 import '../services/checkout_service.dart';
+import '../widgets/payment_selection_sheet.dart';
 import '../../loyalty/providers/loyalty_providers.dart';
 import '../../loyalty/services/loyalty_service.dart';
 import '../../tax/models/tax_settings_model.dart';
@@ -120,6 +121,15 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     }
   }
 
+  Future<String?> _selectPaymentMethod() {
+    return showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => const PaymentSelectionSheet(),
+    );
+  }
+
   Future<void> _placeBooking() async {
     final items = ref.read(cartProvider);
     if (items.isEmpty) return;
@@ -150,10 +160,17 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       }
     }
 
+    // ── Payment method selection ─────────────────────────────────────────────
+    final paymentMethod = await _selectPaymentMethod();
+    if (!mounted || paymentMethod == null) return;
+
     final redeemPoints = _loyaltyRedeemPoints;
 
+    debugPrint('[DODO][Checkout] _placeBooking starting — inModal=${widget.inModal}');
     setState(() => _placing = true);
+    debugPrint('[DODO][Checkout] _placing=true');
     try {
+      debugPrint('[DODO][Checkout] → awaiting createCartBooking...');
       final booking = await CheckoutService().createCartBooking(
         items: items,
         address: _selectedAddress!,
@@ -162,15 +179,19 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         couponId: _selectedCoupon?.id,
         discountAmount: _discount + _loyaltyDiscount,
         taxAmount: _tax,
+        paymentMethod: paymentMethod,
       );
+      debugPrint('[DODO][Checkout] ✓ createCartBooking returned — id=${booking.id}');
 
       // Record loyalty redemption after booking is confirmed
       if (redeemPoints > 0) {
+        debugPrint('[DODO][Checkout] → awaiting recordRedemption($redeemPoints pts)...');
         try {
           await LoyaltyService().recordRedemption(
             bookingId: booking.id,
             points: redeemPoints,
           );
+          debugPrint('[DODO][Checkout] ✓ recordRedemption done');
           ref.invalidate(customerLoyaltyProvider);
           ref.invalidate(loyaltyTransactionsProvider);
         } catch (e) {
@@ -178,31 +199,53 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         }
       }
 
+      debugPrint('[DODO][Checkout] → clearCart()');
       ref.read(cartProvider.notifier).clearCart();
+      debugPrint('[DODO][Checkout] ✓ clearCart done');
 
-      if (!mounted) return;
+      debugPrint('[DODO][Checkout] mounted=$mounted (pre-dialog check)');
+      if (!mounted) {
+        debugPrint('[DODO][Checkout] ✗ unmounted before dialog — returning');
+        return;
+      }
       if (widget.inModal) {
         // Capture the root navigator before the dialog opens.
         // After popUntil runs inside the callbacks, this NavigatorState and
         // its .context remain valid (the Navigator itself is never popped).
         final navigator = Navigator.of(context);
+        debugPrint('[DODO][Checkout] → showBookingSuccessDialog (inModal path)');
         await showBookingSuccessDialog(
           context,
           booking,
-          onClose: () => navigator.popUntil((route) => route.isFirst),
-          onViewBookings: () {
+          onClose: () {
+            debugPrint('[DODO][SuccessDialog] onClose → popUntil(isFirst)');
             navigator.popUntil((route) => route.isFirst);
+            debugPrint('[DODO][SuccessDialog] onClose popUntil done');
+          },
+          onViewBookings: () {
+            debugPrint('[DODO][SuccessDialog] onViewBookings → popUntil(isFirst)');
+            navigator.popUntil((route) => route.isFirst);
+            debugPrint('[DODO][SuccessDialog] onViewBookings popUntil done — openMyBookings');
             openMyBookings(navigator.context);
           },
         );
+        debugPrint('[DODO][Checkout] ✓ showBookingSuccessDialog awaited/returned');
       } else {
+        debugPrint('[DODO][Checkout] → context.go(/booking-success)');
         context.go('/booking-success', extra: booking);
+        debugPrint('[DODO][Checkout] ✓ context.go called');
       }
     } catch (e) {
-      if (!mounted) return;
+      debugPrint('[DODO][Checkout] ✗ exception: $e');
+      if (!mounted) {
+        debugPrint('[DODO][Checkout] ✗ unmounted in catch — cannot show error');
+        return;
+      }
       _showError('Booking failed: $e');
     } finally {
+      debugPrint('[DODO][Checkout] finally — mounted=$mounted');
       if (mounted) setState(() => _placing = false);
+      debugPrint('[DODO][Checkout] finally done');
     }
   }
 
