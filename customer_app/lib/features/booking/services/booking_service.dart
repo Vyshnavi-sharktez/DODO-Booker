@@ -36,49 +36,112 @@ class BookingService {
     String dateStr,
     String serviceId,
   ) async {
-    debugPrint('[DODO][Slots] fetchAvailableSlots(date=$dateStr, service=$serviceId)');
+    debugPrint('[DODO][Slots] ══════════ fetchAvailableSlots ══════════');
+    debugPrint('[DODO][Slots] date=$dateStr  serviceId="$serviceId"');
 
-    // ── 1. Load scheduling config ────────────────────────────────────────────
-    Map<String, dynamic>? cfg;
-    if (serviceId.isNotEmpty) {
-      try {
-        final rows = await _client
-            .from('service_scheduling')
-            .select()
-            .eq('service_id', serviceId);
-        if (rows.isNotEmpty) {
-          cfg = rows.first;
+    // ── 1. Fetch global scheduling config ───────────────────────────────────
+    // Always loaded first so the master switch can be checked even when the
+    // service has no service_scheduling row of its own.
+    Map<String, dynamic>? globalCfg;
+    try {
+      final globalRows =
+          await _client.from('global_scheduling').select().limit(1);
+      if (globalRows.isNotEmpty) {
+        globalCfg = globalRows.first as Map<String, dynamic>;
+      }
+    } catch (e) {
+      debugPrint('[DODO][Slots] Warning: could not load global_scheduling: $e');
+    }
+
+    final globalMasterOn = (globalCfg?['is_enabled'] as bool?) ?? false;
+    debugPrint('[DODO][Slots] globalMasterOn=$globalMasterOn');
+
+    // ── 2. Resolve which schedule config to use ──────────────────────────────
+    // Priority:
+    //   1. Global master ON  → all services use global (no service row needed)
+    //   2. Global master OFF + service opted in → this service uses global
+    //   3. Global master OFF + not opted in     → service's own config
+    //
+    // `isEnabled` is tracked separately: global_scheduling.is_enabled is the
+    // master switch, not a per-service scheduling-active flag.
+    Map<String, dynamic>? scheduleCfg;
+    bool isEnabled;
+
+    if (globalMasterOn) {
+      // Master ON → use global for every service without querying service_scheduling.
+      debugPrint('[DODO][Slots] Using global schedule (master override)');
+      scheduleCfg = globalCfg;
+      isEnabled = true;
+    } else {
+      // Master OFF → load the service's own row, then check per-service opt-in.
+      Map<String, dynamic>? serviceCfg;
+      if (serviceId.isNotEmpty) {
+        try {
+          final rows = await _client
+              .from('service_scheduling')
+              .select()
+              .eq('service_id', serviceId);
+          debugPrint('[DODO][Slots] Supabase returned ${rows.length} row(s) for service_id="$serviceId"');
+          if (rows.isNotEmpty) {
+            serviceCfg = rows.first as Map<String, dynamic>;
+            debugPrint('[DODO][Slots] Raw serviceCfg: $serviceCfg');
+          } else {
+            debugPrint('[DODO][Slots] ⚠ No row found in service_scheduling for service_id="$serviceId"');
+          }
+        } catch (e) {
+          debugPrint('[DODO][Slots] ✗ Supabase query failed: $e');
         }
-      } catch (e) {
-        debugPrint('[DODO][Slots] Warning: could not load scheduling config: $e');
+      } else {
+        debugPrint('[DODO][Slots] ⚠ serviceId is empty — skipping DB query');
+      }
+
+      isEnabled = (serviceCfg?['is_enabled'] as bool?) ?? true;
+      final serviceOptedIn =
+          (serviceCfg?['use_global_schedule'] as bool?) ?? false;
+      debugPrint('[DODO][Slots] serviceOptedIn=$serviceOptedIn  isEnabled=$isEnabled');
+
+      if (serviceOptedIn && globalCfg != null) {
+        debugPrint('[DODO][Slots] Using global schedule (per-service opt-in)');
+        scheduleCfg = globalCfg;
+      } else {
+        scheduleCfg = serviceCfg;
       }
     }
 
-    if (cfg == null) {
-      debugPrint('[DODO][Slots] No scheduling config — no slots available');
+    if (scheduleCfg == null) {
+      debugPrint('[DODO][Slots] → returning [] (no scheduling config found)');
       return [];
     }
 
-    final isEnabled = (cfg['is_enabled'] as bool?) ?? true;
+    debugPrint('[DODO][Slots] is_enabled=$isEnabled');
     if (!isEnabled) {
-      debugPrint('[DODO][Slots] Scheduling disabled for this service');
+      debugPrint('[DODO][Slots] → returning [] (scheduling disabled)');
       return [];
     }
+
+    // All remaining filtering reads from scheduleCfg (not cfg).
+    final cfg = scheduleCfg;
 
     // ── 2. Check working day ─────────────────────────────────────────────────
     final date = DateTime.parse(dateStr);
     // Dart: Mon=1 … Sun=7 → convert to Sun=0 … Sat=6
     final dayOfWeek = date.weekday == 7 ? 0 : date.weekday;
-    final workingDays = ((cfg['working_days'] as List?)?.cast<int>()) ?? [1, 2, 3, 4, 5];
+    final workingDays = (cfg['working_days'] as List?)
+        ?.map((e) => (e as num).toInt())
+        .toList() ?? [1, 2, 3, 4, 5];
+    debugPrint('[DODO][Slots] date=$dateStr  dart.weekday=${date.weekday}  '
+        'mapped dayOfWeek=$dayOfWeek  working_days=$workingDays');
     if (!workingDays.contains(dayOfWeek)) {
-      debugPrint('[DODO][Slots] $dateStr (weekday=$dayOfWeek) not in working days $workingDays');
+      debugPrint('[DODO][Slots] → returning [] ($dateStr is not a working day)');
       return [];
     }
 
     // ── 3. Read manual slot list and max bookings ────────────────────────────
-    final labels = ((cfg['slots'] as List?)?.cast<String>()) ?? <String>[];
-    final maxBookings = (cfg['max_bookings_per_slot'] as int?) ?? 5;
-    debugPrint('[DODO][Slots] ${labels.length} manual slots configured');
+    final labels = (cfg['slots'] as List?)
+        ?.map((e) => e as String)
+        .toList() ?? <String>[];
+    final maxBookings = (cfg['max_bookings_per_slot'] as num?)?.toInt() ?? 5;
+    debugPrint('[DODO][Slots] slots from DB: $labels  maxBookings=$maxBookings');
 
     // ── 5. Load existing booking counts for this service+date ───────────────
     final capacityMap = <String, int>{};
@@ -108,26 +171,33 @@ class BookingService {
         '${now.month.toString().padLeft(2, '0')}-'
         '${now.day.toString().padLeft(2, '0')}';
     final isToday = dateStr == todayStr;
-    final cutoffMin = isToday
-        ? now.add(const Duration(hours: 1)).hour * 60 +
-          now.add(const Duration(hours: 1)).minute
-        : 0;
+    final cutoffNow = now.add(const Duration(hours: 1));
+    final cutoffMin = isToday ? cutoffNow.hour * 60 + cutoffNow.minute : 0;
+    debugPrint('[DODO][Slots] isToday=$isToday  '
+        'now=${now.hour}:${now.minute.toString().padLeft(2,'0')}  '
+        'cutoffMin=$cutoffMin (${cutoffMin ~/ 60}:${(cutoffMin % 60).toString().padLeft(2,'0')})');
 
     // ── 7. Build TimeSlotModel list ──────────────────────────────────────────
     // Today: remove past slots entirely. Future: keep all, mark capacity.
-    return labels
-        .where((label) => !isToday || _labelToMinutes(label) >= cutoffMin)
-        .map((label) {
-          final slotMin = _labelToMinutes(label);
-          final bookedCount = capacityMap[label] ?? 0;
-          return TimeSlotModel(
-            id: 'ts_${label.replaceAll(RegExp(r'[^0-9]'), '')}',
-            label: label,
-            period: _periodFor(slotMin),
-            isAvailable: bookedCount < maxBookings,
-          );
-        })
-        .toList();
+    final result = <TimeSlotModel>[];
+    for (final label in labels) {
+      final slotMin = _labelToMinutes(label);
+      if (isToday && slotMin < cutoffMin) {
+        debugPrint('[DODO][Slots]   "$label" ($slotMin min) — FILTERED (before cutoff $cutoffMin)');
+        continue;
+      }
+      final bookedCount = capacityMap[label] ?? 0;
+      final isAvailable = bookedCount < maxBookings;
+      debugPrint('[DODO][Slots]   "$label" ($slotMin min) — KEPT  booked=$bookedCount/$maxBookings  available=$isAvailable');
+      result.add(TimeSlotModel(
+        id: 'ts_${label.replaceAll(RegExp(r'[^0-9]'), '')}',
+        label: label,
+        period: _periodFor(slotMin),
+        isAvailable: isAvailable,
+      ));
+    }
+    debugPrint('[DODO][Slots] → returning ${result.length} slot(s)');
+    return result;
   }
 
   // ── Create booking ──────────────────────────────────────────────────────────

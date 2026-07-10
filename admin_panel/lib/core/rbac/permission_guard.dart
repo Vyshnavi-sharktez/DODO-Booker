@@ -37,6 +37,7 @@ const Map<String, String> routePermissions = {
   '/vendor-settlement': 'vendor.view',
   '/settings': 'settings.manage',
   '/loyalty': 'settings.manage',
+  '/global-scheduling': 'settings.manage',
 };
 
 // ── Permission guard widget ────────────────────────────────────────────────────

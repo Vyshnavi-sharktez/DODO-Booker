@@ -415,8 +415,10 @@ class _BookingFlowModalState extends ConsumerState<BookingFlowModal>
   // ── Step 1: Date & Time ───────────────────────────────────────────────────────
 
   Widget _buildDateTimeStep() {
+    debugPrint('[DODO][Slots] BookingFlowModal: service.id=${widget.service.id}  '
+        'service.legacyId=${widget.service.legacyId}');
     final slotsAsync = ref.watch(timeSlotsProvider(
-      (date: _dateKey, serviceId: widget.service.legacyId ?? ''),
+      (date: _dateKey, serviceId: widget.service.id),
     ));
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,

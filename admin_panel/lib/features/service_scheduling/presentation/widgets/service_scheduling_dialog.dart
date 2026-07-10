@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../data/service_scheduling_repository.dart';
+import '../../../global_scheduling/data/global_scheduling_repository.dart';
 
 class ServiceSchedulingDialog extends StatefulWidget {
   final String serviceId;
@@ -26,7 +27,14 @@ class _ServiceSchedulingDialogState extends State<ServiceSchedulingDialog> {
   bool _saving = false;
   String? _error;
 
+  // True when the admin has enabled the global scheduling master switch.
+  // When true, all services use global automatically — the per-service
+  // "Use Global Schedule" toggle is hidden and custom fields remain editable
+  // so the admin can pre-configure the service schedule for when global is off.
+  bool _globalEnabled = false;
+
   late bool _isEnabled;
+  late bool _useGlobalSchedule;
   late List<bool> _days;       // index 0=Sun … 6=Sat
   late TextEditingController _maxBookings;
   late List<String> _slots;    // sorted "HH:MM AM/PM" labels
@@ -48,9 +56,18 @@ class _ServiceSchedulingDialogState extends State<ServiceSchedulingDialog> {
 
   Future<void> _loadConfig() async {
     try {
-      final cfg = await _repo.fetchForService(widget.serviceId) ??
+      // Fire both requests in parallel — the global check decides whether
+      // the per-service toggle is visible, so we need it before first render.
+      final serviceFuture = _repo.fetchForService(widget.serviceId);
+      final globalFuture =
+          GlobalSchedulingRepository(Supabase.instance.client).fetch();
+
+      final cfg = (await serviceFuture) ??
           ServiceSchedulingConfig.defaults(widget.serviceId);
+      final globalCfg = await globalFuture;
+
       _applyConfig(cfg);
+      _globalEnabled = globalCfg.isEnabled;
     } catch (e) {
       _applyConfig(ServiceSchedulingConfig.defaults(widget.serviceId));
       if (mounted) setState(() => _error = 'Could not load existing config: $e');
@@ -60,6 +77,7 @@ class _ServiceSchedulingDialogState extends State<ServiceSchedulingDialog> {
 
   void _applyConfig(ServiceSchedulingConfig cfg) {
     _isEnabled = cfg.isEnabled;
+    _useGlobalSchedule = cfg.useGlobalSchedule;
     _days = List.generate(7, (i) => cfg.workingDays.contains(i));
     _maxBookings.text = cfg.maxBookingsPerSlot.toString();
     _slots = List<String>.from(cfg.slots)..sort(_slotComparator);
@@ -157,16 +175,18 @@ class _ServiceSchedulingDialogState extends State<ServiceSchedulingDialog> {
   // ── Save ──────────────────────────────────────────────────────────────────────
 
   Future<void> _save() async {
-    if (!_days.contains(true)) {
-      setState(() => _error = 'Select at least one working day.');
-      return;
-    }
-    if (_slots.isEmpty) {
-      setState(() => _error = 'Add at least one time slot.');
-      return;
+    if (!_useGlobalSchedule) {
+      if (!_days.contains(true)) {
+        setState(() => _error = 'Select at least one working day.');
+        return;
+      }
+      if (_slots.isEmpty) {
+        setState(() => _error = 'Add at least one time slot.');
+        return;
+      }
     }
     final maxVal = int.tryParse(_maxBookings.text.trim());
-    if (maxVal == null || maxVal < 1) {
+    if (!_useGlobalSchedule && (maxVal == null || maxVal < 1)) {
       setState(() => _error = 'Max bookings per slot must be at least 1.');
       return;
     }
@@ -179,8 +199,9 @@ class _ServiceSchedulingDialogState extends State<ServiceSchedulingDialog> {
       await _repo.upsert(ServiceSchedulingConfig(
         serviceId: widget.serviceId,
         isEnabled: _isEnabled,
+        useGlobalSchedule: _useGlobalSchedule,
         workingDays: [for (int i = 0; i < 7; i++) if (_days[i]) i],
-        maxBookingsPerSlot: maxVal,
+        maxBookingsPerSlot: maxVal ?? 5,
         slots: _slots,
       ));
       if (mounted) {
@@ -270,7 +291,43 @@ class _ServiceSchedulingDialogState extends State<ServiceSchedulingDialog> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // ── Enable toggle ──────────────────────────────────────────────────
+          // ── Global master active banner ────────────────────────────────────
+          // Shown when the global scheduling master switch is ON.
+          // Hides the per-service toggle because it is irrelevant — all
+          // services already use global regardless of their individual flag.
+          if (_globalEnabled) ...[
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: AppColors.primary.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(8),
+                border:
+                    Border.all(color: AppColors.primary.withValues(alpha: 0.3)),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.public_rounded,
+                      color: AppColors.primary, size: 16),
+                  const SizedBox(width: 10),
+                  const Expanded(
+                    child: Text(
+                      'Global Scheduling is active — all services are using '
+                      'the global schedule. Configure it in Global Schedule '
+                      'settings. You can still save a custom schedule below '
+                      'for when global scheduling is turned off.',
+                      style: TextStyle(
+                          color: AppColors.primary,
+                          fontSize: 12,
+                          height: 1.5),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+          ],
+
+          // ── Enable scheduling toggle ───────────────────────────────────────
           _SectionCard(
             child: Row(
               children: [
@@ -301,93 +358,194 @@ class _ServiceSchedulingDialogState extends State<ServiceSchedulingDialog> {
               ],
             ),
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: 12),
 
-          // ── Working Days ───────────────────────────────────────────────────
-          const _SectionLabel('Working Days'),
-          const SizedBox(height: 8),
-          _SectionCard(
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: List.generate(7, (i) {
-                return _DayChip(
-                  label: _dayLabels[i],
-                  selected: _days[i],
-                  onTap: () => setState(() => _days[i] = !_days[i]),
-                );
-              }),
+          // ── Use Global Schedule toggle (hidden when global master is ON) ───
+          // When the master is ON every service already uses global, so
+          // the per-service opt-in toggle is meaningless and confusing.
+          if (!_globalEnabled) ...[
+            _SectionCard(
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.public_rounded,
+                    color: _useGlobalSchedule
+                        ? AppColors.primary
+                        : AppColors.textSecondary,
+                    size: 18,
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Use Global Schedule',
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: AppColors.textPrimary,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                        Text(
+                          'Uses the admin-wide schedule; custom slots are ignored.',
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: AppColors.textSecondary,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Switch(
+                    value: _useGlobalSchedule,
+                    onChanged: (v) => setState(() {
+                      _useGlobalSchedule = v;
+                      _error = null;
+                    }),
+                    activeThumbColor: AppColors.primary,
+                  ),
+                ],
+              ),
             ),
-          ),
-          const SizedBox(height: 20),
 
-          // ── Max bookings ───────────────────────────────────────────────────
-          const _SectionLabel('Max Bookings per Slot'),
-          const SizedBox(height: 8),
-          TextFormField(
-            controller: _maxBookings,
-            decoration: const InputDecoration(
-              hintText: 'e.g. 5',
-              suffixText: 'bookings',
-            ),
-            keyboardType: TextInputType.number,
-            inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-          ),
-          const SizedBox(height: 20),
-
-          // ── Time Slots ─────────────────────────────────────────────────────
-          Row(
-            children: [
-              const Expanded(child: _SectionLabel('Time Slots')),
-              TextButton.icon(
-                onPressed: _addSlot,
-                icon: const Icon(Icons.add_rounded, size: 16),
-                label: const Text('Add Slot'),
-                style: TextButton.styleFrom(
-                  foregroundColor: AppColors.primary,
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 12, vertical: 6),
+            // Info banner when per-service opt-in is ON
+            if (_useGlobalSchedule) ...[
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: AppColors.primary.withValues(alpha: 0.07),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                      color: AppColors.primary.withValues(alpha: 0.3)),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.info_outline_rounded,
+                        color: AppColors.primary, size: 15),
+                    const SizedBox(width: 8),
+                    const Expanded(
+                      child: Text(
+                        'Custom slots below are saved but ignored while '
+                        '"Use Global Schedule" is on.',
+                        style: TextStyle(
+                            color: AppColors.primary,
+                            fontSize: 12,
+                            height: 1.4),
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ],
-          ),
-          const SizedBox(height: 8),
+            const SizedBox(height: 8),
+          ],
+          const SizedBox(height: 12),
 
-          if (_slots.isEmpty)
-            _SectionCard(
-              child: Center(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 8),
-                  child: Text(
-                    'No slots configured yet.\nTap "Add Slot" to add a time.',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: 13,
-                      color: AppColors.textSecondary,
-                      height: 1.5,
+          // ── Custom schedule fields ─────────────────────────────────────────
+          // Dimmed only when the per-service "Use Global Schedule" opt-in is ON
+          // AND the global master is OFF. When global master is ON, leave the
+          // fields fully editable so the admin can pre-configure the service
+          // schedule that will apply once global scheduling is disabled.
+          AnimatedOpacity(
+            opacity: (!_globalEnabled && _useGlobalSchedule) ? 0.4 : 1.0,
+            duration: const Duration(milliseconds: 200),
+            child: IgnorePointer(
+              ignoring: !_globalEnabled && _useGlobalSchedule,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Working Days
+                  const _SectionLabel('Working Days'),
+                  const SizedBox(height: 8),
+                  _SectionCard(
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: List.generate(7, (i) {
+                        return _DayChip(
+                          label: _dayLabels[i],
+                          selected: _days[i],
+                          onTap: () => setState(() => _days[i] = !_days[i]),
+                        );
+                      }),
                     ),
                   ),
-                ),
-              ),
-            )
-          else
-            _SectionCard(
-              child: Column(
-                children: List.generate(_slots.length, (i) {
-                  final isLast = i == _slots.length - 1;
-                  return Column(
+                  const SizedBox(height: 20),
+
+                  // Max bookings
+                  const _SectionLabel('Max Bookings per Slot'),
+                  const SizedBox(height: 8),
+                  TextFormField(
+                    controller: _maxBookings,
+                    decoration: const InputDecoration(
+                      hintText: 'e.g. 5',
+                      suffixText: 'bookings',
+                    ),
+                    keyboardType: TextInputType.number,
+                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                  ),
+                  const SizedBox(height: 20),
+
+                  // Time Slots
+                  Row(
                     children: [
-                      _SlotRow(
-                        label: _slots[i],
-                        onEdit: () => _editSlot(i),
-                        onDelete: () => _deleteSlot(i),
+                      const Expanded(child: _SectionLabel('Time Slots')),
+                      TextButton.icon(
+                        onPressed: _addSlot,
+                        icon: const Icon(Icons.add_rounded, size: 16),
+                        label: const Text('Add Slot'),
+                        style: TextButton.styleFrom(
+                          foregroundColor: AppColors.primary,
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 12, vertical: 6),
+                        ),
                       ),
-                      if (!isLast)
-                        const Divider(height: 1, color: AppColors.border),
                     ],
-                  );
-                }),
+                  ),
+                  const SizedBox(height: 8),
+
+                  if (_slots.isEmpty)
+                    _SectionCard(
+                      child: Center(
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 8),
+                          child: Text(
+                            'No slots configured yet.\nTap "Add Slot" to add a time.',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: AppColors.textSecondary,
+                              height: 1.5,
+                            ),
+                          ),
+                        ),
+                      ),
+                    )
+                  else
+                    _SectionCard(
+                      child: Column(
+                        children: List.generate(_slots.length, (i) {
+                          final isLast = i == _slots.length - 1;
+                          return Column(
+                            children: [
+                              _SlotRow(
+                                label: _slots[i],
+                                onEdit: () => _editSlot(i),
+                                onDelete: () => _deleteSlot(i),
+                              ),
+                              if (!isLast)
+                                const Divider(
+                                    height: 1, color: AppColors.border),
+                            ],
+                          );
+                        }),
+                      ),
+                    ),
+                ],
               ),
             ),
+          ),
 
           // ── Error ──────────────────────────────────────────────────────────
           if (_error != null) ...[
