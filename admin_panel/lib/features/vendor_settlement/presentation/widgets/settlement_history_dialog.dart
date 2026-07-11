@@ -117,125 +117,142 @@ class SettlementHistoryDialog extends ConsumerWidget {
                   }
 
                   return Expanded(
-                    child: SingleChildScrollView(
-                      scrollDirection: Axis.horizontal,
-                      child: SingleChildScrollView(
-                        child: Table(
-                          columnWidths: const {
-                            0: FixedColumnWidth(110),
-                            1: FlexColumnWidth(1.8),
-                            2: FlexColumnWidth(1.6),
-                            3: FlexColumnWidth(1.6),
-                            4: FlexColumnWidth(2.2),
-                            5: FlexColumnWidth(1.6),
-                            6: FlexColumnWidth(2.4),
-                            7: FixedColumnWidth(80),
-                          },
-                          children: [
-                            TableRow(
-                              decoration: BoxDecoration(
-                                color: AppColors.background,
-                                borderRadius: BorderRadius.circular(6),
-                              ),
-                              children: const [
-                                _HeaderCell('Settlement ID'),
-                                _HeaderCell('Amount'),
-                                _HeaderCell('Payment Method'),
-                                _HeaderCell('Reference'),
-                                _HeaderCell('Notes'),
-                                _HeaderCell('Paid By'),
-                                _HeaderCell('Paid On'),
-                                _HeaderCell('Status'),
-                              ],
-                            ),
-                            for (final entry in history)
-                              TableRow(
-                                decoration: const BoxDecoration(
-                                  border: Border(
-                                    bottom: BorderSide(
-                                      color: AppColors.border,
-                                      width: 0.5,
-                                    ),
-                                  ),
-                                ),
+                    child: LayoutBuilder(
+                      builder: (ctx, constraints) {
+                        // FlexColumnWidth requires a finite table width.
+                        // SingleChildScrollView(horizontal) passes infinite width
+                        // to its child, so FlexColumnWidth columns collapse to zero.
+                        // SizedBox gives the Table a concrete bounded width;
+                        // horizontal scroll activates only when the dialog is
+                        // narrower than the minimum.
+                        final tableWidth = constraints.maxWidth > 760.0
+                            ? constraints.maxWidth
+                            : 760.0;
+                        return SingleChildScrollView(
+                          scrollDirection: Axis.horizontal,
+                          child: SizedBox(
+                            width: tableWidth,
+                            child: SingleChildScrollView(
+                              child: Table(
+                                columnWidths: const {
+                                  0: FixedColumnWidth(110),
+                                  1: FlexColumnWidth(1.8),
+                                  2: FlexColumnWidth(1.6),
+                                  3: FlexColumnWidth(1.6),
+                                  4: FlexColumnWidth(2.2),
+                                  5: FlexColumnWidth(1.6),
+                                  6: FlexColumnWidth(2.4),
+                                  7: FixedColumnWidth(80),
+                                },
                                 children: [
-                                  _DataCell(
-                                    child: Text(
-                                      '#${entry.id.length > 8 ? entry.id.substring(0, 8).toUpperCase() : entry.id.toUpperCase()}',
-                                      style: const TextStyle(
-                                        fontSize: 11,
-                                        fontFamily: 'monospace',
-                                        color: AppColors.textSecondary,
-                                      ),
+                                  TableRow(
+                                    decoration: BoxDecoration(
+                                      color: AppColors.background,
+                                      borderRadius: BorderRadius.circular(6),
                                     ),
+                                    children: const [
+                                      _HeaderCell('Settlement ID'),
+                                      _HeaderCell('Amount'),
+                                      _HeaderCell('Payment Method'),
+                                      _HeaderCell('Reference'),
+                                      _HeaderCell('Notes'),
+                                      _HeaderCell('Paid By'),
+                                      _HeaderCell('Paid On'),
+                                      _HeaderCell('Status'),
+                                    ],
                                   ),
-                                  _DataCell(
-                                    child: Text(
-                                      '₹${moneyFmt.format(entry.amount)}',
-                                      style: const TextStyle(
-                                        fontWeight: FontWeight.w600,
-                                        color: AppColors.success,
-                                      ),
-                                    ),
-                                  ),
-                                  _DataCell(
-                                    child: Text(
-                                      entry.paymentMethod ?? '—',
-                                      style: const TextStyle(fontSize: 12),
-                                    ),
-                                  ),
-                                  _DataCell(
-                                    child: Text(
-                                      entry.referenceNumber ?? '—',
-                                      style: const TextStyle(fontSize: 12),
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                  ),
-                                  _DataCell(
-                                    child: Text(
-                                      entry.notes ?? '—',
-                                      style: const TextStyle(fontSize: 12),
-                                      maxLines: 2,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                  ),
-                                  _DataCell(
-                                    child: Text(
-                                      entry.settledBy,
-                                      style: const TextStyle(fontSize: 12),
-                                    ),
-                                  ),
-                                  _DataCell(
-                                    child: Text(
-                                      dateFmt.format(entry.settledAt),
-                                      style: const TextStyle(fontSize: 12),
-                                    ),
-                                  ),
-                                  _DataCell(
-                                    child: Container(
-                                      padding: const EdgeInsets.symmetric(
-                                          horizontal: 6, vertical: 2),
-                                      decoration: BoxDecoration(
-                                        color: AppColors.success
-                                            .withValues(alpha: 0.12),
-                                        borderRadius: BorderRadius.circular(12),
-                                      ),
-                                      child: const Text(
-                                        'Paid',
-                                        style: TextStyle(
-                                          fontSize: 10,
-                                          fontWeight: FontWeight.w600,
-                                          color: AppColors.success,
+                                  for (final entry in history)
+                                    TableRow(
+                                      decoration: const BoxDecoration(
+                                        border: Border(
+                                          bottom: BorderSide(
+                                            color: AppColors.border,
+                                            width: 0.5,
+                                          ),
                                         ),
                                       ),
+                                      children: [
+                                        _DataCell(
+                                          child: Text(
+                                            '#${entry.id.length > 8 ? entry.id.substring(0, 8).toUpperCase() : entry.id.toUpperCase()}',
+                                            style: const TextStyle(
+                                              fontSize: 11,
+                                              fontFamily: 'monospace',
+                                              color: AppColors.textSecondary,
+                                            ),
+                                          ),
+                                        ),
+                                        _DataCell(
+                                          child: Text(
+                                            '₹${moneyFmt.format(entry.amount)}',
+                                            style: const TextStyle(
+                                              fontWeight: FontWeight.w600,
+                                              color: AppColors.success,
+                                            ),
+                                          ),
+                                        ),
+                                        _DataCell(
+                                          child: Text(
+                                            entry.paymentMethod ?? '—',
+                                            style: const TextStyle(fontSize: 12),
+                                          ),
+                                        ),
+                                        _DataCell(
+                                          child: Text(
+                                            entry.referenceNumber ?? '—',
+                                            style: const TextStyle(fontSize: 12),
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ),
+                                        _DataCell(
+                                          child: Text(
+                                            entry.notes ?? '—',
+                                            style: const TextStyle(fontSize: 12),
+                                            maxLines: 2,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ),
+                                        _DataCell(
+                                          child: Text(
+                                            entry.settledBy,
+                                            style: const TextStyle(fontSize: 12),
+                                          ),
+                                        ),
+                                        _DataCell(
+                                          child: Text(
+                                            dateFmt.format(entry.settledAt),
+                                            style: const TextStyle(fontSize: 12),
+                                          ),
+                                        ),
+                                        _DataCell(
+                                          child: Container(
+                                            padding: const EdgeInsets.symmetric(
+                                                horizontal: 6, vertical: 2),
+                                            decoration: BoxDecoration(
+                                              color: AppColors.success
+                                                  .withValues(alpha: 0.12),
+                                              borderRadius:
+                                                  BorderRadius.circular(12),
+                                            ),
+                                            child: const Text(
+                                              'Paid',
+                                              style: TextStyle(
+                                                fontSize: 10,
+                                                fontWeight: FontWeight.w600,
+                                                color: AppColors.success,
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                      ],
                                     ),
-                                  ),
                                 ],
                               ),
-                          ],
-                        ),
-                      ),
+                            ),
+                          ),
+                        );
+                      },
                     ),
                   );
                 },

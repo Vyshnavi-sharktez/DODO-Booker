@@ -170,6 +170,7 @@ class VendorSettlementRepository {
               referenceNumber?.isNotEmpty == true ? referenceNumber : null,
           'notes': notes?.isNotEmpty == true ? notes : null,
           'settled_by': settledBy,
+          'settled_at': DateTime.now().toUtc().toIso8601String(),
         })
         .select()
         .single();

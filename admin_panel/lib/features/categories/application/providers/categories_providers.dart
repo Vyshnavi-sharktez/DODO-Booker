@@ -21,14 +21,14 @@ class CategoriesNotifier extends StateNotifier<AsyncValue<List<Category>>> {
 
   Future<void> refresh() => _load();
 
-  Future<void> createCategory({
+  Future<Category> createCategory({
     required String name,
     required String slug,
     String? imageUrl,
     required int sortOrder,
     required bool isActive,
   }) async {
-    await _repo.createCategory(
+    final cat = await _repo.createCategory(
       name: name,
       slug: slug,
       imageUrl: imageUrl,
@@ -36,6 +36,7 @@ class CategoriesNotifier extends StateNotifier<AsyncValue<List<Category>>> {
       isActive: isActive,
     );
     await _load();
+    return cat;
   }
 
   Future<void> updateCategory(
