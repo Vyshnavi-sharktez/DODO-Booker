@@ -2,8 +2,14 @@ import '../../../models/service_model.dart';
 
 class CatalogNodeModel {
   final String id;
-  final String? parentId;
+
+  /// All parent category IDs, ordered by sort_order.
+  /// Empty list means this is a top-level item.
+  final List<String> parentIds;
+
+  /// Name of the canonical (first) parent — for display only.
   final String? parentName;
+
   final String name;
   final String slug;
   final String? description;
@@ -13,8 +19,7 @@ class CatalogNodeModel {
   final bool isActive;
   final bool isFeatured;
 
-  /// Admin-controlled flag. Never derived from children. The customer should
-  /// be able to book this node if and only if this is true.
+  /// Admin-controlled flag. Never derived from children.
   final bool isBookable;
 
   final double? basePrice;
@@ -23,22 +28,14 @@ class CatalogNodeModel {
   final double rating;
   final int reviewCount;
 
-  /// Count of active direct children. Non-zero means further navigation is
-  /// possible; zero means this is a leaf regardless of isBookable.
+  /// Count of active direct children.
   final int childrenCount;
 
-  /// The UUID of the original row in the legacy `services` table.
-  /// Non-null for nodes migrated from services (legacy_type = 'service').
-  /// Null for brand-new catalog nodes created directly via the admin panel.
-  ///
-  /// Used as `service_id` when inserting into `booking_items`, which still
-  /// carries a FK to `services(id)`. New catalog nodes (legacyId == null)
-  /// cannot populate `booking_items` until the schema is migrated.
   final String? legacyId;
 
   const CatalogNodeModel({
     required this.id,
-    this.parentId,
+    this.parentIds = const [],
     this.parentName,
     required this.name,
     required this.slug,
@@ -59,17 +56,22 @@ class CatalogNodeModel {
   });
 
   bool get hasChildren => childrenCount > 0;
-  bool get isRoot => parentId == null;
 
-  /// True only when BOTH conditions are met:
-  ///   1. is_bookable == true  (admin has enabled booking)
-  ///   2. children_count == 0  (no child nodes exist)
-  ///
-  /// A node with children is always a navigation node, never a bookable leaf,
-  /// even when is_bookable is set to true in the database.
+  /// True when this item has no parent categories.
+  bool get isRoot => parentIds.isEmpty;
+
+  /// True when this item is listed under more than one category.
+  bool get isShared => parentIds.length > 1;
+
+  /// Canonical (first) parent ID — null when top-level.
+  String? get parentId => parentIds.isEmpty ? null : parentIds.first;
+
+  /// Customers can book this item only when it is bookable AND has no children
+  /// (a node with children is a navigation category, not a bookable service).
   bool get isLeafBookable => isBookable && !hasChildren;
 
-  factory CatalogNodeModel.fromServiceModel(ServiceModel s) => CatalogNodeModel(
+  factory CatalogNodeModel.fromServiceModel(ServiceModel s) =>
+      CatalogNodeModel(
         id: s.id,
         legacyId: s.id,
         name: s.name,
@@ -92,7 +94,10 @@ class CatalogNodeModel {
     return CatalogNodeModel(
       id: map['id'] as String,
       legacyId: map['legacy_id'] as String?,
-      parentId: map['parent_id'] as String?,
+      parentIds: (map['parent_ids'] as List<dynamic>?)
+              ?.map((e) => e.toString())
+              .toList() ??
+          [],
       parentName: map['parent_name'] as String?,
       name: map['name'] as String,
       slug: map['slug'] as String,

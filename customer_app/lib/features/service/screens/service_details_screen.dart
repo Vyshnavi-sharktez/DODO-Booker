@@ -176,11 +176,13 @@ class _BookingBar extends ConsumerWidget {
     required this.addonsTotal,
   });
 
-  bool get _requiredFilled => attrs
-      .where((a) => a.isRequired && a.hasOptions)
-      .every((a) => selections.containsKey(a.id));
+  bool get _requiredFilled =>
+      attrs.where((a) => a.isRequired && a.hasOptions).every(
+            (a) => selections.containsKey(a.id),
+          );
 
-  bool get _hasRequiredAttrs => attrs.any((a) => a.isRequired && a.hasOptions);
+  bool get _hasRequiredAttrs =>
+      attrs.any((a) => a.isRequired && a.hasOptions);
 
   Future<void> _addToCart(BuildContext context, WidgetRef ref) async {
     if (!ref.read(isAuthenticatedProvider)) {
@@ -229,7 +231,8 @@ class _BookingBar extends ConsumerWidget {
   Future<void> _book(BuildContext context, WidgetRef ref) async {
     final selectedAttrs = buildSelectedAttributes(attrs, selections);
     final selectedAddons = buildSelectedAddons(addOns, selectedAddonIds);
-    await launchBookingFlow(context, ref, CatalogNodeModel.fromServiceModel(service),
+    await launchBookingFlow(context, ref,
+        CatalogNodeModel.fromServiceModel(service),
         selectedAttributes: selectedAttrs,
         selectedAddons: selectedAddons);
   }

@@ -5,31 +5,40 @@ import '../../../../../core/widgets/highlighted_text.dart';
 import '../../domain/models/catalog_node.dart';
 
 /// Callbacks passed from [CatalogV2Page] down to each tile.
-/// All callbacks receive the specific [CatalogNode] they operate on.
 class NodeCallbacks {
   const NodeCallbacks({
     required this.onAddChild,
     required this.onEdit,
-    required this.onMove,
+    required this.onManageParents,
+    required this.onRemoveFromParent,
     required this.onDelete,
     required this.onToggleActive,
     required this.onToggleBookable,
-    required this.onOpenAttributes,
     required this.onOpenScheduling,
   });
 
   final void Function(CatalogNode parent) onAddChild;
   final void Function(CatalogNode node, bool hasChildren) onEdit;
-  final void Function(CatalogNode node) onMove;
+
+  /// Opens the "Manage Categories" dialog for this item.
+  final void Function(CatalogNode node) onManageParents;
+
+  /// Removes this item from a specific parent category.
+  /// [parentId] is the category it is currently rendered under.
+  final void Function(CatalogNode node, String parentId) onRemoveFromParent;
+
   final void Function(CatalogNode node) onDelete;
   final void Function(CatalogNode node, bool isActive) onToggleActive;
   final void Function(CatalogNode node, bool isBookable) onToggleBookable;
-  final void Function(CatalogNode node) onOpenAttributes;
   final void Function(CatalogNode node) onOpenScheduling;
 }
 
-/// Renders a single catalog node row and recursively renders its children
-/// when expanded. Indentation is purely visual (depth × 28px).
+/// Renders a single catalog item row and recursively renders its children
+/// when expanded.  Indentation is purely visual (depth × 28 px).
+///
+/// [parentIdContext] is the ID of the category this tile is rendered under
+/// (null for top-level tiles).  It is used to offer "Remove from this
+/// category" when the item is cross-listed.
 class CatalogNodeTile extends StatelessWidget {
   const CatalogNodeTile({
     super.key,
@@ -40,12 +49,13 @@ class CatalogNodeTile extends StatelessWidget {
     required this.expandedIds,
     required this.onToggleExpand,
     required this.callbacks,
+    this.parentIdContext,
     this.searchQuery = '',
   });
 
   final CatalogNode node;
 
-  /// Direct children of [node], pre-filtered by the parent page.
+  /// Direct children pre-filtered by the parent page.
   final List<CatalogNode> children;
 
   /// Full parent→children map for recursive rendering.
@@ -55,6 +65,10 @@ class CatalogNodeTile extends StatelessWidget {
   final Set<String> expandedIds;
   final void Function(String nodeId) onToggleExpand;
   final NodeCallbacks callbacks;
+
+  /// The parent category ID this tile is rendered under; null for root tiles.
+  final String? parentIdContext;
+
   final String searchQuery;
 
   bool get _isExpanded => expandedIds.contains(node.id);
@@ -69,7 +83,9 @@ class CatalogNodeTile extends StatelessWidget {
         if (_isExpanded) ...[
           for (final child in children)
             CatalogNodeTile(
-              key: ValueKey(child.id),
+              // Key encodes (parent, child) so the same node appearing
+              // under two different parents gets two distinct widget keys.
+              key: ValueKey('${node.id}_${child.id}'),
               node: child,
               children: allByParent[child.id] ?? [],
               allByParent: allByParent,
@@ -77,6 +93,7 @@ class CatalogNodeTile extends StatelessWidget {
               expandedIds: expandedIds,
               onToggleExpand: onToggleExpand,
               callbacks: callbacks,
+              parentIdContext: node.id,
               searchQuery: searchQuery,
             ),
           _buildAddChildButton(),
@@ -106,7 +123,7 @@ class CatalogNodeTile extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             child: Row(
               children: [
-                // Expand chevron (invisible when no children, keeps alignment)
+                // Expand chevron
                 SizedBox(
                   width: 20,
                   child: hasChildren
@@ -137,9 +154,8 @@ class CatalogNodeTile extends StatelessWidget {
                     text: node.name,
                     query: searchQuery,
                     style: TextStyle(
-                      fontWeight: depth == 0
-                          ? FontWeight.w600
-                          : FontWeight.w500,
+                      fontWeight:
+                          depth == 0 ? FontWeight.w600 : FontWeight.w500,
                       fontSize: depth == 0 ? 14 : 13,
                       color: node.isActive
                           ? AppColors.textPrimary
@@ -152,8 +168,6 @@ class CatalogNodeTile extends StatelessWidget {
                 const SizedBox(width: 6),
 
                 // Chips
-                // Booking chips are hidden when the node has children —
-                // a node with children acts as a navigation node only.
                 if (!hasChildren && node.isBookable) ...[
                   _Chip(
                     'Bookable',
@@ -162,7 +176,9 @@ class CatalogNodeTile extends StatelessWidget {
                   ),
                   const SizedBox(width: 4),
                 ],
-                if (!hasChildren && node.basePrice != null && node.isBookable) ...[
+                if (!hasChildren &&
+                    node.basePrice != null &&
+                    node.isBookable) ...[
                   _Chip(
                     '₹${node.basePrice!.toStringAsFixed(0)}',
                     const Color(0xFFEBF8F0),
@@ -178,17 +194,24 @@ class CatalogNodeTile extends StatelessWidget {
                   ),
                   const SizedBox(width: 4),
                 ],
+                // "Shared" badge — this item is listed under multiple categories.
+                if (node.isShared) ...[
+                  _Chip(
+                    'Shared',
+                    const Color(0xFFF3E5F5),
+                    const Color(0xFF7B1FA2),
+                  ),
+                  const SizedBox(width: 4),
+                ],
 
-                // is_active switch (always visible)
+                // Active toggle
                 Switch(
                   value: node.isActive,
                   materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                   onChanged: (v) => callbacks.onToggleActive(node, v),
                 ),
 
-                // Bookable toggle — hidden when node has children.
-                // Values are preserved in DB; the toggle reappears if
-                // all children are removed.
+                // Bookable toggle — hidden when node has children
                 if (!hasChildren)
                   Tooltip(
                     message: node.isBookable
@@ -209,16 +232,7 @@ class CatalogNodeTile extends StatelessWidget {
                     ),
                   ),
 
-                // Attributes — only for bookable leaf nodes.
-                if (!hasChildren && node.isBookable)
-                  IconButton(
-                    icon: const Icon(Icons.tune_rounded, size: 17),
-                    tooltip: 'Attributes',
-                    color: AppColors.primary,
-                    onPressed: () => callbacks.onOpenAttributes(node),
-                  ),
-
-                // Scheduling — only for bookable leaf nodes.
+                // Scheduling — bookable leaf nodes only
                 if (!hasChildren && node.isBookable)
                   IconButton(
                     icon: const Icon(Icons.schedule_rounded, size: 17),
@@ -230,7 +244,7 @@ class CatalogNodeTile extends StatelessWidget {
                 // Add child
                 IconButton(
                   icon: const Icon(Icons.add_circle_outline, size: 17),
-                  tooltip: 'Add Child',
+                  tooltip: 'Add item inside',
                   color: AppColors.accent,
                   onPressed: () => callbacks.onAddChild(node),
                 ),
@@ -243,13 +257,23 @@ class CatalogNodeTile extends StatelessWidget {
                   onPressed: () => callbacks.onEdit(node, hasChildren),
                 ),
 
-                // Move
+                // Manage Categories
                 IconButton(
-                  icon: const Icon(Icons.drive_file_move_outlined, size: 17),
-                  tooltip: 'Move',
+                  icon: const Icon(Icons.category_outlined, size: 17),
+                  tooltip: 'Manage Categories',
                   color: AppColors.primary,
-                  onPressed: () => callbacks.onMove(node),
+                  onPressed: () => callbacks.onManageParents(node),
                 ),
+
+                // Remove from this category — only when rendered under a specific parent
+                if (parentIdContext != null)
+                  IconButton(
+                    icon: const Icon(Icons.link_off_rounded, size: 17),
+                    tooltip: 'Remove from this category',
+                    color: AppColors.textSecondary,
+                    onPressed: () =>
+                        callbacks.onRemoveFromParent(node, parentIdContext!),
+                  ),
 
                 // Delete
                 IconButton(
@@ -272,7 +296,7 @@ class CatalogNodeTile extends StatelessWidget {
       child: TextButton.icon(
         onPressed: () => callbacks.onAddChild(node),
         icon: const Icon(Icons.add, size: 13),
-        label: const Text('Add Child', style: TextStyle(fontSize: 12)),
+        label: const Text('Add Item', style: TextStyle(fontSize: 12)),
         style: TextButton.styleFrom(
           foregroundColor: AppColors.accent,
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
@@ -306,7 +330,7 @@ class CatalogNodeTile extends StatelessWidget {
   }
 }
 
-// ── Internal badge widget ──────────────────────────────────────────────────────
+// ── Badge chip ─────────────────────────────────────────────────────────────────
 
 class _Chip extends StatelessWidget {
   const _Chip(this.label, this.bg, this.fg);
@@ -324,7 +348,8 @@ class _Chip extends StatelessWidget {
       ),
       child: Text(
         label,
-        style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: fg),
+        style:
+            TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: fg),
       ),
     );
   }

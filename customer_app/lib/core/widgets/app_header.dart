@@ -9,6 +9,7 @@ import '../../features/notifications/services/notification_providers.dart';
 import '../../features/profile/services/profile_providers.dart';
 import '../../features/cart/providers/cart_provider.dart';
 import '../../features/cart/utils/cart_launcher.dart';
+import '../../features/auth/providers/auth_provider.dart';
 import '../../features/loyalty/providers/loyalty_providers.dart';
 import '../../features/loyalty/screens/loyalty_screen.dart';
 
@@ -542,9 +543,10 @@ class _LoyaltyPill extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    if (!ref.watch(isAuthenticatedProvider)) return const SizedBox.shrink();
     final loyaltyAsync = ref.watch(customerLoyaltyProvider);
     final points = loyaltyAsync.whenOrNull(data: (l) => l.availablePoints);
-    if (points == null || points == 0) return const SizedBox.shrink();
+    if (points == null) return const SizedBox.shrink();
 
     return GestureDetector(
       onTap: () => AppModalDialog.show(

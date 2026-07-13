@@ -13,40 +13,54 @@ class ServiceAttributesNotifier
     extends StateNotifier<AsyncValue<List<ServiceAttribute>>> {
   final ServiceAttributesRepository _repo;
   String? _currentServiceId;
+  String? _currentNodeId;
 
   ServiceAttributesNotifier(this._repo) : super(const AsyncValue.data([]));
 
   Future<void> loadForService(String serviceId) async {
     _currentServiceId = serviceId;
+    _currentNodeId = null;
+    await _reload();
+  }
+
+  /// Loads attributes for a catalog node (Phase 2+). Used by
+  /// [AttributeOptionsDialog] when opened from the catalog node drawer so it
+  /// reads and writes the correct rows via node_id.
+  Future<void> loadForNode(String nodeId) async {
+    _currentNodeId = nodeId;
+    _currentServiceId = null;
     await _reload();
   }
 
   Future<void> refresh() => _reload();
 
   Future<void> _reload() async {
-    if (_currentServiceId == null) return;
+    if (_currentServiceId == null && _currentNodeId == null) return;
     state = const AsyncValue.loading();
     state = await AsyncValue.guard(
-      () => _repo.fetchByService(_currentServiceId!),
+      _currentServiceId != null
+          ? () => _repo.fetchByService(_currentServiceId!)
+          : () => _repo.fetchByNode(_currentNodeId!),
     );
   }
 
-  Future<void> createAttribute({
+  Future<String> createAttribute({
     required String serviceId,
     required String name,
     required String fieldType,
     required bool isRequired,
   }) async {
-    await _repo.createAttribute(
+    final attr = await _repo.createAttribute(
       serviceId: serviceId,
       name: name,
       fieldType: fieldType,
       isRequired: isRequired,
     );
     await _reload();
+    return attr.id;
   }
 
-  Future<void> updateAttribute(
+  Future<String> updateAttribute(
     String id, {
     required String serviceId,
     required String name,
@@ -61,6 +75,7 @@ class ServiceAttributesNotifier
       isRequired: isRequired,
     );
     await _reload();
+    return id;
   }
 
   Future<void> deleteAttribute(String id) async {

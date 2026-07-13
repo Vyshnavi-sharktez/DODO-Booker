@@ -52,18 +52,15 @@ class _CatalogNodeFormDialogState extends State<CatalogNodeFormDialog> {
   final _formKey = GlobalKey<FormState>();
 
   late final TextEditingController _name;
-  late final TextEditingController _slug;
   late final TextEditingController _description;
   late final TextEditingController _imageUrl;
   late final TextEditingController _iconKey;
   late final TextEditingController _sortOrder;
   late final TextEditingController _basePrice;
-  late final TextEditingController _duration;
   late final TextEditingController _minOrderAmount;
 
   late bool _isActive;
   late bool _isBookable;
-  bool _slugEdited = false;
   bool _saving = false;
 
   @override
@@ -71,18 +68,12 @@ class _CatalogNodeFormDialogState extends State<CatalogNodeFormDialog> {
     super.initState();
     final e = widget.existing;
     _name = TextEditingController(text: e?.name ?? '');
-    _slug = TextEditingController(text: e?.slug ?? '');
     _description = TextEditingController(text: e?.description ?? '');
     _imageUrl = TextEditingController(text: e?.imageUrl ?? '');
     _iconKey = TextEditingController(text: e?.iconKey ?? '');
     _sortOrder = TextEditingController(text: (e?.sortOrder ?? 0).toString());
     _basePrice = TextEditingController(
       text: e?.basePrice != null ? e!.basePrice!.toStringAsFixed(2) : '',
-    );
-    _duration = TextEditingController(
-      text: e?.estimatedDuration != null
-          ? e!.estimatedDuration.toString()
-          : '',
     );
     _minOrderAmount = TextEditingController(
       text: e?.minimumOrderAmount != null
@@ -91,27 +82,18 @@ class _CatalogNodeFormDialogState extends State<CatalogNodeFormDialog> {
     );
     _isActive = e?.isActive ?? true;
     _isBookable = e?.isBookable ?? false;
-    _slugEdited = e != null;
   }
 
   @override
   void dispose() {
     _name.dispose();
-    _slug.dispose();
     _description.dispose();
     _imageUrl.dispose();
     _iconKey.dispose();
     _sortOrder.dispose();
     _basePrice.dispose();
-    _duration.dispose();
     _minOrderAmount.dispose();
     super.dispose();
-  }
-
-  void _onNameChanged(String value) {
-    if (!_slugEdited) {
-      _slug.text = _toSlug(value);
-    }
   }
 
   String _toSlug(String value) {
@@ -130,7 +112,7 @@ class _CatalogNodeFormDialogState extends State<CatalogNodeFormDialog> {
     try {
       await widget.onSave(
         name: _name.text.trim(),
-        slug: _slug.text.trim(),
+        slug: _toSlug(_name.text.trim()),
         description:
             _description.text.trim().isEmpty ? null : _description.text.trim(),
         imageUrl:
@@ -142,9 +124,7 @@ class _CatalogNodeFormDialogState extends State<CatalogNodeFormDialog> {
         basePrice: _isBookable && _basePrice.text.trim().isNotEmpty
             ? double.tryParse(_basePrice.text.trim())
             : null,
-        estimatedDuration: _isBookable && _duration.text.trim().isNotEmpty
-            ? int.tryParse(_duration.text.trim())
-            : null,
+        estimatedDuration: widget.existing?.estimatedDuration,
         minimumOrderAmount:
             _isBookable && _minOrderAmount.text.trim().isNotEmpty
                 ? double.tryParse(_minOrderAmount.text.trim())
@@ -252,29 +232,8 @@ class _CatalogNodeFormDialogState extends State<CatalogNodeFormDialog> {
                 hintText: 'e.g. MacBook Air',
               ),
               textCapitalization: TextCapitalization.words,
-              onChanged: _onNameChanged,
               validator: (v) =>
                   v == null || v.trim().isEmpty ? 'Required' : null,
-            ),
-            const SizedBox(height: 16),
-
-            // Slug
-            TextFormField(
-              controller: _slug,
-              decoration: const InputDecoration(
-                labelText: 'Slug *',
-                hintText: 'e.g. macbook-air',
-                helperText:
-                    'Auto-generated. Lowercase letters, numbers and hyphens.',
-              ),
-              onChanged: (_) => _slugEdited = true,
-              validator: (v) {
-                if (v == null || v.trim().isEmpty) return 'Required';
-                if (!RegExp(r'^[a-z0-9-]+$').hasMatch(v.trim())) {
-                  return 'Lowercase letters, numbers and hyphens only';
-                }
-                return null;
-              },
             ),
             const SizedBox(height: 16),
 
@@ -383,37 +342,17 @@ class _CatalogNodeFormDialogState extends State<CatalogNodeFormDialog> {
                       fontSize: 12, color: AppColors.textSecondary),
                 ),
                 const SizedBox(height: 14),
-                Row(
-                  children: [
-                    Expanded(
-                      child: TextFormField(
-                        controller: _basePrice,
-                        decoration: const InputDecoration(
-                          labelText: 'Base Price (₹)',
-                          prefixIcon: Icon(Icons.currency_rupee),
-                        ),
-                        keyboardType: const TextInputType.numberWithOptions(
-                            decimal: true),
-                        inputFormatters: [
-                          FilteringTextInputFormatter.allow(
-                              RegExp(r'^\d+\.?\d{0,2}')),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: TextFormField(
-                        controller: _duration,
-                        decoration: const InputDecoration(
-                          labelText: 'Duration (min)',
-                          prefixIcon: Icon(Icons.timer_outlined),
-                        ),
-                        keyboardType: TextInputType.number,
-                        inputFormatters: [
-                          FilteringTextInputFormatter.digitsOnly,
-                        ],
-                      ),
-                    ),
+                TextFormField(
+                  controller: _basePrice,
+                  decoration: const InputDecoration(
+                    labelText: 'Base Price (₹)',
+                    prefixIcon: Icon(Icons.currency_rupee),
+                  ),
+                  keyboardType:
+                      const TextInputType.numberWithOptions(decimal: true),
+                  inputFormatters: [
+                    FilteringTextInputFormatter.allow(
+                        RegExp(r'^\d+\.?\d{0,2}')),
                   ],
                 ),
                 const SizedBox(height: 12),

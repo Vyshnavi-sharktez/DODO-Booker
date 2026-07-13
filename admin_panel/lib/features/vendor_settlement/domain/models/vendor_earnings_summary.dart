@@ -7,6 +7,7 @@ class VendorEarningsSummary {
   final bool isActive;
   final int completedJobs;
   final double grossEarnings;
+  final double commissionRate;
   final double totalSettled;
   final DateTime? lastSettlementAt;
 
@@ -17,12 +18,15 @@ class VendorEarningsSummary {
     required this.isActive,
     required this.completedJobs,
     required this.grossEarnings,
+    this.commissionRate = 0.0,
     required this.totalSettled,
     this.lastSettlementAt,
   });
 
+  double get platformCommission => grossEarnings * commissionRate / 100;
+
   double get pendingSettlement =>
-      (grossEarnings - totalSettled).clamp(0.0, double.infinity);
+      (grossEarnings - platformCommission - totalSettled).clamp(0.0, double.infinity);
 
   SettlementStatus get settlementStatus {
     if (completedJobs == 0) return SettlementStatus.noEarnings;

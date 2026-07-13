@@ -155,8 +155,6 @@ class ServiceAttributesRepository {
     return ServiceAttribute.fromMap(data);
   }
 
-  /// Updates only the name/type/required fields of an attribute.
-  /// Used by the catalog node attributes drawer which does not pass serviceId.
   Future<ServiceAttribute> updateAttributeName(
     String id, {
     required String name,

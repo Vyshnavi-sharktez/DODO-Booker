@@ -15,6 +15,7 @@ class Vendor {
   final DateTime? updatedAt;
   final double? latitude;
   final double? longitude;
+  final double commissionRate;
 
   const Vendor({
     required this.id,
@@ -33,6 +34,7 @@ class Vendor {
     this.updatedAt,
     this.latitude,
     this.longitude,
+    this.commissionRate = 0.0,
   });
 
   factory Vendor.fromMap(Map<String, dynamic> map) {
@@ -57,6 +59,7 @@ class Vendor {
           : null,
       latitude: (map['latitude'] as num?)?.toDouble(),
       longitude: (map['longitude'] as num?)?.toDouble(),
+      commissionRate: (map['commission_rate'] as num?)?.toDouble() ?? 0.0,
     );
   }
 
@@ -73,6 +76,7 @@ class Vendor {
     double? walletBalance,
     double? latitude,
     double? longitude,
+    double? commissionRate,
   }) {
     return Vendor(
       id: id,
@@ -90,6 +94,7 @@ class Vendor {
       updatedAt: updatedAt,
       latitude: latitude ?? this.latitude,
       longitude: longitude ?? this.longitude,
+      commissionRate: commissionRate ?? this.commissionRate,
     );
   }
 }
