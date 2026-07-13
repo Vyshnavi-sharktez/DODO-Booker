@@ -41,18 +41,20 @@ class _CategoriesPageState extends ConsumerState<CategoriesPage> {
           required sortOrder,
           required isActive,
         }) async {
-          await ref.read(categoriesNotifierProvider.notifier).createCategory(
-                name: name,
-                slug: slug,
-                imageUrl: imageUrl,
-                sortOrder: sortOrder,
-                isActive: isActive,
-              );
+          final cat =
+              await ref.read(categoriesNotifierProvider.notifier).createCategory(
+                    name: name,
+                    slug: slug,
+                    imageUrl: imageUrl,
+                    sortOrder: sortOrder,
+                    isActive: isActive,
+                  );
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(content: Text('Category created successfully')),
             );
           }
+          return cat.id;
         },
       ),
     );
@@ -86,6 +88,7 @@ class _CategoriesPageState extends ConsumerState<CategoriesPage> {
               const SnackBar(content: Text('Category updated successfully')),
             );
           }
+          return category.id;
         },
       ),
     );

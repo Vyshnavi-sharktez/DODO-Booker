@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/theme/app_theme.dart';
+import '../../../commission/application/providers/commission_providers.dart';
 import '../../domain/models/category.dart';
 
-class CategoryFormDialog extends StatefulWidget {
+class CategoryFormDialog extends ConsumerStatefulWidget {
   final Category? existing;
-  final Future<void> Function({
+  final Future<String?> Function({
     required String name,
     required String slug,
     String? imageUrl,
@@ -20,10 +22,10 @@ class CategoryFormDialog extends StatefulWidget {
   });
 
   @override
-  State<CategoryFormDialog> createState() => _CategoryFormDialogState();
+  ConsumerState<CategoryFormDialog> createState() => _CategoryFormDialogState();
 }
 
-class _CategoryFormDialogState extends State<CategoryFormDialog> {
+class _CategoryFormDialogState extends ConsumerState<CategoryFormDialog> {
   final _formKey = GlobalKey<FormState>();
   late final TextEditingController _name;
   late final TextEditingController _slug;
@@ -32,6 +34,11 @@ class _CategoryFormDialogState extends State<CategoryFormDialog> {
   late bool _isActive;
   bool _saving = false;
   bool _slugEdited = false;
+
+  // Commission override
+  bool _overrideCommission = false;
+  String _commissionType = 'percentage';
+  final _commissionValue = TextEditingController(text: '10');
 
   @override
   void initState() {
@@ -43,6 +50,7 @@ class _CategoryFormDialogState extends State<CategoryFormDialog> {
     _sortOrder = TextEditingController(text: (e?.sortOrder ?? 0).toString());
     _isActive = e?.isActive ?? true;
     _slugEdited = e != null;
+    if (e != null) _loadCommission(e.id);
   }
 
   @override
@@ -51,7 +59,23 @@ class _CategoryFormDialogState extends State<CategoryFormDialog> {
     _slug.dispose();
     _imageUrl.dispose();
     _sortOrder.dispose();
+    _commissionValue.dispose();
     super.dispose();
+  }
+
+  Future<void> _loadCommission(String categoryId) async {
+    final rule = await ref
+        .read(commissionRepositoryProvider)
+        .fetchForCategory(categoryId);
+    if (!mounted || rule == null) return;
+    setState(() {
+      _overrideCommission = true;
+      _commissionType = rule.commissionType;
+      final v = rule.commissionValue;
+      _commissionValue.text = v == v.truncateToDouble()
+          ? v.toInt().toString()
+          : v.toString();
+    });
   }
 
   void _onNameChanged(String value) {
@@ -72,9 +96,31 @@ class _CategoryFormDialogState extends State<CategoryFormDialog> {
 
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
+    if (_overrideCommission) {
+      final cv = double.tryParse(_commissionValue.text.trim());
+      if (cv == null || cv < 0) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Enter a valid commission value.'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+        return;
+      }
+      if (_commissionType == 'percentage' && cv > 100) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Commission percentage cannot exceed 100.'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+        return;
+      }
+    }
+
     setState(() => _saving = true);
     try {
-      await widget.onSave(
+      final categoryId = await widget.onSave(
         name: _name.text.trim(),
         slug: _slug.text.trim(),
         imageUrl:
@@ -82,6 +128,25 @@ class _CategoryFormDialogState extends State<CategoryFormDialog> {
         sortOrder: int.tryParse(_sortOrder.text.trim()) ?? 0,
         isActive: _isActive,
       );
+
+      if (categoryId != null) {
+        final repo = ref.read(commissionRepositoryProvider);
+        if (_overrideCommission) {
+          final cv = double.parse(_commissionValue.text.trim());
+          await repo.upsertRule(
+            ruleType: 'category',
+            targetId: categoryId,
+            commissionType: _commissionType,
+            commissionValue: cv,
+            isEnabled: true,
+          );
+          ref.invalidate(categoryCommissionProvider(categoryId));
+        } else if (widget.existing != null) {
+          await repo.deleteForTarget(categoryId);
+          ref.invalidate(categoryCommissionProvider(categoryId));
+        }
+      }
+
       if (mounted) Navigator.of(context).pop();
     } catch (e) {
       if (mounted) {
@@ -236,7 +301,7 @@ class _CategoryFormDialogState extends State<CategoryFormDialog> {
                               size: 18,
                             ),
                             const SizedBox(width: 10),
-                            Text(
+                            const Text(
                               'Active',
                               style: TextStyle(
                                 fontSize: 14,
@@ -253,6 +318,98 @@ class _CategoryFormDialogState extends State<CategoryFormDialog> {
                           ],
                         ),
                       ),
+                      const SizedBox(height: 20),
+
+                      // Commission Override
+                      Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: AppColors.background,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: AppColors.border),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Icon(Icons.percent_rounded,
+                                    size: 16, color: AppColors.textSecondary),
+                                const SizedBox(width: 8),
+                                const Expanded(
+                                  child: Text(
+                                    'Override Commission',
+                                    style: TextStyle(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w500,
+                                      color: AppColors.textPrimary,
+                                    ),
+                                  ),
+                                ),
+                                Switch(
+                                  value: _overrideCommission,
+                                  onChanged: (v) =>
+                                      setState(() => _overrideCommission = v),
+                                  activeThumbColor: AppColors.accent,
+                                ),
+                              ],
+                            ),
+                            if (!_overrideCommission)
+                              const Padding(
+                                padding: EdgeInsets.only(top: 4),
+                                child: Text(
+                                  'Uses global commission setting by default.',
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    color: AppColors.textSecondary,
+                                  ),
+                                ),
+                              ),
+                            if (_overrideCommission) ...[
+                              const SizedBox(height: 14),
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: _CommissionTypeBtn(
+                                      label: '% Percentage',
+                                      selected: _commissionType == 'percentage',
+                                      onTap: () => setState(
+                                          () => _commissionType = 'percentage'),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: _CommissionTypeBtn(
+                                      label: '₹ Fixed',
+                                      selected: _commissionType == 'fixed',
+                                      onTap: () => setState(
+                                          () => _commissionType = 'fixed'),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 12),
+                              TextFormField(
+                                controller: _commissionValue,
+                                decoration: InputDecoration(
+                                  labelText: 'Commission Value',
+                                  suffixText: _commissionType == 'percentage'
+                                      ? '%'
+                                      : '₹',
+                                  isDense: true,
+                                ),
+                                keyboardType:
+                                    const TextInputType.numberWithOptions(
+                                        decimal: true),
+                                inputFormatters: [
+                                  FilteringTextInputFormatter.allow(
+                                      RegExp(r'^\d*\.?\d{0,4}')),
+                                ],
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
                     ],
                   ),
                 ),
@@ -262,7 +419,7 @@ class _CategoryFormDialogState extends State<CategoryFormDialog> {
             // ── Footer actions ────────────────────────────────────────────────
             Container(
               padding: const EdgeInsets.fromLTRB(24, 12, 24, 20),
-              decoration: BoxDecoration(
+              decoration: const BoxDecoration(
                 border: Border(
                   top: BorderSide(color: AppColors.border),
                 ),
@@ -301,6 +458,48 @@ class _CategoryFormDialogState extends State<CategoryFormDialog> {
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _CommissionTypeBtn extends StatelessWidget {
+  const _CommissionTypeBtn({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 120),
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        decoration: BoxDecoration(
+          color: selected
+              ? AppColors.accent.withValues(alpha: 0.12)
+              : AppColors.surface,
+          borderRadius: BorderRadius.circular(6),
+          border: Border.all(
+            color: selected ? AppColors.accent : AppColors.border,
+            width: selected ? 1.5 : 1,
+          ),
+        ),
+        child: Center(
+          child: Text(
+            label,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: selected ? FontWeight.w700 : FontWeight.w400,
+              color: selected ? AppColors.accent : AppColors.textSecondary,
+            ),
+          ),
         ),
       ),
     );

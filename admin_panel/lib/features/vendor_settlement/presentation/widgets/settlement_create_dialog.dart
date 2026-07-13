@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../features/auth/application/providers/auth_provider.dart';
+import '../../../../features/commission/application/providers/commission_providers.dart';
 import '../../application/providers/vendor_settlement_providers.dart';
 import '../../domain/models/vendor_earnings_summary.dart';
 
@@ -24,6 +25,7 @@ class _SettlementCreateDialogState
   final _notesCtrl = TextEditingController();
   String? _paymentMethod = 'Bank Transfer';
   bool _saving = false;
+  bool _amountUpdatedForCommission = false;
 
   static final _fmt = NumberFormat('#,##0.00', 'en_IN');
 
@@ -40,6 +42,30 @@ class _SettlementCreateDialogState
     final pending = widget.summary.pendingSettlement;
     _amountCtrl = TextEditingController(
       text: pending > 0 ? pending.toStringAsFixed(2) : '',
+    );
+    // If the commission provider is already cached, apply it after the first
+    // frame so ref is available. The ref.listen in build() covers the case
+    // where it loads after first render.
+    WidgetsBinding.instance.addPostFrameCallback((_) => _applyCommission());
+  }
+
+  void _applyCommission() {
+    if (!mounted || _amountUpdatedForCommission) return;
+    final s = widget.summary;
+    final providerState = ref.read(resolvedVendorCommissionProvider(s.vendorId));
+    debugPrint('[Settlement._applyCommission] providerState=$providerState');
+    providerState.whenOrNull(
+      data: (rule) {
+        final commission = rule?.compute(s.grossEarnings) ?? 0.0;
+        final payable = (s.grossEarnings - commission - s.totalSettled)
+            .clamp(0.0, double.infinity);
+        debugPrint('[Settlement._applyCommission] rule=${rule == null ? "null" : "${rule.ruleType}/${rule.commissionType}/${rule.commissionValue}/enabled=${rule.isEnabled}"} '
+            'grossEarnings=${s.grossEarnings} commission=$commission '
+            'totalSettled=${s.totalSettled} finalPayable=$payable '
+            'settingTextField="${payable > 0 ? payable.toStringAsFixed(2) : ""}"');
+        _amountCtrl.text = payable > 0 ? payable.toStringAsFixed(2) : '';
+        _amountUpdatedForCommission = true;
+      },
     );
   }
 
@@ -58,13 +84,14 @@ class _SettlementCreateDialogState
     setState(() => _saving = true);
     try {
       final adminUser = ref.read(currentAdminUserProvider);
+      if (adminUser == null) throw Exception('Admin session expired. Please log in again.');
       final s = widget.summary;
       await ref.read(vendorSettlementNotifierProvider.notifier).createSettlement(
             vendorId: s.vendorId,
             vendorName: s.vendorName,
             amount: _parsedAmount,
             completedJobsCount: s.completedJobs,
-            settledBy: adminUser?.displayName ?? 'Admin',
+            settledBy: adminUser.id,
             paymentMethod: _paymentMethod,
             referenceNumber:
                 _refCtrl.text.trim().isEmpty ? null : _refCtrl.text.trim(),
@@ -87,6 +114,34 @@ class _SettlementCreateDialogState
   @override
   Widget build(BuildContext context) {
     final s = widget.summary;
+    final commissionAsync =
+        ref.watch(resolvedVendorCommissionProvider(s.vendorId));
+    final commissionAmount = commissionAsync.whenOrNull(
+          data: (rule) => rule?.compute(s.grossEarnings) ?? 0.0,
+        ) ??
+        0.0;
+    final finalPayable =
+        (s.grossEarnings - commissionAmount - s.totalSettled)
+            .clamp(0.0, double.infinity);
+
+    // Update the amount field the first time commission data arrives
+    // (covers the case where the provider loads after first render).
+    ref.listen(resolvedVendorCommissionProvider(s.vendorId), (prev, next) {
+      debugPrint('[Settlement.ref.listen] transition: ${prev.runtimeType} → ${next.runtimeType} '
+          '| _amountUpdatedForCommission=$_amountUpdatedForCommission');
+      if (_amountUpdatedForCommission) return;
+      next.whenOrNull(data: (rule) {
+        final commission = rule?.compute(s.grossEarnings) ?? 0.0;
+        final payable = (s.grossEarnings - commission - s.totalSettled)
+            .clamp(0.0, double.infinity);
+        debugPrint('[Settlement.ref.listen] rule=${rule == null ? "null" : "${rule.ruleType}/${rule.commissionType}/${rule.commissionValue}/enabled=${rule.isEnabled}"} '
+            'grossEarnings=${s.grossEarnings} commission=$commission '
+            'totalSettled=${s.totalSettled} finalPayable=$payable '
+            'settingTextField="${payable > 0 ? payable.toStringAsFixed(2) : ""}"');
+        _amountCtrl.text = payable > 0 ? payable.toStringAsFixed(2) : '';
+        _amountUpdatedForCommission = true;
+      });
+    });
 
     return Dialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -177,7 +232,9 @@ class _SettlementCreateDialogState
                           _Divider(),
                           _SummaryItem(
                             label: 'Platform Commission',
-                            value: '₹0.00',
+                            value: commissionAsync.isLoading
+                                ? '…'
+                                : '₹${_fmt.format(commissionAmount)}',
                             color: AppColors.textSecondary,
                           ),
                           _Divider(),
@@ -202,7 +259,9 @@ class _SettlementCreateDialogState
                           _Divider(),
                           _SummaryItem(
                             label: 'Final Payable Amount',
-                            value: '₹${_fmt.format(s.pendingSettlement)}',
+                            value: commissionAsync.isLoading
+                                ? '…'
+                                : '₹${_fmt.format(finalPayable)}',
                             color: AppColors.warning,
                             bold: true,
                           ),
@@ -234,8 +293,8 @@ class _SettlementCreateDialogState
                     if (val == null || val <= 0) {
                       return 'Enter a valid amount greater than zero';
                     }
-                    if (val > s.pendingSettlement + 0.01) {
-                      return 'Exceeds pending settlement (₹${_fmt.format(s.pendingSettlement)})';
+                    if (val > finalPayable + 0.01) {
+                      return 'Exceeds payable amount (₹${_fmt.format(finalPayable)})';
                     }
                     return null;
                   },
