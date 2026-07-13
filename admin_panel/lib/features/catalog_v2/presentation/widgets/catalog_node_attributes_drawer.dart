@@ -4,7 +4,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../../core/theme/app_theme.dart';
 import '../../../service_attributes/domain/models/service_attribute.dart';
 import '../../../service_attributes/presentation/widgets/attribute_form_dialog.dart';
-import '../../../service_attributes/presentation/widgets/attribute_options_dialog.dart';
 import '../../application/providers/catalog_node_providers.dart';
 import '../../domain/models/catalog_node.dart';
 
@@ -35,12 +34,12 @@ class _CatalogNodeAttributesDrawerState
   }
 
   void _openCreate() {
+    final notifier =
+        ref.read(catalogNodeAttributesNotifierProvider.notifier);
     showDialog(
       context: context,
       barrierDismissible: false,
       builder: (_) => AttributeFormDialog(
-        // Pass node.id as serviceId — the dialog uses it only as an opaque
-        // identifier passed back in the onSave callback.
         serviceId: widget.node.id,
         serviceName: widget.node.name,
         onSave: ({
@@ -49,25 +48,20 @@ class _CatalogNodeAttributesDrawerState
           required fieldType,
           required isRequired,
         }) async {
-          await ref
-              .read(catalogNodeAttributesNotifierProvider.notifier)
-              .createAttribute(
-                nodeId: serviceId, // serviceId parameter carries the nodeId
-                name: name,
-                fieldType: fieldType,
-                isRequired: isRequired,
-              );
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Attribute created.')),
-            );
-          }
+          await notifier.createAttribute(
+            nodeId: serviceId,
+            name: name,
+            fieldType: fieldType,
+            isRequired: isRequired,
+          );
         },
       ),
     );
   }
 
   void _openEdit(ServiceAttribute attr) {
+    final notifier =
+        ref.read(catalogNodeAttributesNotifierProvider.notifier);
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -81,19 +75,12 @@ class _CatalogNodeAttributesDrawerState
           required fieldType,
           required isRequired,
         }) async {
-          await ref
-              .read(catalogNodeAttributesNotifierProvider.notifier)
-              .updateAttribute(
-                attr.id,
-                name: name,
-                fieldType: fieldType,
-                isRequired: isRequired,
-              );
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Attribute updated.')),
-            );
-          }
+          await notifier.updateAttribute(
+            attr.id,
+            name: name,
+            fieldType: fieldType,
+            isRequired: isRequired,
+          );
         },
       ),
     );
@@ -128,16 +115,6 @@ class _CatalogNodeAttributesDrawerState
       ScaffoldMessenger.of(context)
           .showSnackBar(const SnackBar(content: Text('Attribute deleted.')));
     }
-  }
-
-  void _openOptions(ServiceAttribute attr) {
-    showDialog(
-      context: context,
-      builder: (_) => AttributeOptionsDialog(
-        attributeId: attr.id,
-        attributeName: attr.name,
-      ),
-    );
   }
 
   @override
@@ -181,7 +158,6 @@ class _CatalogNodeAttributesDrawerState
                   attr: attrs[i],
                   onEdit: _openEdit,
                   onDelete: _delete,
-                  onOptions: _openOptions,
                 ),
               );
             },
@@ -259,13 +235,11 @@ class _AttributeItem extends StatelessWidget {
     required this.attr,
     required this.onEdit,
     required this.onDelete,
-    required this.onOptions,
   });
 
   final ServiceAttribute attr;
   final void Function(ServiceAttribute) onEdit;
   final void Function(ServiceAttribute) onDelete;
-  final void Function(ServiceAttribute) onOptions;
 
   @override
   Widget build(BuildContext context) {
@@ -279,6 +253,7 @@ class _AttributeItem extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // ── Name + tags + edit/delete ──────────────────────────────────
           Row(
             children: [
               Expanded(
@@ -291,40 +266,17 @@ class _AttributeItem extends StatelessWidget {
                   ),
                 ),
               ),
-              if (attr.isRequired)
-                _Tag(
-                    'Required', AppColors.error.withValues(alpha: 0.1),
+              if (attr.isRequired) ...[
+                _Tag('Required', AppColors.error.withValues(alpha: 0.1),
                     AppColors.error),
-              const SizedBox(width: 4),
-              _Tag(attr.fieldType, AppColors.primary.withValues(alpha: 0.08),
-                  AppColors.primary),
-            ],
-          ),
-          const SizedBox(height: 6),
-          Row(
-            children: [
-              if (attr.hasOptions)
-                Text(
-                  '${attr.options.length} option${attr.options.length == 1 ? "" : "s"}',
-                  style: const TextStyle(
-                      fontSize: 12, color: AppColors.textSecondary),
-                ),
-              const Spacer(),
-              if (attr.hasOptions)
-                TextButton.icon(
-                  onPressed: () => onOptions(attr),
-                  icon: const Icon(Icons.list_alt_outlined, size: 14),
-                  label:
-                      const Text('Options', style: TextStyle(fontSize: 12)),
-                  style: TextButton.styleFrom(
-                    foregroundColor: AppColors.accent,
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 8, vertical: 4),
-                  ),
-                ),
+                const SizedBox(width: 4),
+              ],
+              _Tag(attr.fieldType,
+                  AppColors.primary.withValues(alpha: 0.08), AppColors.primary),
+              const SizedBox(width: 2),
               IconButton(
                 icon: const Icon(Icons.edit_outlined, size: 15),
-                tooltip: 'Edit',
+                tooltip: 'Edit attribute',
                 color: AppColors.textSecondary,
                 onPressed: () => onEdit(attr),
                 padding: EdgeInsets.zero,
@@ -333,7 +285,7 @@ class _AttributeItem extends StatelessWidget {
               ),
               IconButton(
                 icon: const Icon(Icons.delete_outline, size: 15),
-                tooltip: 'Delete',
+                tooltip: 'Delete attribute',
                 color: AppColors.error,
                 onPressed: () => onDelete(attr),
                 padding: EdgeInsets.zero,
@@ -342,11 +294,14 @@ class _AttributeItem extends StatelessWidget {
               ),
             ],
           ),
+
         ],
       ),
     );
   }
 }
+
+// ── Label tag ──────────────────────────────────────────────────────────────────
 
 class _Tag extends StatelessWidget {
   const _Tag(this.label, this.bg, this.fg);

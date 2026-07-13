@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../domain/models/service_attribute.dart';
 
@@ -14,6 +14,7 @@ class AttributeFormDialog extends StatefulWidget {
   final ServiceAttribute? existing;
   final String serviceId;
   final String serviceName;
+
   final Future<void> Function({
     required String serviceId,
     required String name,
@@ -93,7 +94,7 @@ class _AttributeFormDialogState extends State<AttributeFormDialog> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // ── Header ──────────────────────────────────────────────────────
+            // -- Header
             Container(
               padding: const EdgeInsets.fromLTRB(24, 20, 16, 20),
               decoration: BoxDecoration(
@@ -122,15 +123,14 @@ class _AttributeFormDialogState extends State<AttributeFormDialog> {
                   const Spacer(),
                   IconButton(
                     onPressed: () => Navigator.of(context).pop(),
-                    icon: const Icon(Icons.close_rounded,
-                        color: Colors.white70),
+                    icon: const Icon(Icons.close_rounded, color: Colors.white70),
                     visualDensity: VisualDensity.compact,
                   ),
                 ],
               ),
             ),
 
-            // ── Form ────────────────────────────────────────────────────────
+            // -- Form
             Flexible(
               child: SingleChildScrollView(
                 padding: const EdgeInsets.all(24),
@@ -139,7 +139,6 @@ class _AttributeFormDialogState extends State<AttributeFormDialog> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // Service — read-only context
                       _ContextRow(
                         label: 'Service',
                         name: widget.serviceName,
@@ -147,7 +146,6 @@ class _AttributeFormDialogState extends State<AttributeFormDialog> {
                       ),
                       const SizedBox(height: 16),
 
-                      // Attribute Name
                       TextFormField(
                         controller: _name,
                         decoration: const InputDecoration(
@@ -160,7 +158,6 @@ class _AttributeFormDialogState extends State<AttributeFormDialog> {
                       ),
                       const SizedBox(height: 16),
 
-                      // Field Type
                       DropdownButtonFormField<String>(
                         // ignore: deprecated_member_use
                         value: _fieldType,
@@ -190,28 +187,8 @@ class _AttributeFormDialogState extends State<AttributeFormDialog> {
                             v == null ? 'Please select a type' : null,
                         isExpanded: true,
                       ),
-                      if (_fieldType == 'dropdown' ||
-                          _fieldType == 'radio' ||
-                          _fieldType == 'checkbox') ...[
-                        const SizedBox(height: 8),
-                        Row(
-                          children: [
-                            Icon(Icons.info_outline_rounded,
-                                size: 14, color: AppColors.accent),
-                            const SizedBox(width: 6),
-                            Text(
-                              'You can manage options after saving.',
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: AppColors.accent,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
                       const SizedBox(height: 20),
 
-                      // Required toggle
                       _ToggleRow(
                         icon: Icons.star_outline_rounded,
                         activeIcon: Icons.star_rounded,
@@ -226,7 +203,7 @@ class _AttributeFormDialogState extends State<AttributeFormDialog> {
               ),
             ),
 
-            // ── Footer ──────────────────────────────────────────────────────
+            // -- Footer
             Container(
               padding: const EdgeInsets.fromLTRB(24, 12, 24, 20),
               decoration: BoxDecoration(
@@ -272,6 +249,8 @@ class _AttributeFormDialogState extends State<AttributeFormDialog> {
     );
   }
 }
+
+// -- Context row
 
 class _ContextRow extends StatelessWidget {
   final String label;
@@ -324,6 +303,8 @@ class _ContextRow extends StatelessWidget {
     );
   }
 }
+
+// -- Toggle row
 
 class _ToggleRow extends StatelessWidget {
   final IconData icon;

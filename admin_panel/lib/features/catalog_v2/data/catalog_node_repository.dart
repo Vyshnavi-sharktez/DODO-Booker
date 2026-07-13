@@ -7,8 +7,6 @@ class CatalogNodeRepository {
   const CatalogNodeRepository(this._supabase);
 
   /// Fetches ALL nodes (active and inactive) from the view.
-  /// The admin's authenticated RLS policy allows unrestricted reads.
-  /// The view adds children_count (active children) + parent_name/slug.
   Future<List<CatalogNode>> fetchAll() async {
     final data = await _supabase
         .from('catalog_nodes_view')
@@ -20,6 +18,8 @@ class CatalogNodeRepository {
         .toList();
   }
 
+  /// Creates a new catalog item.  If [parentId] is provided, a parent-child
+  /// relationship is also created so the item appears under that category.
   Future<CatalogNode> createNode({
     String? parentId,
     required String name,
@@ -37,7 +37,6 @@ class CatalogNodeRepository {
     final data = await _supabase
         .from('catalog_nodes')
         .insert({
-          if (parentId != null) 'parent_id': parentId,
           'name': name,
           'slug': slug,
           if (description != null && description.isNotEmpty)
@@ -55,13 +54,25 @@ class CatalogNodeRepository {
         })
         .select()
         .single();
-    // Refetch via view to get children_count + parent_name
-    return _fetchById(data['id'] as String);
+
+    final nodeId = data['id'] as String;
+
+    if (parentId != null) {
+      await _supabase.from('catalog_node_relationships').insert({
+        'parent_id': parentId,
+        'child_id': nodeId,
+        'sort_order': sortOrder,
+      });
+    }
+
+    return _fetchById(nodeId);
   }
 
+  /// Updates node properties only.
+  /// Parent-category relationships are managed separately via
+  /// [addParent] and [removeParent].
   Future<CatalogNode> updateNode(
     String id, {
-    String? parentId,
     required String name,
     required String slug,
     String? description,
@@ -77,7 +88,6 @@ class CatalogNodeRepository {
     await _supabase
         .from('catalog_nodes')
         .update({
-          'parent_id': parentId,
           'name': name,
           'slug': slug,
           'description':
@@ -95,9 +105,41 @@ class CatalogNodeRepository {
     return _fetchById(id);
   }
 
-  /// Deletes a node. Supabase will raise a foreign-key error (ON DELETE
-  /// RESTRICT) if the node still has children — the caller must handle it.
+  /// Permanently deletes a catalog item and all its removable dependencies.
+  ///
+  /// Historical booking records are preserved intact — booking_items.service_id
+  /// has no FK constraint to catalog_nodes, so those rows are unaffected.
+  ///
+  /// Deletion order:
+  ///   1. wishlists.node_id           — customer data, deleted.
+  ///   2. service_attribute_options   — child of service_attributes, deleted first.
+  ///   3. service_attributes.node_id  — service config, deleted.
+  ///   4. service_scheduling.service_id — scheduling config, deleted.
+  ///   5. catalog_nodes               — deleted; DB CASCADE removes relationship rows.
   Future<void> deleteNode(String id) async {
+    // 1. Wishlists: customer data — remove referencing rows.
+    await _supabase.from('wishlists').delete().eq('node_id', id);
+
+    // 2-3. Service attributes: delete options (child FK) then attributes.
+    final attrs = await _supabase
+        .from('service_attributes')
+        .select('id')
+        .eq('node_id', id);
+    final attrIds = (attrs as List<dynamic>)
+        .map((a) => (a as Map<String, dynamic>)['id'] as String)
+        .toList();
+    if (attrIds.isNotEmpty) {
+      await _supabase
+          .from('service_attribute_options')
+          .delete()
+          .inFilter('attribute_id', attrIds);
+    }
+    await _supabase.from('service_attributes').delete().eq('node_id', id);
+
+    // 4. Scheduling config — no FK constraint but clean up the config row.
+    await _supabase.from('service_scheduling').delete().eq('service_id', id);
+
+    // 5. Delete the node; catalog_node_relationships rows cascade automatically.
     await _supabase.from('catalog_nodes').delete().eq('id', id);
   }
 
@@ -108,8 +150,6 @@ class CatalogNodeRepository {
         .eq('id', id);
   }
 
-  /// Sets is_bookable on the node. This is an explicit admin action — the
-  /// system never changes is_bookable automatically.
   Future<void> toggleBookable(String id, {required bool isBookable}) async {
     await _supabase
         .from('catalog_nodes')
@@ -117,22 +157,37 @@ class CatalogNodeRepository {
         .eq('id', id);
   }
 
-  /// Moves [id] to a new parent. Pass [newParentId] = null to make it a root.
-  /// The DB trigger trg_catalog_nodes_no_cycle rejects any move that would
-  /// create a circular reference, so the caller only needs to handle the
-  /// exception message for display.
-  Future<void> moveNode(String id, String? newParentId) async {
-    await _supabase
-        .from('catalog_nodes')
-        .update({'parent_id': newParentId})
-        .eq('id', id);
+  // ── Category relationship management ─────────────────────────────────────────
+
+  /// Lists [nodeId] under [parentId] as a new parent category.
+  /// The DB rejects the relationship if it would create a loop
+  /// or if the pair already exists (UNIQUE constraint).
+  Future<void> addParent(String nodeId, String parentId,
+      {int sortOrder = 0}) async {
+    await _supabase.from('catalog_node_relationships').insert({
+      'parent_id': parentId,
+      'child_id': nodeId,
+      'sort_order': sortOrder,
+    });
   }
 
-  /// Returns the count of direct children (all, not just active).
-  /// Used to block deletion when children exist.
+  /// Removes the listing of [nodeId] from under [parentId].
+  /// If this was the item's only category, it becomes a top-level item.
+  Future<void> removeParent(String nodeId, String parentId) async {
+    await _supabase
+        .from('catalog_node_relationships')
+        .delete()
+        .eq('parent_id', parentId)
+        .eq('child_id', nodeId);
+  }
+
+  // ── Helpers ──────────────────────────────────────────────────────────────────
+
+  /// Returns the count of direct children listed under [id].
+  /// Used to warn the admin before deleting a category.
   Future<int> countChildren(String id) async {
     final data = await _supabase
-        .from('catalog_nodes')
+        .from('catalog_node_relationships')
         .select('id')
         .eq('parent_id', id);
     return (data as List).length;

@@ -7,7 +7,7 @@ import '../services/catalog_service.dart';
 final catalogServiceProvider =
     Provider<CatalogService>((ref) => CatalogService());
 
-/// All active root-level catalog nodes (parent_id IS NULL).
+/// All active top-level catalog items (no parent category).
 final rootCatalogNodesProvider =
     FutureProvider<List<CatalogNodeModel>>((ref) {
   return ref.read(catalogServiceProvider).fetchRootNodes();

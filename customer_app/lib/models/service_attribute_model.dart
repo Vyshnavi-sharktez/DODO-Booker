@@ -111,3 +111,4 @@ List<SelectedAttributeOption> buildSelectedAttributes(
 
 double totalPriceAdjustment(List<SelectedAttributeOption> sels) =>
     sels.fold(0.0, (sum, s) => sum + s.priceAdjustment);
+

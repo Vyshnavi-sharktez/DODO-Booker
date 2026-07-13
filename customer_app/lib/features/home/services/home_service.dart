@@ -100,7 +100,7 @@ class HomeService {
       final data = await _db
           .from('catalog_nodes_view')
           .select()
-          .isFilter('parent_id', null)
+          .eq('is_root_node', true)
           .eq('is_active', true)
           .order('sort_order', ascending: true)
           .order('name', ascending: true);

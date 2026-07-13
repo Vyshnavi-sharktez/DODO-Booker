@@ -12,13 +12,14 @@ class CatalogService {
 
   static SupabaseClient get _db => Supabase.instance.client;
 
+  /// All active top-level catalog items (no parent category).
   Future<List<CatalogNodeModel>> fetchRootNodes() async {
     if (!_ready) return [];
     try {
       final data = await _db
           .from('catalog_nodes_view')
           .select()
-          .isFilter('parent_id', null)
+          .eq('is_root_node', true)
           .eq('is_active', true)
           .order('sort_order', ascending: true)
           .order('name', ascending: true);
@@ -47,16 +48,16 @@ class CatalogService {
     }
   }
 
+  /// Active direct children of [parentId], ordered by sort_order.
+  /// Uses the get_catalog_node_children() DB function which joins
+  /// through the catalog_node_relationships table.
   Future<List<CatalogNodeModel>> fetchChildren(String parentId) async {
     if (!_ready) return [];
     try {
-      final data = await _db
-          .from('catalog_nodes_view')
-          .select()
-          .eq('parent_id', parentId)
-          .eq('is_active', true)
-          .order('sort_order', ascending: true)
-          .order('name', ascending: true);
+      final data = await _db.rpc(
+        'get_catalog_node_children',
+        params: {'p_parent_id': parentId},
+      );
       return (data as List)
           .map((e) => CatalogNodeModel.fromMap(e as Map<String, dynamic>))
           .toList();
@@ -66,8 +67,7 @@ class CatalogService {
     }
   }
 
-  /// Fetches FAQs by node_id (backfilled in Phase-1 migration for all
-  /// migrated services; also covers new catalog-only nodes).
+  /// FAQs for a catalog item (queried by node_id).
   Future<List<FaqModel>> fetchFaqsForNode(String nodeId) async {
     if (!_ready) return [];
     try {
@@ -84,7 +84,7 @@ class CatalogService {
     }
   }
 
-  /// Full-text search across all active catalog nodes.
+  /// Full-text search across all active catalog items.
   Future<List<CatalogNodeModel>> searchNodes(String query) async {
     if (!_ready || query.trim().isEmpty) return [];
     try {

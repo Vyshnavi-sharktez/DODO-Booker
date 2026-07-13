@@ -64,7 +64,6 @@ class CatalogNodeNotifier
 
   Future<void> updateNode(
     String id, {
-    String? parentId,
     required String name,
     required String slug,
     String? description,
@@ -79,7 +78,6 @@ class CatalogNodeNotifier
   }) async {
     await _repo.updateNode(
       id,
-      parentId: parentId,
       name: name,
       slug: slug,
       description: description,
@@ -100,10 +98,19 @@ class CatalogNodeNotifier
     await _load();
   }
 
-  Future<void> moveNode(String id, String? newParentId) async {
-    await _repo.moveNode(id, newParentId);
+  // ── Category relationship management ───────────────────────────────────────
+
+  Future<void> addParent(String nodeId, String parentId) async {
+    await _repo.addParent(nodeId, parentId);
     await _load();
   }
+
+  Future<void> removeParent(String nodeId, String parentId) async {
+    await _repo.removeParent(nodeId, parentId);
+    await _load();
+  }
+
+  // ── Optimistic toggles ─────────────────────────────────────────────────────
 
   Future<void> toggleActive(String id, {required bool isActive}) async {
     final current = state.valueOrNull;
@@ -145,10 +152,7 @@ final catalogNodeNotifierProvider = StateNotifierProvider<CatalogNodeNotifier,
   return CatalogNodeNotifier(ref.watch(catalogNodeRepositoryProvider));
 });
 
-// ── Node attributes notifier (separate from serviceAttributesNotifierProvider) ─
-//
-// Queries service_attributes by node_id so it works for both migrated nodes
-// (where node_id = service_id) and brand-new catalog nodes (node_id only).
+// ── Node attributes notifier ───────────────────────────────────────────────────
 
 class CatalogNodeAttributesNotifier
     extends StateNotifier<AsyncValue<List<ServiceAttribute>>> {
@@ -171,22 +175,23 @@ class CatalogNodeAttributesNotifier
     );
   }
 
-  Future<void> createAttribute({
+  Future<String> createAttribute({
     required String nodeId,
     required String name,
     required String fieldType,
     required bool isRequired,
   }) async {
-    await _repo.createAttributeForNode(
+    final attr = await _repo.createAttributeForNode(
       nodeId: nodeId,
       name: name,
       fieldType: fieldType,
       isRequired: isRequired,
     );
     await _reload();
+    return attr.id;
   }
 
-  Future<void> updateAttribute(
+  Future<String> updateAttribute(
     String id, {
     required String name,
     required String fieldType,
@@ -199,6 +204,7 @@ class CatalogNodeAttributesNotifier
       isRequired: isRequired,
     );
     await _reload();
+    return id;
   }
 
   Future<void> deleteAttribute(String id) async {

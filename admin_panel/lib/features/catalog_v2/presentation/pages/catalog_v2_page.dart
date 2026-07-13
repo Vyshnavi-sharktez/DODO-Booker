@@ -6,22 +6,23 @@ import '../../../../../core/widgets/admin_search_bar.dart';
 import '../../application/providers/catalog_node_providers.dart';
 import '../../domain/models/catalog_node.dart';
 import '../../../service_scheduling/presentation/widgets/service_scheduling_dialog.dart';
-import '../widgets/catalog_node_attributes_drawer.dart';
 import '../widgets/catalog_node_form_dialog.dart';
-import '../widgets/catalog_node_move_dialog.dart';
+import '../widgets/catalog_node_parents_dialog.dart';
 import '../widgets/catalog_node_tile.dart';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // CatalogV2Page
 //
 // Responsibilities
-//   • Load ALL catalog nodes in one query and build an in-memory tree
+//   • Load ALL catalog items in one query and build an in-memory tree
 //   • Manage expand/collapse state (Set<String> of expanded node IDs)
 //   • Own all CRUD + toggle methods and pass them as NodeCallbacks
 //   • Pre-compute the visible set during search (matching nodes + ancestors)
 //
-// Widget tree
-//   CatalogV2Page → ListView → CatalogNodeTile (recursive, unlimited depth)
+// Multi-parent support
+//   • An item with parentIds = ['a', 'b'] appears in both branches of the tree
+//   • byParent map is built from parentIds (not from a single parent_id)
+//   • Tiles get a parentIdContext so "Remove from this category" knows the context
 // ═══════════════════════════════════════════════════════════════════════════════
 
 class CatalogV2Page extends ConsumerStatefulWidget {
@@ -47,7 +48,7 @@ class _CatalogV2PageState extends ConsumerState<CatalogV2Page> {
     });
   }
 
-  // ── CRUD ──────────────────────────────────────────────────────────────────────
+  // ── Create ────────────────────────────────────────────────────────────────────
 
   void _openCreate({CatalogNode? parent}) {
     showDialog(
@@ -87,13 +88,15 @@ class _CatalogV2PageState extends ConsumerState<CatalogV2Page> {
           }
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Node created successfully.')),
+              const SnackBar(content: Text('Item created successfully.')),
             );
           }
         },
       ),
     );
   }
+
+  // ── Edit ──────────────────────────────────────────────────────────────────────
 
   void _openEdit(CatalogNode node, bool hasChildren) {
     showDialog(
@@ -117,7 +120,6 @@ class _CatalogV2PageState extends ConsumerState<CatalogV2Page> {
         }) async {
           await ref.read(catalogNodeNotifierProvider.notifier).updateNode(
                 node.id,
-                parentId: node.parentId,
                 name: name,
                 slug: slug,
                 description: description,
@@ -132,7 +134,7 @@ class _CatalogV2PageState extends ConsumerState<CatalogV2Page> {
               );
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Node updated successfully.')),
+              const SnackBar(content: Text('Item updated successfully.')),
             );
           }
         },
@@ -140,9 +142,10 @@ class _CatalogV2PageState extends ConsumerState<CatalogV2Page> {
     );
   }
 
+  // ── Delete ────────────────────────────────────────────────────────────────────
+
   Future<void> _deleteNode(CatalogNode node) async {
-    // Check for children first so we can show a descriptive error.
-    int childCount;
+    int childCount = 0;
     try {
       childCount = await ref
           .read(catalogNodeRepositoryProvider)
@@ -151,62 +154,63 @@ class _CatalogV2PageState extends ConsumerState<CatalogV2Page> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-              content: Text('Unable to validate deletion. Please try again.')),
+              content:
+                  Text('Unable to validate deletion. Please try again.')),
         );
       }
       return;
     }
     if (!mounted) return;
 
-    if (childCount > 0) {
-      showDialog(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          title: const Row(
-            children: [
-              Icon(Icons.warning_amber_rounded,
-                  color: AppColors.warning, size: 22),
-              SizedBox(width: 8),
-              Text('Cannot Delete Node'),
-            ],
-          ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('"${node.name}" has $childCount '
-                  'child node${childCount == 1 ? "" : "s"}. '
-                  'Remove or move them first.'),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(ctx).pop(),
-              child: const Text('OK'),
-            ),
-          ],
-        ),
-      );
-      return;
-    }
-
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         shape:
             RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        title: const Text('Delete Node'),
-        content: Text(
-            'Delete "${node.name}"? This cannot be undone.'),
+        title: const Text('Delete Catalog Item'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Delete "${node.name}"? This cannot be undone.'),
+            if (childCount > 0) ...[
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFFF8E1),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: const Color(0xFFFFE082)),
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Icon(Icons.warning_amber_rounded,
+                        size: 16, color: Color(0xFFF9A825)),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        '$childCount item${childCount == 1 ? '' : 's'} '
+                        'listed under "${node.name}" will be moved to '
+                        'top level or kept under their other categories.',
+                        style: const TextStyle(
+                            fontSize: 12, color: Color(0xFF795548)),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ],
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(false),
             child: const Text('Cancel'),
           ),
           FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: AppColors.error),
+            style:
+                FilledButton.styleFrom(backgroundColor: AppColors.error),
             onPressed: () => Navigator.of(ctx).pop(true),
             child: const Text('Delete'),
           ),
@@ -221,7 +225,7 @@ class _CatalogV2PageState extends ConsumerState<CatalogV2Page> {
           .deleteNode(node.id);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Node deleted.')),
+          const SnackBar(content: Text('Item deleted.')),
         );
       }
     } catch (e) {
@@ -234,6 +238,8 @@ class _CatalogV2PageState extends ConsumerState<CatalogV2Page> {
       }
     }
   }
+
+  // ── Toggles ───────────────────────────────────────────────────────────────────
 
   void _toggleActive(CatalogNode node, bool isActive) async {
     try {
@@ -261,28 +267,95 @@ class _CatalogV2PageState extends ConsumerState<CatalogV2Page> {
     }
   }
 
-  void _moveNode(CatalogNode node) {
-    // Read current node list from the notifier — fresh at the moment of the tap.
+  // ── Manage categories ─────────────────────────────────────────────────────────
+
+  void _manageParents(CatalogNode node) {
     final allNodes =
         ref.read(catalogNodeNotifierProvider).valueOrNull ?? [];
     showDialog(
       context: context,
-      builder: (_) => CatalogNodeMoveDialog(
+      barrierDismissible: false,
+      builder: (_) => CatalogNodeParentsDialog(
         node: node,
         allNodes: allNodes,
-        onMove: (newParentId) async {
-          await ref
-              .read(catalogNodeNotifierProvider.notifier)
-              .moveNode(node.id, newParentId);
+        onSave: (toAdd, toRemove) async {
+          for (final parentId in toRemove) {
+            await ref
+                .read(catalogNodeNotifierProvider.notifier)
+                .removeParent(node.id, parentId);
+          }
+          for (final parentId in toAdd) {
+            await ref
+                .read(catalogNodeNotifierProvider.notifier)
+                .addParent(node.id, parentId);
+          }
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Node moved successfully.')),
+              const SnackBar(content: Text('Categories updated.')),
             );
           }
         },
       ),
     );
   }
+
+  Future<void> _removeFromParent(
+      CatalogNode node, String parentId) async {
+    final allNodes =
+        ref.read(catalogNodeNotifierProvider).valueOrNull ?? [];
+    final parentNode =
+        allNodes.where((n) => n.id == parentId).firstOrNull;
+    final parentName = parentNode?.name ?? 'this category';
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape:
+            RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        title: Text('Remove from "$parentName"?'),
+        content: Text(
+          node.parentIds.length == 1
+              ? '"${node.name}" will become a top-level item (not under any category).'
+              : '"${node.name}" will be removed from "$parentName" but will stay in its other categories.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+                backgroundColor: AppColors.primary),
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Remove'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    try {
+      await ref
+          .read(catalogNodeNotifierProvider.notifier)
+          .removeParent(node.id, parentId);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+              content: Text('Removed "${node.name}" from $parentName.')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+              content: Text('Error: $e'),
+              backgroundColor: AppColors.error),
+        );
+      }
+    }
+  }
+
+  // ── Scheduling / Attributes ───────────────────────────────────────────────────
 
   void _openScheduling(CatalogNode node) {
     showDialog(
@@ -291,28 +364,6 @@ class _CatalogV2PageState extends ConsumerState<CatalogV2Page> {
       builder: (_) => ServiceSchedulingDialog(
         serviceId: node.id,
         serviceName: node.name,
-      ),
-    );
-  }
-
-  void _openAttributes(CatalogNode node) {
-    ref
-        .read(catalogNodeAttributesNotifierProvider.notifier)
-        .loadForNode(node.id);
-    showDialog(
-      context: context,
-      builder: (ctx) => Dialog(
-        alignment: Alignment.centerRight,
-        insetPadding:
-            const EdgeInsets.only(top: 0, bottom: 0, right: 0, left: 120),
-        shape: const RoundedRectangleBorder(
-          borderRadius:
-              BorderRadius.horizontal(left: Radius.circular(16)),
-        ),
-        child: SizedBox(
-          width: 480,
-          child: CatalogNodeAttributesDrawer(node: node),
-        ),
       ),
     );
   }
@@ -326,11 +377,11 @@ class _CatalogV2PageState extends ConsumerState<CatalogV2Page> {
     final callbacks = NodeCallbacks(
       onAddChild: (parent) => _openCreate(parent: parent),
       onEdit: (node, hasChildren) => _openEdit(node, hasChildren),
-      onMove: _moveNode,
+      onManageParents: _manageParents,
+      onRemoveFromParent: _removeFromParent,
       onDelete: _deleteNode,
       onToggleActive: _toggleActive,
       onToggleBookable: _toggleBookable,
-      onOpenAttributes: _openAttributes,
       onOpenScheduling: _openScheduling,
     );
 
@@ -370,7 +421,7 @@ class _CatalogV2PageState extends ConsumerState<CatalogV2Page> {
                 ),
                 SizedBox(height: 4),
                 Text(
-                  'Dynamic catalog tree — unlimited levels, admin-controlled',
+                  'Unlimited nesting · cross-listed services · admin-controlled',
                   style: TextStyle(
                     fontSize: 14,
                     color: AppColors.textSecondary,
@@ -382,7 +433,7 @@ class _CatalogV2PageState extends ConsumerState<CatalogV2Page> {
           FilledButton.icon(
             onPressed: () => _openCreate(),
             icon: const Icon(Icons.add, size: 18),
-            label: const Text('Add Service'),
+            label: const Text('Add Item'),
           ),
         ],
       ),
@@ -394,7 +445,7 @@ class _CatalogV2PageState extends ConsumerState<CatalogV2Page> {
       color: AppColors.surface,
       padding: const EdgeInsets.fromLTRB(32, 0, 32, 16),
       child: AdminSearchBar(
-        hintText: 'Search catalog...',
+        hintText: 'Search catalog…',
         width: double.infinity,
         onChanged: (q) => setState(() => _searchQuery = q.toLowerCase()),
       ),
@@ -420,12 +471,18 @@ class _CatalogV2PageState extends ConsumerState<CatalogV2Page> {
     final allNodes = nodesAsync.valueOrNull ?? [];
 
     // ── Build parent → children map ──────────────────────────────────────────
+    // An item with parentIds = ['a', 'b'] is added to BOTH byParent['a']
+    // and byParent['b'], so it appears under each category in the tree.
+    // Top-level items (parentIds empty) go to byParent[null].
     final byParent = <String?, List<CatalogNode>>{};
     for (final n in allNodes) {
-      byParent.putIfAbsent(n.parentId, () => []).add(n);
+      if (n.isRoot) {
+        byParent.putIfAbsent(null, () => []).add(n);
+      }
+      for (final pid in n.parentIds) {
+        byParent.putIfAbsent(pid, () => []).add(n);
+      }
     }
-    // Sort each group by sort_order then name (they arrive sorted from DB,
-    // but rebuild here ensures stability after optimistic updates).
     byParent.forEach((_, list) {
       list.sort((a, b) {
         final so = a.sortOrder.compareTo(b.sortOrder);
@@ -439,39 +496,38 @@ class _CatalogV2PageState extends ConsumerState<CatalogV2Page> {
     final q = _searchQuery;
     final isSearching = q.isNotEmpty;
 
-    // IDs of nodes whose name matches.
     Set<String> matchingIds = {};
-    // IDs of ancestors of matching nodes (shown for context).
     Set<String> ancestorIds = {};
-    // IDs that should be auto-expanded during search.
     Set<String> autoExpandIds = {};
 
     if (isSearching) {
-      // Build a quick id→node lookup.
       final byId = {for (final n in allNodes) n.id: n};
+
+      void collectAncestors(String nodeId) {
+        final node = byId[nodeId];
+        if (node == null) return;
+        for (final pid in node.parentIds) {
+          if (ancestorIds.add(pid)) {
+            autoExpandIds.add(pid);
+            collectAncestors(pid);
+          }
+        }
+      }
 
       for (final n in allNodes) {
         if (n.name.toLowerCase().contains(q)) {
           matchingIds.add(n.id);
-          // Walk up to collect all ancestors.
-          String? pid = n.parentId;
-          while (pid != null) {
-            ancestorIds.add(pid);
-            autoExpandIds.add(pid);
-            pid = byId[pid]?.parentId;
-          }
+          collectAncestors(n.id);
         }
       }
     }
 
     final visibleIds = {...matchingIds, ...ancestorIds};
 
-    // Build the active expand set for this render pass.
     final effectiveExpandedIds = isSearching
         ? {..._expandedIds, ...autoExpandIds}
         : _expandedIds;
 
-    // Filter root list for search.
     final visibleRoots = isSearching
         ? roots.where((n) => visibleIds.contains(n.id)).toList()
         : roots;
@@ -488,7 +544,7 @@ class _CatalogV2PageState extends ConsumerState<CatalogV2Page> {
             Text(
               isSearching
                   ? 'No results for "$_searchQuery"'
-                  : 'No catalog nodes yet. Add one to get started.',
+                  : 'No catalog items yet. Add one to get started.',
               style: const TextStyle(color: AppColors.textSecondary),
             ),
             if (!isSearching) ...[
@@ -496,7 +552,7 @@ class _CatalogV2PageState extends ConsumerState<CatalogV2Page> {
               FilledButton.icon(
                 onPressed: () => _openCreate(),
                 icon: const Icon(Icons.add, size: 18),
-                label: const Text('Add Service'),
+                label: const Text('Add Item'),
               ),
             ],
           ],
@@ -520,7 +576,9 @@ class _CatalogV2PageState extends ConsumerState<CatalogV2Page> {
       children: [
         for (final root in visibleRoots)
           CatalogNodeTile(
-            key: ValueKey(root.id),
+            // Root tiles have no parent context; key includes 'root' prefix
+            // to distinguish from child appearances of the same node.
+            key: ValueKey('root_${root.id}'),
             node: root,
             children: displayByParent[root.id] ?? [],
             allByParent: displayByParent,
@@ -528,20 +586,10 @@ class _CatalogV2PageState extends ConsumerState<CatalogV2Page> {
             expandedIds: effectiveExpandedIds,
             onToggleExpand: _toggleExpand,
             callbacks: callbacks,
+            parentIdContext: null,
             searchQuery: _searchQuery,
           ),
         const SizedBox(height: 8),
-        OutlinedButton.icon(
-          onPressed: () => _openCreate(),
-          icon: const Icon(Icons.add, size: 16),
-          label: const Text('Add Service'),
-          style: OutlinedButton.styleFrom(
-            foregroundColor: AppColors.accent,
-            side: BorderSide(color: AppColors.accent.withValues(alpha: 0.5)),
-            padding:
-                const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          ),
-        ),
       ],
     );
   }

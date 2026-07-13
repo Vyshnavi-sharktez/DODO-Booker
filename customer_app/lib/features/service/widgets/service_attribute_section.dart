@@ -1,10 +1,7 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../models/service_attribute_model.dart';
 
-/// Renders all selectable attributes for a service with option chips that
-/// display `+₹XX` price adjustments. Fires [onChanged] whenever a selection
-/// changes so the parent can recalculate the live price.
 class ServiceAttributeSection extends StatelessWidget {
   final List<ServiceAttributeModel> attrs;
   final Map<String, String> selections;
@@ -19,14 +16,14 @@ class ServiceAttributeSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final selectableAttrs = attrs.where((a) => a.hasOptions).toList();
-    if (selectableAttrs.isEmpty) return const SizedBox.shrink();
+    final relevant = attrs.where((a) => a.hasOptions).toList();
+    if (relevant.isEmpty) return const SizedBox.shrink();
 
     final tt = Theme.of(context).textTheme;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        for (final attr in selectableAttrs) ...[
+        for (final attr in relevant) ...[
           Padding(
             padding: const EdgeInsets.fromLTRB(20, 24, 20, 0),
             child: Row(
@@ -58,7 +55,7 @@ class ServiceAttributeSection extends StatelessWidget {
               children: attr.options.map((opt) {
                 final selected = selections[attr.id] == opt.id;
                 final adjLabel = opt.priceAdjustment > 0
-                    ? ' (+₹${opt.priceAdjustment.toStringAsFixed(0)})'
+                    ? ' (+${opt.priceAdjustment.toStringAsFixed(0)})'
                     : '';
                 return _AttrChip(
                   label: '${opt.optionName}$adjLabel',
@@ -79,7 +76,8 @@ class _AttrChip extends StatelessWidget {
   final bool selected;
   final VoidCallback onTap;
 
-  const _AttrChip({required this.label, required this.selected, required this.onTap});
+  const _AttrChip(
+      {required this.label, required this.selected, required this.onTap});
 
   @override
   Widget build(BuildContext context) {

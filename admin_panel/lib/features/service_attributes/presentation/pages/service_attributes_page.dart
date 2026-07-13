@@ -4,7 +4,6 @@ import '../../../../core/theme/app_theme.dart';
 import '../../application/providers/service_attributes_providers.dart';
 import '../../domain/models/service_attribute.dart';
 import '../widgets/attribute_form_dialog.dart';
-import '../widgets/attribute_options_dialog.dart';
 
 // ── Field type display config ─────────────────────────────────────────────────
 
@@ -62,6 +61,7 @@ class _ServiceAttributesPageState
   void _openCreate() {
     final sid = _selectedServiceId;
     if (sid == null) return;
+    final notifier = ref.read(serviceAttributesNotifierProvider.notifier);
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -74,26 +74,19 @@ class _ServiceAttributesPageState
           required fieldType,
           required isRequired,
         }) async {
-          await ref
-              .read(serviceAttributesNotifierProvider.notifier)
-              .createAttribute(
-                serviceId: serviceId,
-                name: name,
-                fieldType: fieldType,
-                isRequired: isRequired,
-              );
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                  content: Text('Attribute created successfully')),
-            );
-          }
+          await notifier.createAttribute(
+            serviceId: serviceId,
+            name: name,
+            fieldType: fieldType,
+            isRequired: isRequired,
+          );
         },
       ),
     );
   }
 
   void _openEdit(ServiceAttribute attr) {
+    final notifier = ref.read(serviceAttributesNotifierProvider.notifier);
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -107,33 +100,14 @@ class _ServiceAttributesPageState
           required fieldType,
           required isRequired,
         }) async {
-          await ref
-              .read(serviceAttributesNotifierProvider.notifier)
-              .updateAttribute(
-                attr.id,
-                serviceId: serviceId,
-                name: name,
-                fieldType: fieldType,
-                isRequired: isRequired,
-              );
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                  content: Text('Attribute updated successfully')),
-            );
-          }
+          await notifier.updateAttribute(
+            attr.id,
+            serviceId: serviceId,
+            name: name,
+            fieldType: fieldType,
+            isRequired: isRequired,
+          );
         },
-      ),
-    );
-  }
-
-  void _openOptions(ServiceAttribute attr) {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (_) => AttributeOptionsDialog(
-        attributeId: attr.id,
-        attributeName: attr.name,
       ),
     );
   }
@@ -347,7 +321,6 @@ class _ServiceAttributesPageState
                         attributes: attrs,
                         onEdit: _openEdit,
                         onDelete: _confirmDelete,
-                        onManageOptions: _openOptions,
                       );
                     },
                   ),
@@ -364,13 +337,11 @@ class _AttributesTable extends StatelessWidget {
   final List<ServiceAttribute> attributes;
   final void Function(ServiceAttribute) onEdit;
   final void Function(ServiceAttribute) onDelete;
-  final void Function(ServiceAttribute) onManageOptions;
 
   const _AttributesTable({
     required this.attributes,
     required this.onEdit,
     required this.onDelete,
-    required this.onManageOptions,
   });
 
   static const double _minTableWidth = 550;
@@ -428,9 +399,6 @@ class _AttributesTable extends StatelessWidget {
                                   attribute: attr,
                                   onEdit: () => onEdit(attr),
                                   onDelete: () => onDelete(attr),
-                                  onManageOptions: attr.hasOptions
-                                      ? () => onManageOptions(attr)
-                                      : null,
                                 );
                               },
                             ),
@@ -489,13 +457,11 @@ class _AttributeRow extends StatelessWidget {
   final ServiceAttribute attribute;
   final VoidCallback onEdit;
   final VoidCallback onDelete;
-  final VoidCallback? onManageOptions;
 
   const _AttributeRow({
     required this.attribute,
     required this.onEdit,
     required this.onDelete,
-    this.onManageOptions,
   });
 
   @override
@@ -588,14 +554,6 @@ class _AttributeRow extends StatelessWidget {
                   tooltip: 'Edit',
                   visualDensity: VisualDensity.compact,
                 ),
-                if (onManageOptions != null)
-                  IconButton(
-                    onPressed: onManageOptions,
-                    icon: Icon(Icons.tune_rounded,
-                        size: 16, color: AppColors.primary),
-                    tooltip: 'Manage Options',
-                    visualDensity: VisualDensity.compact,
-                  ),
                 IconButton(
                   onPressed: onDelete,
                   icon: Icon(Icons.delete_outline_rounded,

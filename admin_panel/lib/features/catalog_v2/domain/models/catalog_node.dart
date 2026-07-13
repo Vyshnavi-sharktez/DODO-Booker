@@ -1,6 +1,11 @@
 class CatalogNode {
   final String id;
-  final String? parentId;
+
+  /// All parent IDs from the relationship table, ordered by sort_order.
+  /// Empty list means this is a top-level (root) item.
+  final List<String> parentIds;
+
+  /// Name of the canonical (first) parent — for display only.
   final String? parentName;
   final String? parentSlug;
 
@@ -11,11 +16,9 @@ class CatalogNode {
   final String? iconKey;
   final int sortOrder;
 
-  /// Admin-controlled. Never derived from child presence.
   final bool isActive;
   final bool isBookable;
 
-  /// Only meaningful when [isBookable] is true.
   final double? basePrice;
   final int? estimatedDuration;
   final double? minimumOrderAmount;
@@ -23,8 +26,6 @@ class CatalogNode {
   final int reviewCount;
 
   /// Count of active children from the DB view.
-  /// In the admin tree this is supplemented by the in-memory byParent map
-  /// which includes inactive children too.
   final int childrenCount;
 
   final DateTime? createdAt;
@@ -32,7 +33,7 @@ class CatalogNode {
 
   const CatalogNode({
     required this.id,
-    this.parentId,
+    this.parentIds = const [],
     this.parentName,
     this.parentSlug,
     required this.name,
@@ -53,12 +54,26 @@ class CatalogNode {
     this.updatedAt,
   });
 
-  bool get isRoot => parentId == null;
+  /// True when this item has no parent categories.
+  bool get isRoot => parentIds.isEmpty;
+
+  /// True when this item appears under more than one parent category.
+  bool get isShared => parentIds.length > 1;
+
+  /// The canonical (first) parent ID — null when top-level.
+  /// Kept for display convenience; do not use for relationship management.
+  String? get primaryParentId => parentIds.isEmpty ? null : parentIds.first;
+
+  /// Alias for [primaryParentId] — kept so legacy code still compiles.
+  String? get parentId => primaryParentId;
 
   factory CatalogNode.fromMap(Map<String, dynamic> map) {
     return CatalogNode(
       id: map['id'] as String,
-      parentId: map['parent_id'] as String?,
+      parentIds: (map['parent_ids'] as List<dynamic>?)
+              ?.map((e) => e.toString())
+              .toList() ??
+          [],
       parentName: map['parent_name'] as String?,
       parentSlug: map['parent_slug'] as String?,
       name: map['name'] as String? ?? '',
@@ -85,7 +100,7 @@ class CatalogNode {
   }
 
   CatalogNode copyWith({
-    String? parentId,
+    List<String>? parentIds,
     String? parentName,
     String? name,
     String? slug,
@@ -102,7 +117,7 @@ class CatalogNode {
   }) {
     return CatalogNode(
       id: id,
-      parentId: parentId ?? this.parentId,
+      parentIds: parentIds ?? this.parentIds,
       parentName: parentName ?? this.parentName,
       parentSlug: parentSlug,
       name: name ?? this.name,

@@ -323,11 +323,13 @@ class _ModalBookingBar extends ConsumerWidget {
     required this.addonsTotal,
   });
 
-  bool get _requiredFilled => attrs
-      .where((a) => a.isRequired && a.hasOptions)
-      .every((a) => selections.containsKey(a.id));
+  bool get _requiredFilled =>
+      attrs.where((a) => a.isRequired && a.hasOptions).every(
+            (a) => selections.containsKey(a.id),
+          );
 
-  bool get _hasRequiredAttrs => attrs.any((a) => a.isRequired && a.hasOptions);
+  bool get _hasRequiredAttrs =>
+      attrs.any((a) => a.isRequired && a.hasOptions);
 
   Future<void> _addToCart(BuildContext context, WidgetRef ref) async {
     if (!ref.read(isAuthenticatedProvider)) {
