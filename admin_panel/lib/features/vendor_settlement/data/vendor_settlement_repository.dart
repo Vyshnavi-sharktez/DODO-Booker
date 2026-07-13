@@ -12,7 +12,7 @@ class VendorSettlementRepository {
     // Start all three queries in parallel, then await each.
     final vendorsFuture = _supabase
         .from('vendors')
-        .select('id, business_name, owner_name, is_active')
+        .select('id, business_name, owner_name, is_active, commission_rate')
         .order('business_name');
     final bookingsFuture = _supabase
         .from('bookings')
@@ -73,6 +73,7 @@ class VendorSettlementRepository {
         isActive: v['is_active'] as bool? ?? false,
         completedJobs: vb.length,
         grossEarnings: grossEarnings,
+        commissionRate: (v['commission_rate'] as num?)?.toDouble() ?? 0.0,
         totalSettled: totalSettled,
         lastSettlementAt: lastSettlementAt,
       );
@@ -88,7 +89,7 @@ class VendorSettlementRepository {
     // then await each individually to preserve concurrency without type issues.
     final vendorFuture = _supabase
         .from('vendors')
-        .select('business_name, owner_name, is_active')
+        .select('business_name, owner_name, is_active, commission_rate')
         .eq('id', vendorId)
         .single();
     final bookingsFuture = _supabase
@@ -124,6 +125,7 @@ class VendorSettlementRepository {
       isActive: vendorData['is_active'] as bool? ?? false,
       completedJobs: bookingsData.length,
       grossEarnings: grossEarnings,
+      commissionRate: (vendorData['commission_rate'] as num?)?.toDouble() ?? 0.0,
       totalSettled: totalSettled,
       lastSettlementAt: lastSettlementAt,
     );

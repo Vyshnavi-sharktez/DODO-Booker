@@ -15,8 +15,8 @@ class LoyaltyService {
         .from('customers')
         .select('id')
         .eq('phone', phone)
-        .single();
-    return row['id'] as String?;
+        .maybeSingle();
+    return row?['id'] as String?;
   }
 
   Future<LoyaltySettingsModel> getSettings() async {

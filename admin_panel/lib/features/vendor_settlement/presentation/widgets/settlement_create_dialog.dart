@@ -64,7 +64,7 @@ class _SettlementCreateDialogState
             vendorName: s.vendorName,
             amount: _parsedAmount,
             completedJobsCount: s.completedJobs,
-            settledBy: adminUser?.displayName ?? 'Admin',
+            settledBy: adminUser?.userId ?? '',
             paymentMethod: _paymentMethod,
             referenceNumber:
                 _refCtrl.text.trim().isEmpty ? null : _refCtrl.text.trim(),
@@ -176,8 +176,8 @@ class _SettlementCreateDialogState
                           ),
                           _Divider(),
                           _SummaryItem(
-                            label: 'Platform Commission',
-                            value: '₹0.00',
+                            label: 'Platform Commission (${s.commissionRate.toStringAsFixed(1)}%)',
+                            value: '₹${_fmt.format(s.platformCommission)}',
                             color: AppColors.textSecondary,
                           ),
                           _Divider(),

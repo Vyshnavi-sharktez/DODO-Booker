@@ -30,6 +30,7 @@ class VendorFormDialog extends StatefulWidget {
     double? walletBalance,
     double? latitude,
     double? longitude,
+    double? commissionRate,
   }) onSave;
 
   const VendorFormDialog({
@@ -52,6 +53,7 @@ class _VendorFormDialogState extends State<VendorFormDialog> {
   late final TextEditingController _address;
   late final TextEditingController _rating;
   late final TextEditingController _walletBalance;
+  late final TextEditingController _commissionRate;
   late String _status;
   late bool _isActive;
   bool _saving = false;
@@ -76,6 +78,9 @@ class _VendorFormDialogState extends State<VendorFormDialog> {
     _walletBalance = TextEditingController(
       text: e != null ? e.walletBalance.toStringAsFixed(2) : '',
     );
+    _commissionRate = TextEditingController(
+      text: e != null ? e.commissionRate.toStringAsFixed(2) : '0.00',
+    );
     _status = e?.status ?? 'pending';
     _isActive = e?.isActive ?? false;
     _latitude = e?.latitude;
@@ -92,6 +97,7 @@ class _VendorFormDialogState extends State<VendorFormDialog> {
     _address.dispose();
     _rating.dispose();
     _walletBalance.dispose();
+    _commissionRate.dispose();
     super.dispose();
   }
 
@@ -176,6 +182,7 @@ class _VendorFormDialogState extends State<VendorFormDialog> {
     try {
       final ratingText = _rating.text.trim();
       final walletText = _walletBalance.text.trim();
+      final commissionText = _commissionRate.text.trim();
       await widget.onSave(
         businessName: _businessName.text.trim(),
         ownerName: _ownerName.text.trim().isEmpty ? null : _ownerName.text.trim(),
@@ -189,6 +196,7 @@ class _VendorFormDialogState extends State<VendorFormDialog> {
         walletBalance: walletText.isEmpty ? null : double.tryParse(walletText),
         latitude: _latitude,
         longitude: _longitude,
+        commissionRate: double.tryParse(commissionText) ?? 0.0,
       );
       if (mounted) Navigator.of(context).pop();
     } catch (e) {
@@ -491,12 +499,12 @@ class _VendorFormDialogState extends State<VendorFormDialog> {
                       ],
                       const SizedBox(height: 16),
 
-                      // Rating + Wallet Balance
+                      // Rating + Wallet Balance + Commission Rate
                       Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           SizedBox(
-                            width: 160,
+                            width: 140,
                             child: TextFormField(
                               controller: _rating,
                               decoration: const InputDecoration(
@@ -523,7 +531,7 @@ class _VendorFormDialogState extends State<VendorFormDialog> {
                           ),
                           const SizedBox(width: 16),
                           SizedBox(
-                            width: 180,
+                            width: 160,
                             child: TextFormField(
                               controller: _walletBalance,
                               decoration: const InputDecoration(
@@ -542,6 +550,33 @@ class _VendorFormDialogState extends State<VendorFormDialog> {
                                 if (v == null || v.trim().isEmpty) return null;
                                 if (double.tryParse(v.trim()) == null) {
                                   return 'Invalid amount';
+                                }
+                                return null;
+                              },
+                            ),
+                          ),
+                          const SizedBox(width: 16),
+                          SizedBox(
+                            width: 160,
+                            child: TextFormField(
+                              controller: _commissionRate,
+                              decoration: const InputDecoration(
+                                labelText: 'Commission Rate (%)',
+                                hintText: '0.00',
+                                prefixIcon: Icon(Icons.percent_rounded),
+                                helperText: '0 = no commission',
+                              ),
+                              keyboardType: const TextInputType.numberWithOptions(
+                                  decimal: true),
+                              inputFormatters: [
+                                FilteringTextInputFormatter.allow(
+                                    RegExp(r'^\d{0,2}\.?\d{0,2}')),
+                              ],
+                              validator: (v) {
+                                if (v == null || v.trim().isEmpty) return null;
+                                final r = double.tryParse(v.trim());
+                                if (r == null || r < 0 || r >= 100) {
+                                  return 'Enter 0 – 99.99';
                                 }
                                 return null;
                               },

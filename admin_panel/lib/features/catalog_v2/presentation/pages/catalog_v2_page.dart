@@ -382,7 +382,7 @@ class _CatalogV2PageState extends ConsumerState<CatalogV2Page> {
           FilledButton.icon(
             onPressed: () => _openCreate(),
             icon: const Icon(Icons.add, size: 18),
-            label: const Text('Add Root Node'),
+            label: const Text('Add Service'),
           ),
         ],
       ),
@@ -496,7 +496,7 @@ class _CatalogV2PageState extends ConsumerState<CatalogV2Page> {
               FilledButton.icon(
                 onPressed: () => _openCreate(),
                 icon: const Icon(Icons.add, size: 18),
-                label: const Text('Add Root Node'),
+                label: const Text('Add Service'),
               ),
             ],
           ],
@@ -534,7 +534,7 @@ class _CatalogV2PageState extends ConsumerState<CatalogV2Page> {
         OutlinedButton.icon(
           onPressed: () => _openCreate(),
           icon: const Icon(Icons.add, size: 16),
-          label: const Text('Add Root Node'),
+          label: const Text('Add Service'),
           style: OutlinedButton.styleFrom(
             foregroundColor: AppColors.accent,
             side: BorderSide(color: AppColors.accent.withValues(alpha: 0.5)),

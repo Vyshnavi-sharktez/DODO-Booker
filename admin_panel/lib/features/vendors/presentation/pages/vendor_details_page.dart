@@ -7,8 +7,10 @@ import 'package:intl/intl.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../vendor_settlement/application/providers/vendor_settlement_providers.dart';
 import '../../application/providers/vendor_detail_providers.dart';
+import '../../application/providers/vendors_providers.dart';
 import '../../domain/models/vendor.dart';
 import '../../domain/models/vendor_detail.dart';
+import '../widgets/vendor_form_dialog.dart';
 
 final _currencyFmt =
     NumberFormat.currency(locale: 'en_IN', symbol: '₹', decimalDigits: 2);
@@ -34,21 +36,64 @@ class VendorDetailsPage extends ConsumerWidget {
 
 // ── Main view ──────────────────────────────────────────────────────────────────
 
-class _VendorDetailView extends StatelessWidget {
+class _VendorDetailView extends ConsumerWidget {
   const _VendorDetailView({required this.vendor, required this.vendorId});
   final Vendor vendor;
   final String vendorId;
 
+  Future<void> _openEdit(BuildContext context, WidgetRef ref) async {
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => VendorFormDialog(
+        existing: vendor,
+        onSave: ({
+          required businessName,
+          ownerName,
+          required phone,
+          required email,
+          required city,
+          address,
+          required status,
+          required isActive,
+          rating,
+          walletBalance,
+          latitude,
+          longitude,
+          commissionRate,
+        }) async {
+          await ref.read(vendorsNotifierProvider.notifier).updateVendor(
+                vendorId,
+                businessName: businessName,
+                ownerName: ownerName,
+                phone: phone,
+                email: email,
+                city: city,
+                address: address,
+                status: status,
+                isActive: isActive,
+                rating: rating,
+                walletBalance: walletBalance,
+                latitude: latitude,
+                longitude: longitude,
+                commissionRate: commissionRate,
+              );
+          ref.invalidate(vendorByIdProvider(vendorId));
+        },
+      ),
+    );
+  }
+
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     return DefaultTabController(
-      length: 4,
+      length: 5,
       child: Padding(
         padding: const EdgeInsets.all(24),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _PageHeader(vendor: vendor),
+            _PageHeader(vendor: vendor, onEdit: () => _openEdit(context, ref)),
             const SizedBox(height: 20),
             TabBar(
               isScrollable: true,
@@ -61,6 +106,7 @@ class _VendorDetailView extends StatelessWidget {
                 Tab(text: 'Documents'),
                 Tab(text: 'Service Areas'),
                 Tab(text: 'Analytics'),
+                Tab(text: 'Commission'),
               ],
             ),
             const SizedBox(height: 16),
@@ -71,6 +117,7 @@ class _VendorDetailView extends StatelessWidget {
                   _DocumentsTab(vendorId: vendorId),
                   _ServiceAreasTab(vendorId: vendorId),
                   _AnalyticsTab(vendor: vendor, vendorId: vendorId),
+                  _CommissionTab(vendor: vendor, vendorId: vendorId),
                 ],
               ),
             ),
@@ -84,8 +131,9 @@ class _VendorDetailView extends StatelessWidget {
 // ── Page header ────────────────────────────────────────────────────────────────
 
 class _PageHeader extends StatelessWidget {
-  const _PageHeader({required this.vendor});
+  const _PageHeader({required this.vendor, required this.onEdit});
   final Vendor vendor;
+  final VoidCallback onEdit;
 
   @override
   Widget build(BuildContext context) {
@@ -154,6 +202,12 @@ class _PageHeader extends StatelessWidget {
               ),
             ),
             _StatusChip(status: vendor.status),
+            const SizedBox(width: 8),
+            IconButton(
+              onPressed: onEdit,
+              icon: Icon(Icons.edit_rounded, size: 18, color: AppColors.primary),
+              tooltip: 'Edit Vendor',
+            ),
           ],
         ),
       ],
@@ -763,6 +817,160 @@ class _Chip extends StatelessWidget {
       child: Text(text,
           style: TextStyle(
               fontSize: 11, fontWeight: FontWeight.w600, color: color)),
+    );
+  }
+}
+
+// ── Commission Tab ─────────────────────────────────────────────────────────────
+
+class _CommissionTab extends ConsumerStatefulWidget {
+  const _CommissionTab({required this.vendor, required this.vendorId});
+  final Vendor vendor;
+  final String vendorId;
+
+  @override
+  ConsumerState<_CommissionTab> createState() => _CommissionTabState();
+}
+
+class _CommissionTabState extends ConsumerState<_CommissionTab> {
+  late final TextEditingController _ctrl;
+  final _formKey = GlobalKey<FormState>();
+  bool _saving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = TextEditingController(
+      text: widget.vendor.commissionRate.toStringAsFixed(2),
+    );
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _save() async {
+    if (!(_formKey.currentState?.validate() ?? false)) return;
+    setState(() => _saving = true);
+    try {
+      final v = widget.vendor;
+      await ref.read(vendorsNotifierProvider.notifier).updateVendor(
+            widget.vendorId,
+            businessName: v.businessName,
+            ownerName: v.ownerName,
+            phone: v.phone,
+            email: v.email,
+            city: v.city,
+            address: v.address,
+            status: v.status,
+            isActive: v.isActive,
+            rating: v.rating,
+            walletBalance: v.walletBalance,
+            latitude: v.latitude,
+            longitude: v.longitude,
+            commissionRate: double.tryParse(_ctrl.text.trim()) ?? 0.0,
+          );
+      ref.invalidate(vendorByIdProvider(widget.vendorId));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Commission rate updated')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed: $e'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SingleChildScrollView(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _SectionTitle('Platform Commission'),
+          const SizedBox(height: 12),
+          Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: AppColors.surface,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: AppColors.border),
+            ),
+            child: Form(
+              key: _formKey,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Deducted from gross earnings when calculating the final payable amount to this vendor.',
+                    style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
+                  ),
+                  const SizedBox(height: 20),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      SizedBox(
+                        width: 200,
+                        child: TextFormField(
+                          controller: _ctrl,
+                          decoration: const InputDecoration(
+                            labelText: 'Commission Rate (%)',
+                            prefixIcon: Icon(Icons.percent_rounded),
+                            helperText: '0 = no commission deducted',
+                          ),
+                          keyboardType: const TextInputType.numberWithOptions(
+                              decimal: true),
+                          inputFormatters: [
+                            FilteringTextInputFormatter.allow(
+                                RegExp(r'^\d{0,2}\.?\d{0,2}')),
+                          ],
+                          validator: (v) {
+                            if (v == null || v.trim().isEmpty) return 'Required';
+                            final r = double.tryParse(v.trim());
+                            if (r == null || r < 0 || r >= 100) {
+                              return 'Enter 0 – 99.99';
+                            }
+                            return null;
+                          },
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Padding(
+                        padding: const EdgeInsets.only(top: 8),
+                        child: FilledButton.icon(
+                          onPressed: _saving ? null : _save,
+                          icon: _saving
+                              ? const SizedBox(
+                                  width: 16,
+                                  height: 16,
+                                  child: CircularProgressIndicator(
+                                      strokeWidth: 2, color: Colors.white),
+                                )
+                              : const Icon(Icons.save_rounded, size: 18),
+                          label: const Text('Save'),
+                          style: FilledButton.styleFrom(
+                              backgroundColor: AppColors.primary),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

@@ -80,6 +80,7 @@ class _VendorsPageState extends ConsumerState<VendorsPage> {
           walletBalance,
           latitude,
           longitude,
+          commissionRate,
         }) async {
           await ref.read(vendorsNotifierProvider.notifier).createVendor(
                 businessName: businessName,
@@ -94,6 +95,7 @@ class _VendorsPageState extends ConsumerState<VendorsPage> {
                 walletBalance: walletBalance ?? 0.0,
                 latitude: latitude,
                 longitude: longitude,
+                commissionRate: commissionRate ?? 0.0,
               );
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
