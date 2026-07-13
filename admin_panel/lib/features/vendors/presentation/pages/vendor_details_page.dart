@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
+import 'package:flutter/services.dart'; // FilteringTextInputFormatter
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 import '../../../../core/theme/app_theme.dart';
+import '../../../commission/application/providers/commission_providers.dart';
+import '../../../commission/data/commission_repository.dart';
+import '../../../commission/domain/models/commission_rule.dart';
 import '../../../vendor_settlement/application/providers/vendor_settlement_providers.dart';
 import '../../application/providers/vendor_detail_providers.dart';
 import '../../application/providers/vendors_providers.dart';
@@ -298,6 +301,10 @@ class _OverviewTab extends ConsumerWidget {
                 label: 'Last Updated',
                 value: updatedStr),
           ]),
+          const SizedBox(height: 24),
+          _SectionTitle('Commission'),
+          const SizedBox(height: 12),
+          _VendorCommissionCard(vendorId: vendor.id),
         ],
       ),
     );
@@ -1160,6 +1167,311 @@ class _StatCard extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+// ── Vendor Commission Card ─────────────────────────────────────────────────────
+
+class _VendorCommissionCard extends ConsumerWidget {
+  const _VendorCommissionCard({required this.vendorId});
+  final String vendorId;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final vendorRuleAsync = ref.watch(vendorCommissionProvider(vendorId));
+    final globalRuleAsync = ref.watch(globalCommissionProvider);
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: AppColors.primary.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: const Icon(Icons.percent_rounded,
+                size: 16, color: AppColors.primary),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: vendorRuleAsync.when(
+              loading: () => const Text('…',
+                  style: TextStyle(color: AppColors.textSecondary)),
+              error: (_, __) => const Text('—',
+                  style: TextStyle(color: AppColors.textSecondary)),
+              data: (vendorRule) {
+                if (vendorRule != null) {
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Vendor Override: ${vendorRule.displayLabel}',
+                        style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.textPrimary,
+                        ),
+                      ),
+                      const Text(
+                        'This vendor uses a custom commission rate.',
+                        style: TextStyle(
+                            fontSize: 11, color: AppColors.textSecondary),
+                      ),
+                    ],
+                  );
+                }
+                return globalRuleAsync.when(
+                  loading: () => const Text('…',
+                      style: TextStyle(color: AppColors.textSecondary)),
+                  error: (_, __) => const Text('Using global commission',
+                      style: TextStyle(color: AppColors.textSecondary)),
+                  data: (globalRule) => Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Global Default: ${globalRule?.displayLabel ?? '—'}',
+                        style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.textPrimary,
+                        ),
+                      ),
+                      const Text(
+                        'No vendor-specific override. Using global setting.',
+                        style: TextStyle(
+                            fontSize: 11, color: AppColors.textSecondary),
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
+          ),
+          OutlinedButton.icon(
+            onPressed: () => _showCommissionEditDialog(context, ref),
+            icon: const Icon(Icons.edit_rounded, size: 14),
+            label: const Text('Edit'),
+            style: OutlinedButton.styleFrom(
+              visualDensity: VisualDensity.compact,
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              textStyle: const TextStyle(fontSize: 12),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showCommissionEditDialog(BuildContext context, WidgetRef ref) {
+    showDialog(
+      context: context,
+      builder: (_) => _VendorCommissionDialog(vendorId: vendorId),
+    );
+  }
+}
+
+class _VendorCommissionDialog extends ConsumerStatefulWidget {
+  const _VendorCommissionDialog({required this.vendorId});
+  final String vendorId;
+
+  @override
+  ConsumerState<_VendorCommissionDialog> createState() =>
+      _VendorCommissionDialogState();
+}
+
+class _VendorCommissionDialogState
+    extends ConsumerState<_VendorCommissionDialog> {
+  bool _override = false;
+  String _type = 'percentage';
+  final _valueCtrl = TextEditingController(text: '10');
+  bool _saving = false;
+  bool _loaded = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  @override
+  void dispose() {
+    _valueCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _load() async {
+    final rule = await ref
+        .read(commissionRepositoryProvider)
+        .fetchForVendor(widget.vendorId);
+    if (!mounted) return;
+    setState(() {
+      _loaded = true;
+      if (rule != null) {
+        _override = true;
+        _type = rule.commissionType;
+        final v = rule.commissionValue;
+        _valueCtrl.text = v == v.truncateToDouble()
+            ? v.toInt().toString()
+            : v.toString();
+      }
+    });
+  }
+
+  Future<void> _save() async {
+    final repo = ref.read(commissionRepositoryProvider);
+    setState(() => _saving = true);
+    try {
+      if (_override) {
+        final value = double.tryParse(_valueCtrl.text.trim()) ?? 0;
+        await repo.upsertRule(
+          ruleType: 'vendor',
+          targetId: widget.vendorId,
+          commissionType: _type,
+          commissionValue: value,
+          isEnabled: true,
+        );
+      } else {
+        await repo.deleteForTarget(widget.vendorId);
+      }
+      ref.invalidate(vendorCommissionProvider(widget.vendorId));
+      ref.invalidate(resolvedVendorCommissionProvider(widget.vendorId));
+      if (mounted) Navigator.of(context).pop();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Save failed: $e'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+        setState(() => _saving = false);
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      title: const Text('Vendor Commission'),
+      content: !_loaded
+          ? const SizedBox(
+              height: 60,
+              child: Center(child: CircularProgressIndicator()),
+            )
+          : Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    const Expanded(
+                      child: Text(
+                        'Custom commission rate',
+                        style: TextStyle(
+                            fontSize: 14, color: AppColors.textPrimary),
+                      ),
+                    ),
+                    Switch(
+                      value: _override,
+                      onChanged: (v) => setState(() => _override = v),
+                      activeColor: AppColors.accent,
+                    ),
+                  ],
+                ),
+                if (!_override)
+                  const Text(
+                    'Falls back to global commission setting.',
+                    style:
+                        TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                  ),
+                if (_override) ...[
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: () =>
+                              setState(() => _type = 'percentage'),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: _type == 'percentage'
+                                ? AppColors.primary
+                                : AppColors.textSecondary,
+                            side: BorderSide(
+                              color: _type == 'percentage'
+                                  ? AppColors.primary
+                                  : AppColors.border,
+                            ),
+                            visualDensity: VisualDensity.compact,
+                          ),
+                          child: const Text('% Percentage'),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: () => setState(() => _type = 'fixed'),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: _type == 'fixed'
+                                ? AppColors.primary
+                                : AppColors.textSecondary,
+                            side: BorderSide(
+                              color: _type == 'fixed'
+                                  ? AppColors.primary
+                                  : AppColors.border,
+                            ),
+                            visualDensity: VisualDensity.compact,
+                          ),
+                          child: const Text('₹ Fixed'),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: _valueCtrl,
+                    decoration: InputDecoration(
+                      labelText: 'Value',
+                      suffixText: _type == 'percentage' ? '%' : '₹',
+                      isDense: true,
+                    ),
+                    keyboardType:
+                        const TextInputType.numberWithOptions(decimal: true),
+                    inputFormatters: [
+                      FilteringTextInputFormatter.allow(
+                          RegExp(r'^\d*\.?\d{0,4}')),
+                    ],
+                  ),
+                ],
+              ],
+            ),
+      actions: [
+        TextButton(
+          onPressed: _saving ? null : () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: _saving || !_loaded ? null : _save,
+          style: FilledButton.styleFrom(backgroundColor: AppColors.primary),
+          child: _saving
+              ? const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(
+                      strokeWidth: 2, color: Colors.white),
+                )
+              : const Text('Save'),
+        ),
+      ],
     );
   }
 }

@@ -29,6 +29,7 @@ import '../../features/marketing/presentation/pages/abandoned_carts_page.dart';
 import '../../features/loyalty/presentation/pages/loyalty_page.dart';
 import '../../features/tax_settings/presentation/pages/tax_settings_page.dart';
 import '../../features/global_scheduling/presentation/pages/global_scheduling_page.dart';
+import '../../features/commission/presentation/pages/commission_settings_page.dart';
 import '../../shared/pages/unauthorized_page.dart';
 import '../rbac/permission_guard.dart';
 
@@ -309,6 +310,13 @@ final routerProvider = Provider<GoRouter>((ref) {
             name: 'globalScheduling',
             pageBuilder: (context, state) => const NoTransitionPage(
               child: GlobalSchedulingPage(),
+            ),
+          ),
+          GoRoute(
+            path: '/dashboard/commission',
+            name: 'commission',
+            pageBuilder: (context, state) => const NoTransitionPage(
+              child: CommissionSettingsPage(),
             ),
           ),
         ],

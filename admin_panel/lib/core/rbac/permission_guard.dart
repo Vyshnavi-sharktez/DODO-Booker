@@ -39,6 +39,7 @@ const Map<String, String> routePermissions = {
   '/loyalty': 'settings.manage',
   '/tax-settings': 'settings.manage',
   '/global-scheduling': 'settings.manage',
+  '/commission': 'settings.manage',
 };
 
 // ── Permission guard widget ────────────────────────────────────────────────────
