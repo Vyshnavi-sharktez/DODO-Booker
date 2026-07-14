@@ -22,12 +22,7 @@ class BookingsService {
       quantity,
       unit_price,
       total_price,
-      services(
-        id,
-        name,
-        categories(id, name),
-        sub_categories(id, name)
-      )
+      catalog_nodes(id, name)
     )
   ''';
 

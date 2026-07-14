@@ -14,7 +14,7 @@ class BookingItem {
   });
 
   factory BookingItem.fromMap(Map<String, dynamic> map) {
-    final service = map['services'] as Map<String, dynamic>?;
+    final service = (map['catalog_nodes'] ?? map['services']) as Map<String, dynamic>?;
     return BookingItem(
       serviceId: (map['service_id'] as String?) ?? '',
       serviceName: (service?['name'] as String?) ?? '',

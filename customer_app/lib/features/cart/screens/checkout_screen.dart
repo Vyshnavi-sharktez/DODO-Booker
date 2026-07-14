@@ -17,6 +17,7 @@ import '../models/cart_item.dart';
 import '../providers/cart_provider.dart';
 import '../services/checkout_service.dart';
 import '../widgets/payment_selection_sheet.dart';
+import '../../bookings/services/bookings_providers.dart';
 import '../../loyalty/providers/loyalty_providers.dart';
 import '../../loyalty/services/loyalty_service.dart';
 import '../../tax/models/tax_settings_model.dart';
@@ -182,6 +183,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         paymentMethod: paymentMethod,
       );
       debugPrint('[DODO][Checkout] ✓ createCartBooking returned — id=${booking.id}');
+      ref.invalidate(myBookingsProvider);
 
       // Record loyalty redemption after booking is confirmed
       if (redeemPoints > 0) {

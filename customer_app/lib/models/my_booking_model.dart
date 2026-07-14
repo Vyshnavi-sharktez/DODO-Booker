@@ -177,10 +177,13 @@ class MyBookingModel {
 
     final firstItem =
         rawItems.isNotEmpty ? rawItems[0] as Map<String, dynamic> : null;
-    final serviceData = firstItem?['services'] as Map<String, dynamic>?;
-    final categoryData = serviceData?['categories'] as Map<String, dynamic>?;
-    final subCategoryData =
-        serviceData?['sub_categories'] as Map<String, dynamic>?;
+    // Key is 'catalog_nodes' after FK retargeting; fall back to 'services' for
+    // any cached rows loaded before the migration applied.
+    final serviceData =
+        (firstItem?['catalog_nodes'] ?? firstItem?['services']) as Map<String, dynamic>?;
+    // Category/subcategory not available from catalog_nodes embedded join.
+    const categoryData = null;
+    const subCategoryData = null;
 
     final notes = json['notes'] as String?;
     final serviceId = serviceData?['id'] as String? ??

@@ -92,7 +92,6 @@ class _BookingDetailsScreenState extends ConsumerState<BookingDetailsScreen> {
                 _AddonsCard(booking: booking),
                 _ServicePhotosCard(bookingId: booking.id),
                 _AddressCard(booking: booking),
-                if (!booking.isDodoTeam) _VendorCard(booking: booking),
                 _TimelineCard(booking: booking),
                 _PaymentCard(booking: booking),
                 const SizedBox(height: 16),

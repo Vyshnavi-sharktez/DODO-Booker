@@ -9,13 +9,7 @@ class WishlistService {
 
   static const _wishlistSelect = '''
     *,
-    services(
-      *,
-      sub_categories(
-        id, name,
-        categories(id, name)
-      )
-    )
+    catalog_nodes(*)
   ''';
 
   Future<String> _getCustomerId() async {

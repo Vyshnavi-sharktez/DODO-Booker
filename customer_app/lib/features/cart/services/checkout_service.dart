@@ -64,7 +64,7 @@ class CheckoutService {
       'latitude': ?address.latitude,
       'longitude': ?address.longitude,
       'scheduled_time': slot.label,
-      if (primaryItem?.legacyId != null) 'service_id': primaryItem!.legacyId,
+      if (primaryItem != null) 'service_id': primaryItem.serviceId,
       'payment_method': paymentMethod,
       'payment_status': paymentStatus,
     };
@@ -81,14 +81,12 @@ class CheckoutService {
     debugPrint('[DODO][Checkout] Booking created: id=$bookingId');
 
     // ── INSERT booking_items (one row per cart item) ──────────────────────────
-    // booking_items.service_id has a FK to services(id).
-    // Only insert rows for items whose legacyId is non-null (migrated services).
-    // New catalog nodes (legacyId == null) have no services row yet.
+    // booking_items.service_id has a FK to catalog_nodes(id).
+    // item.serviceId is the catalog_node UUID for all items.
     final rows = items
-        .where((item) => item.legacyId != null)
         .map((item) => {
               'booking_id': bookingId,
-              'service_id': item.legacyId,
+              'service_id': item.serviceId,
               'quantity': item.quantity,
               'unit_price': item.unitPrice,
               'total_price': item.totalPrice,
@@ -101,10 +99,6 @@ class CheckoutService {
       } catch (e) {
         debugPrint('[DODO][Checkout] Warning: booking_items insert failed: $e');
       }
-    }
-    final skipped = items.length - rows.length;
-    if (skipped > 0) {
-      debugPrint('[DODO][Checkout] Skipped $skipped new catalog node(s) with no services row');
     }
 
     // ── Increment coupon used_count ───────────────────────────────────────────
