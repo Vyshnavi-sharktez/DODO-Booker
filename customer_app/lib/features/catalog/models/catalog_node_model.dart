@@ -31,8 +31,6 @@ class CatalogNodeModel {
   /// Count of active direct children.
   final int childrenCount;
 
-  final String? legacyId;
-
   const CatalogNodeModel({
     required this.id,
     this.parentIds = const [],
@@ -52,7 +50,6 @@ class CatalogNodeModel {
     this.rating = 0.0,
     this.reviewCount = 0,
     this.childrenCount = 0,
-    this.legacyId,
   });
 
   bool get hasChildren => childrenCount > 0;
@@ -73,7 +70,6 @@ class CatalogNodeModel {
   factory CatalogNodeModel.fromServiceModel(ServiceModel s) =>
       CatalogNodeModel(
         id: s.id,
-        legacyId: s.id,
         name: s.name,
         slug: s.id,
         description: s.description,
@@ -93,7 +89,6 @@ class CatalogNodeModel {
   factory CatalogNodeModel.fromMap(Map<String, dynamic> map) {
     return CatalogNodeModel(
       id: map['id'] as String,
-      legacyId: map['legacy_id'] as String?,
       parentIds: (map['parent_ids'] as List<dynamic>?)
               ?.map((e) => e.toString())
               .toList() ??
