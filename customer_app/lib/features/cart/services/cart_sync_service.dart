@@ -101,19 +101,16 @@ class CartSyncService {
       final items = rows as List<dynamic>;
       if (items.isEmpty) return [];
 
-      // Resolve legacy_id for each cart item's catalog node so that
-      // checkout_service can satisfy the booking_items FK to services(id).
+      // Fetch minimum_order_amount for each cart item's catalog node.
       final nodeIds =
           items.map((r) => r['service_id'] as String).toSet().toList();
       final nodeRows = await _client
           .from('catalog_nodes_view')
-          .select('id, legacy_id, minimum_order_amount')
+          .select('id, minimum_order_amount')
           .inFilter('id', nodeIds);
-      final legacyMap = <String, String?>{};
       final minAmtMap = <String, double?>{};
       for (final n in nodeRows as List<dynamic>) {
         final id = n['id'] as String;
-        legacyMap[id] = n['legacy_id'] as String?;
         minAmtMap[id] = (n['minimum_order_amount'] as num?)?.toDouble();
       }
 
@@ -126,7 +123,6 @@ class CartSyncService {
               imageUrl: r['image_url'] as String?,
               unitPrice: (r['unit_price'] as num).toDouble(),
               quantity: r['quantity'] as int,
-              legacyId: legacyMap[sid],
               minimumOrderAmount: minAmtMap[sid],
             );
           })

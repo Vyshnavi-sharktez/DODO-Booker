@@ -4,33 +4,71 @@ class ServicesRemoteDatasource {
   const ServicesRemoteDatasource(this._client);
   final SupabaseClient _client;
 
-  static const _vendorServicesSelect =
-      'id, vendor_id, service_id, is_active, custom_price, created_at, '
-      'services(id, name, base_price, estimated_duration, '
-      'categories(id, name), sub_categories(id, name))';
-
-  static const _catalogSelect =
-      'id, name, base_price, estimated_duration, '
-      'categories(id, name), sub_categories(id, name)';
-
   Future<List<Map<String, dynamic>>> fetchVendorServices(
     String vendorId,
   ) async {
-    final data = await _client
+    // Step 1 — get vendor_services rows
+    final vsData = await _client
         .from('vendor_services')
-        .select(_vendorServicesSelect)
+        .select('id, vendor_id, service_id, is_active, custom_price, created_at')
         .eq('vendor_id', vendorId)
         .order('created_at', ascending: false);
-    return List<Map<String, dynamic>>.from(data as List);
+
+    final rows = List<Map<String, dynamic>>.from(vsData as List);
+    if (rows.isEmpty) return rows;
+
+    // Step 2 — fetch catalog_node data for the service IDs
+    // service_id == catalog_node.id (UUIDs preserved during Phase 1 migration)
+    final serviceIds =
+        rows.map((r) => r['service_id'] as String).toSet().toList();
+
+    final nodeData = await _client
+        .from('catalog_nodes_view')
+        .select('id, name, base_price, estimated_duration, parent_name')
+        .inFilter('id', serviceIds);
+
+    final nodesById = <String, Map<String, dynamic>>{
+      for (final n in (nodeData as List))
+        (n as Map<String, dynamic>)['id'] as String: n,
+    };
+
+    // Build output with the same nested map shape the upper layers expect
+    return rows.map((row) {
+      final node = nodesById[row['service_id'] as String] ?? const {};
+      return {
+        ...row,
+        'services': {
+          'id': node['id'],
+          'name': node['name'],
+          'base_price': node['base_price'],
+          'estimated_duration': node['estimated_duration'],
+          'categories': {'id': null, 'name': node['parent_name']},
+          'sub_categories': {'id': null, 'name': node['parent_name']},
+        },
+      };
+    }).toList();
   }
 
   Future<List<Map<String, dynamic>>> fetchCatalogServices() async {
     final data = await _client
-        .from('services')
-        .select(_catalogSelect)
+        .from('catalog_nodes_view')
+        .select('id, name, base_price, estimated_duration, parent_name')
         .eq('is_active', true)
+        .eq('is_bookable', true)
         .order('name');
-    return List<Map<String, dynamic>>.from(data as List);
+
+    // Return with the same shape the upper layers expect for a "services" row
+    return (data as List).map((e) {
+      final r = e as Map<String, dynamic>;
+      return {
+        'id': r['id'],
+        'name': r['name'],
+        'base_price': r['base_price'],
+        'estimated_duration': r['estimated_duration'],
+        'categories': {'id': null, 'name': r['parent_name']},
+        'sub_categories': {'id': null, 'name': r['parent_name']},
+      };
+    }).toList().cast<Map<String, dynamic>>();
   }
 
   Future<void> assignServices(

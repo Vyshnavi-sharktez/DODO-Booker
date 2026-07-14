@@ -253,7 +253,7 @@ class BookingService {
       'longitude': ?address.longitude,
       'completion_otp': completionOtp,
       'scheduled_time': slot.label,
-      if (service.legacyId != null) 'service_id': service.legacyId,
+      'service_id': service.id,
     };
     debugPrint('[OTP][Create] Payload keys    : ${payload.keys.toList()}');
     debugPrint('[OTP][Create] Payload otp val : ${payload['completion_otp']}');
@@ -295,29 +295,19 @@ class BookingService {
     }
 
     // ── INSERT into booking_items ─────────────────────────────────────────────
-    // booking_items.service_id has a FK to services(id).
-    // Migrated catalog nodes (legacy_type='service') reuse the original service
-    // UUID as both their id AND legacy_id, so the FK is always satisfied.
-    // Brand-new catalog nodes (legacy_id == null) have no services row yet;
-    // they must be excluded until the schema adds a node_id FK path.
-    final bookingServiceId = service.legacyId;
-    if (bookingServiceId != null) {
-      try {
-        debugPrint('[DODO][Booking] Inserting booking_item: service_id=$bookingServiceId unit_price=$subtotal');
-        await _client.from('booking_items').insert({
-          'booking_id': bookingId,
-          'service_id': bookingServiceId,
-          'quantity': 1,
-          'unit_price': subtotal,
-          'total_price': subtotal,
-        });
-        debugPrint('[DODO][Booking] booking_item inserted');
-      } catch (e) {
-        debugPrint('[DODO][Booking] Warning: booking_item insert failed: $e');
-      }
-    } else {
-      debugPrint('[DODO][Booking] Skipping booking_item: node ${service.id} '
-          'is a new catalog node with no services row (legacy_id = null)');
+    // booking_items.service_id FK → catalog_nodes(id). Use service.id directly.
+    try {
+      debugPrint('[DODO][Booking] Inserting booking_item: service_id=${service.id} unit_price=$subtotal');
+      await _client.from('booking_items').insert({
+        'booking_id': bookingId,
+        'service_id': service.id,
+        'quantity': 1,
+        'unit_price': subtotal,
+        'total_price': subtotal,
+      });
+      debugPrint('[DODO][Booking] booking_item inserted');
+    } catch (e) {
+      debugPrint('[DODO][Booking] Warning: booking_item insert failed: $e');
     }
 
     // ── INSERT into booking_addons (non-fatal) ───────────────────────────────

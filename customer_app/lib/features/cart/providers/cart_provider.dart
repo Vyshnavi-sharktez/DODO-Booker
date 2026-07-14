@@ -86,7 +86,6 @@ class CartNotifier extends StateNotifier<List<CartItem>> {
         ...state,
         CartItem(
           serviceId: service.id,
-          legacyId: service.legacyId,
           serviceName: service.name,
           imageUrl: service.imageUrl,
           unitPrice: (service.basePrice ?? 0.0) + priceAdjustment,

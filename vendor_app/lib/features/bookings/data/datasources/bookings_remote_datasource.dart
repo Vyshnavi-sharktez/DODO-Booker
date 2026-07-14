@@ -18,7 +18,7 @@ class BookingsRemoteDatasource {
       quantity,
       unit_price,
       total_price,
-      services(id, name)
+      catalog_nodes(id, name)
     )
   ''';
 

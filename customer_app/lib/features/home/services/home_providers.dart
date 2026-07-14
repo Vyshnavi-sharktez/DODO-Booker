@@ -2,7 +2,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'home_service.dart';
 import '../../../features/catalog/models/catalog_node_model.dart';
 import '../../../models/banner_model.dart';
-import '../../../models/service_model.dart';
 
 final homeServiceProvider = Provider<HomeService>((ref) => HomeService());
 
@@ -16,19 +15,19 @@ final featuredCatalogNodesProvider =
   return ref.read(homeServiceProvider).fetchFeaturedCatalogNodes();
 });
 
-final featuredServicesProvider = FutureProvider<List<ServiceModel>>((ref) {
+final featuredServicesProvider = FutureProvider<List<CatalogNodeModel>>((ref) {
   return ref.read(homeServiceProvider).fetchFeaturedServices();
 });
 
-final popularServicesProvider = FutureProvider<List<ServiceModel>>((ref) {
+final popularServicesProvider = FutureProvider<List<CatalogNodeModel>>((ref) {
   return ref.read(homeServiceProvider).fetchPopularServices();
 });
 
-final trendingServicesProvider = FutureProvider<List<ServiceModel>>((ref) {
+final trendingServicesProvider = FutureProvider<List<CatalogNodeModel>>((ref) {
   return ref.read(homeServiceProvider).fetchTrendingServices();
 });
 
-final newServicesProvider = FutureProvider<List<ServiceModel>>((ref) {
+final newServicesProvider = FutureProvider<List<CatalogNodeModel>>((ref) {
   return ref.read(homeServiceProvider).fetchNewServices();
 });
 

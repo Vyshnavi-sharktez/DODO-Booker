@@ -16,7 +16,7 @@ class WishlistItemModel {
   });
 
   factory WishlistItemModel.fromJson(Map<String, dynamic> json) {
-    final serviceJson = json['services'] as Map<String, dynamic>;
+    final serviceJson = (json['catalog_nodes'] ?? json['services']) as Map<String, dynamic>;
     return WishlistItemModel(
       id: json['id'] as String,
       customerId: json['customer_id'] as String,

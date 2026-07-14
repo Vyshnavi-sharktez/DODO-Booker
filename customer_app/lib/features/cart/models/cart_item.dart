@@ -5,11 +5,6 @@ class CartItem {
   final double unitPrice;
   final int quantity;
 
-  /// The UUID of the original row in the legacy `services` table.
-  /// Non-null for migrated catalog nodes; null for brand-new catalog nodes.
-  /// Used as `service_id` in `booking_items` to satisfy the FK to services(id).
-  final String? legacyId;
-
   /// Resolved from catalog_nodes.minimum_order_amount at the time the item was
   /// added (or synced). Null means no minimum applies to this service.
   final double? minimumOrderAmount;
@@ -20,7 +15,6 @@ class CartItem {
     this.imageUrl,
     required this.unitPrice,
     required this.quantity,
-    this.legacyId,
     this.minimumOrderAmount,
   });
 
@@ -30,7 +24,6 @@ class CartItem {
         imageUrl: imageUrl,
         unitPrice: unitPrice,
         quantity: quantity ?? this.quantity,
-        legacyId: legacyId,
         minimumOrderAmount: minimumOrderAmount,
       );
 
@@ -42,7 +35,6 @@ class CartItem {
         'imageUrl': imageUrl,
         'unitPrice': unitPrice,
         'quantity': quantity,
-        if (legacyId != null) 'legacyId': legacyId,
         if (minimumOrderAmount != null)
           'minimumOrderAmount': minimumOrderAmount,
       };
@@ -53,7 +45,6 @@ class CartItem {
         imageUrl: json['imageUrl'] as String?,
         unitPrice: (json['unitPrice'] as num).toDouble(),
         quantity: json['quantity'] as int,
-        legacyId: json['legacyId'] as String?,
         minimumOrderAmount: (json['minimumOrderAmount'] as num?)?.toDouble(),
       );
 }

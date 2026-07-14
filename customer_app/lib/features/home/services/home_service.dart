@@ -3,7 +3,6 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/config/supabase_config.dart';
 import '../../../features/catalog/models/catalog_node_model.dart';
 import '../../../models/banner_model.dart';
-import '../../../models/service_model.dart';
 
 // ── Public review model for home page testimonials ────────────────────────────
 
@@ -113,68 +112,59 @@ class HomeService {
     }
   }
 
-  // ── Featured services ──────────────────────────────────────────────────────
+  // ── Featured services (active bookable nodes in display order) ───────────
 
-  Future<List<ServiceModel>> fetchFeaturedServices() async {
-    if (!_ready) return _devServices;
-
-    final data = await _db
-        .from('services')
-        .select('*, sub_categories(name, categories(name))')
-        .eq('is_active', true)
-        .eq('is_featured', true)
-        .order('name', ascending: true)
-        .limit(10);
-
-    return (data as List)
-        .map((e) => ServiceModel.fromJson(e as Map<String, dynamic>))
-        .toList();
-  }
-
-  // ── Popular services (by rating) ──────────────────────────────────────────
-
-  Future<List<ServiceModel>> fetchPopularServices() async {
-    if (!_ready) return _devServices;
-
-    final data = await _db
-        .from('services')
-        .select('*, sub_categories(name, categories(name))')
-        .eq('is_active', true)
-        .order('rating', ascending: false)
-        .limit(8);
-
-    return (data as List)
-        .map((e) => ServiceModel.fromJson(e as Map<String, dynamic>))
-        .toList();
-  }
-
-  // ── Most booked services (by actual booking count) ─────────────────────────
-  //
-  // Strategy:
-  //   1. Aggregate booking_items.service_id in Dart (cap 500 rows for perf).
-  //   2. Fetch full service details for the top-10 IDs via .inFilter().
-  //   3. Re-sort the result to restore booking-count order.
-  //   Fallback: active services ordered by rating descending.
-
-  Future<List<ServiceModel>> fetchTrendingServices() async {
-    if (!_ready) return _devServices.toList();
-
+  Future<List<CatalogNodeModel>> fetchFeaturedServices() async {
+    if (!_ready) return [];
     try {
-      // Step 1 – collect raw service_ids from booking_items
+      final data = await _db
+          .from('catalog_nodes_view')
+          .select()
+          .eq('is_active', true)
+          .eq('is_bookable', true)
+          .order('sort_order', ascending: true)
+          .limit(10);
+      return (data as List)
+          .map((e) => CatalogNodeModel.fromMap(e as Map<String, dynamic>))
+          .toList();
+    } catch (e) {
+      debugPrint('[HomeService] fetchFeaturedServices error: $e');
+      return [];
+    }
+  }
+
+  // ── Popular services (top 8 by booking count, last 90 days) ─────────────
+  //
+  // Distinction from Most Booked (all-time top 10):
+  //   Popular = recency-windowed — "what's hot right now."
+  //   Most Booked = all-time volume — "what people always choose."
+  //
+  // Strategy mirrors fetchTrendingServices but caps to the last 90 days
+  // so newer services that are gaining momentum surface here first.
+  // Falls back to display-order if booking_items has no created_at or
+  // no recent bookings exist yet.
+
+  Future<List<CatalogNodeModel>> fetchPopularServices() async {
+    if (!_ready) return [];
+    try {
+      final cutoff = DateTime.now()
+          .subtract(const Duration(days: 90))
+          .toUtc()
+          .toIso8601String();
+
       final rawItems = await _db
           .from('booking_items')
           .select('service_id')
+          .gte('created_at', cutoff)
           .limit(500);
 
       final items = rawItems as List;
 
-      // If the platform has no bookings yet, fall through to rating-sort
       if (items.isEmpty) {
-        debugPrint('[DODO][HomeService] fetchTrendingServices: no booking_items — rating fallback');
-        return _fetchByRating();
+        debugPrint('[HomeService] fetchPopularServices: no recent bookings — default fallback');
+        return _fetchByDefault();
       }
 
-      // Step 2 – aggregate count per service_id (client-side)
       final counts = <String, int>{};
       for (final row in items) {
         final id = row['service_id'] as String?;
@@ -183,54 +173,120 @@ class HomeService {
         }
       }
 
-      if (counts.isEmpty) return _fetchByRating();
+      if (counts.isEmpty) return _fetchByDefault();
 
-      // Sort descending by count; take top 10
       final sorted = counts.entries.toList()
         ..sort((a, b) => b.value.compareTo(a.value));
-      final topIds = sorted.take(10).map((e) => e.key).toList();
+      final topIds = sorted.take(8).map((e) => e.key).toList();
 
-      // Step 3 – fetch full service rows for those IDs (flat join)
       final data = await _db
-          .from('services')
-          .select('*, sub_categories(id, name), categories(id, name)')
+          .from('catalog_nodes_view')
+          .select()
           .inFilter('id', topIds)
-          .eq('is_active', true);
+          .eq('is_active', true)
+          .eq('is_bookable', true);
 
-      final services = (data as List)
-          .map((e) => ServiceModel.fromJson(e as Map<String, dynamic>))
+      final nodes = (data as List)
+          .map((e) => CatalogNodeModel.fromMap(e as Map<String, dynamic>))
           .toList();
 
-      if (services.isEmpty) return _fetchByRating();
+      if (nodes.isEmpty) return _fetchByDefault();
 
-      // Restore booking-count order (.inFilter does not preserve list order)
-      services.sort((a, b) {
+      nodes.sort((a, b) {
         final ca = counts[a.id] ?? 0;
         final cb = counts[b.id] ?? 0;
         return cb.compareTo(ca);
       });
 
-      debugPrint('[DODO][HomeService] fetchTrendingServices → ${services.length} services (booking-count order)');
-      return services;
+      debugPrint('[HomeService] fetchPopularServices → ${nodes.length} nodes (90-day booking count)');
+      return nodes;
     } catch (e) {
-      debugPrint('[DODO][HomeService] fetchTrendingServices error: $e — rating fallback');
-      return _fetchByRating();
+      debugPrint('[HomeService] fetchPopularServices error: $e — default fallback');
+      return _fetchByDefault();
     }
   }
 
-  // ── New services (recently added) ─────────────────────────────────────────
+  // ── Most booked services (all-time booking count via server-side RPC) ───────
+  //
+  // Strategy:
+  //   1. Call get_most_booked_service_ids RPC — GROUP BY runs in the DB
+  //      over every booking_items row, no row-count cap.
+  //   2. Fetch catalog_nodes_view rows for the returned IDs.
+  //   3. Re-sort to restore RPC order (.inFilter does not preserve it).
+  //   Fallback: active bookable nodes in display order.
 
-  Future<List<ServiceModel>> fetchNewServices() async {
+  Future<List<CatalogNodeModel>> fetchTrendingServices() async {
+    if (!_ready) return [];
+
+    try {
+      // Step 1 – server-side GROUP BY aggregation (all rows, no limit)
+      final rpcRows = await _db.rpc(
+        'get_most_booked_service_ids',
+        params: {'p_limit': 10},
+      ) as List;
+
+      if (rpcRows.isEmpty) {
+        debugPrint('[DODO][HomeService] fetchTrendingServices: no bookings — default fallback');
+        return _fetchByDefault();
+      }
+
+      // Step 2 – collect ordered IDs and counts returned by the RPC
+      final counts = <String, int>{};
+      final topIds = <String>[];
+      for (final row in rpcRows) {
+        final id = row['service_id'] as String?;
+        final count = (row['booking_count'] as num?)?.toInt() ?? 0;
+        if (id != null && id.isNotEmpty) {
+          counts[id] = count;
+          topIds.add(id);
+        }
+      }
+
+      if (topIds.isEmpty) return _fetchByDefault();
+
+      // Step 3 – fetch catalog nodes for those IDs
+      final data = await _db
+          .from('catalog_nodes_view')
+          .select()
+          .inFilter('id', topIds)
+          .eq('is_active', true)
+          .eq('is_bookable', true);
+
+      final nodes = (data as List)
+          .map((e) => CatalogNodeModel.fromMap(e as Map<String, dynamic>))
+          .toList();
+
+      if (nodes.isEmpty) return _fetchByDefault();
+
+      // Restore booking-count order (.inFilter does not preserve list order)
+      nodes.sort((a, b) {
+        final ca = counts[a.id] ?? 0;
+        final cb = counts[b.id] ?? 0;
+        return cb.compareTo(ca);
+      });
+
+      debugPrint('[DODO][HomeService] fetchTrendingServices → ${nodes.length} nodes (all-time booking count)');
+      return nodes;
+    } catch (e) {
+      debugPrint('[DODO][HomeService] fetchTrendingServices error: $e — default fallback');
+      return _fetchByDefault();
+    }
+  }
+
+  // ── New services (recently added catalog nodes) ────────────────────────────
+
+  Future<List<CatalogNodeModel>> fetchNewServices() async {
     if (!_ready) return [];
     try {
       final data = await _db
-          .from('services')
-          .select('*, sub_categories(id, name), categories(id, name)')
+          .from('catalog_nodes_view')
+          .select()
           .eq('is_active', true)
+          .eq('is_bookable', true)
           .order('created_at', ascending: false)
           .limit(8);
       return (data as List)
-          .map((e) => ServiceModel.fromJson(e as Map<String, dynamic>))
+          .map((e) => CatalogNodeModel.fromMap(e as Map<String, dynamic>))
           .toList();
     } catch (e) {
       debugPrint('[DODO][HomeService] fetchNewServices error: $e');
@@ -259,24 +315,26 @@ class HomeService {
     }
   }
 
-  // Private fallback: active services ordered by rating descending
-  Future<List<ServiceModel>> _fetchByRating() async {
+  // Private fallback: active bookable nodes in display order
+  Future<List<CatalogNodeModel>> _fetchByDefault() async {
     try {
       final data = await _db
-          .from('services')
-          .select('*, sub_categories(id, name), categories(id, name)')
+          .from('catalog_nodes_view')
+          .select()
           .eq('is_active', true)
-          .order('rating', ascending: false)
+          .eq('is_bookable', true)
+          .order('sort_order', ascending: true)
+          .order('name', ascending: true)
           .limit(10);
 
       final result = (data as List)
-          .map((e) => ServiceModel.fromJson(e as Map<String, dynamic>))
+          .map((e) => CatalogNodeModel.fromMap(e as Map<String, dynamic>))
           .toList();
 
-      debugPrint('[DODO][HomeService] _fetchByRating → ${result.length} services');
-      return result.isNotEmpty ? result : _devServices.toList();
+      debugPrint('[DODO][HomeService] _fetchByDefault → ${result.length} nodes');
+      return result;
     } catch (_) {
-      return _devServices.toList();
+      return [];
     }
   }
 }
@@ -302,14 +360,4 @@ final _devBanners = [
     subtitle: 'Emergency service available',
     actionLabel: 'Call Now',
   ),
-];
-
-
-final _devServices = [
-  const ServiceModel(id: 'dev-s1', name: 'Home Deep Clean', startingPrice: 999, categoryName: 'Cleaning'),
-  const ServiceModel(id: 'dev-s2', name: 'AC Service', startingPrice: 499, categoryName: 'Appliances'),
-  const ServiceModel(id: 'dev-s3', name: 'Plumber Visit', startingPrice: 299, categoryName: 'Plumbing'),
-  const ServiceModel(id: 'dev-s4', name: 'Electrician', startingPrice: 349, categoryName: 'Electrical'),
-  const ServiceModel(id: 'dev-s5', name: 'Wall Painting', startingPrice: 799, categoryName: 'Painting'),
-  const ServiceModel(id: 'dev-s6', name: 'Carpenter', startingPrice: 449, categoryName: 'Carpentry'),
 ];

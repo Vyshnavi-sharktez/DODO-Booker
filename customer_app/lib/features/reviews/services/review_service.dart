@@ -115,8 +115,9 @@ class ReviewService {
   }
 
   Future<void> _updateServiceRating(String serviceId, int newRating) async {
+    // service_id == catalog_node id (UUIDs preserved during Phase 1 migration)
     final row = await _client
-        .from('services')
+        .from('catalog_nodes')
         .select('rating, review_count')
         .eq('id', serviceId)
         .maybeSingle();
@@ -129,7 +130,7 @@ class ReviewService {
     final updatedRating =
         ((currentRating * currentCount) + newRating) / newCount;
 
-    await _client.from('services').update({
+    await _client.from('catalog_nodes').update({
       'rating': double.parse(updatedRating.toStringAsFixed(2)),
       'review_count': newCount,
     }).eq('id', serviceId);

@@ -46,18 +46,13 @@ class CustomerBookingItem {
   });
 
   factory CustomerBookingItem.fromMap(Map<String, dynamic> map) {
-    final service =
-        map['services'] as Map<String, dynamic>? ?? const <String, dynamic>{};
-    final category =
-        service['categories'] as Map<String, dynamic>? ?? const <String, dynamic>{};
-    final subCategory =
-        service['sub_categories'] as Map<String, dynamic>? ??
-            const <String, dynamic>{};
+    final service = (map['catalog_nodes'] ?? map['services'])
+        as Map<String, dynamic>? ?? const <String, dynamic>{};
     return CustomerBookingItem(
       serviceId: (map['service_id'] as String?) ?? '',
       serviceName: (service['name'] as String?) ?? '',
-      categoryName: (category['name'] as String?) ?? '',
-      subCategoryName: (subCategory['name'] as String?) ?? '',
+      categoryName: '',
+      subCategoryName: '',
       quantity: (map['quantity'] as int?) ?? 1,
       unitPrice: (map['unit_price'] as num?)?.toDouble() ?? 0.0,
       totalPrice: (map['total_price'] as num?)?.toDouble() ?? 0.0,

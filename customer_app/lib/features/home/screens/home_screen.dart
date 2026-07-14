@@ -4,9 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../features/catalog/models/catalog_node_model.dart';
 import '../../../features/catalog/utils/catalog_launcher.dart';
-import '../../../models/service_model.dart';
 import '../../booking/services/coupon_providers.dart';
-import '../../service/utils/service_detail_launcher.dart';
 import '../services/home_providers.dart';
 import '../widgets/customer_reviews_section.dart';
 import '../widgets/hero_section.dart';
@@ -35,10 +33,6 @@ class HomeScreen extends ConsumerWidget {
         ref.read(homeReviewsProvider.future),
       ]);
     } catch (_) {}
-  }
-
-  void _onServiceTap(BuildContext context, ServiceModel service) {
-    openServiceDetail(context, service);
   }
 
   void _onCatalogNodeTap(BuildContext context, CatalogNodeModel node) {
@@ -107,7 +101,7 @@ class HomeScreen extends ConsumerWidget {
                           // const SizedBox(height: 32),
                           // TrendingServicesSection(
                           //   asyncServices: featuredServices,
-                          //   onServiceTap: (s) => _onServiceTap(context, s),
+                          //   onServiceTap: (n) => _onCatalogNodeTap(context, n),
                           //   onSeeAll: () => context.push('/categories'),
                           //   title: 'Featured Services',
                           // ),
@@ -116,7 +110,7 @@ class HomeScreen extends ConsumerWidget {
                           // const SizedBox(height: 32),
                           // TrendingServicesSection(
                           //   asyncServices: popularServices,
-                          //   onServiceTap: (s) => _onServiceTap(context, s),
+                          //   onServiceTap: (n) => _onCatalogNodeTap(context, n),
                           //   onSeeAll: () => context.push('/categories'),
                           //   title: 'Popular Services',
                           // ),
@@ -125,7 +119,7 @@ class HomeScreen extends ConsumerWidget {
                           const SizedBox(height: 32),
                           TrendingServicesSection(
                             asyncServices: trendingServices,
-                            onServiceTap: (s) => _onServiceTap(context, s),
+                            onServiceTap: (n) => _onCatalogNodeTap(context, n),
                             onSeeAll: () => context.push('/categories'),
                             title: 'Most Booked Services',
                           ),
@@ -134,7 +128,7 @@ class HomeScreen extends ConsumerWidget {
                           const SizedBox(height: 32),
                           TrendingServicesSection(
                             asyncServices: newServices,
-                            onServiceTap: (s) => _onServiceTap(context, s),
+                            onServiceTap: (n) => _onCatalogNodeTap(context, n),
                             onSeeAll: () => context.push('/categories'),
                             title: 'New Services',
                           ),

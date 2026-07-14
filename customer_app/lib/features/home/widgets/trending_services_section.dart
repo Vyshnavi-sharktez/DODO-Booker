@@ -5,7 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/utils/service_image_registry.dart';
 import '../../../core/widgets/section_header.dart';
-import '../../../models/service_model.dart';
+import '../../../features/catalog/models/catalog_node_model.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Layout constants
@@ -41,8 +41,8 @@ const double _kInfoH  = 120.0;
 // ─────────────────────────────────────────────────────────────────────────────
 
 class TrendingServicesSection extends StatelessWidget {
-  final AsyncValue<List<ServiceModel>> asyncServices;
-  final ValueChanged<ServiceModel> onServiceTap;
+  final AsyncValue<List<CatalogNodeModel>> asyncServices;
+  final ValueChanged<CatalogNodeModel> onServiceTap;
   final VoidCallback? onSeeAll;
   final String title;
 
@@ -85,8 +85,8 @@ class TrendingServicesSection extends StatelessWidget {
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _Carousel extends StatefulWidget {
-  final List<ServiceModel> services;
-  final ValueChanged<ServiceModel> onServiceTap;
+  final List<CatalogNodeModel> services;
+  final ValueChanged<CatalogNodeModel> onServiceTap;
 
   const _Carousel({required this.services, required this.onServiceTap});
 
@@ -144,16 +144,16 @@ class _CarouselState extends State<_Carousel> {
                 padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
                 itemCount: widget.services.length,
                 itemBuilder: (_, i) {
-                  final svc = widget.services[i];
+                  final node = widget.services[i];
                   return Padding(
                     padding: EdgeInsets.only(
                       right: i < widget.services.length - 1 ? _kGap : 0,
                     ),
                     child: _ServiceCard(
-                      service: svc,
+                      node: node,
                       cardWidth: size.w,
                       cardHeight: size.h,
-                      onTap: () => widget.onServiceTap(svc),
+                      onTap: () => widget.onServiceTap(node),
                     ),
                   );
                 },
@@ -197,13 +197,13 @@ class _CarouselScrollBehavior extends MaterialScrollBehavior {
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _ServiceCard extends StatefulWidget {
-  final ServiceModel service;
+  final CatalogNodeModel node;
   final double cardWidth;
   final double cardHeight;
   final VoidCallback onTap;
 
   const _ServiceCard({
-    required this.service,
+    required this.node,
     required this.cardWidth,
     required this.cardHeight,
     required this.onTap,
@@ -262,12 +262,12 @@ class _ServiceCardState extends State<_ServiceCard> {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 Expanded(
-                  child: _CardImage(service: widget.service),
+                  child: _CardImage(node: widget.node),
                 ),
                 SizedBox(
                   height: _kInfoH,
                   child: _CardInfo(
-                    service: widget.service,
+                    node: widget.node,
                     onBookNow: _navigate,
                   ),
                 ),
@@ -285,15 +285,15 @@ class _ServiceCardState extends State<_ServiceCard> {
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _CardImage extends StatelessWidget {
-  final ServiceModel service;
+  final CatalogNodeModel node;
 
-  const _CardImage({required this.service});
+  const _CardImage({required this.node});
 
   @override
   Widget build(BuildContext context) {
     final url = ServiceImageRegistry.resolve(
-      service.imageUrl,
-      service.categoryName,
+      node.imageUrl,
+      node.parentName,
     );
 
     return Image.network(
@@ -314,10 +314,10 @@ class _CardImage extends StatelessWidget {
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _CardInfo extends StatelessWidget {
-  final ServiceModel service;
+  final CatalogNodeModel node;
   final VoidCallback onBookNow;
 
-  const _CardInfo({required this.service, required this.onBookNow});
+  const _CardInfo({required this.node, required this.onBookNow});
 
   @override
   Widget build(BuildContext context) {
@@ -330,7 +330,7 @@ class _CardInfo extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              service.name,
+              node.name,
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
               style: const TextStyle(
@@ -340,10 +340,10 @@ class _CardInfo extends StatelessWidget {
                 height: 1.25,
               ),
             ),
-            if (service.categoryName != null) ...[
+            if (node.parentName != null) ...[
               const SizedBox(height: 4),
               Text(
-                service.categoryName!,
+                node.parentName!,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: const TextStyle(
@@ -353,7 +353,7 @@ class _CardInfo extends StatelessWidget {
                 ),
               ),
             ],
-            if (service.rating > 0) ...[
+            if (node.rating > 0) ...[
               const SizedBox(height: 3),
               Row(
                 children: [
@@ -364,7 +364,7 @@ class _CardInfo extends StatelessWidget {
                   ),
                   const SizedBox(width: 2),
                   Text(
-                    service.rating.toStringAsFixed(1),
+                    node.rating.toStringAsFixed(1),
                     style: const TextStyle(
                       fontSize: 10,
                       fontWeight: FontWeight.w600,
@@ -372,10 +372,10 @@ class _CardInfo extends StatelessWidget {
                       height: 1.2,
                     ),
                   ),
-                  if (service.reviewCount > 0) ...[
+                  if (node.reviewCount > 0) ...[
                     const SizedBox(width: 2),
                     Text(
-                      '(${service.reviewCount})',
+                      '(${node.reviewCount})',
                       style: const TextStyle(
                         fontSize: 10,
                         color: AppColors.textHint,
@@ -392,7 +392,7 @@ class _CardInfo extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
                 Text(
-                  '₹${service.startingPrice.toInt()}',
+                  '₹${(node.basePrice ?? 0).toInt()}',
                   style: const TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.w800,
