@@ -30,20 +30,33 @@ import '../providers/catalog_providers.dart';
 // ═══════════════════════════════════════════════════════════════════════════════
 
 class CatalogNodeModal extends ConsumerStatefulWidget {
-  const CatalogNodeModal({super.key, required this.node});
+  const CatalogNodeModal({
+    super.key,
+    required this.node,
+    this.parentNodeId,
+  });
 
   final CatalogNodeModel node;
 
+  /// The catalog_node.id of the parent through which this node was navigated.
+  /// Null for root-level nodes or deep-link entry points.
+  final String? parentNodeId;
+
   /// Shows the modal with a fade+scale transition over a blurred backdrop.
   /// Stacks safely — tapping a child node opens another modal on top.
-  static Future<void> open(BuildContext context, CatalogNodeModel node) {
+  static Future<void> open(
+    BuildContext context,
+    CatalogNodeModel node, {
+    String? parentId,
+  }) {
     return showGeneralDialog(
       context: context,
       barrierDismissible: false,
       barrierLabel: '',
       barrierColor: Colors.transparent,
       transitionDuration: const Duration(milliseconds: 280),
-      pageBuilder: (ctx, _, _) => CatalogNodeModal(node: node),
+      pageBuilder: (ctx, _, _) =>
+          CatalogNodeModal(node: node, parentNodeId: parentId),
       transitionBuilder: (ctx, anim, _, child) {
         final curved =
             CurvedAnimation(parent: anim, curve: Curves.easeOutCubic);
@@ -303,6 +316,7 @@ class _CatalogNodeModalState extends ConsumerState<CatalogNodeModal> {
                               displayPrice: displayPrice,
                               priceAdjustment: _priceAdjustment,
                               addonsTotal: addonsTotal,
+                              parentNodeId: widget.parentNodeId,
                             ),
                         ],
                       ),
@@ -712,7 +726,11 @@ class _ModalChildrenList extends StatelessWidget {
             separatorBuilder: (_, _) => const SizedBox(height: 10),
             itemBuilder: (ctx, i) => _ModalChildItem(
               node: children[i],
-              onTap: () => CatalogNodeModal.open(ctx, children[i]),
+              onTap: () => CatalogNodeModal.open(
+                ctx,
+                children[i],
+                parentId: node.id,
+              ),
             ),
           ),
       ],
@@ -947,12 +965,14 @@ class _ModalBookingBar extends ConsumerWidget {
     required this.displayPrice,
     required this.priceAdjustment,
     required this.addonsTotal,
+    this.parentNodeId,
   });
 
   final CatalogNodeModel node;
   final double displayPrice;
   final double priceAdjustment;
   final double addonsTotal;
+  final String? parentNodeId;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -1019,8 +1039,11 @@ class _ModalBookingBar extends ConsumerWidget {
                   : FilledButton.icon(
                       onPressed: () => ref
                           .read(cartProvider.notifier)
-                          .addToCart(node,
-                              priceAdjustment: priceAdjustment + addonsTotal),
+                          .addToCart(
+                            node,
+                            priceAdjustment: priceAdjustment + addonsTotal,
+                            parentNodeId: parentNodeId,
+                          ),
                       icon: const Icon(Icons.add_shopping_cart_rounded,
                           size: 16),
                       label: const Text(

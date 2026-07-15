@@ -17,6 +17,8 @@ import '../modals/booking_flow_modal.dart';
 import '../modals/payment_modal.dart';
 import '../services/booking_providers.dart';
 import '../services/coupon_providers.dart';
+import '../../../features/tax/providers/tax_provider.dart';
+import '../../../features/tax/models/tax_settings_model.dart';
 
 /// Launches the full modal-based booking flow:
 /// Auth → Profile → Address → DateTime → Summary → Payment → Success.
@@ -28,6 +30,7 @@ Future<void> launchBookingFlow(
   CatalogNodeModel service, {
   List<SelectedAttributeOption> selectedAttributes = const [],
   List<SelectedAddon> selectedAddons = const [],
+  String? parentNodeId,
 }) async {
   // ── Step 0: Minimum order amount (safety net — UI disables Book Now first) ─
   final minAmt = service.minimumOrderAmount;
@@ -79,6 +82,7 @@ Future<void> launchBookingFlow(
         service: service,
         selectedAttributes: selectedAttributes,
         selectedAddons: selectedAddons,
+        parentNodeId: parentNodeId,
       ),
     );
     return;
@@ -97,7 +101,7 @@ Future<void> launchBookingFlow(
   // ── Step 4: Date & time ───────────────────────────────────────────────────
   final dtFuture = AppModalDialog.show(
     context: context,
-    child: DateTimeModal(serviceId: service.id),
+    child: DateTimeModal(serviceId: service.id, parentNodeId: parentNodeId),
   );
   final dtResult = await dtFuture;
   if (!context.mounted || dtResult == null) return;
@@ -119,6 +123,7 @@ Future<void> launchBookingFlow(
       priceAdjustment: priceAdjustment,
       selectedAttributes: selectedAttributes,
       selectedAddons: selectedAddons,
+      parentNodeId: parentNodeId,
     ),
   );
   final confirmed = await summaryFuture;
@@ -126,7 +131,14 @@ Future<void> launchBookingFlow(
 
   // Read coupon state after the summary modal closes.
   final selectedCoupon = ref.read(selectedCouponProvider);
-  final subtotal = ((service.basePrice ?? 0.0) + priceAdjustment + addonsTotal) * 1.18;
+  final taxSettings = ref
+      .read(resolvedTaxProvider((
+        serviceId: service.id,
+        parentNodeId: parentNodeId,
+      )))
+      .valueOrNull ?? TaxSettingsModel.defaults;
+  final baseSubtotal = (service.basePrice ?? 0.0) + priceAdjustment + addonsTotal;
+  final subtotal = baseSubtotal + taxSettings.computeTax(baseSubtotal);
   final discountAmount = selectedCoupon?.calculateDiscount(subtotal) ?? 0.0;
   final finalTotal = (subtotal - discountAmount).clamp(0.0, double.infinity);
 
@@ -153,6 +165,7 @@ Future<void> launchBookingFlow(
           discountAmount: discountAmount,
           priceAdjustment: priceAdjustment,
           selectedAddons: selectedAddons,
+          parentNodeId: parentNodeId,
         );
     ref.read(selectedCouponProvider.notifier).state = null;
     if (!context.mounted) return;

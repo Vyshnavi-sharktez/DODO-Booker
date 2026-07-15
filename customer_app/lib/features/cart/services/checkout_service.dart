@@ -90,6 +90,8 @@ class CheckoutService {
               'quantity': item.quantity,
               'unit_price': item.unitPrice,
               'total_price': item.totalPrice,
+              if (item.parentNodeId != null)
+                'catalog_parent_node_id': item.parentNodeId,
             })
         .toList();
     if (rows.isNotEmpty) {

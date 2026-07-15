@@ -12,6 +12,8 @@ import '../../../models/addon_model.dart';
 import '../services/coupon_providers.dart';
 import '../widgets/booking_summary_card.dart';
 import '../widgets/available_coupons_sheet.dart';
+import '../../../features/tax/providers/tax_provider.dart';
+import '../../../features/tax/models/tax_settings_model.dart';
 
 /// Booking summary modal. Pops with `true` when the user confirms booking.
 class BookingSummaryModal extends ConsumerStatefulWidget {
@@ -22,6 +24,7 @@ class BookingSummaryModal extends ConsumerStatefulWidget {
   final double priceAdjustment;
   final List<SelectedAttributeOption> selectedAttributes;
   final List<SelectedAddon> selectedAddons;
+  final String? parentNodeId;
 
   const BookingSummaryModal({
     super.key,
@@ -32,6 +35,7 @@ class BookingSummaryModal extends ConsumerStatefulWidget {
     this.priceAdjustment = 0.0,
     this.selectedAttributes = const [],
     this.selectedAddons = const [],
+    this.parentNodeId,
   });
 
   @override
@@ -49,12 +53,21 @@ class _BookingSummaryModalState extends ConsumerState<BookingSummaryModal> {
     super.dispose();
   }
 
-  // Subtotal = (base price + attribute adjustments + add-ons) + 18% GST
-  double get _subtotal =>
-      ((widget.service.basePrice ?? 0.0) +
-              widget.priceAdjustment +
-              totalAddonsPrice(widget.selectedAddons)) *
-          1.18;
+  TaxSettingsModel _readTax() =>
+      ref
+          .read(resolvedTaxProvider((
+            serviceId: widget.service.id,
+            parentNodeId: widget.parentNodeId,
+          )))
+          .valueOrNull ??
+      TaxSettingsModel.defaults;
+
+  double _computeSubtotal(TaxSettingsModel tax) {
+    final base = (widget.service.basePrice ?? 0.0) +
+        widget.priceAdjustment +
+        totalAddonsPrice(widget.selectedAddons);
+    return base + tax.computeTax(base);
+  }
 
   Future<void> _applyCoupon() async {
     final code = _couponController.text.trim().toUpperCase();
@@ -80,14 +93,15 @@ class _BookingSummaryModalState extends ConsumerState<BookingSummaryModal> {
         return;
       }
 
-      final error = found.validate(_subtotal);
+      final subtotal = _computeSubtotal(_readTax());
+      final error = found.validate(subtotal);
       if (error != null) {
         setState(() => _errorText = error);
         debugPrint('[DODO][Coupon] Validation failed for $code: $error');
         return;
       }
 
-      final discount = found.calculateDiscount(_subtotal);
+      final discount = found.calculateDiscount(subtotal);
       ref.read(selectedCouponProvider.notifier).state = found;
       debugPrint('[DODO][Coupon] Coupon applied: ${found.code} — discount ₹${discount.toStringAsFixed(2)}');
       setState(() => _errorText = null);
@@ -108,12 +122,13 @@ class _BookingSummaryModalState extends ConsumerState<BookingSummaryModal> {
 
   Future<void> _showCouponsSheet() async {
     setState(() => _errorText = null);
+    final subtotal = _computeSubtotal(_readTax());
     final coupon = await showModalBottomSheet<CouponModel>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (_) => AvailableCouponsSheet(
-        subtotal: _subtotal,
+        subtotal: subtotal,
         selectedCoupon: ref.read(selectedCouponProvider),
       ),
     );
@@ -122,7 +137,7 @@ class _BookingSummaryModalState extends ConsumerState<BookingSummaryModal> {
     ref.read(selectedCouponProvider.notifier).state = coupon;
     debugPrint(
       '[DODO][Coupon] Coupon applied: ${coupon.code}'
-      ' — discount ₹${coupon.calculateDiscount(_subtotal).toStringAsFixed(2)}',
+      ' — discount ₹${coupon.calculateDiscount(subtotal).toStringAsFixed(2)}',
     );
   }
 
@@ -131,7 +146,12 @@ class _BookingSummaryModalState extends ConsumerState<BookingSummaryModal> {
     debugPrint('SUMMARY MODAL ACTIVE');
     final tt = Theme.of(context).textTheme;
     final selectedCoupon = ref.watch(selectedCouponProvider);
-    final discount = selectedCoupon?.calculateDiscount(_subtotal) ?? 0.0;
+    final taxSettings = ref.watch(resolvedTaxProvider((
+      serviceId: widget.service.id,
+      parentNodeId: widget.parentNodeId,
+    ))).valueOrNull ?? TaxSettingsModel.defaults;
+    final subtotal = _computeSubtotal(taxSettings);
+    final discount = selectedCoupon?.calculateDiscount(subtotal) ?? 0.0;
 
     return AppModalDialog(
       title: 'Review Booking',
@@ -149,6 +169,7 @@ class _BookingSummaryModalState extends ConsumerState<BookingSummaryModal> {
             priceAdjustment: widget.priceAdjustment,
             selectedAttributes: widget.selectedAttributes,
             selectedAddons: widget.selectedAddons,
+            parentNodeId: widget.parentNodeId,
           ),
 
           // ── Coupon input / applied state ──────────────────────────────────

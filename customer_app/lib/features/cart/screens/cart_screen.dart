@@ -431,10 +431,21 @@ class _CartSummaryCard extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final tt = Theme.of(context).textTheme;
     final totalItems = items.fold<int>(0, (sum, item) => sum + item.quantity);
-    final taxSettings = ref.watch(taxSettingsProvider).valueOrNull ??
-        TaxSettingsModel.defaults;
-    final tax = taxSettings.computeTax(subtotal);
-    final grandTotal = subtotal + tax;
+
+    // Resolve tax per item so ancestor-scoped configs (e.g. AC Services → 12%)
+    // are applied. Amounts are summed; display label uses the first item's model.
+    var totalTax = 0.0;
+    TaxSettingsModel? displayTax;
+    for (final item in items) {
+      final taxSettings = ref.watch(resolvedTaxProvider((
+        serviceId: item.serviceId,
+        parentNodeId: item.parentNodeId,
+      ))).valueOrNull ?? TaxSettingsModel.defaults;
+      totalTax += taxSettings.computeTax(item.totalPrice);
+      displayTax ??= taxSettings;
+    }
+    displayTax ??= ref.watch(taxSettingsProvider).valueOrNull ?? TaxSettingsModel.defaults;
+    final grandTotal = subtotal + totalTax;
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -462,11 +473,11 @@ class _CartSummaryCard extends ConsumerWidget {
           const SizedBox(height: 10),
           _SummaryRow(
               label: 'Subtotal', value: '₹${subtotal.toInt()}', tt: tt),
-          if (tax > 0) ...[
+          if (totalTax > 0) ...[
             const SizedBox(height: 10),
             _SummaryRow(
-              label: 'Est. ${taxSettings.displayLabel}',
-              value: '₹${tax.toInt()}',
+              label: 'Est. ${displayTax.displayLabel}',
+              value: '₹${totalTax.toInt()}',
               tt: tt,
             ),
           ],
@@ -526,8 +537,16 @@ class _CheckoutBar extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final tt = Theme.of(context).textTheme;
-    final grandTotal = subtotal * 1.18;
     final items = ref.watch(cartProvider);
+    var totalTax = 0.0;
+    for (final item in items) {
+      final taxSettings = ref.watch(resolvedTaxProvider((
+        serviceId: item.serviceId,
+        parentNodeId: item.parentNodeId,
+      ))).valueOrNull ?? TaxSettingsModel.defaults;
+      totalTax += taxSettings.computeTax(item.totalPrice);
+    }
+    final grandTotal = subtotal + totalTax;
 
     final itemsWithMin = items
         .where((i) => i.minimumOrderAmount != null && i.minimumOrderAmount! > 0)
@@ -612,8 +631,16 @@ class _ModalCheckoutBar extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final tt = Theme.of(context).textTheme;
-    final grandTotal = subtotal * 1.18;
     final items = ref.watch(cartProvider);
+    var totalTax = 0.0;
+    for (final item in items) {
+      final taxSettings = ref.watch(resolvedTaxProvider((
+        serviceId: item.serviceId,
+        parentNodeId: item.parentNodeId,
+      ))).valueOrNull ?? TaxSettingsModel.defaults;
+      totalTax += taxSettings.computeTax(item.totalPrice);
+    }
+    final grandTotal = subtotal + totalTax;
 
     final itemsWithMin = items
         .where((i) => i.minimumOrderAmount != null && i.minimumOrderAmount! > 0)

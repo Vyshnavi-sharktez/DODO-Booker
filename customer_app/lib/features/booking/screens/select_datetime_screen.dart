@@ -28,7 +28,7 @@ class SelectDatetimeScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final dateStr = _dateKey(selectedDate);
-    final slotsAsync = ref.watch(timeSlotsProvider((date: dateStr, serviceId: serviceId)));
+    final slotsAsync = ref.watch(timeSlotsProvider((date: dateStr, serviceId: serviceId, parentNodeId: null)));
     final tt = Theme.of(context).textTheme;
 
     return SingleChildScrollView(

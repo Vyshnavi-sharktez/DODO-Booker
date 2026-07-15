@@ -12,6 +12,8 @@ import '../../../models/service_attribute_model.dart';
 import '../../../models/addon_model.dart';
 import '../services/booking_providers.dart';
 import '../services/coupon_providers.dart';
+import '../../../features/tax/providers/tax_provider.dart';
+import '../../../features/tax/models/tax_settings_model.dart';
 import '../widgets/date_selector.dart';
 import '../widgets/time_slot_card.dart';
 import '../widgets/available_coupons_sheet.dart';
@@ -23,12 +25,14 @@ class BookingFlowModal extends ConsumerStatefulWidget {
   final CatalogNodeModel service;
   final List<SelectedAttributeOption> selectedAttributes;
   final List<SelectedAddon> selectedAddons;
+  final String? parentNodeId;
 
   const BookingFlowModal({
     super.key,
     required this.service,
     this.selectedAttributes = const [],
     this.selectedAddons = const [],
+    this.parentNodeId,
   });
 
   @override
@@ -60,11 +64,21 @@ class _BookingFlowModalState extends ConsumerState<BookingFlowModal>
   String get _dateKey =>
       '${_date.year}-${_date.month.toString().padLeft(2, '0')}-${_date.day.toString().padLeft(2, '0')}';
 
-  double get _subtotal =>
-      ((widget.service.basePrice ?? 0.0) +
-              totalPriceAdjustment(widget.selectedAttributes) +
-              totalAddonsPrice(widget.selectedAddons)) *
-          1.18;
+  TaxSettingsModel get _taxSettings =>
+      ref
+          .watch(resolvedTaxProvider((
+            serviceId: widget.service.id,
+            parentNodeId: widget.parentNodeId,
+          )))
+          .valueOrNull ??
+      TaxSettingsModel.defaults;
+
+  double get _subtotal {
+    final base = (widget.service.basePrice ?? 0.0) +
+        totalPriceAdjustment(widget.selectedAttributes) +
+        totalAddonsPrice(widget.selectedAddons);
+    return base + _taxSettings.computeTax(base);
+  }
 
   @override
   void initState() {
@@ -147,6 +161,7 @@ class _BookingFlowModalState extends ConsumerState<BookingFlowModal>
             discountAmount: discountAmount,
             priceAdjustment: totalPriceAdjustment(widget.selectedAttributes),
             selectedAddons: widget.selectedAddons,
+            parentNodeId: widget.parentNodeId,
           );
       ref.read(selectedCouponProvider.notifier).state = null;
       if (!mounted) return;
@@ -417,7 +432,7 @@ class _BookingFlowModalState extends ConsumerState<BookingFlowModal>
   Widget _buildDateTimeStep() {
     debugPrint('[DODO][Slots] BookingFlowModal: service.id=${widget.service.id}');
     final slotsAsync = ref.watch(timeSlotsProvider(
-      (date: _dateKey, serviceId: widget.service.id),
+      (date: _dateKey, serviceId: widget.service.id, parentNodeId: widget.parentNodeId),
     ));
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -478,7 +493,7 @@ class _BookingFlowModalState extends ConsumerState<BookingFlowModal>
     final totalAdj = totalPriceAdjustment(widget.selectedAttributes);
     final addonsTotal = totalAddonsPrice(widget.selectedAddons);
     final adjustedBase = basePrice + totalAdj + addonsTotal;
-    final tax = adjustedBase * 0.18;
+    final tax = _taxSettings.computeTax(adjustedBase);
     final total = (adjustedBase + tax - discount).clamp(0.0, double.infinity);
 
     const weekdays = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
@@ -805,7 +820,7 @@ class _BookingFlowModalState extends ConsumerState<BookingFlowModal>
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             Flexible(
-                child: Text('GST (18%)',
+                child: Text(_taxSettings.displayLabel,
                     style: tt.bodySmall
                         ?.copyWith(color: AppColors.textSecondary),
                     overflow: TextOverflow.ellipsis)),

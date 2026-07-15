@@ -16,10 +16,10 @@ final addressesProvider = Provider<AsyncValue<List<AddressModel>>>(
   (ref) => ref.watch(addressNotifierProvider),
 );
 
-// Key is a record: (date: ISO date string, serviceId: legacy services.id).
-// serviceId may be empty for new catalog-only nodes — falls back to defaults.
+// Key: (date, serviceId, parentNodeId?).
+// parentNodeId drives scoped scheduling resolution; null falls back to global.
 final timeSlotsProvider = FutureProvider.family<List<TimeSlotModel>,
-    ({String date, String serviceId})>(
+    ({String date, String serviceId, String? parentNodeId})>(
   (ref, key) =>
-      ref.read(bookingServiceProvider).fetchAvailableSlots(key.date, key.serviceId),
+      ref.read(bookingServiceProvider).fetchAvailableSlots(key.date, key.serviceId, parentNodeId: key.parentNodeId),
 );

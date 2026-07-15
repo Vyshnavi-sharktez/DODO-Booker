@@ -8,6 +8,7 @@ import '../widgets/catalog_node_modal.dart';
 ///
 /// Deep-link navigation (`/catalog/:nodeId`) continues to use the full-screen
 /// CatalogNodeFetchScreen so push-notification deep-links keep working.
-void openCatalogNode(BuildContext context, CatalogNodeModel node) {
-  CatalogNodeModal.open(context, node);
+void openCatalogNode(BuildContext context, CatalogNodeModel node,
+    {String? parentId}) {
+  CatalogNodeModal.open(context, node, parentId: parentId);
 }

@@ -6,6 +6,7 @@ class BookingItem {
   final int quantity;
   final double unitPrice;
   final double totalPrice;
+  final String? catalogParentNodeId;
 
   const BookingItem({
     required this.serviceId,
@@ -15,6 +16,7 @@ class BookingItem {
     required this.quantity,
     required this.unitPrice,
     required this.totalPrice,
+    this.catalogParentNodeId,
   });
 
   factory BookingItem.fromJson(Map<String, dynamic> json) {
@@ -29,6 +31,7 @@ class BookingItem {
       quantity: (json['quantity'] as int?) ?? 1,
       unitPrice: (json['unit_price'] as num?)?.toDouble() ?? 0.0,
       totalPrice: (json['total_price'] as num?)?.toDouble() ?? 0.0,
+      catalogParentNodeId: json['catalog_parent_node_id'] as String?,
     );
   }
 }

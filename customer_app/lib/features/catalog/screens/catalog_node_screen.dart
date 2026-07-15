@@ -29,9 +29,17 @@ import '../utils/catalog_launcher.dart';
 // ═══════════════════════════════════════════════════════════════════════════════
 
 class CatalogNodeScreen extends ConsumerStatefulWidget {
-  const CatalogNodeScreen({super.key, required this.node});
+  const CatalogNodeScreen({
+    super.key,
+    required this.node,
+    this.parentNodeId,
+  });
 
   final CatalogNodeModel node;
+
+  /// The catalog_node.id of the parent through which this screen was reached.
+  /// Null for deep-link entry points where the path is unknown.
+  final String? parentNodeId;
 
   @override
   ConsumerState<CatalogNodeScreen> createState() => _CatalogNodeScreenState();
@@ -248,6 +256,7 @@ class _CatalogNodeScreenState extends ConsumerState<CatalogNodeScreen> {
               displayPrice: displayPrice,
               priceAdjustment: _priceAdjustment,
               addonsTotal: addonsTotal,
+              parentNodeId: widget.parentNodeId,
             )
           : null,
     );
@@ -751,7 +760,7 @@ class _ChildrenSection extends StatelessWidget {
             separatorBuilder: (_, _) => const SizedBox(height: 10),
             itemBuilder: (ctx, i) => _ChildListItem(
               node: children[i],
-              onTap: () => openCatalogNode(ctx, children[i]),
+              onTap: () => openCatalogNode(ctx, children[i], parentId: node.id),
             ),
           ),
 
@@ -1001,12 +1010,14 @@ class _NodeBookingBar extends ConsumerWidget {
     required this.displayPrice,
     required this.priceAdjustment,
     required this.addonsTotal,
+    this.parentNodeId,
   });
 
   final CatalogNodeModel node;
   final double displayPrice;
   final double priceAdjustment;
   final double addonsTotal;
+  final String? parentNodeId;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -1079,7 +1090,8 @@ class _NodeBookingBar extends ConsumerWidget {
                     onPressed: () => ref
                         .read(cartProvider.notifier)
                         .addToCart(node,
-                            priceAdjustment: priceAdjustment + addonsTotal),
+                            priceAdjustment: priceAdjustment + addonsTotal,
+                            parentNodeId: parentNodeId),
                     icon: const Icon(Icons.add_shopping_cart_rounded, size: 18),
                     label: const Text(
                       'Add to Cart',
