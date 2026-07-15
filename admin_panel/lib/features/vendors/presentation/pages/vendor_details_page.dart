@@ -109,7 +109,7 @@ class _VendorDetailView extends ConsumerWidget {
                 Tab(text: 'Documents'),
                 Tab(text: 'Service Areas'),
                 Tab(text: 'Analytics'),
-                Tab(text: 'Commission'),
+                Tab(text: 'Platform Commission'),
               ],
             ),
             const SizedBox(height: 16),
@@ -302,7 +302,7 @@ class _OverviewTab extends ConsumerWidget {
                 value: updatedStr),
           ]),
           const SizedBox(height: 24),
-          _SectionTitle('Commission'),
+          _SectionTitle('Platform Commission'),
           const SizedBox(height: 12),
           _VendorCommissionCard(vendorId: vendor.id),
         ],
@@ -882,7 +882,7 @@ class _CommissionTabState extends ConsumerState<_CommissionTab> {
       ref.invalidate(vendorByIdProvider(widget.vendorId));
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Commission rate updated')),
+          const SnackBar(content: Text('Platform Commission rate updated')),
         );
       }
     } catch (e) {
@@ -932,7 +932,7 @@ class _CommissionTabState extends ConsumerState<_CommissionTab> {
                         child: TextFormField(
                           controller: _ctrl,
                           decoration: const InputDecoration(
-                            labelText: 'Commission Rate (%)',
+                            labelText: 'Platform Commission Rate (%)',
                             prefixIcon: Icon(Icons.percent_rounded),
                             helperText: '0 = no commission deducted',
                           ),
@@ -1081,7 +1081,7 @@ class _AnalyticsTab extends ConsumerWidget {
                     loading: () => '…',
                     error: (_, __) => '—',
                     data: (s) => s != null
-                        ? _currencyFmt.format(s.totalSettled)
+                        ? _currencyFmt.format(s.totalPaid)
                         : '—',
                   ),
                   icon: Icons.payments_rounded,
@@ -1362,7 +1362,7 @@ class _VendorCommissionDialogState
   Widget build(BuildContext context) {
     return AlertDialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-      title: const Text('Vendor Commission'),
+      title: const Text('Platform Commission'),
       content: !_loaded
           ? const SizedBox(
               height: 60,

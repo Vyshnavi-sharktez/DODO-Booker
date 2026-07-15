@@ -5,10 +5,10 @@ class VendorEarningsSummary {
   final String vendorName;
   final String? ownerName;
   final bool isActive;
-  final int completedJobs;
-  final double grossEarnings;
-  final double commissionRate;
-  final double totalSettled;
+  final int pendingOrdersCount;
+  final int paidOrdersCount;
+  final double totalPending;
+  final double totalPaid;
   final DateTime? lastSettlementAt;
 
   const VendorEarningsSummary({
@@ -16,21 +16,19 @@ class VendorEarningsSummary {
     required this.vendorName,
     this.ownerName,
     required this.isActive,
-    required this.completedJobs,
-    required this.grossEarnings,
-    this.commissionRate = 0.0,
-    required this.totalSettled,
+    required this.pendingOrdersCount,
+    required this.paidOrdersCount,
+    required this.totalPending,
+    required this.totalPaid,
     this.lastSettlementAt,
   });
 
-  double get platformCommission => grossEarnings * commissionRate / 100;
-
-  double get pendingSettlement =>
-      (grossEarnings - platformCommission - totalSettled).clamp(0.0, double.infinity);
+  int get completedJobs => pendingOrdersCount + paidOrdersCount;
+  double get pendingSettlement => totalPending;
 
   SettlementStatus get settlementStatus {
     if (completedJobs == 0) return SettlementStatus.noEarnings;
-    if (pendingSettlement <= 0) return SettlementStatus.settled;
+    if (pendingOrdersCount == 0) return SettlementStatus.settled;
     return SettlementStatus.pendingPayment;
   }
 }

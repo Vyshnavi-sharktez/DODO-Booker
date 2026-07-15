@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../application/providers/vendor_settlement_providers.dart';
+import '../../domain/models/vendor_booking_row.dart';
 
 class SettlementHistoryDialog extends ConsumerWidget {
   const SettlementHistoryDialog({
@@ -15,14 +16,14 @@ class SettlementHistoryDialog extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final historyAsync = ref.watch(vendorSettlementHistoryProvider(vendorId));
-    final dateFmt = DateFormat('dd MMM yyyy, hh:mm a');
+    final rowsAsync = ref.watch(vendorBookingRowsProvider(vendorId));
+    final dateFmt = DateFormat('dd MMM yyyy');
     final moneyFmt = NumberFormat('#,##0.00', 'en_IN');
 
     return Dialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 900, maxHeight: 560),
+        constraints: const BoxConstraints(maxWidth: 960, maxHeight: 580),
         child: Padding(
           padding: const EdgeInsets.all(28),
           child: Column(
@@ -39,11 +40,8 @@ class SettlementHistoryDialog extends ConsumerWidget {
                       color: AppColors.primary.withValues(alpha: 0.12),
                       borderRadius: BorderRadius.circular(8),
                     ),
-                    child: const Icon(
-                      Icons.history_rounded,
-                      color: AppColors.primary,
-                      size: 18,
-                    ),
+                    child: const Icon(Icons.receipt_long_rounded,
+                        color: AppColors.primary, size: 18),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
@@ -51,7 +49,7 @@ class SettlementHistoryDialog extends ConsumerWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         const Text(
-                          'Settlement History',
+                          'Order History',
                           style: TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.w700,
@@ -79,37 +77,30 @@ class SettlementHistoryDialog extends ConsumerWidget {
               const Divider(color: AppColors.border),
               const SizedBox(height: 8),
 
-              historyAsync.when(
+              rowsAsync.when(
                 loading: () => const Expanded(
                   child: Center(child: CircularProgressIndicator()),
                 ),
                 error: (e, _) => Expanded(
                   child: Center(
-                    child: Text(
-                      'Error loading history: $e',
-                      style: const TextStyle(color: AppColors.error),
-                    ),
+                    child: Text('Error loading orders: $e',
+                        style: const TextStyle(color: AppColors.error)),
                   ),
                 ),
-                data: (history) {
-                  if (history.isEmpty) {
+                data: (rows) {
+                  if (rows.isEmpty) {
                     return const Padding(
                       padding: EdgeInsets.symmetric(vertical: 40),
                       child: Center(
                         child: Column(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Icon(
-                              Icons.history_rounded,
-                              size: 40,
-                              color: AppColors.border,
-                            ),
+                            Icon(Icons.receipt_long_rounded,
+                                size: 40, color: AppColors.border),
                             SizedBox(height: 12),
-                            Text(
-                              'No settlement records found',
-                              style:
-                                  TextStyle(color: AppColors.textSecondary),
-                            ),
+                            Text('No completed orders found',
+                                style: TextStyle(
+                                    color: AppColors.textSecondary)),
                           ],
                         ),
                       ),
@@ -119,15 +110,9 @@ class SettlementHistoryDialog extends ConsumerWidget {
                   return Expanded(
                     child: LayoutBuilder(
                       builder: (ctx, constraints) {
-                        // FlexColumnWidth requires a finite table width.
-                        // SingleChildScrollView(horizontal) passes infinite width
-                        // to its child, so FlexColumnWidth columns collapse to zero.
-                        // SizedBox gives the Table a concrete bounded width;
-                        // horizontal scroll activates only when the dialog is
-                        // narrower than the minimum.
-                        final tableWidth = constraints.maxWidth > 760.0
+                        final tableWidth = constraints.maxWidth > 820.0
                             ? constraints.maxWidth
-                            : 760.0;
+                            : 820.0;
                         return SingleChildScrollView(
                           scrollDirection: Axis.horizontal,
                           child: SizedBox(
@@ -136,117 +121,36 @@ class SettlementHistoryDialog extends ConsumerWidget {
                               child: Table(
                                 columnWidths: const {
                                   0: FixedColumnWidth(110),
-                                  1: FlexColumnWidth(1.8),
+                                  1: FixedColumnWidth(100),
                                   2: FlexColumnWidth(1.6),
                                   3: FlexColumnWidth(1.6),
-                                  4: FlexColumnWidth(2.2),
+                                  4: FlexColumnWidth(1.6),
                                   5: FlexColumnWidth(1.6),
-                                  6: FlexColumnWidth(2.4),
-                                  7: FixedColumnWidth(80),
+                                  6: FixedColumnWidth(90),
+                                  7: FlexColumnWidth(1.8),
+                                  8: FlexColumnWidth(1.6),
                                 },
                                 children: [
                                   TableRow(
                                     decoration: BoxDecoration(
                                       color: AppColors.background,
-                                      borderRadius: BorderRadius.circular(6),
+                                      borderRadius:
+                                          BorderRadius.circular(6),
                                     ),
                                     children: const [
-                                      _HeaderCell('Settlement ID'),
-                                      _HeaderCell('Amount'),
-                                      _HeaderCell('Payment Method'),
-                                      _HeaderCell('Reference'),
-                                      _HeaderCell('Notes'),
-                                      _HeaderCell('Paid By'),
-                                      _HeaderCell('Paid On'),
+                                      _HeaderCell('Booking ID'),
+                                      _HeaderCell('Completed'),
+                                      _HeaderCell('Order Amount'),
+                                      _HeaderCell('DODO Commission'),
+                                      _HeaderCell('Commission Rate'),
+                                      _HeaderCell('Vendor Receivable'),
                                       _HeaderCell('Status'),
+                                      _HeaderCell('Settlement Ref'),
+                                      _HeaderCell('Settled On'),
                                     ],
                                   ),
-                                  for (final entry in history)
-                                    TableRow(
-                                      decoration: const BoxDecoration(
-                                        border: Border(
-                                          bottom: BorderSide(
-                                            color: AppColors.border,
-                                            width: 0.5,
-                                          ),
-                                        ),
-                                      ),
-                                      children: [
-                                        _DataCell(
-                                          child: Text(
-                                            '#${entry.id.length > 8 ? entry.id.substring(0, 8).toUpperCase() : entry.id.toUpperCase()}',
-                                            style: const TextStyle(
-                                              fontSize: 11,
-                                              fontFamily: 'monospace',
-                                              color: AppColors.textSecondary,
-                                            ),
-                                          ),
-                                        ),
-                                        _DataCell(
-                                          child: Text(
-                                            '₹${moneyFmt.format(entry.amount)}',
-                                            style: const TextStyle(
-                                              fontWeight: FontWeight.w600,
-                                              color: AppColors.success,
-                                            ),
-                                          ),
-                                        ),
-                                        _DataCell(
-                                          child: Text(
-                                            entry.paymentMethod ?? '—',
-                                            style: const TextStyle(fontSize: 12),
-                                          ),
-                                        ),
-                                        _DataCell(
-                                          child: Text(
-                                            entry.referenceNumber ?? '—',
-                                            style: const TextStyle(fontSize: 12),
-                                            maxLines: 1,
-                                            overflow: TextOverflow.ellipsis,
-                                          ),
-                                        ),
-                                        _DataCell(
-                                          child: Text(
-                                            entry.notes ?? '—',
-                                            style: const TextStyle(fontSize: 12),
-                                            maxLines: 2,
-                                            overflow: TextOverflow.ellipsis,
-                                          ),
-                                        ),
-                                        _DataCell(
-                                          child: Text(
-                                            entry.settledBy,
-                                            style: const TextStyle(fontSize: 12),
-                                          ),
-                                        ),
-                                        _DataCell(
-                                          child: Text(
-                                            dateFmt.format(entry.settledAt),
-                                            style: const TextStyle(fontSize: 12),
-                                          ),
-                                        ),
-                                        _DataCell(
-                                          child: Container(
-                                            padding: const EdgeInsets.symmetric(
-                                                horizontal: 6, vertical: 2),
-                                            decoration: BoxDecoration(
-                                              color: AppColors.success
-                                                  .withValues(alpha: 0.12),
-                                              borderRadius:
-                                                  BorderRadius.circular(12),
-                                            ),
-                                            child: const Text(
-                                              'Paid',
-                                              style: TextStyle(
-                                                fontSize: 10,
-                                                fontWeight: FontWeight.w600,
-                                                color: AppColors.success,
-                                              ),
-                                            ),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
+                                  for (final row in rows)
+                                    _buildRow(row, moneyFmt, dateFmt),
                                 ],
                               ),
                             ),
@@ -272,7 +176,115 @@ class SettlementHistoryDialog extends ConsumerWidget {
       ),
     );
   }
+
+  TableRow _buildRow(
+    VendorBookingRow row,
+    NumberFormat moneyFmt,
+    DateFormat dateFmt,
+  ) {
+    return TableRow(
+      decoration: const BoxDecoration(
+        border: Border(
+            bottom: BorderSide(color: AppColors.border, width: 0.5)),
+      ),
+      children: [
+        _DataCell(
+          child: Text(
+            '#${row.bookingId.length > 8 ? row.bookingId.substring(0, 8).toUpperCase() : row.bookingId.toUpperCase()}',
+            style: const TextStyle(
+              fontSize: 11,
+              fontFamily: 'monospace',
+              color: AppColors.textSecondary,
+            ),
+          ),
+        ),
+        _DataCell(
+          child: Text(
+            dateFmt.format(row.completedAt),
+            style: const TextStyle(fontSize: 12),
+          ),
+        ),
+        _DataCell(
+          child: Text(
+            '₹${moneyFmt.format(row.bookingGross)}',
+            style: const TextStyle(fontSize: 13),
+          ),
+        ),
+        _DataCell(
+          child: Text(
+            '₹${moneyFmt.format(row.commissionAmount)}',
+            style: const TextStyle(
+                fontSize: 12, color: AppColors.textSecondary),
+          ),
+        ),
+        _DataCell(
+          child: Text(
+            row.commissionLabel,
+            style: const TextStyle(
+                fontSize: 11, color: AppColors.textSecondary),
+          ),
+        ),
+        _DataCell(
+          child: Text(
+            '₹${moneyFmt.format(row.netVendorAmount)}',
+            style: const TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: AppColors.success,
+            ),
+          ),
+        ),
+        _DataCell(
+          child: _StatusBadge(isPaid: row.isPaid),
+        ),
+        _DataCell(
+          child: Text(
+            row.referenceNumber ?? '—',
+            style: const TextStyle(fontSize: 12),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+        _DataCell(
+          child: Text(
+            row.settledAt != null ? dateFmt.format(row.settledAt!) : '—',
+            style: const TextStyle(fontSize: 12),
+          ),
+        ),
+      ],
+    );
+  }
 }
+
+// ── Status badge ───────────────────────────────────────────────────────────────
+
+class _StatusBadge extends StatelessWidget {
+  const _StatusBadge({required this.isPaid});
+  final bool isPaid;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = isPaid ? AppColors.success : AppColors.warning;
+    final label = isPaid ? 'Paid' : 'Pending';
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          fontSize: 10,
+          fontWeight: FontWeight.w600,
+          color: color,
+        ),
+      ),
+    );
+  }
+}
+
+// ── Table helpers ──────────────────────────────────────────────────────────────
 
 class _HeaderCell extends StatelessWidget {
   const _HeaderCell(this.text);
@@ -281,7 +293,7 @@ class _HeaderCell extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
       child: Text(
         text,
         style: const TextStyle(
@@ -302,7 +314,7 @@ class _DataCell extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
       child: child,
     );
   }

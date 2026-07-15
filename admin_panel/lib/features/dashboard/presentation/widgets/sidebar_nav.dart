@@ -104,7 +104,7 @@ const _navItems = <_NavItem>[
     requiredPermission: 'settings.manage',
   ),
   _NavItem(
-    label: 'Commission',
+    label: 'Platform Commission',
     icon: Icons.percent_rounded,
     route: '/dashboard/commission',
     requiredPermission: 'settings.manage',

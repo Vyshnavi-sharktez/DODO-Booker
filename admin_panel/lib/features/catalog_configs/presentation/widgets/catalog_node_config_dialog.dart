@@ -94,7 +94,7 @@ class _CatalogNodeConfigDialogState extends State<CatalogNodeConfigDialog>
   String _commType = 'percentage';
 
   static const _modules = ['tax', 'loyalty', 'scheduling', 'commission'];
-  static const _tabLabels = ['Tax', 'Loyalty', 'Scheduling', 'Commission'];
+  static const _tabLabels = ['Tax', 'Loyalty', 'Scheduling', 'Platform Commission'];
   static const _dayLabels = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
   @override
@@ -283,7 +283,7 @@ class _CatalogNodeConfigDialogState extends State<CatalogNodeConfigDialog>
       final useRel = _useRelScope[module] ?? false;
       if (useRel && _relationshipId == null) {
         setState(() {
-          _error = 'No relationship found for this parent → node path.';
+          _error = 'Could not link this category to the item. Please refresh and try again.';
           _saving = false;
         });
         return;
@@ -318,7 +318,7 @@ class _CatalogNodeConfigDialogState extends State<CatalogNodeConfigDialog>
       _creatingOverride[module] = false;
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('$module config saved.')),
+          SnackBar(content: Text('${_tabLabels[_modules.indexOf(module)]} settings saved.')),
         );
       }
     } catch (e) {
@@ -338,7 +338,7 @@ class _CatalogNodeConfigDialogState extends State<CatalogNodeConfigDialog>
       _creatingOverride[module] = false;
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('$module config removed (global fallback applies).')),
+          SnackBar(content: Text('${_tabLabels[_modules.indexOf(module)]} settings removed — default settings will apply.')),
         );
       }
     } catch (e) {
@@ -455,6 +455,8 @@ class _CatalogNodeConfigDialogState extends State<CatalogNodeConfigDialog>
               // ── Tabs ───────────────────────────────────────────────────
               TabBar(
                 controller: _tabController,
+                isScrollable: true,
+                tabAlignment: TabAlignment.start,
                 labelColor: AppColors.primary,
                 unselectedLabelColor: AppColors.textSecondary,
                 indicatorColor: AppColors.primary,
@@ -503,7 +505,7 @@ class _CatalogNodeConfigDialogState extends State<CatalogNodeConfigDialog>
           // ── Scope selector ────────────────────────────────────────────
           if (hasParent) ...[
             const Text(
-              'Scope',
+              'Apply to',
               style: TextStyle(
                   fontSize: 13,
                   fontWeight: FontWeight.w600,
@@ -519,14 +521,14 @@ class _CatalogNodeConfigDialogState extends State<CatalogNodeConfigDialog>
                 children: [
                   RadioListTile<bool>(
                     dense: true,
-                    title: Text(
-                      'This path only  (${widget.parentNodeName} → ${widget.nodeName})',
-                      style: const TextStyle(fontSize: 13),
+                    title: const Text(
+                      'Only here',
+                      style: TextStyle(fontSize: 13),
                     ),
-                    subtitle: const Text(
-                      'Config applies only when accessed via this specific parent. '
-                      'Never affects the same node under another category.',
-                      style: TextStyle(fontSize: 11),
+                    subtitle: Text(
+                      'Use this setting only for '
+                      '${widget.parentNodeName ?? 'this category'} → ${widget.nodeName}.',
+                      style: const TextStyle(fontSize: 11),
                     ),
                     value: true,
                     groupValue: useRel,
@@ -542,13 +544,12 @@ class _CatalogNodeConfigDialogState extends State<CatalogNodeConfigDialog>
                   RadioListTile<bool>(
                     dense: true,
                     title: const Text(
-                      'All occurrences of this node',
+                      'Everywhere',
                       style: TextStyle(fontSize: 13),
                     ),
-                    subtitle: const Text(
-                      'Config applies wherever this node appears in the catalog, '
-                      'regardless of which category was used to navigate to it.',
-                      style: TextStyle(fontSize: 11),
+                    subtitle: Text(
+                      'Use this setting for ${widget.nodeName} wherever it appears in the catalog.',
+                      style: const TextStyle(fontSize: 11),
                     ),
                     value: false,
                     groupValue: useRel,
@@ -571,17 +572,17 @@ class _CatalogNodeConfigDialogState extends State<CatalogNodeConfigDialog>
                 color: AppColors.background,
                 borderRadius: BorderRadius.circular(8),
               ),
-              child: const Row(
+              child: Row(
                 children: [
-                  Icon(Icons.info_outline_rounded,
+                  const Icon(Icons.info_outline_rounded,
                       size: 14, color: AppColors.textSecondary),
-                  SizedBox(width: 6),
+                  const SizedBox(width: 6),
                   Expanded(
                     child: Text(
-                      'Configuring without a parent context. '
-                      'This config applies to all occurrences of this node.',
-                      style:
-                          TextStyle(fontSize: 11, color: AppColors.textSecondary),
+                      'No category selected — this setting applies to '
+                      '${widget.nodeName} everywhere in the catalog.',
+                      style: const TextStyle(
+                          fontSize: 11, color: AppColors.textSecondary),
                     ),
                   ),
                 ],
@@ -601,7 +602,7 @@ class _CatalogNodeConfigDialogState extends State<CatalogNodeConfigDialog>
                 _populateFromInherited(module);
               }),
               icon: const Icon(Icons.edit_outlined, size: 15),
-              label: const Text('Create override'),
+              label: const Text('Set different settings here'),
             ),
           ],
 
@@ -617,7 +618,7 @@ class _CatalogNodeConfigDialogState extends State<CatalogNodeConfigDialog>
                   OutlinedButton.icon(
                     onPressed: _saving ? null : () => _delete(module),
                     icon: const Icon(Icons.delete_outline, size: 15),
-                    label: const Text('Remove Override'),
+                    label: const Text('Use parent settings'),
                     style: OutlinedButton.styleFrom(
                       foregroundColor: AppColors.error,
                       side: const BorderSide(color: AppColors.error),
@@ -655,7 +656,7 @@ class _CatalogNodeConfigDialogState extends State<CatalogNodeConfigDialog>
               Padding(
                 padding: const EdgeInsets.only(top: 8),
                 child: Text(
-                  'No override set — global ${module.toUpperCase()} config applies.',
+                  'No custom settings — default ${_tabLabels[_modules.indexOf(module)]} settings will apply.',
                   style: const TextStyle(
                       fontSize: 11, color: AppColors.textSecondary),
                 ),
@@ -699,7 +700,7 @@ class _CatalogNodeConfigDialogState extends State<CatalogNodeConfigDialog>
                   size: 14, color: AppColors.textSecondary),
               SizedBox(width: 6),
               Text(
-                'Inherited configuration',
+                'Using parent settings',
                 style: TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.w600,
@@ -716,9 +717,9 @@ class _CatalogNodeConfigDialogState extends State<CatalogNodeConfigDialog>
                       fontSize: 13, color: AppColors.textPrimary)),
             ),
           const SizedBox(height: 8),
-          const Text(
-            'Inherited from a parent configuration.',
-            style: TextStyle(fontSize: 11, color: AppColors.textSecondary),
+          Text(
+            'This setting comes from ${widget.parentNodeName ?? 'a parent category'}.',
+            style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
           ),
         ],
       ),
@@ -980,7 +981,7 @@ class _CatalogNodeConfigDialogState extends State<CatalogNodeConfigDialog>
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _label('Commission Type'),
+        _label('Platform Commission Type'),
         const SizedBox(height: 4),
         SegmentedButton<String>(
           segments: const [
@@ -993,7 +994,7 @@ class _CatalogNodeConfigDialogState extends State<CatalogNodeConfigDialog>
         ),
         const SizedBox(height: 12),
         _label(
-            _commType == 'percentage' ? 'Commission Rate (%)' : 'Fixed Amount (₹)'),
+            _commType == 'percentage' ? 'Platform Commission Rate (%)' : 'Fixed Amount (₹)'),
         const SizedBox(height: 4),
         TextField(
           controller: _commValueCtrl,

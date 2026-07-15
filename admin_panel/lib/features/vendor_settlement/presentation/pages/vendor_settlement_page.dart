@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:intl/intl.dart';
+import 'package:intl/intl.dart' show NumberFormat;
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/clickable.dart';
 import '../../application/providers/vendor_settlement_providers.dart';
@@ -314,7 +314,6 @@ class _VendorTable extends StatelessWidget {
   final void Function(VendorEarningsSummary) onHistory;
 
   static final _fmt = NumberFormat('#,##0.00', 'en_IN');
-  static final _dateFmt = DateFormat('dd MMM yyyy');
 
   @override
   Widget build(BuildContext context) {
@@ -328,20 +327,22 @@ class _VendorTable extends StatelessWidget {
           child: Table(
             columnWidths: const {
               0: FlexColumnWidth(3),
-              1: FlexColumnWidth(1.5),
+              1: FlexColumnWidth(1.4),
               2: FlexColumnWidth(2),
-              3: FlexColumnWidth(2),
-              4: FlexColumnWidth(1.6),
-              5: FlexColumnWidth(2),
+              3: FlexColumnWidth(1.4),
+              4: FlexColumnWidth(2),
+              5: FlexColumnWidth(1.6),
+              6: FlexColumnWidth(2),
             },
             children: [
               const TableRow(
                 decoration: BoxDecoration(color: AppColors.background),
                 children: [
                   _TableHeader('Vendor'),
-                  _TableHeader('Completed Jobs'),
-                  _TableHeader('Pending Settlement'),
-                  _TableHeader('Last Settlement'),
+                  _TableHeader('Pending Orders'),
+                  _TableHeader('Total Pending'),
+                  _TableHeader('Paid Orders'),
+                  _TableHeader('Total Paid'),
                   _TableHeader('Status'),
                   _TableHeader('Actions'),
                 ],
@@ -391,40 +392,58 @@ class _VendorTable extends StatelessWidget {
                         ],
                       ),
                     ),
-                    // Completed Jobs
+                    // Pending Orders count
                     Padding(
                       padding: const EdgeInsets.symmetric(
                           horizontal: 16, vertical: 14),
                       child: Text(
-                        s.completedJobs.toString(),
-                        style: const TextStyle(fontSize: 13),
-                      ),
-                    ),
-                    // Pending Settlement
-                    Padding(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 16, vertical: 14),
-                      child: Text(
-                        '₹${_fmt.format(s.pendingSettlement)}',
+                        s.pendingOrdersCount.toString(),
                         style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w700,
-                          color: s.pendingSettlement > 0
+                          fontSize: 13,
+                          fontWeight: s.pendingOrdersCount > 0
+                              ? FontWeight.w600
+                              : FontWeight.normal,
+                          color: s.pendingOrdersCount > 0
                               ? AppColors.warning
                               : AppColors.textSecondary,
                         ),
                       ),
                     ),
-                    // Last Settlement
+                    // Total Pending amount
                     Padding(
                       padding: const EdgeInsets.symmetric(
                           horizontal: 16, vertical: 14),
                       child: Text(
-                        s.lastSettlementAt != null
-                            ? _dateFmt.format(s.lastSettlementAt!)
-                            : '—',
+                        '₹${_fmt.format(s.totalPending)}',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700,
+                          color: s.totalPending > 0
+                              ? AppColors.warning
+                              : AppColors.textSecondary,
+                        ),
+                      ),
+                    ),
+                    // Paid Orders count
+                    Padding(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 14),
+                      child: Text(
+                        s.paidOrdersCount.toString(),
                         style: const TextStyle(
-                          fontSize: 12,
+                          fontSize: 13,
+                          color: AppColors.textSecondary,
+                        ),
+                      ),
+                    ),
+                    // Total Paid amount
+                    Padding(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 14),
+                      child: Text(
+                        '₹${_fmt.format(s.totalPaid)}',
+                        style: const TextStyle(
+                          fontSize: 13,
                           color: AppColors.textSecondary,
                         ),
                       ),
@@ -446,15 +465,15 @@ class _VendorTable extends StatelessWidget {
                             label: 'Settle',
                             icon: Icons.payments_rounded,
                             color: AppColors.success,
-                            enabled: s.pendingSettlement > 0,
+                            enabled: s.pendingOrdersCount > 0,
                             onTap: () => onSettle(s),
                           ),
                           const SizedBox(width: 8),
                           _ActionButton(
-                            label: 'History',
-                            icon: Icons.history_rounded,
+                            label: 'Orders',
+                            icon: Icons.receipt_long_rounded,
                             color: AppColors.primary,
-                            enabled: true,
+                            enabled: s.completedJobs > 0,
                             onTap: () => onHistory(s),
                           ),
                         ],

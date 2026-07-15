@@ -101,7 +101,7 @@ class _CategoryFormDialogState extends ConsumerState<CategoryFormDialog> {
       if (cv == null || cv < 0) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Enter a valid commission value.'),
+            content: Text('Enter a valid platform commission value.'),
             backgroundColor: AppColors.error,
           ),
         );
@@ -110,7 +110,7 @@ class _CategoryFormDialogState extends ConsumerState<CategoryFormDialog> {
       if (_commissionType == 'percentage' && cv > 100) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Commission percentage cannot exceed 100.'),
+            content: Text('Platform Commission percentage cannot exceed 100.'),
             backgroundColor: AppColors.error,
           ),
         );
@@ -338,7 +338,7 @@ class _CategoryFormDialogState extends ConsumerState<CategoryFormDialog> {
                                 const SizedBox(width: 8),
                                 const Expanded(
                                   child: Text(
-                                    'Override Commission',
+                                    'Override Platform Commission',
                                     style: TextStyle(
                                       fontSize: 14,
                                       fontWeight: FontWeight.w500,
@@ -358,7 +358,7 @@ class _CategoryFormDialogState extends ConsumerState<CategoryFormDialog> {
                               const Padding(
                                 padding: EdgeInsets.only(top: 4),
                                 child: Text(
-                                  'Uses global commission setting by default.',
+                                  'Uses global platform commission setting by default.',
                                   style: TextStyle(
                                     fontSize: 11,
                                     color: AppColors.textSecondary,
@@ -392,7 +392,7 @@ class _CategoryFormDialogState extends ConsumerState<CategoryFormDialog> {
                               TextFormField(
                                 controller: _commissionValue,
                                 decoration: InputDecoration(
-                                  labelText: 'Commission Value',
+                                  labelText: 'Platform Commission Value',
                                   suffixText: _commissionType == 'percentage'
                                       ? '%'
                                       : '₹',
