@@ -18,6 +18,7 @@ import '../providers/cart_provider.dart';
 import '../services/checkout_service.dart';
 import '../widgets/payment_selection_sheet.dart';
 import '../../bookings/services/bookings_providers.dart';
+import '../../loyalty/models/loyalty_settings_model.dart';
 import '../../loyalty/providers/loyalty_providers.dart';
 import '../../loyalty/services/loyalty_service.dart';
 import '../../tax/models/tax_settings_model.dart';
@@ -303,6 +304,21 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     }
     _taxTotal = newTaxTotal;
     _displayTax = firstTax ?? TaxSettingsModel.defaults;
+
+    // Resolve loyalty earn points per cart item using scoped catalog config.
+    final globalLoyalty =
+        ref.watch(loyaltySettingsProvider).valueOrNull ?? LoyaltySettingsModel.defaults;
+    var earnedPoints = 0;
+    if (globalLoyalty.isEnabled && globalLoyalty.earnEnabled) {
+      for (final item in items) {
+        final loyaltyAsync = ref.watch(resolvedLoyaltyConfigProvider((
+          serviceId: item.serviceId,
+          parentNodeId: item.parentNodeId,
+        )));
+        final cfg = loyaltyAsync.valueOrNull;
+        earnedPoints += _computeItemLoyaltyPoints(cfg, globalLoyalty, item.totalPrice);
+      }
+    }
     debugPrint('[DODO][Checkout][Tax] totalTax=$_taxTotal  rate=${_displayTax.taxValue}%');
     final dateStr =
         _selectedDate?.toIso8601String().substring(0, 10);
@@ -531,6 +547,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
           showTaxLine: _displayTax.isEnabled &&
               _displayTax.applyOnServices &&
               _displayTax.displaySeparately,
+          earnedPoints: earnedPoints,
         ),
       ),
     ];
@@ -1039,6 +1056,28 @@ class _LoyaltySection extends ConsumerWidget {
   }
 }
 
+// ── Loyalty points calculation (mirrors backend award_loyalty_points trigger) ──
+
+int _computeItemLoyaltyPoints(
+  Map<String, dynamic>? cfg,
+  LoyaltySettingsModel global,
+  double totalPrice,
+) {
+  if (cfg == null) {
+    return (totalPrice / 100).floor() * global.earnPer100;
+  }
+  if (cfg['earn_enabled'] == false) return 0;
+  final rule = cfg['earn_rule'] as String?;
+  if (rule == 'fixed') {
+    return (cfg['fixed_points'] as num?)?.toInt() ?? 0;
+  }
+  if (rule == 'percentage') {
+    final per = (cfg['earn_per_100'] as num?)?.toInt();
+    if (per != null) return (totalPrice / 100).floor() * per;
+  }
+  return (totalPrice / 100).floor() * global.earnPer100;
+}
+
 // ── Price summary ─────────────────────────────────────────────────────────────
 
 class _PriceSummary extends StatelessWidget {
@@ -1049,6 +1088,7 @@ class _PriceSummary extends StatelessWidget {
   final double grandTotal;
   final String taxLabel;
   final bool showTaxLine;
+  final int earnedPoints;
 
   const _PriceSummary({
     required this.subtotal,
@@ -1058,6 +1098,7 @@ class _PriceSummary extends StatelessWidget {
     required this.grandTotal,
     this.taxLabel = 'GST (18%)',
     this.showTaxLine = true,
+    this.earnedPoints = 0,
   });
 
   @override
@@ -1087,6 +1128,47 @@ class _PriceSummary extends StatelessWidget {
         if (showTaxLine && tax > 0) ...[
           const SizedBox(height: 8),
           _Row(label: taxLabel, value: '₹${tax.toInt()}', tt: tt),
+        ],
+        if (earnedPoints > 0) ...[
+          const SizedBox(height: 10),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+            decoration: BoxDecoration(
+              color: const Color(0xFFFFD700).withAlpha(20),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(
+                color: const Color(0xFFFFD700).withAlpha(80),
+                width: 0.8,
+              ),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.stars_rounded,
+                    size: 15, color: Color(0xFFFFD700)),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Earn $earnedPoints DODO Points',
+                        style: tt.bodySmall?.copyWith(
+                          color: const Color(0xFFB8860B),
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      Text(
+                        'Complete this booking to receive your points.',
+                        style: tt.labelSmall?.copyWith(
+                          color: const Color(0xFFB8860B).withAlpha(180),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
         ],
         const Padding(
           padding: EdgeInsets.symmetric(vertical: 12),
