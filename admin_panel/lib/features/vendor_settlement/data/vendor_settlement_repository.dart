@@ -33,8 +33,7 @@ class VendorSettlementRepository {
     return globalRule;
   }
 
-  /// Per item: apply scoped config if found, otherwise accumulate into unscopedTotal.
-  /// Fallback rule (from commission_rules) is applied once to the total unscoped amount.
+  /// Used in summary methods where only the total commission is needed.
   static double _computeVendorCommission({
     required List<Map<String, dynamic>> items,
     required Map<String, Map<String, dynamic>?> scopedConfigs,
@@ -62,6 +61,43 @@ class VendorSettlementRepository {
     }
 
     return scoped + fallback;
+  }
+
+  /// Used in fetchBookingRows: returns total commission AND whether multiple
+  /// distinct commission rules were applied (for the "Mixed" label).
+  static ({double commission, bool isMixed}) _computeCommissionWithMixed({
+    required List<Map<String, dynamic>> items,
+    required Map<String, Map<String, dynamic>?> scopedConfigs,
+    required Map<String, dynamic>? fallbackRule,
+  }) {
+    var total = 0.0;
+    final ruleKeys = <String>{};
+    var hasScopedItems = false;
+    var hasUnscopedWithFallback = false;
+
+    for (final item in items) {
+      final serviceId = item['service_id'] as String? ?? '';
+      final parentNodeId = item['catalog_parent_node_id'] as String?;
+      final price = (item['total_price'] as num?)?.toDouble() ?? 0.0;
+      if (price <= 0) continue;
+
+      final config = scopedConfigs['$serviceId:$parentNodeId'];
+      if (config != null) {
+        hasScopedItems = true;
+        total += _applyRate(config, price);
+        ruleKeys.add('${config['commission_type']}:${config['commission_value']}');
+      } else if (fallbackRule != null) {
+        hasUnscopedWithFallback = true;
+        total += _applyRate(fallbackRule, price);
+        ruleKeys.add(
+          'fallback:${fallbackRule['commission_type']}:${fallbackRule['commission_value']}',
+        );
+      }
+    }
+
+    final isMixed =
+        ruleKeys.length > 1 || (hasScopedItems && hasUnscopedWithFallback);
+    return (commission: total, isMixed: isMixed);
   }
 
   // ── Scoped config resolution ───────────────────────────────────────────────
@@ -126,15 +162,19 @@ class VendorSettlementRepository {
   // ── Per-vendor booking rows ────────────────────────────────────────────────
 
   /// Returns all completed bookings for [vendorId] with per-booking commission
-  /// and settlement status.
+  /// and payout status.
   ///
   /// Paid bookings use immutable snapshots from vendor_settlement_bookings.
   /// Unpaid bookings use the current catalog commission config (re-resolved on
-  /// each call so the admin always sees live rates before settling).
+  /// each call so the admin always sees live rates before paying).
+  ///
+  /// Platform Commission is ALWAYS calculated on the pre-tax service amount
+  /// (booking.subtotal / booking_items.total_price).  Tax is never included in
+  /// the commission base or in vendor_receivable.
   Future<List<VendorBookingRow>> fetchBookingRows(String vendorId) async {
     final bookingsData = await _supabase
         .from('bookings')
-        .select('id, total_amount, created_at')
+        .select('id, subtotal, discount_amount, total_amount, created_at')
         .eq('vendor_id', vendorId)
         .eq('status', 'completed')
         .order('created_at', ascending: false);
@@ -143,7 +183,6 @@ class VendorSettlementRepository {
 
     final bookingIds = bookingsData.map((b) => b['id'] as String).toList();
 
-    // Fetch items, settled rows, and commission_rules fallback in parallel.
     final itemsFuture = _supabase
         .from('booking_items')
         .select('booking_id, service_id, catalog_parent_node_id, total_price')
@@ -151,7 +190,10 @@ class VendorSettlementRepository {
     final settledFuture = _supabase
         .from('vendor_settlement_bookings')
         .select(
-            'booking_id, settlement_id, booking_gross, commission_amount, net_vendor_amount')
+          'booking_id, settlement_id, '
+          'booking_gross, subtotal_before_tax, tax_amount, commission_base, '
+          'commission_amount, net_vendor_amount',
+        )
         .inFilter('booking_id', bookingIds);
     final rulesFuture = _supabase
         .from('commission_rules')
@@ -162,7 +204,7 @@ class VendorSettlementRepository {
     final settledData = await settledFuture;
     final allRulesRaw = await rulesFuture;
 
-    // Fetch settlement details (settledAt, referenceNumber) for paid bookings.
+    // Fetch settlement details for paid bookings.
     final settlementIds = (settledData as List)
         .map((s) => s['settlement_id'] as String)
         .toSet()
@@ -178,7 +220,6 @@ class VendorSettlementRepository {
       }
     }
 
-    // Build item lookup and unique pairs for commission resolution.
     final itemsByBooking = <String, List<Map<String, dynamic>>>{};
     final uniquePairs = <String, (String, String?)>{};
     for (final item in itemsData as List) {
@@ -195,13 +236,15 @@ class VendorSettlementRepository {
 
     final rulesIndex = _indexRules(allRulesRaw.cast<Map<String, dynamic>>());
     final fallbackRule = _resolveRule(
-      vendorId, null,
-      rulesIndex.vendorRules, rulesIndex.categoryRules, rulesIndex.globalRule,
+      vendorId,
+      null,
+      rulesIndex.vendorRules,
+      rulesIndex.categoryRules,
+      rulesIndex.globalRule,
     );
     final scopedConfigs = <String, Map<String, dynamic>?>{};
     await _batchResolveScopedCommission(uniquePairs, scopedConfigs);
 
-    // Build settled lookup by booking_id.
     final settledByBookingId = <String, Map<String, dynamic>>{};
     for (final s in settledData) {
       settledByBookingId[s['booking_id'] as String] = s;
@@ -209,7 +252,9 @@ class VendorSettlementRepository {
 
     return bookingsData.map<VendorBookingRow>((b) {
       final bookingId = b['id'] as String;
-      final rawGross = (b['total_amount'] as num?)?.toDouble() ?? 0.0;
+      final rawTotal = (b['total_amount'] as num?)?.toDouble() ?? 0.0;
+      final rawSubtotal = (b['subtotal'] as num?)?.toDouble() ?? rawTotal;
+      final rawDiscount = (b['discount_amount'] as num?)?.toDouble() ?? 0.0;
       final completedAt =
           DateTime.tryParse(b['created_at'] as String? ?? '') ?? DateTime.now();
       final items = itemsByBooking[bookingId] ?? [];
@@ -217,35 +262,59 @@ class VendorSettlementRepository {
       final isPaid = settledRow != null;
 
       final double bookingGross;
+      final double subtotalBeforeTax;
+      final double taxAmount;
+      final bool hasTaxBreakdown;
       final double commissionAmount;
       final double netVendorAmount;
+      final String commissionLabel;
 
       if (isPaid) {
-        // Use immutable snapshots — commission config changes after settlement
-        // must NOT affect these values.
+        // Immutable snapshot — never recalculate.
         bookingGross =
-            (settledRow['booking_gross'] as num?)?.toDouble() ?? rawGross;
+            (settledRow['booking_gross'] as num?)?.toDouble() ?? rawTotal;
         commissionAmount =
             (settledRow['commission_amount'] as num?)?.toDouble() ?? 0.0;
         netVendorAmount =
             (settledRow['net_vendor_amount'] as num?)?.toDouble() ?? 0.0;
+
+        final snapshotSubtotal = settledRow['subtotal_before_tax'] as num?;
+        hasTaxBreakdown = snapshotSubtotal != null;
+        subtotalBeforeTax = snapshotSubtotal?.toDouble() ?? 0.0;
+        taxAmount =
+            (settledRow['tax_amount'] as num?)?.toDouble() ?? 0.0;
+
+        // Rate shown against the correct base; "(locked)" signals immutability.
+        final base = hasTaxBreakdown ? subtotalBeforeTax : bookingGross;
+        final effectivePct = base > 0 ? commissionAmount / base * 100 : 0.0;
+        commissionLabel = '${effectivePct.toStringAsFixed(1)}% (locked)';
       } else {
-        // Compute from current config (live until the moment admin settles).
-        commissionAmount = _computeVendorCommission(
+        // Live computation — Platform Commission on pre-tax item amounts only.
+        bookingGross = rawTotal;
+        subtotalBeforeTax = rawSubtotal;
+        taxAmount = rawTotal - rawSubtotal + rawDiscount;
+        hasTaxBreakdown = true;
+
+        final result = _computeCommissionWithMixed(
           items: items,
           scopedConfigs: scopedConfigs,
           fallbackRule: fallbackRule,
         );
+        commissionAmount = result.commission;
+        // Vendor receives the pre-tax service amount minus commission.
+        // Tax is never included in the vendor receivable.
         netVendorAmount =
-            (rawGross - commissionAmount).clamp(0.0, double.infinity);
-        bookingGross = rawGross;
-      }
+            (subtotalBeforeTax - commissionAmount).clamp(0.0, double.infinity);
 
-      final effectivePct =
-          bookingGross > 0 ? commissionAmount / bookingGross * 100 : 0.0;
-      final commissionLabel = isPaid
-          ? '${effectivePct.toStringAsFixed(1)}% (locked)'
-          : '${effectivePct.toStringAsFixed(1)}%';
+        if (result.isMixed) {
+          commissionLabel = 'Mixed';
+        } else if (subtotalBeforeTax > 0) {
+          commissionLabel =
+              '${(commissionAmount / subtotalBeforeTax * 100).toStringAsFixed(1)}%';
+        } else {
+          commissionLabel = '0%';
+        }
+      }
 
       String? settlementId;
       DateTime? settledAt;
@@ -263,6 +332,9 @@ class VendorSettlementRepository {
         vendorId: vendorId,
         completedAt: completedAt,
         bookingGross: bookingGross,
+        subtotalBeforeTax: subtotalBeforeTax,
+        taxAmount: taxAmount,
+        hasTaxBreakdown: hasTaxBreakdown,
         commissionAmount: commissionAmount,
         netVendorAmount: netVendorAmount,
         commissionLabel: commissionLabel,
@@ -277,14 +349,13 @@ class VendorSettlementRepository {
   // ── Earnings summaries ─────────────────────────────────────────────────────
 
   Future<List<VendorEarningsSummary>> fetchEarningsSummaries() async {
-    // Phase 1: four independent queries in parallel.
     final vendorsFuture = _supabase
         .from('vendors')
         .select('id, business_name, owner_name, is_active')
         .order('business_name');
     final bookingsFuture = _supabase
         .from('bookings')
-        .select('id, vendor_id, total_amount')
+        .select('id, vendor_id, subtotal, total_amount')
         .eq('status', 'completed')
         .not('vendor_id', 'is', null);
     final settlementsFuture = _supabase
@@ -304,7 +375,6 @@ class VendorSettlementRepository {
         (bookings as List).map((b) => b['id'] as String).toList();
 
     List<Map<String, dynamic>> items = const [];
-    // settledNet: booking_id → net_vendor_amount snapshot (from junction table)
     final settledNet = <String, double>{};
 
     if (bookingIds.isNotEmpty) {
@@ -353,7 +423,8 @@ class VendorSettlementRepository {
     for (final s in settlements as List) {
       final vid = s['vendor_id'] as String? ?? '';
       if (vid.isNotEmpty) {
-        settlementsByVendor.putIfAbsent(vid, () => []).add(s as Map<String, dynamic>);
+        settlementsByVendor.putIfAbsent(vid, () => [])
+            .add(s as Map<String, dynamic>);
       }
     }
 
@@ -366,8 +437,11 @@ class VendorSettlementRepository {
       final vs = settlementsByVendor[vendorId] ?? [];
 
       final fallbackRule = _resolveRule(
-        vendorId, null,
-        rulesIndex.vendorRules, rulesIndex.categoryRules, rulesIndex.globalRule,
+        vendorId,
+        null,
+        rulesIndex.vendorRules,
+        rulesIndex.categoryRules,
+        rulesIndex.globalRule,
       );
 
       var pendingOrdersCount = 0;
@@ -377,22 +451,23 @@ class VendorSettlementRepository {
 
       for (final b in vb) {
         final bookingId = b['id'] as String;
-        final gross = (b['total_amount'] as num?)?.toDouble() ?? 0.0;
+        // Use pre-tax subtotal as the vendor's earnings base for pending orders.
+        final subtotal = (b['subtotal'] as num?)?.toDouble() ??
+            (b['total_amount'] as num?)?.toDouble() ??
+            0.0;
         final bookingItems = itemsByBooking[bookingId] ?? [];
 
         if (settledNet.containsKey(bookingId)) {
-          // Use the stored snapshot — commission changes don't affect paid orders.
           paidOrdersCount++;
           totalPaid += settledNet[bookingId]!;
         } else {
-          // Compute from current config for unpaid orders.
           final commission = _computeVendorCommission(
             items: bookingItems,
             scopedConfigs: scopedConfigs,
             fallbackRule: fallbackRule,
           );
           pendingOrdersCount++;
-          totalPending += (gross - commission).clamp(0.0, double.infinity);
+          totalPending += (subtotal - commission).clamp(0.0, double.infinity);
         }
       }
 
@@ -432,7 +507,7 @@ class VendorSettlementRepository {
         .single();
     final bookingsFuture = _supabase
         .from('bookings')
-        .select('id, total_amount')
+        .select('id, subtotal, total_amount')
         .eq('vendor_id', vendorId)
         .eq('status', 'completed');
     final settlementsFuture = _supabase
@@ -475,8 +550,11 @@ class VendorSettlementRepository {
 
     final rulesIndex = _indexRules(allRulesRaw.cast<Map<String, dynamic>>());
     final fallbackRule = _resolveRule(
-      vendorId, null,
-      rulesIndex.vendorRules, rulesIndex.categoryRules, rulesIndex.globalRule,
+      vendorId,
+      null,
+      rulesIndex.vendorRules,
+      rulesIndex.categoryRules,
+      rulesIndex.globalRule,
     );
 
     final uniquePairs = <String, (String, String?)>{};
@@ -501,7 +579,9 @@ class VendorSettlementRepository {
 
     for (final b in bookingsData) {
       final bookingId = b['id'] as String;
-      final gross = (b['total_amount'] as num?)?.toDouble() ?? 0.0;
+      final subtotal = (b['subtotal'] as num?)?.toDouble() ??
+          (b['total_amount'] as num?)?.toDouble() ??
+          0.0;
       final bookingItems = itemsByBooking[bookingId] ?? [];
 
       if (settledNet.containsKey(bookingId)) {
@@ -514,7 +594,7 @@ class VendorSettlementRepository {
           fallbackRule: fallbackRule,
         );
         pendingOrdersCount++;
-        totalPending += (gross - commission).clamp(0.0, double.infinity);
+        totalPending += (subtotal - commission).clamp(0.0, double.infinity);
       }
     }
 
@@ -556,10 +636,8 @@ class VendorSettlementRepository {
         .toList();
   }
 
-  /// Atomically settles a batch of bookings via the DB function
-  /// [create_vendor_settlement_batch].  All validations and inserts happen in a
-  /// single DB transaction — if any booking is already settled or does not belong
-  /// to the vendor, the entire call fails and no data is changed.
+  /// Atomically pays a batch of bookings via [create_vendor_settlement_batch].
+  /// All validations and inserts happen in a single DB transaction.
   Future<String> createSettlementBatch({
     required String vendorId,
     required String vendorName,
@@ -573,6 +651,9 @@ class VendorSettlementRepository {
         .map((b) => {
               'booking_id': b.bookingId,
               'booking_gross': b.bookingGross,
+              'subtotal_before_tax': b.subtotalBeforeTax,
+              'tax_amount': b.taxAmount,
+              'commission_base': b.subtotalBeforeTax,
               'commission_amount': b.commissionAmount,
               'net_vendor_amount': b.netVendorAmount,
             })

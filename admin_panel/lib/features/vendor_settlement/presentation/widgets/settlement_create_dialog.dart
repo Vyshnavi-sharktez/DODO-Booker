@@ -7,6 +7,21 @@ import '../../application/providers/vendor_settlement_providers.dart';
 import '../../domain/models/vendor_booking_row.dart';
 import '../../domain/models/vendor_earnings_summary.dart';
 
+// ── Column widths (must match between header and data rows) ──────────────────
+
+const double _colCheck = 52;
+const double _colOrder = 96;
+const double _colDate  = 82;
+const double _colSvc   = 115;
+const double _colTax   = 100;
+const double _colPaid  = 115;
+const double _colComm  = 135;
+const double _colNet   = 125;
+const double _colStatus = 80;
+const double _tableMinWidth =
+    _colCheck + _colOrder + _colDate + _colSvc + _colTax +
+    _colPaid + _colComm + _colNet + _colStatus; // ≈ 900
+
 class SettlementCreateDialog extends ConsumerStatefulWidget {
   const SettlementCreateDialog({super.key, required this.summary});
   final VendorEarningsSummary summary;
@@ -18,13 +33,13 @@ class SettlementCreateDialog extends ConsumerStatefulWidget {
 
 class _SettlementCreateDialogState
     extends ConsumerState<SettlementCreateDialog> {
-  final _refCtrl = TextEditingController();
+  final _refCtrl   = TextEditingController();
   final _notesCtrl = TextEditingController();
   String? _paymentMethod = 'Bank Transfer';
   bool _saving = false;
   final _selected = <String>{};
 
-  static final _fmt = NumberFormat('#,##0.00', 'en_IN');
+  static final _fmt     = NumberFormat('#,##0.00', 'en_IN');
   static final _dateFmt = DateFormat('dd MMM yy');
 
   static const _paymentMethods = ['Bank Transfer', 'UPI', 'Cash', 'Cheque'];
@@ -39,9 +54,9 @@ class _SettlementCreateDialogState
   List<VendorBookingRow> _unpaid(List<VendorBookingRow> all) =>
       all.where((r) => !r.isPaid).toList();
 
-  double _selectedGross(List<VendorBookingRow> unpaid) => unpaid
+  double _selectedSubtotal(List<VendorBookingRow> unpaid) => unpaid
       .where((r) => _selected.contains(r.bookingId))
-      .fold(0.0, (s, r) => s + r.bookingGross);
+      .fold(0.0, (s, r) => s + r.subtotalBeforeTax);
 
   double _selectedCommission(List<VendorBookingRow> unpaid) => unpaid
       .where((r) => _selected.contains(r.bookingId))
@@ -76,8 +91,7 @@ class _SettlementCreateDialogState
                 _notesCtrl.text.trim().isEmpty ? null : _notesCtrl.text.trim(),
           );
       if (mounted) {
-        ref.invalidate(
-            vendorBookingRowsProvider(widget.summary.vendorId));
+        ref.invalidate(vendorBookingRowsProvider(widget.summary.vendorId));
         Navigator.of(context).pop(true);
       }
     } catch (e) {
@@ -85,7 +99,7 @@ class _SettlementCreateDialogState
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Settlement failed: $e'),
+            content: Text('Payout failed: $e'),
             backgroundColor: AppColors.error,
           ),
         );
@@ -101,13 +115,13 @@ class _SettlementCreateDialogState
     return Dialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 780, maxHeight: 680),
+        constraints: const BoxConstraints(maxWidth: 980, maxHeight: 720),
         child: Padding(
           padding: const EdgeInsets.all(28),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // ── Header ──────────────────────────────────────────────────────
+              // ── Header ─────────────────────────────────────────────────────
               Row(
                 children: [
                   Container(
@@ -126,7 +140,7 @@ class _SettlementCreateDialogState
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         const Text(
-                          'Settle Orders',
+                          'Pay Vendor Orders',
                           style: TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.w700,
@@ -151,11 +165,17 @@ class _SettlementCreateDialogState
                   ),
                 ],
               ),
-              const SizedBox(height: 16),
-              const Divider(color: AppColors.border),
-              const SizedBox(height: 8),
+              const SizedBox(height: 12),
 
-              // ── Booking list ─────────────────────────────────────────────────
+              // ── Helper note ─────────────────────────────────────────────────
+              _InfoNote(
+                'Platform Commission is calculated on the service amount before tax. '
+                'Vendor Receivable = Service Amount − Commission.',
+              ),
+              const SizedBox(height: 10),
+              const Divider(color: AppColors.border),
+
+              // ── Booking list ────────────────────────────────────────────────
               Expanded(
                 child: rowsAsync.when(
                   loading: () =>
@@ -168,98 +188,86 @@ class _SettlementCreateDialogState
                     final unpaid = _unpaid(allRows);
                     if (unpaid.isEmpty) {
                       return const Center(
-                        child: Text(
-                          'No pending orders to settle.',
-                          style:
-                              TextStyle(color: AppColors.textSecondary),
-                        ),
+                        child: Text('No pending orders.',
+                            style: TextStyle(color: AppColors.textSecondary)),
                       );
                     }
 
                     return Column(
                       children: [
-                        // Select-all row
-                        Row(
-                          children: [
-                            Checkbox(
-                              value: _selected.length == unpaid.length &&
-                                  unpaid.isNotEmpty,
-                              tristate: true,
-                              onChanged: (_) {
-                                setState(() {
-                                  if (_selected.length == unpaid.length) {
-                                    _selected.clear();
-                                  } else {
-                                    _selected.addAll(
-                                        unpaid.map((r) => r.bookingId));
-                                  }
-                                });
-                              },
-                            ),
-                            const Text(
-                              'Select All',
-                              style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w600,
-                                color: AppColors.textSecondary,
-                              ),
-                            ),
-                            const Spacer(),
-                            Text(
-                              '${unpaid.length} pending order${unpaid.length == 1 ? '' : 's'}',
-                              style: const TextStyle(
-                                fontSize: 12,
-                                color: AppColors.textSecondary,
-                              ),
-                            ),
-                          ],
-                        ),
-                        const Divider(height: 1, color: AppColors.border),
-
-                        // Booking rows
+                        // Horizontally-scrollable table (header + rows)
                         Expanded(
-                          child: ListView.builder(
-                            itemCount: unpaid.length,
-                            itemBuilder: (_, i) {
-                              final row = unpaid[i];
-                              final isChecked =
-                                  _selected.contains(row.bookingId);
-                              return _BookingSelectRow(
-                                row: row,
-                                checked: isChecked,
-                                fmt: _fmt,
-                                dateFmt: _dateFmt,
-                                onToggle: () => setState(() {
-                                  if (isChecked) {
-                                    _selected.remove(row.bookingId);
-                                  } else {
-                                    _selected.add(row.bookingId);
-                                  }
-                                }),
-                              );
-                            },
+                          child: SingleChildScrollView(
+                            scrollDirection: Axis.horizontal,
+                            child: SizedBox(
+                              width: _tableMinWidth,
+                              child: Column(
+                                children: [
+                                  // Select-all header row
+                                  _TableHeader(
+                                    allSelected:
+                                        _selected.length == unpaid.length &&
+                                            unpaid.isNotEmpty,
+                                    pendingCount: unpaid.length,
+                                    onSelectAll: () => setState(() {
+                                      if (_selected.length == unpaid.length) {
+                                        _selected.clear();
+                                      } else {
+                                        _selected.addAll(
+                                            unpaid.map((r) => r.bookingId));
+                                      }
+                                    }),
+                                  ),
+                                  const Divider(
+                                      height: 1, color: AppColors.border),
+                                  // Data rows
+                                  Expanded(
+                                    child: ListView.builder(
+                                      itemCount: unpaid.length,
+                                      itemBuilder: (_, i) {
+                                        final row = unpaid[i];
+                                        final checked = _selected
+                                            .contains(row.bookingId);
+                                        return _BookingSelectRow(
+                                          row: row,
+                                          checked: checked,
+                                          fmt: _fmt,
+                                          dateFmt: _dateFmt,
+                                          onToggle: () => setState(() {
+                                            if (checked) {
+                                              _selected
+                                                  .remove(row.bookingId);
+                                            } else {
+                                              _selected.add(row.bookingId);
+                                            }
+                                          }),
+                                        );
+                                      },
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
                           ),
                         ),
 
-                        // Selected totals strip
+                        // Summary strip (outside horizontal scroll)
                         if (_selected.isNotEmpty) ...[
                           const Divider(color: AppColors.border),
                           Padding(
-                            padding:
-                                const EdgeInsets.symmetric(vertical: 10),
+                            padding: const EdgeInsets.symmetric(vertical: 10),
                             child: Row(
-                              mainAxisAlignment:
-                                  MainAxisAlignment.spaceAround,
+                              mainAxisAlignment: MainAxisAlignment.spaceAround,
                               children: [
                                 _TotalItem(
-                                  label: 'Selected Orders',
+                                  label: 'Selected',
                                   value: _selected.length.toString(),
                                   color: AppColors.primary,
                                 ),
                                 _TotalItem(
-                                  label: 'Gross',
+                                  label: 'Service Amount',
                                   value:
-                                      '₹${_fmt.format(_selectedGross(unpaid))}',
+                                      '₹${_fmt.format(_selectedSubtotal(unpaid))}',
                                   color: AppColors.textPrimary,
                                 ),
                                 _TotalItem(
@@ -288,7 +296,7 @@ class _SettlementCreateDialogState
               const Divider(color: AppColors.border),
               const SizedBox(height: 14),
 
-              // ── Payment fields ───────────────────────────────────────────────
+              // ── Payment fields ──────────────────────────────────────────────
               Row(
                 children: [
                   Expanded(
@@ -296,17 +304,15 @@ class _SettlementCreateDialogState
                       value: _paymentMethod,
                       decoration: const InputDecoration(
                         labelText: 'Payment Method *',
-                        prefixIcon: Icon(
-                            Icons.account_balance_rounded,
-                            size: 18),
+                        prefixIcon:
+                            Icon(Icons.account_balance_rounded, size: 18),
                         isDense: true,
                       ),
                       items: _paymentMethods
                           .map((m) =>
                               DropdownMenuItem(value: m, child: Text(m)))
                           .toList(),
-                      onChanged: (v) =>
-                          setState(() => _paymentMethod = v),
+                      onChanged: (v) => setState(() => _paymentMethod = v),
                     ),
                   ),
                   const SizedBox(width: 12),
@@ -315,8 +321,7 @@ class _SettlementCreateDialogState
                       controller: _refCtrl,
                       decoration: const InputDecoration(
                         labelText: 'Reference / Transaction No. (Optional)',
-                        prefixIcon:
-                            Icon(Icons.tag_rounded, size: 18),
+                        prefixIcon: Icon(Icons.tag_rounded, size: 18),
                         isDense: true,
                       ),
                     ),
@@ -335,7 +340,7 @@ class _SettlementCreateDialogState
               ),
               const SizedBox(height: 18),
 
-              // ── Actions ──────────────────────────────────────────────────────
+              // ── Actions ─────────────────────────────────────────────────────
               rowsAsync.whenData((allRows) {
                 final unpaid = _unpaid(allRows);
                 return Row(
@@ -357,13 +362,12 @@ class _SettlementCreateDialogState
                               width: 16,
                               height: 16,
                               child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  color: Colors.white),
+                                  strokeWidth: 2, color: Colors.white),
                             )
                           : const Icon(Icons.check_rounded, size: 18),
                       label: Text(
                         _selected.isEmpty
-                            ? 'Select orders to settle'
+                            ? 'Select orders to pay'
                             : 'Mark ${_selected.length} order${_selected.length == 1 ? '' : 's'} as Paid',
                       ),
                       style: FilledButton.styleFrom(
@@ -381,7 +385,64 @@ class _SettlementCreateDialogState
   }
 }
 
-// ── Booking row widget ─────────────────────────────────────────────────────────
+// ── Table header row ───────────────────────────────────────────────────────────
+
+class _TableHeader extends StatelessWidget {
+  const _TableHeader({
+    required this.allSelected,
+    required this.pendingCount,
+    required this.onSelectAll,
+  });
+  final bool allSelected;
+  final int pendingCount;
+  final VoidCallback onSelectAll;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      color: AppColors.background,
+      child: Row(
+        children: [
+          SizedBox(
+            width: _colCheck,
+            child: Checkbox(
+              value: allSelected,
+              tristate: true,
+              onChanged: (_) => onSelectAll(),
+            ),
+          ),
+          _Col(_colOrder,  _hdr('Order ID')),
+          _Col(_colDate,   _hdr('Date')),
+          _Col(_colSvc,    _hdr('Service Amount')),
+          _Col(_colTax,    _hdr('Tax')),
+          _Col(_colPaid,   _hdr('Customer Paid')),
+          _Col(_colComm,   _hdr('Platform Commission')),
+          _Col(_colNet,    _hdr('Vendor Receivable')),
+          SizedBox(
+            width: _colStatus,
+            child: Text(
+              '$pendingCount pending',
+              style: const TextStyle(fontSize: 10, color: AppColors.textSecondary),
+              textAlign: TextAlign.center,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  static Widget _hdr(String label) => Text(
+        label,
+        style: const TextStyle(
+          fontSize: 11,
+          fontWeight: FontWeight.w600,
+          color: AppColors.textSecondary,
+          letterSpacing: 0.4,
+        ),
+      );
+}
+
+// ── Booking data row ───────────────────────────────────────────────────────────
 
 class _BookingSelectRow extends StatelessWidget {
   const _BookingSelectRow({
@@ -407,18 +468,20 @@ class _BookingSelectRow extends StatelessWidget {
               ? AppColors.success.withValues(alpha: 0.05)
               : Colors.transparent,
           border: const Border(
-            bottom: BorderSide(color: AppColors.border, width: 0.5),
-          ),
+              bottom: BorderSide(color: AppColors.border, width: 0.5)),
         ),
-        padding:
-            const EdgeInsets.symmetric(horizontal: 4, vertical: 10),
+        padding: const EdgeInsets.symmetric(vertical: 10),
         child: Row(
           children: [
-            Checkbox(value: checked, onChanged: (_) => onToggle()),
-            const SizedBox(width: 4),
-            Expanded(
-              flex: 2,
-              child: Text(
+            // Checkbox
+            SizedBox(
+              width: _colCheck,
+              child: Checkbox(value: checked, onChanged: (_) => onToggle()),
+            ),
+            // Order ID
+            _Col(
+              _colOrder,
+              Text(
                 '#${row.bookingId.length > 8 ? row.bookingId.substring(0, 8).toUpperCase() : row.bookingId.toUpperCase()}',
                 style: const TextStyle(
                   fontSize: 11,
@@ -427,24 +490,56 @@ class _BookingSelectRow extends StatelessWidget {
                 ),
               ),
             ),
-            Expanded(
-              flex: 2,
-              child: Text(
-                dateFmt.format(row.completedAt),
-                style: const TextStyle(
-                    fontSize: 12, color: AppColors.textSecondary),
-              ),
+            // Date
+            _Col(
+              _colDate,
+              Text(dateFmt.format(row.completedAt),
+                  style: const TextStyle(
+                      fontSize: 12, color: AppColors.textSecondary)),
             ),
-            Expanded(
-              flex: 2,
-              child: Text(
-                '₹${fmt.format(row.bookingGross)}',
-                style: const TextStyle(fontSize: 13),
-              ),
+            // Service Amount Before Tax
+            _Col(
+              _colSvc,
+              Text('₹${fmt.format(row.subtotalBeforeTax)}',
+                  style: const TextStyle(fontSize: 13)),
             ),
-            Expanded(
-              flex: 2,
-              child: Column(
+            // Tax
+            _Col(
+              _colTax,
+              row.hasTaxBreakdown
+                  ? Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          '₹${fmt.format(row.taxAmount)}',
+                          style: const TextStyle(
+                              fontSize: 12, color: AppColors.textSecondary),
+                        ),
+                        Text(
+                          row.subtotalBeforeTax > 0
+                              ? '${(row.taxAmount / row.subtotalBeforeTax * 100).toStringAsFixed(1)}%'
+                              : '—',
+                          style: const TextStyle(
+                              fontSize: 10, color: AppColors.textSecondary),
+                        ),
+                      ],
+                    )
+                  : const Text('—',
+                      style: TextStyle(
+                          fontSize: 12, color: AppColors.textSecondary)),
+            ),
+            // Customer Paid
+            _Col(
+              _colPaid,
+              Text('₹${fmt.format(row.bookingGross)}',
+                  style: const TextStyle(
+                      fontSize: 12, color: AppColors.textSecondary)),
+            ),
+            // Commission (amount + rate on two lines)
+            _Col(
+              _colComm,
+              Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
                 children: [
@@ -461,9 +556,10 @@ class _BookingSelectRow extends StatelessWidget {
                 ],
               ),
             ),
-            Expanded(
-              flex: 2,
-              child: Text(
+            // Vendor Receivable
+            _Col(
+              _colNet,
+              Text(
                 '₹${fmt.format(row.netVendorAmount)}',
                 style: const TextStyle(
                   fontSize: 13,
@@ -472,8 +568,87 @@ class _BookingSelectRow extends StatelessWidget {
                 ),
               ),
             ),
+            // Payout Status (always Pending in this dialog)
+            SizedBox(
+              width: _colStatus,
+              child: _PendingBadge(),
+            ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+// ── Shared layout helper ───────────────────────────────────────────────────────
+
+class _Col extends StatelessWidget {
+  const _Col(this.width, this.child);
+  final double width;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: width,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 8),
+        child: child,
+      ),
+    );
+  }
+}
+
+// ── Pending status badge ───────────────────────────────────────────────────────
+
+class _PendingBadge extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+        decoration: BoxDecoration(
+          color: AppColors.warning.withValues(alpha: 0.12),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: const Text(
+          'Pending',
+          style: TextStyle(
+            fontSize: 10,
+            fontWeight: FontWeight.w600,
+            color: AppColors.warning,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ── Info note banner ───────────────────────────────────────────────────────────
+
+class _InfoNote extends StatelessWidget {
+  const _InfoNote(this.text);
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: AppColors.primary.withValues(alpha: 0.06),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.info_outline_rounded,
+              size: 13, color: AppColors.primary),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text(text,
+                style: const TextStyle(
+                    fontSize: 11, color: AppColors.textSecondary)),
+          ),
+        ],
       ),
     );
   }
