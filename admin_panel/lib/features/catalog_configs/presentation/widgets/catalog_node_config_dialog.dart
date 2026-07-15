@@ -27,6 +27,7 @@ class CatalogNodeConfigDialog extends StatefulWidget {
   final String nodeName;
   final String? parentNodeId;
   final String? parentNodeName;
+  final bool hasChildren;
 
   const CatalogNodeConfigDialog({
     super.key,
@@ -34,6 +35,7 @@ class CatalogNodeConfigDialog extends StatefulWidget {
     required this.nodeName,
     this.parentNodeId,
     this.parentNodeName,
+    this.hasChildren = false,
   });
 
   @override
@@ -71,6 +73,9 @@ class _CatalogNodeConfigDialogState extends State<CatalogNodeConfigDialog>
   // Whether the admin clicked "Create override" in a module tab.
   final Map<String, bool> _creatingOverride = {};
 
+  // Whether "Apply to all child items" is checked per module.
+  final Map<String, bool> _applyToChildren = {};
+
   // Form controllers per module
   // Tax
   final _taxValueCtrl = TextEditingController();
@@ -101,6 +106,9 @@ class _CatalogNodeConfigDialogState extends State<CatalogNodeConfigDialog>
   void initState() {
     super.initState();
     _tabController = TabController(length: 4, vsync: this);
+    for (final m in _modules) {
+      _applyToChildren[m] = false;
+    }
     _loadData();
   }
 
@@ -275,20 +283,69 @@ class _CatalogNodeConfigDialogState extends State<CatalogNodeConfigDialog>
   }
 
   Future<void> _save(String module) async {
+    final useRel = _useRelScope[module] ?? false;
+    final applyToChildren = (_applyToChildren[module] ?? false) && widget.hasChildren;
+
+    // Validate before anything else.
+    if (useRel && _relationshipId == null) {
+      setState(() {
+        _error = 'Could not link this category to the item. Please refresh and try again.';
+      });
+      return;
+    }
+
+    // ── All confirmations happen HERE, before any database write ──────────────
+    String? bulkMode; // null = normal save, otherwise 'subtree_only' | 'shared_everywhere'
+
+    if (applyToChildren) {
+      if (!mounted) return;
+      final tabLabel = _tabLabels[_modules.indexOf(module)];
+
+      // Step 1: first warning — confirm intent to override child items.
+      final firstOk = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Override child settings?'),
+          content: Text(
+            'Saving will also clear existing $tabLabel overrides on all child items '
+            'in this subtree so they inherit this setting.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(ctx).pop(true),
+              child: const Text('Apply & Override'),
+            ),
+          ],
+        ),
+      );
+      // Cancel at step 1: leave dialog open with all values intact, do nothing.
+      if (firstOk != true || !mounted) return;
+
+      // Step 2: scan for shared descendants (read-only, before any write).
+      final sharedCount = await _repo.countSharedDescendants(widget.nodeId);
+      if (!mounted) return;
+
+      if (sharedCount > 0) {
+        // Step 3: mode-choice dialog — only shown when shared descendants exist.
+        final chosen = await _showSharedModeDialog(sharedCount, tabLabel);
+        // Cancel at step 3: do nothing.
+        if (chosen == null || !mounted) return;
+        bulkMode = chosen;
+      } else {
+        bulkMode = 'subtree_only';
+      }
+    }
+    // ── All confirmations complete. Now write. ────────────────────────────────
+
     setState(() {
       _saving = true;
       _error = null;
     });
     try {
-      final useRel = _useRelScope[module] ?? false;
-      if (useRel && _relationshipId == null) {
-        setState(() {
-          _error = 'Could not link this category to the item. Please refresh and try again.';
-          _saving = false;
-        });
-        return;
-      }
-
       final config = _buildConfig(module);
       final existing = _activeConfig(module);
 
@@ -303,7 +360,7 @@ class _CatalogNodeConfigDialogState extends State<CatalogNodeConfigDialog>
 
       await _repo.upsert(model);
 
-      // Scope conversion: if the admin changed scope, delete the old-scope config.
+      // Scope conversion: delete the old-scope config when the admin switched.
       // Only runs after a successful upsert — never deletes if the save failed.
       final wasUseRel = _savedScope[module] ?? useRel;
       if (useRel != wasUseRel) {
@@ -316,9 +373,42 @@ class _CatalogNodeConfigDialogState extends State<CatalogNodeConfigDialog>
 
       await _refreshConfigs();
       _creatingOverride[module] = false;
-      if (mounted) {
+
+      if (bulkMode != null && mounted) {
+        final tabLabel = _tabLabels[_modules.indexOf(module)];
+        final result = await _repo.bulkApplyConfigToSubtree(
+          widget.nodeId, module, config, true,
+          mode: bulkMode,
+        );
+
+        debugPrint(
+          '[DODO][BulkConfig] node=${widget.nodeId} module=$module mode=$bulkMode '
+          'deleted=${result.deleted} upserted=${result.upserted} '
+          'skipped=${result.skipped}',
+        );
+
+        if (mounted) {
+          setState(() => _applyToChildren[module] = false);
+          final String note;
+          if (bulkMode == 'shared_everywhere' && result.upserted > 0) {
+            note = ' (${result.upserted} shared item${result.upserted == 1 ? '' : 's'} updated everywhere)';
+          } else if (result.skipped > 0) {
+            note = ' (${result.skipped} shared item${result.skipped == 1 ? '' : 's'} received path-specific override)';
+          } else {
+            note = '';
+          }
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                  '$tabLabel settings saved and applied to child items$note.'),
+            ),
+          );
+        }
+      } else if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('${_tabLabels[_modules.indexOf(module)]} settings saved.')),
+          SnackBar(
+              content: Text(
+                  '${_tabLabels[_modules.indexOf(module)]} settings saved.')),
         );
       }
     } catch (e) {
@@ -326,6 +416,66 @@ class _CatalogNodeConfigDialogState extends State<CatalogNodeConfigDialog>
     } finally {
       if (mounted) setState(() => _saving = false);
     }
+  }
+
+  Future<String?> _showSharedModeDialog(int sharedCount, String tabLabel) {
+    String selected = 'subtree_only';
+    return showDialog<String>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setModal) => AlertDialog(
+          title: const Text('Shared items found'),
+          content: SizedBox(
+            width: 400,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Some items under "${widget.nodeName}" also appear in other parts '
+                  'of the catalog. Choose where you want to apply these settings.',
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  '$sharedCount shared item${sharedCount == 1 ? '' : 's'} found.',
+                  style: const TextStyle(
+                      fontSize: 12, color: AppColors.textSecondary),
+                ),
+                const SizedBox(height: 16),
+                _SharedModeOption(
+                  title: 'Only this catalog section',
+                  subtitle:
+                      'Apply the $tabLabel setting only to items inside '
+                      '"${widget.nodeName}". Other places where shared items '
+                      'appear will remain unchanged.',
+                  selected: selected == 'subtree_only',
+                  onTap: () => setModal(() => selected = 'subtree_only'),
+                ),
+                const SizedBox(height: 8),
+                _SharedModeOption(
+                  title: 'Everywhere shared items appear',
+                  subtitle:
+                      'Also apply this $tabLabel setting to these shared items '
+                      'everywhere they appear in the catalog.',
+                  selected: selected == 'shared_everywhere',
+                  onTap: () => setModal(() => selected = 'shared_everywhere'),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(null),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(ctx).pop(selected),
+              child: const Text('Apply'),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   Future<void> _delete(String module) async {
@@ -609,6 +759,11 @@ class _CatalogNodeConfigDialogState extends State<CatalogNodeConfigDialog>
           // ── Edit form (direct override or creating new) ────────────────
           if (showForm) ...[
             _buildModuleFields(module),
+
+            if (widget.hasChildren) ...[
+              const SizedBox(height: 16),
+              _buildApplyToChildrenCheckbox(module),
+            ],
 
             const SizedBox(height: 20),
 
@@ -1010,6 +1165,37 @@ class _CatalogNodeConfigDialogState extends State<CatalogNodeConfigDialog>
     );
   }
 
+  Widget _buildApplyToChildrenCheckbox(String module) {
+    final checked = _applyToChildren[module] ?? false;
+    return Container(
+      decoration: BoxDecoration(
+        border: Border.all(
+          color: checked ? AppColors.primary : AppColors.border,
+          width: checked ? 1.2 : 0.8,
+        ),
+        borderRadius: BorderRadius.circular(8),
+        color: checked ? AppColors.primary.withValues(alpha: 0.05) : null,
+      ),
+      child: CheckboxListTile(
+        dense: true,
+        value: checked,
+        onChanged: (v) => setState(() => _applyToChildren[module] = v ?? false),
+        title: const Text(
+          'Apply to all child items',
+          style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
+        ),
+        subtitle: const Text(
+          'Removes existing overrides on child items so they inherit this setting. '
+          'Items shared across other catalog paths receive a path-specific override '
+          'that does not affect their other occurrences.',
+          style: TextStyle(fontSize: 11),
+        ),
+        activeColor: AppColors.primary,
+        controlAffinity: ListTileControlAffinity.leading,
+      ),
+    );
+  }
+
   Widget _label(String text) => Text(
         text,
         style: const TextStyle(
@@ -1039,4 +1225,78 @@ class _CatalogNodeConfigDialogState extends State<CatalogNodeConfigDialog>
               const BorderSide(color: AppColors.primary, width: 1.4),
         ),
       );
+}
+
+// ── Shared-mode option card used inside the mode-choice dialog ─────────────────
+
+class _SharedModeOption extends StatelessWidget {
+  const _SharedModeOption({
+    required this.title,
+    required this.subtitle,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String title;
+  final String subtitle;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
+        decoration: BoxDecoration(
+          border: Border.all(
+            color: selected ? AppColors.primary : AppColors.border,
+            width: selected ? 1.5 : 0.8,
+          ),
+          borderRadius: BorderRadius.circular(8),
+          color: selected ? AppColors.primary.withValues(alpha: 0.05) : null,
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.only(top: 1),
+              child: Icon(
+                selected
+                    ? Icons.radio_button_checked_rounded
+                    : Icons.radio_button_unchecked_rounded,
+                size: 18,
+                color:
+                    selected ? AppColors.primary : AppColors.textSecondary,
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: selected
+                          ? AppColors.primary
+                          : AppColors.textPrimary,
+                    ),
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    subtitle,
+                    style: const TextStyle(
+                        fontSize: 11, color: AppColors.textSecondary),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }

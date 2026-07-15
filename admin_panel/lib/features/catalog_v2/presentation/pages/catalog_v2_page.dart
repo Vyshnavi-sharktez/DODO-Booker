@@ -386,6 +386,7 @@ class _CatalogV2PageState extends ConsumerState<CatalogV2Page> {
         nodeName: node.name,
         parentNodeId: parentIdContext,
         parentNodeName: parentNode?.name,
+        hasChildren: node.childrenCount > 0,
       ),
     );
   }
