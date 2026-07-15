@@ -3,9 +3,9 @@ import '../domain/models/customer_search_record.dart';
 
 /// Builds a flat search index for the customers list page in a single query.
 ///
-/// Joins customers → addresses → bookings → booking_items → services /
-/// categories / sub_categories / vendors / dodo_teams so that the page can
-/// filter by any of those fields entirely client-side.
+/// Joins customers → addresses → bookings → booking_items → catalog_nodes /
+/// vendors / dodo_teams so that the page can filter by any of those fields
+/// entirely client-side.
 class CustomerSearchRepository {
   final SupabaseClient _supabase;
   const CustomerSearchRepository(this._supabase);
@@ -23,11 +23,7 @@ class CustomerSearchRepository {
       vendors(business_name),
       dodo_teams(team_name),
       booking_items(
-        services(
-          name,
-          categories(name),
-          sub_categories(name)
-        )
+        catalog_nodes!booking_items_service_id_catalog_fkey(name)
       )
     )
   ''';
@@ -72,14 +68,8 @@ class CustomerSearchRepository {
       add(dodoTeam?['team_name'] as String?);
       for (final item in (booking['booking_items'] as List<dynamic>? ?? [])) {
         final i = item as Map<String, dynamic>;
-        final svc = i['services'] as Map<String, dynamic>?;
-        if (svc != null) {
-          add(svc['name'] as String?);
-          final cat = svc['categories'] as Map<String, dynamic>?;
-          add(cat?['name'] as String?);
-          final sub = svc['sub_categories'] as Map<String, dynamic>?;
-          add(sub?['name'] as String?);
-        }
+        final node = i['catalog_nodes'] as Map<String, dynamic>?;
+        add(node?['name'] as String?);
       }
     }
 

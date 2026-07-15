@@ -11,6 +11,8 @@ import '../../../models/booking_item.dart';
 import '../../../features/address/modals/address_form_modal.dart';
 import '../services/booking_providers.dart';
 import '../services/coupon_providers.dart';
+import '../../../features/tax/providers/tax_provider.dart';
+import '../../../features/tax/models/tax_settings_model.dart';
 import '../widgets/date_selector.dart';
 import '../widgets/time_slot_card.dart';
 import '../widgets/available_coupons_sheet.dart';
@@ -42,10 +44,20 @@ class _RebookFlowModalState extends ConsumerState<RebookFlowModal>
   late final Animation<double> _successScale;
 
   List<BookingItem> get _items => widget.booking.items;
+  String? get _parentNodeId =>
+      _items.isNotEmpty ? _items.first.catalogParentNodeId : null;
 
   double get _baseAmount =>
       _items.fold(0.0, (sum, i) => sum + i.unitPrice * i.quantity);
-  double get _taxAmount => _baseAmount * 0.18;
+  TaxSettingsModel get _taxSettings =>
+      ref
+          .watch(resolvedTaxProvider((
+            serviceId: widget.booking.serviceId,
+            parentNodeId: _parentNodeId,
+          )))
+          .valueOrNull ??
+      TaxSettingsModel.defaults;
+  double get _taxAmount => _taxSettings.computeTax(_baseAmount);
   double get _grossAmount => _baseAmount + _taxAmount;
 
   String get _dateKey =>
@@ -141,6 +153,7 @@ class _RebookFlowModalState extends ConsumerState<RebookFlowModal>
             slot: _slot!,
             couponId: selectedCoupon?.id,
             discountAmount: discountAmount,
+            parentNodeId: _parentNodeId,
           );
       ref.read(selectedCouponProvider.notifier).state = null;
       if (!mounted) return;
@@ -410,7 +423,7 @@ class _RebookFlowModalState extends ConsumerState<RebookFlowModal>
 
   Widget _buildDateTimeStep() {
     final slotsAsync = ref.watch(timeSlotsProvider(
-      (date: _dateKey, serviceId: widget.booking.serviceId),
+      (date: _dateKey, serviceId: widget.booking.serviceId, parentNodeId: _parentNodeId),
     ));
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -475,6 +488,7 @@ class _RebookFlowModalState extends ConsumerState<RebookFlowModal>
           slot: _slot!,
           baseAmount: _baseAmount,
           taxAmount: _taxAmount,
+          taxLabel: _taxSettings.displayLabel,
           discountAmount: discount,
           couponCode: selectedCoupon?.code,
         ),
@@ -915,6 +929,7 @@ class _RebookSummaryCard extends StatelessWidget {
   final TimeSlotModel slot;
   final double baseAmount;
   final double taxAmount;
+  final String taxLabel;
   final double discountAmount;
   final String? couponCode;
 
@@ -925,6 +940,7 @@ class _RebookSummaryCard extends StatelessWidget {
     required this.slot,
     required this.baseAmount,
     required this.taxAmount,
+    required this.taxLabel,
     required this.discountAmount,
     this.couponCode,
   });
@@ -1081,7 +1097,7 @@ class _RebookSummaryCard extends StatelessWidget {
                     value: '₹${baseAmount.toStringAsFixed(2)}',
                     tt: tt),
                 _PriceRow(
-                    label: 'GST (18%)',
+                    label: taxLabel,
                     value: '₹${taxAmount.toStringAsFixed(2)}',
                     tt: tt),
                 if (discountAmount > 0 && couponCode != null)

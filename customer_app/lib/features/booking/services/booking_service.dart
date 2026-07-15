@@ -9,12 +9,14 @@ import '../../../models/booking_item.dart';
 import '../../../features/catalog/models/catalog_node_model.dart';
 import '../../../models/address_model.dart';
 import '../../../models/addon_model.dart';
+import '../../../features/tax/services/tax_service.dart';
 import 'coupon_service.dart';
 
 class BookingService {
   static const _phoneKey = 'dodo_auth_phone';
   final _client = Supabase.instance.client;
   final _couponService = CouponService();
+  final _taxService = TaxService();
 
   // ── Internal helpers ────────────────────────────────────────────────────────
 
@@ -34,10 +36,47 @@ class BookingService {
 
   Future<List<TimeSlotModel>> fetchAvailableSlots(
     String dateStr,
-    String serviceId,
-  ) async {
+    String serviceId, {
+    String? parentNodeId,
+  }) async {
     debugPrint('[DODO][Slots] ══════════ fetchAvailableSlots ══════════');
-    debugPrint('[DODO][Slots] date=$dateStr  serviceId="$serviceId"');
+    debugPrint('[DODO][Slots] date=$dateStr  serviceId="$serviceId"  parentNodeId=$parentNodeId');
+
+    // ── 0. Try relationship/node-scoped scheduling config ───────────────────
+    // Call the RPC even when parentNodeId is null: the function handles null
+    // p_parent_id by checking node-scoped configs on the service itself (step B
+    // in the RPC's resolution loop). Relationship-scoped configs still require a
+    // non-null parentNodeId to match the correct edge.
+    if (serviceId.isNotEmpty) {
+      try {
+        final scopedResult = await _client.rpc(
+          'resolve_catalog_module_config',
+          params: {
+            'p_module': 'scheduling',
+            'p_service_id': serviceId,
+            'p_parent_id': parentNodeId,
+          },
+        );
+        if (scopedResult != null && scopedResult is Map) {
+          final scopedCfg = Map<String, dynamic>.from(scopedResult as Map);
+          debugPrint('[DODO][Slots] CONFIG SOURCE: scoped (resolve_catalog_module_config)');
+          debugPrint('[DODO][Slots] Scoped config raw: $scopedCfg');
+          final isEnabled = (scopedCfg['is_enabled'] as bool?) ?? true;
+          if (!isEnabled) {
+            debugPrint('[DODO][Slots] → returning [] (scoped scheduling disabled)');
+            return [];
+          }
+          // await so that any exception from _buildSlots is caught by this
+          // try/catch rather than propagating as an unhandled Future rejection.
+          return await _buildSlots(dateStr, serviceId, scopedCfg,
+              configSource: 'scoped');
+        } else {
+          debugPrint('[DODO][Slots] RPC returned null — no scoped config, falling through to global');
+        }
+      } catch (e) {
+        debugPrint('[DODO][Slots] Warning: scoped scheduling RPC failed, falling through: $e');
+      }
+    }
 
     // ── 1. Fetch global scheduling config ───────────────────────────────────
     // Always loaded first so the master switch can be checked even when the
@@ -69,7 +108,7 @@ class BookingService {
 
     if (globalMasterOn) {
       // Master ON → use global for every service without querying service_scheduling.
-      debugPrint('[DODO][Slots] Using global schedule (master override)');
+      debugPrint('[DODO][Slots] CONFIG SOURCE: global (master override)');
       scheduleCfg = globalCfg;
       isEnabled = true;
     } else {
@@ -101,9 +140,10 @@ class BookingService {
       debugPrint('[DODO][Slots] serviceOptedIn=$serviceOptedIn  isEnabled=$isEnabled');
 
       if (serviceOptedIn && globalCfg != null) {
-        debugPrint('[DODO][Slots] Using global schedule (per-service opt-in)');
+        debugPrint('[DODO][Slots] CONFIG SOURCE: global (per-service opt-in)');
         scheduleCfg = globalCfg;
       } else {
+        debugPrint('[DODO][Slots] CONFIG SOURCE: service-specific (service_scheduling table)');
         scheduleCfg = serviceCfg;
       }
     }
@@ -119,31 +159,43 @@ class BookingService {
       return [];
     }
 
-    // All remaining filtering reads from scheduleCfg (not cfg).
-    final cfg = scheduleCfg;
+    return await _buildSlots(dateStr, serviceId, scheduleCfg!);
+  }
 
-    // ── 2. Check working day ─────────────────────────────────────────────────
+  /// Shared slot-generation logic used by both scoped and fallback paths.
+  Future<List<TimeSlotModel>> _buildSlots(
+      String dateStr, String serviceId, Map<String, dynamic> cfg,
+      {String configSource = 'unknown'}) async {
+    debugPrint('[DODO][Slots] ── _buildSlots: configSource=$configSource');
+
+    // ── Check working day ────────────────────────────────────────────────────
     final date = DateTime.parse(dateStr);
-    // Dart: Mon=1 … Sun=7 → convert to Sun=0 … Sat=6
     final dayOfWeek = date.weekday == 7 ? 0 : date.weekday;
     final workingDays = (cfg['working_days'] as List?)
-        ?.map((e) => (e as num).toInt())
-        .toList() ?? [1, 2, 3, 4, 5];
-    debugPrint('[DODO][Slots] date=$dateStr  dart.weekday=${date.weekday}  '
-        'mapped dayOfWeek=$dayOfWeek  working_days=$workingDays');
+            ?.map((e) => (e as num).toInt())
+            .toList() ??
+        [1, 2, 3, 4, 5];
+    debugPrint('[DODO][Slots] STAGE working-day: date=$dateStr  '
+        'dart.weekday=${date.weekday}  mapped=$dayOfWeek  '
+        'working_days=$workingDays  → pass=${workingDays.contains(dayOfWeek)}');
     if (!workingDays.contains(dayOfWeek)) {
       debugPrint('[DODO][Slots] → returning [] ($dateStr is not a working day)');
       return [];
     }
 
-    // ── 3. Read manual slot list and max bookings ────────────────────────────
-    final labels = (cfg['slots'] as List?)
-        ?.map((e) => e as String)
-        .toList() ?? <String>[];
+    // ── Read slot list and max bookings ──────────────────────────────────────
+    // Trim each label to handle slots stored with surrounding spaces
+    // (e.g. when admin enters "09:00 AM, 10:00 AM" and split(',') is used).
+    final rawLabels = (cfg['slots'] as List?)?.cast<dynamic>().toList() ?? [];
+    debugPrint('[DODO][Slots] STAGE parse-slots: raw=${rawLabels.length} labels=$rawLabels');
+    final labels = rawLabels
+        .map((e) => (e as String).trim())
+        .where((s) => s.isNotEmpty)
+        .toList();
     final maxBookings = (cfg['max_bookings_per_slot'] as num?)?.toInt() ?? 5;
-    debugPrint('[DODO][Slots] slots from DB: $labels  maxBookings=$maxBookings');
+    debugPrint('[DODO][Slots] STAGE parse-slots: after trim=${labels.length} labels=$labels  maxBookings=$maxBookings');
 
-    // ── 5. Load existing booking counts for this service+date ───────────────
+    // ── Load existing booking counts for this service+date ───────────────────
     final capacityMap = <String, int>{};
     if (serviceId.isNotEmpty) {
       try {
@@ -165,7 +217,7 @@ class BookingService {
       }
     }
 
-    // ── 6. Same-day lead-time filter ─────────────────────────────────────────
+    // ── Same-day lead-time filter ────────────────────────────────────────────
     final now = DateTime.now();
     final todayStr = '${now.year}-'
         '${now.month.toString().padLeft(2, '0')}-'
@@ -174,21 +226,22 @@ class BookingService {
     final cutoffNow = now.add(const Duration(hours: 1));
     final cutoffMin = isToday ? cutoffNow.hour * 60 + cutoffNow.minute : 0;
     debugPrint('[DODO][Slots] isToday=$isToday  '
-        'now=${now.hour}:${now.minute.toString().padLeft(2,'0')}  '
-        'cutoffMin=$cutoffMin (${cutoffMin ~/ 60}:${(cutoffMin % 60).toString().padLeft(2,'0')})');
+        'now=${now.hour}:${now.minute.toString().padLeft(2, '0')}  '
+        'cutoffMin=$cutoffMin (${cutoffMin ~/ 60}:${(cutoffMin % 60).toString().padLeft(2, '0')})');
 
-    // ── 7. Build TimeSlotModel list ──────────────────────────────────────────
-    // Today: remove past slots entirely. Future: keep all, mark capacity.
+    // ── Build TimeSlotModel list ─────────────────────────────────────────────
     final result = <TimeSlotModel>[];
     for (final label in labels) {
       final slotMin = _labelToMinutes(label);
       if (isToday && slotMin < cutoffMin) {
-        debugPrint('[DODO][Slots]   "$label" ($slotMin min) — FILTERED (before cutoff $cutoffMin)');
+        debugPrint(
+            '[DODO][Slots]   "$label" ($slotMin min) — FILTERED (before cutoff $cutoffMin)');
         continue;
       }
       final bookedCount = capacityMap[label] ?? 0;
       final isAvailable = bookedCount < maxBookings;
-      debugPrint('[DODO][Slots]   "$label" ($slotMin min) — KEPT  booked=$bookedCount/$maxBookings  available=$isAvailable');
+      debugPrint(
+          '[DODO][Slots]   "$label" ($slotMin min) — KEPT  booked=$bookedCount/$maxBookings  available=$isAvailable');
       result.add(TimeSlotModel(
         id: 'ts_${label.replaceAll(RegExp(r'[^0-9]'), '')}',
         label: label,
@@ -196,11 +249,30 @@ class BookingService {
         isAvailable: isAvailable,
       ));
     }
+    final filteredByTime = labels.length - result.length;
+    debugPrint('[DODO][Slots] STAGE summary: '
+        'raw=${rawLabels.length}  '
+        'parsed=${labels.length}  '
+        'filtered-by-time=$filteredByTime  '
+        'returned=${result.length}');
+    if (result.isEmpty && labels.isNotEmpty) {
+      final cutoffHH = cutoffMin ~/ 60;
+      final cutoffMM = (cutoffMin % 60).toString().padLeft(2, '0');
+      debugPrint('[DODO][Slots] ⚠ All ${labels.length} slot(s) were filtered.'
+          '  isToday=$isToday  cutoffMin=$cutoffMin ($cutoffHH:$cutoffMM)');
+    }
     debugPrint('[DODO][Slots] → returning ${result.length} slot(s)');
     return result;
   }
 
   // ── Create booking ──────────────────────────────────────────────────────────
+
+  Future<double> _resolveTaxAmount(
+      double subtotal, String serviceId, String? parentNodeId) async {
+    final taxSettings =
+        await _taxService.getResolvedTaxForService(serviceId, parentNodeId);
+    return taxSettings.computeTax(subtotal);
+  }
 
   Future<BookingModel> createBooking({
     required CatalogNodeModel service,
@@ -211,6 +283,7 @@ class BookingService {
     double discountAmount = 0.0,
     double priceAdjustment = 0.0,
     List<SelectedAddon> selectedAddons = const [],
+    String? parentNodeId,
   }) async {
     debugPrint('[DODO][Booking] createBooking started');
     debugPrint('[DODO][Booking] Service: ${service.name} (id=${service.id})');
@@ -223,7 +296,7 @@ class BookingService {
 
     final addonsTotal = totalAddonsPrice(selectedAddons);
     final subtotal = (service.basePrice ?? 0.0) + priceAdjustment + addonsTotal;
-    final tax = subtotal * 0.18;
+    final tax = await _resolveTaxAmount(subtotal, service.id, parentNodeId);
     final grossAmount = subtotal + tax;
     final totalAmount = (grossAmount - discountAmount).clamp(0.0, double.infinity);
     final serviceDate = date.toIso8601String().substring(0, 10);
@@ -297,13 +370,14 @@ class BookingService {
     // ── INSERT into booking_items ─────────────────────────────────────────────
     // booking_items.service_id FK → catalog_nodes(id). Use service.id directly.
     try {
-      debugPrint('[DODO][Booking] Inserting booking_item: service_id=${service.id} unit_price=$subtotal');
+      debugPrint('[DODO][Booking] Inserting booking_item: service_id=${service.id} unit_price=$subtotal parentNodeId=$parentNodeId');
       await _client.from('booking_items').insert({
         'booking_id': bookingId,
         'service_id': service.id,
         'quantity': 1,
         'unit_price': subtotal,
         'total_price': subtotal,
+        if (parentNodeId != null) 'catalog_parent_node_id': parentNodeId,
       });
       debugPrint('[DODO][Booking] booking_item inserted');
     } catch (e) {
@@ -400,14 +474,16 @@ class BookingService {
     required TimeSlotModel slot,
     String? couponId,
     double discountAmount = 0.0,
+    String? parentNodeId,
   }) async {
-    debugPrint('[DODO][Booking] rebookBooking started — ${items.length} items');
+    debugPrint('[DODO][Booking] rebookBooking started — ${items.length} items  parentNodeId=$parentNodeId');
 
     final customerId = await _getCustomerId();
 
     final subtotal =
         items.fold(0.0, (sum, i) => sum + i.unitPrice * i.quantity);
-    final tax = subtotal * 0.18;
+    final firstServiceId = items.isNotEmpty ? items.first.serviceId : '';
+    final tax = await _resolveTaxAmount(subtotal, firstServiceId, parentNodeId);
     final grossAmount = subtotal + tax;
     final totalAmount =
         (grossAmount - discountAmount).clamp(0.0, double.infinity);
@@ -417,8 +493,6 @@ class BookingService {
 
     final completionOtp = (100000 + Random().nextInt(900000)).toString();
 
-    final rebookServiceId =
-        items.isNotEmpty && items.first.serviceId.isNotEmpty ? items.first.serviceId : null;
     final payload = {
       'customer_id': customerId,
       'service_date': serviceDate,
@@ -432,7 +506,7 @@ class BookingService {
       'longitude': ?address.longitude,
       'completion_otp': completionOtp,
       'scheduled_time': slot.label,
-      if (rebookServiceId != null) 'service_id': rebookServiceId,
+      if (firstServiceId.isNotEmpty) 'service_id': firstServiceId,
     };
 
     final bookingData =
@@ -451,6 +525,8 @@ class BookingService {
                     'quantity': item.quantity,
                     'unit_price': item.unitPrice,
                     'total_price': item.unitPrice * item.quantity,
+                    if (item.catalogParentNodeId != null)
+                      'catalog_parent_node_id': item.catalogParentNodeId,
                   })
               .toList(),
         );
@@ -531,13 +607,15 @@ class BookingService {
 
 // ── Slot helpers ───────────────────────────────────────────────────────────────
 
-/// "07:00 AM" / "01:00 PM" → minutes since midnight.
+/// Parses a slot label to minutes since midnight.
+/// Accepts both "07:00 AM" and "07:00AM" (with or without space before AM/PM).
 int _labelToMinutes(String label) {
-  final parts = label.split(' ');
-  final timeParts = parts[0].split(':');
+  final upper = label.toUpperCase().replaceAll(' ', '');
+  final isPm = upper.endsWith('PM');
+  final timePart = upper.replaceAll('AM', '').replaceAll('PM', '');
+  final timeParts = timePart.split(':');
   var hour = int.parse(timeParts[0]);
   final minute = int.parse(timeParts[1]);
-  final isPm = parts[1] == 'PM';
   if (isPm && hour != 12) hour += 12;
   if (!isPm && hour == 12) hour = 0;
   return hour * 60 + minute;

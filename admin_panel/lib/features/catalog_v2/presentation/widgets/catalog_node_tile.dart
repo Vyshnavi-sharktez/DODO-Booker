@@ -15,6 +15,7 @@ class NodeCallbacks {
     required this.onToggleActive,
     required this.onToggleBookable,
     required this.onOpenScheduling,
+    required this.onOpenConfig,
   });
 
   final void Function(CatalogNode parent) onAddChild;
@@ -31,6 +32,10 @@ class NodeCallbacks {
   final void Function(CatalogNode node, bool isActive) onToggleActive;
   final void Function(CatalogNode node, bool isBookable) onToggleBookable;
   final void Function(CatalogNode node) onOpenScheduling;
+
+  /// Opens the module configuration dialog (Tax/Loyalty/Scheduling/Commission).
+  /// [parentIdContext] is passed so the dialog can offer relationship-scoped config.
+  final void Function(CatalogNode node, String? parentIdContext) onOpenConfig;
 }
 
 /// Renders a single catalog item row and recursively renders its children
@@ -240,6 +245,15 @@ class CatalogNodeTile extends StatelessWidget {
                     color: AppColors.accent,
                     onPressed: () => callbacks.onOpenScheduling(node),
                   ),
+
+                // Module config (Tax / Loyalty / Scheduling / Commission)
+                IconButton(
+                  icon: const Icon(Icons.tune_rounded, size: 17),
+                  tooltip: 'Configure Tax / Loyalty / Scheduling / Commission',
+                  color: AppColors.primary,
+                  onPressed: () =>
+                      callbacks.onOpenConfig(node, parentIdContext),
+                ),
 
                 // Add child
                 IconButton(

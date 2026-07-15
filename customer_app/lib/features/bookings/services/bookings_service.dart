@@ -22,7 +22,7 @@ class BookingsService {
       quantity,
       unit_price,
       total_price,
-      catalog_nodes(id, name)
+      catalog_nodes!booking_items_service_id_catalog_fkey(id, name)
     )
   ''';
 

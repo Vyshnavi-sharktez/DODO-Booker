@@ -38,7 +38,8 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
   CouponModel? _selectedCoupon;
   bool _usePoints = false;
   bool _placing = false;
-  TaxSettingsModel _taxSettings = TaxSettingsModel.defaults;
+  double _taxTotal = 0.0;
+  TaxSettingsModel _displayTax = TaxSettingsModel.defaults;
 
   static const _monthNames = [
     'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
@@ -54,7 +55,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
   double get _discount =>
       _selectedCoupon?.calculateDiscount(_subtotal) ?? 0.0;
 
-  double get _tax => _taxSettings.computeTax(_subtotal);
+  double get _tax => _taxTotal;
 
   int get _availablePoints {
     return ref
@@ -280,15 +281,39 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     final items = ref.watch(cartProvider);
     final addressAsync = ref.watch(addressNotifierProvider);
 
-    // Cache tax settings so _tax getter and _placeBooking() stay in sync.
-    // Falls back to defaults (18% GST) until the provider resolves.
-    ref.watch(taxSettingsProvider).whenData((s) => _taxSettings = s);
+    // Resolve tax per cart item so ancestor-scoped configs apply correctly.
+    // Each item's own serviceId + parentNodeId is used; amounts are summed.
+    debugPrint('[DODO][Checkout][Tax] ── build: ${items.length} cart item(s)');
+    var newTaxTotal = 0.0;
+    TaxSettingsModel? firstTax;
+    for (final item in items) {
+      final taxAsync = ref.watch(resolvedTaxProvider((
+        serviceId: item.serviceId,
+        parentNodeId: item.parentNodeId,
+      )));
+      debugPrint('[DODO][Checkout][Tax]   item=${item.serviceName}  '
+          'parentNodeId=${item.parentNodeId}  '
+          'resolved=${taxAsync.valueOrNull?.taxValue}%');
+      final taxSettings = taxAsync.valueOrNull ?? TaxSettingsModel.defaults;
+      newTaxTotal += taxSettings.computeTax(item.totalPrice);
+      if (taxAsync.hasValue) firstTax ??= taxSettings;
+    }
+    if (items.isEmpty) {
+      firstTax = ref.watch(taxSettingsProvider).valueOrNull ?? TaxSettingsModel.defaults;
+    }
+    _taxTotal = newTaxTotal;
+    _displayTax = firstTax ?? TaxSettingsModel.defaults;
+    debugPrint('[DODO][Checkout][Tax] totalTax=$_taxTotal  rate=${_displayTax.taxValue}%');
     final dateStr =
         _selectedDate?.toIso8601String().substring(0, 10);
     final serviceId =
         items.isNotEmpty ? items.first.serviceId : '';
+    final parentNodeId =
+        items.isNotEmpty ? items.first.parentNodeId : null;
+    debugPrint('[DODO][Checkout][Slots] timeSlotsProvider key: '
+        'date=$dateStr  serviceId=$serviceId  parentNodeId=$parentNodeId');
     final slotsAsync = dateStr != null
-        ? ref.watch(timeSlotsProvider((date: dateStr, serviceId: serviceId)))
+        ? ref.watch(timeSlotsProvider((date: dateStr, serviceId: serviceId, parentNodeId: parentNodeId)))
         : null;
 
     // Pre-select the default address once loaded
@@ -450,7 +475,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                 error: (e, _) => _ErrorRow(
                   message: 'Could not load time slots',
                   onRetry: () => ref.invalidate(
-                    timeSlotsProvider((date: dateStr!, serviceId: serviceId)),
+                    timeSlotsProvider((date: dateStr!, serviceId: serviceId, parentNodeId: parentNodeId)),
                   ),
                 ),
                 data: (slots) => _SlotGrid(
@@ -502,10 +527,10 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
           loyaltyDiscount: _loyaltyDiscount,
           tax: _tax,
           grandTotal: _grandTotal,
-          taxLabel: _taxSettings.displayLabel,
-          showTaxLine: _taxSettings.isEnabled &&
-              _taxSettings.applyOnServices &&
-              _taxSettings.displaySeparately,
+          taxLabel: _displayTax.displayLabel,
+          showTaxLine: _displayTax.isEnabled &&
+              _displayTax.applyOnServices &&
+              _displayTax.displaySeparately,
         ),
       ),
     ];
@@ -760,6 +785,26 @@ class _SlotGrid extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final tt = Theme.of(context).textTheme;
+
+    if (slots.isEmpty) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        child: Row(
+          children: [
+            const Icon(Icons.schedule_outlined,
+                size: 16, color: AppColors.textHint),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                'No time slots available for this date. Try selecting a different date.',
+                style: tt.bodySmall?.copyWith(color: AppColors.textSecondary),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
     final groups = <SlotPeriod, List<TimeSlotModel>>{};
     for (final s in slots) {
       groups.putIfAbsent(s.period, () => []).add(s);

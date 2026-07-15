@@ -296,7 +296,7 @@ class _CatalogNodeParentsDialogState
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const Text(
-          'Add to another category',
+          'Add or move to a category',
           style: TextStyle(
             fontSize: 13,
             fontWeight: FontWeight.w600,
@@ -475,14 +475,13 @@ class _CandidateRow extends StatelessWidget {
                       color: AppColors.textPrimary,
                     ),
                   ),
-                  if (path.isNotEmpty && path != name)
-                    Text(
-                      path,
-                      style: const TextStyle(
-                          fontSize: 11,
-                          color: AppColors.textSecondary),
-                      overflow: TextOverflow.ellipsis,
-                    ),
+                  Text(
+                    (path.isEmpty || path == name) ? 'Top level' : path,
+                    style: const TextStyle(
+                        fontSize: 11,
+                        color: AppColors.textSecondary),
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ],
               ),
             ),

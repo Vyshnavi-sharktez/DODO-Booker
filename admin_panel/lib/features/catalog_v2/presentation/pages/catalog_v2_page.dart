@@ -6,6 +6,7 @@ import '../../../../../core/widgets/admin_search_bar.dart';
 import '../../application/providers/catalog_node_providers.dart';
 import '../../domain/models/catalog_node.dart';
 import '../../../service_scheduling/presentation/widgets/service_scheduling_dialog.dart';
+import '../../../catalog_configs/presentation/widgets/catalog_node_config_dialog.dart';
 import '../widgets/catalog_node_form_dialog.dart';
 import '../widgets/catalog_node_parents_dialog.dart';
 import '../widgets/catalog_node_tile.dart';
@@ -368,6 +369,27 @@ class _CatalogV2PageState extends ConsumerState<CatalogV2Page> {
     );
   }
 
+  // ── Module config ─────────────────────────────────────────────────────────────
+
+  void _openConfigPanel(CatalogNode node, String? parentIdContext) {
+    final allNodes =
+        ref.read(catalogNodeNotifierProvider).valueOrNull ?? [];
+    final parentNode = parentIdContext != null
+        ? allNodes.where((n) => n.id == parentIdContext).firstOrNull
+        : null;
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => CatalogNodeConfigDialog(
+        nodeId: node.id,
+        nodeName: node.name,
+        parentNodeId: parentIdContext,
+        parentNodeName: parentNode?.name,
+      ),
+    );
+  }
+
   // ── Build ─────────────────────────────────────────────────────────────────────
 
   @override
@@ -383,6 +405,7 @@ class _CatalogV2PageState extends ConsumerState<CatalogV2Page> {
       onToggleActive: _toggleActive,
       onToggleBookable: _toggleBookable,
       onOpenScheduling: _openScheduling,
+      onOpenConfig: _openConfigPanel,
     );
 
     return Scaffold(

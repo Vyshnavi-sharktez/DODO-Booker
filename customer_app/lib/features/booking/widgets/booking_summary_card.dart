@@ -1,12 +1,15 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../features/catalog/models/catalog_node_model.dart';
+import '../../../features/tax/providers/tax_provider.dart';
+import '../../../features/tax/models/tax_settings_model.dart';
 import '../../../models/address_model.dart';
 import '../../../models/time_slot_model.dart';
 import '../../../models/service_attribute_model.dart';
 import '../../../models/addon_model.dart';
 
-class BookingSummaryCard extends StatelessWidget {
+class BookingSummaryCard extends ConsumerWidget {
   final CatalogNodeModel service;
   final AddressModel address;
   final DateTime date;
@@ -16,6 +19,7 @@ class BookingSummaryCard extends StatelessWidget {
   final double priceAdjustment;
   final List<SelectedAttributeOption> selectedAttributes;
   final List<SelectedAddon> selectedAddons;
+  final String? parentNodeId;
 
   const BookingSummaryCard({
     super.key,
@@ -28,6 +32,7 @@ class BookingSummaryCard extends StatelessWidget {
     this.priceAdjustment = 0.0,
     this.selectedAttributes = const [],
     this.selectedAddons = const [],
+    this.parentNodeId,
   });
 
   static const _monthNames = [
@@ -44,12 +49,19 @@ class BookingSummaryCard extends StatelessWidget {
 
   double get _addonsTotal => totalAddonsPrice(selectedAddons);
   double get _adjustedBase => (service.basePrice ?? 0.0) + priceAdjustment + _addonsTotal;
-  double get _tax => _adjustedBase * 0.18;
-  double get _originalTotal => _adjustedBase + _tax;
-  double get _finalTotal => (_originalTotal - discountAmount).clamp(0.0, double.infinity);
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final taxSettings = ref
+        .watch(resolvedTaxProvider((
+          serviceId: service.id,
+          parentNodeId: parentNodeId,
+        )))
+        .valueOrNull ??
+        TaxSettingsModel.defaults;
+    final tax = taxSettings.computeTax(_adjustedBase);
+    final originalTotal = _adjustedBase + tax;
+    final finalTotal = (originalTotal - discountAmount).clamp(0.0, double.infinity);
     final tt = Theme.of(context).textTheme;
     final hasDiscount = discountAmount > 0;
 
@@ -175,7 +187,7 @@ class BookingSummaryCard extends StatelessWidget {
               _PriceRow(label: addon.addonName, amount: addon.addonPrice, prefix: '+'),
             ],
             const SizedBox(height: 6),
-            _PriceRow(label: 'GST (18%)', amount: _tax),
+            _PriceRow(label: taxSettings.displayLabel, amount: tax),
             if (hasDiscount) ...[
               const SizedBox(height: 6),
               _DiscountRow(
@@ -188,7 +200,7 @@ class BookingSummaryCard extends StatelessWidget {
             const SizedBox(height: 10),
             _PriceRow(
               label: 'Total Amount',
-              amount: _finalTotal,
+              amount: finalTotal,
               isTotal: true,
             ),
           ],
