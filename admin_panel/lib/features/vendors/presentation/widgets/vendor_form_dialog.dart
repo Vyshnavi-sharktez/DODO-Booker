@@ -561,7 +561,7 @@ class _VendorFormDialogState extends State<VendorFormDialog> {
                             child: TextFormField(
                               controller: _commissionRate,
                               decoration: const InputDecoration(
-                                labelText: 'Commission Rate (%)',
+                                labelText: 'Platform Commission Rate (%)',
                                 hintText: '0.00',
                                 prefixIcon: Icon(Icons.percent_rounded),
                                 helperText: '0 = no commission',

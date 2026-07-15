@@ -249,7 +249,7 @@ class CatalogNodeTile extends StatelessWidget {
                 // Module config (Tax / Loyalty / Scheduling / Commission)
                 IconButton(
                   icon: const Icon(Icons.tune_rounded, size: 17),
-                  tooltip: 'Configure Tax / Loyalty / Scheduling / Commission',
+                  tooltip: 'Configure Tax / Loyalty / Scheduling / Platform Commission',
                   color: AppColors.primary,
                   onPressed: () =>
                       callbacks.onOpenConfig(node, parentIdContext),

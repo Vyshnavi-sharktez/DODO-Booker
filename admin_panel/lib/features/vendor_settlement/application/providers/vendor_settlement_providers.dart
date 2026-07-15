@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../auth/application/providers/auth_provider.dart';
 import '../../data/vendor_settlement_repository.dart';
+import '../../domain/models/vendor_booking_row.dart';
 import '../../domain/models/vendor_earnings_summary.dart';
 import '../../domain/models/vendor_settlement.dart';
 
@@ -28,21 +29,19 @@ class VendorSettlementNotifier
 
   Future<void> refresh() => _load();
 
-  Future<void> createSettlement({
+  Future<void> createSettlementBatch({
     required String vendorId,
     required String vendorName,
-    required double amount,
-    required int completedJobsCount,
+    required List<VendorBookingRow> bookings,
     required String settledBy,
     String? paymentMethod,
     String? referenceNumber,
     String? notes,
   }) async {
-    await _repo.createSettlement(
+    await _repo.createSettlementBatch(
       vendorId: vendorId,
       vendorName: vendorName,
-      amount: amount,
-      completedJobsCount: completedJobsCount,
+      bookings: bookings,
       settledBy: settledBy,
       paymentMethod: paymentMethod,
       referenceNumber: referenceNumber,
@@ -54,8 +53,18 @@ class VendorSettlementNotifier
 
 final vendorSettlementNotifierProvider = StateNotifierProvider<
     VendorSettlementNotifier, AsyncValue<List<VendorEarningsSummary>>>(
-  (ref) => VendorSettlementNotifier(ref.watch(vendorSettlementRepositoryProvider)),
+  (ref) =>
+      VendorSettlementNotifier(ref.watch(vendorSettlementRepositoryProvider)),
 );
+
+// ── Per-vendor booking rows ────────────────────────────────────────────────────
+
+final vendorBookingRowsProvider =
+    FutureProvider.family<List<VendorBookingRow>, String>((ref, vendorId) {
+  return ref
+      .watch(vendorSettlementRepositoryProvider)
+      .fetchBookingRows(vendorId);
+});
 
 // ── Per-vendor summary (used in vendor details page) ───────────────────────────
 
@@ -65,7 +74,7 @@ final vendorPendingSettlementProvider =
   return repo.fetchEarningsSummaryForVendor(vendorId);
 });
 
-// ── Settlement history ─────────────────────────────────────────────────────────
+// ── Settlement history (legacy batch records) ──────────────────────────────────
 
 final settlementHistoryProvider =
     FutureProvider<List<VendorSettlement>>((ref) async {

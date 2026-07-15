@@ -1,11 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../features/auth/application/providers/auth_provider.dart';
-import '../../../../features/commission/application/providers/commission_providers.dart';
 import '../../application/providers/vendor_settlement_providers.dart';
+import '../../domain/models/vendor_booking_row.dart';
 import '../../domain/models/vendor_earnings_summary.dart';
 
 class SettlementCreateDialog extends ConsumerStatefulWidget {
@@ -19,85 +18,68 @@ class SettlementCreateDialog extends ConsumerStatefulWidget {
 
 class _SettlementCreateDialogState
     extends ConsumerState<SettlementCreateDialog> {
-  final _formKey = GlobalKey<FormState>();
-  late final TextEditingController _amountCtrl;
   final _refCtrl = TextEditingController();
   final _notesCtrl = TextEditingController();
   String? _paymentMethod = 'Bank Transfer';
   bool _saving = false;
-  bool _amountUpdatedForCommission = false;
+  final _selected = <String>{};
 
   static final _fmt = NumberFormat('#,##0.00', 'en_IN');
+  static final _dateFmt = DateFormat('dd MMM yy');
 
-  static const _paymentMethods = [
-    'Bank Transfer',
-    'UPI',
-    'Cash',
-    'Cheque',
-  ];
-
-  @override
-  void initState() {
-    super.initState();
-    final pending = widget.summary.pendingSettlement;
-    _amountCtrl = TextEditingController(
-      text: pending > 0 ? pending.toStringAsFixed(2) : '',
-    );
-    // If the commission provider is already cached, apply it after the first
-    // frame so ref is available. The ref.listen in build() covers the case
-    // where it loads after first render.
-    WidgetsBinding.instance.addPostFrameCallback((_) => _applyCommission());
-  }
-
-  void _applyCommission() {
-    if (!mounted || _amountUpdatedForCommission) return;
-    final s = widget.summary;
-    final providerState = ref.read(resolvedVendorCommissionProvider(s.vendorId));
-    debugPrint('[Settlement._applyCommission] providerState=$providerState');
-    providerState.whenOrNull(
-      data: (rule) {
-        final commission = rule?.compute(s.grossEarnings) ?? 0.0;
-        final payable = (s.grossEarnings - commission - s.totalSettled)
-            .clamp(0.0, double.infinity);
-        debugPrint('[Settlement._applyCommission] rule=${rule == null ? "null" : "${rule.ruleType}/${rule.commissionType}/${rule.commissionValue}/enabled=${rule.isEnabled}"} '
-            'grossEarnings=${s.grossEarnings} commission=$commission '
-            'totalSettled=${s.totalSettled} finalPayable=$payable '
-            'settingTextField="${payable > 0 ? payable.toStringAsFixed(2) : ""}"');
-        _amountCtrl.text = payable > 0 ? payable.toStringAsFixed(2) : '';
-        _amountUpdatedForCommission = true;
-      },
-    );
-  }
+  static const _paymentMethods = ['Bank Transfer', 'UPI', 'Cash', 'Cheque'];
 
   @override
   void dispose() {
-    _amountCtrl.dispose();
     _refCtrl.dispose();
     _notesCtrl.dispose();
     super.dispose();
   }
 
-  double get _parsedAmount => double.tryParse(_amountCtrl.text.trim()) ?? 0.0;
+  List<VendorBookingRow> _unpaid(List<VendorBookingRow> all) =>
+      all.where((r) => !r.isPaid).toList();
 
-  Future<void> _submit() async {
-    if (!(_formKey.currentState?.validate() ?? false)) return;
+  double _selectedGross(List<VendorBookingRow> unpaid) => unpaid
+      .where((r) => _selected.contains(r.bookingId))
+      .fold(0.0, (s, r) => s + r.bookingGross);
+
+  double _selectedCommission(List<VendorBookingRow> unpaid) => unpaid
+      .where((r) => _selected.contains(r.bookingId))
+      .fold(0.0, (s, r) => s + r.commissionAmount);
+
+  double _selectedNet(List<VendorBookingRow> unpaid) => unpaid
+      .where((r) => _selected.contains(r.bookingId))
+      .fold(0.0, (s, r) => s + r.netVendorAmount);
+
+  Future<void> _submit(List<VendorBookingRow> unpaid) async {
+    final toSettle =
+        unpaid.where((r) => _selected.contains(r.bookingId)).toList();
+    if (toSettle.isEmpty) return;
+
     setState(() => _saving = true);
     try {
       final adminUser = ref.read(currentAdminUserProvider);
-      if (adminUser == null) throw Exception('Admin session expired. Please log in again.');
-      final s = widget.summary;
-      await ref.read(vendorSettlementNotifierProvider.notifier).createSettlement(
-            vendorId: s.vendorId,
-            vendorName: s.vendorName,
-            amount: _parsedAmount,
-            completedJobsCount: s.completedJobs,
+      if (adminUser == null) {
+        throw Exception('Admin session expired. Please log in again.');
+      }
+      await ref
+          .read(vendorSettlementNotifierProvider.notifier)
+          .createSettlementBatch(
+            vendorId: widget.summary.vendorId,
+            vendorName: widget.summary.vendorName,
+            bookings: toSettle,
             settledBy: adminUser.id,
             paymentMethod: _paymentMethod,
             referenceNumber:
                 _refCtrl.text.trim().isEmpty ? null : _refCtrl.text.trim(),
-            notes: _notesCtrl.text.trim().isEmpty ? null : _notesCtrl.text.trim(),
+            notes:
+                _notesCtrl.text.trim().isEmpty ? null : _notesCtrl.text.trim(),
           );
-      if (mounted) Navigator.of(context).pop(true);
+      if (mounted) {
+        ref.invalidate(
+            vendorBookingRowsProvider(widget.summary.vendorId));
+        Navigator.of(context).pop(true);
+      }
     } catch (e) {
       setState(() => _saving = false);
       if (mounted) {
@@ -113,263 +95,285 @@ class _SettlementCreateDialogState
 
   @override
   Widget build(BuildContext context) {
-    final s = widget.summary;
-    final commissionAsync =
-        ref.watch(resolvedVendorCommissionProvider(s.vendorId));
-    final commissionAmount = commissionAsync.whenOrNull(
-          data: (rule) => rule?.compute(s.grossEarnings) ?? 0.0,
-        ) ??
-        0.0;
-    final finalPayable =
-        (s.grossEarnings - commissionAmount - s.totalSettled)
-            .clamp(0.0, double.infinity);
-
-    // Update the amount field the first time commission data arrives
-    // (covers the case where the provider loads after first render).
-    ref.listen(resolvedVendorCommissionProvider(s.vendorId), (prev, next) {
-      debugPrint('[Settlement.ref.listen] transition: ${prev.runtimeType} → ${next.runtimeType} '
-          '| _amountUpdatedForCommission=$_amountUpdatedForCommission');
-      if (_amountUpdatedForCommission) return;
-      next.whenOrNull(data: (rule) {
-        final commission = rule?.compute(s.grossEarnings) ?? 0.0;
-        final payable = (s.grossEarnings - commission - s.totalSettled)
-            .clamp(0.0, double.infinity);
-        debugPrint('[Settlement.ref.listen] rule=${rule == null ? "null" : "${rule.ruleType}/${rule.commissionType}/${rule.commissionValue}/enabled=${rule.isEnabled}"} '
-            'grossEarnings=${s.grossEarnings} commission=$commission '
-            'totalSettled=${s.totalSettled} finalPayable=$payable '
-            'settingTextField="${payable > 0 ? payable.toStringAsFixed(2) : ""}"');
-        _amountCtrl.text = payable > 0 ? payable.toStringAsFixed(2) : '';
-        _amountUpdatedForCommission = true;
-      });
-    });
+    final rowsAsync =
+        ref.watch(vendorBookingRowsProvider(widget.summary.vendorId));
 
     return Dialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 520),
+        constraints: const BoxConstraints(maxWidth: 780, maxHeight: 680),
         child: Padding(
           padding: const EdgeInsets.all(28),
-          child: Form(
-            key: _formKey,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Header
-                Row(
-                  children: [
-                    Container(
-                      width: 40,
-                      height: 40,
-                      decoration: BoxDecoration(
-                        color: AppColors.success.withValues(alpha: 0.12),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: const Icon(
-                        Icons.payments_rounded,
-                        color: AppColors.success,
-                        size: 20,
-                      ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // ── Header ──────────────────────────────────────────────────────
+              Row(
+                children: [
+                  Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      color: AppColors.success.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(10),
                     ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text(
-                            'Mark as Paid',
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w700,
-                              color: AppColors.textPrimary,
-                            ),
-                          ),
-                          Text(
-                            s.vendorName,
-                            style: const TextStyle(
-                              fontSize: 12,
-                              color: AppColors.textSecondary,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    IconButton(
-                      onPressed:
-                          _saving ? null : () => Navigator.of(context).pop(),
-                      icon: const Icon(Icons.close_rounded, size: 20),
-                      color: AppColors.textSecondary,
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 20),
-
-                // Summary strip
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: AppColors.background,
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: AppColors.border),
+                    child: const Icon(Icons.payments_rounded,
+                        color: AppColors.success, size: 20),
                   ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceAround,
-                        children: [
-                          _SummaryItem(
-                            label: 'Completed Jobs',
-                            value: s.completedJobs.toString(),
-                            color: AppColors.primary,
-                          ),
-                          _Divider(),
-                          _SummaryItem(
-                            label: 'Gross Earnings',
-                            value: '₹${_fmt.format(s.grossEarnings)}',
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Settle Orders',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w700,
                             color: AppColors.textPrimary,
                           ),
-                          _Divider(),
-                          _SummaryItem(
-                            label: 'Platform Commission',
-                            value: commissionAsync.isLoading
-                                ? '…'
-                                : '₹${_fmt.format(commissionAmount)}',
+                        ),
+                        Text(
+                          widget.summary.vendorName,
+                          style: const TextStyle(
+                            fontSize: 12,
                             color: AppColors.textSecondary,
                           ),
-                          _Divider(),
-                          _SummaryItem(
-                            label: 'Adjustments',
-                            value: '—',
-                            color: AppColors.textSecondary,
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 12),
-                      const Divider(height: 1, color: AppColors.border),
-                      const SizedBox(height: 12),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceAround,
-                        children: [
-                          _SummaryItem(
-                            label: 'Previously Settled',
-                            value: '₹${_fmt.format(s.totalSettled)}',
-                            color: AppColors.textSecondary,
-                          ),
-                          _Divider(),
-                          _SummaryItem(
-                            label: 'Final Payable Amount',
-                            value: commissionAsync.isLoading
-                                ? '…'
-                                : '₹${_fmt.format(finalPayable)}',
-                            color: AppColors.warning,
-                            bold: true,
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 20),
-
-                // Amount field
-                TextFormField(
-                  controller: _amountCtrl,
-                  keyboardType: const TextInputType.numberWithOptions(
-                    decimal: true,
-                  ),
-                  inputFormatters: [
-                    FilteringTextInputFormatter.allow(
-                      RegExp(r'^\d+\.?\d{0,2}'),
+                        ),
+                      ],
                     ),
-                  ],
-                  decoration: const InputDecoration(
-                    labelText: 'Settlement Amount (₹) *',
-                    prefixIcon: Icon(Icons.currency_rupee_rounded, size: 18),
-                    helperText: 'Defaults to full pending amount; edit for partial',
                   ),
-                  validator: (v) {
-                    final val = double.tryParse(v?.trim() ?? '');
-                    if (val == null || val <= 0) {
-                      return 'Enter a valid amount greater than zero';
+                  IconButton(
+                    onPressed:
+                        _saving ? null : () => Navigator.of(context).pop(),
+                    icon: const Icon(Icons.close_rounded, size: 20),
+                    color: AppColors.textSecondary,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              const Divider(color: AppColors.border),
+              const SizedBox(height: 8),
+
+              // ── Booking list ─────────────────────────────────────────────────
+              Expanded(
+                child: rowsAsync.when(
+                  loading: () =>
+                      const Center(child: CircularProgressIndicator()),
+                  error: (e, _) => Center(
+                    child: Text('Error loading orders: $e',
+                        style: const TextStyle(color: AppColors.error)),
+                  ),
+                  data: (allRows) {
+                    final unpaid = _unpaid(allRows);
+                    if (unpaid.isEmpty) {
+                      return const Center(
+                        child: Text(
+                          'No pending orders to settle.',
+                          style:
+                              TextStyle(color: AppColors.textSecondary),
+                        ),
+                      );
                     }
-                    if (val > finalPayable + 0.01) {
-                      return 'Exceeds payable amount (₹${_fmt.format(finalPayable)})';
-                    }
-                    return null;
+
+                    return Column(
+                      children: [
+                        // Select-all row
+                        Row(
+                          children: [
+                            Checkbox(
+                              value: _selected.length == unpaid.length &&
+                                  unpaid.isNotEmpty,
+                              tristate: true,
+                              onChanged: (_) {
+                                setState(() {
+                                  if (_selected.length == unpaid.length) {
+                                    _selected.clear();
+                                  } else {
+                                    _selected.addAll(
+                                        unpaid.map((r) => r.bookingId));
+                                  }
+                                });
+                              },
+                            ),
+                            const Text(
+                              'Select All',
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                color: AppColors.textSecondary,
+                              ),
+                            ),
+                            const Spacer(),
+                            Text(
+                              '${unpaid.length} pending order${unpaid.length == 1 ? '' : 's'}',
+                              style: const TextStyle(
+                                fontSize: 12,
+                                color: AppColors.textSecondary,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const Divider(height: 1, color: AppColors.border),
+
+                        // Booking rows
+                        Expanded(
+                          child: ListView.builder(
+                            itemCount: unpaid.length,
+                            itemBuilder: (_, i) {
+                              final row = unpaid[i];
+                              final isChecked =
+                                  _selected.contains(row.bookingId);
+                              return _BookingSelectRow(
+                                row: row,
+                                checked: isChecked,
+                                fmt: _fmt,
+                                dateFmt: _dateFmt,
+                                onToggle: () => setState(() {
+                                  if (isChecked) {
+                                    _selected.remove(row.bookingId);
+                                  } else {
+                                    _selected.add(row.bookingId);
+                                  }
+                                }),
+                              );
+                            },
+                          ),
+                        ),
+
+                        // Selected totals strip
+                        if (_selected.isNotEmpty) ...[
+                          const Divider(color: AppColors.border),
+                          Padding(
+                            padding:
+                                const EdgeInsets.symmetric(vertical: 10),
+                            child: Row(
+                              mainAxisAlignment:
+                                  MainAxisAlignment.spaceAround,
+                              children: [
+                                _TotalItem(
+                                  label: 'Selected Orders',
+                                  value: _selected.length.toString(),
+                                  color: AppColors.primary,
+                                ),
+                                _TotalItem(
+                                  label: 'Gross',
+                                  value:
+                                      '₹${_fmt.format(_selectedGross(unpaid))}',
+                                  color: AppColors.textPrimary,
+                                ),
+                                _TotalItem(
+                                  label: 'DODO Commission',
+                                  value:
+                                      '₹${_fmt.format(_selectedCommission(unpaid))}',
+                                  color: AppColors.textSecondary,
+                                ),
+                                _TotalItem(
+                                  label: 'Vendor Receivable',
+                                  value:
+                                      '₹${_fmt.format(_selectedNet(unpaid))}',
+                                  color: AppColors.success,
+                                  bold: true,
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ],
+                    );
                   },
                 ),
-                const SizedBox(height: 16),
+              ),
 
-                // Payment Method
-                // ignore: deprecated_member_use
-                DropdownButtonFormField<String>(
-                  value: _paymentMethod,
-                  decoration: const InputDecoration(
-                    labelText: 'Payment Method *',
-                    prefixIcon: Icon(Icons.account_balance_rounded, size: 18),
+              const Divider(color: AppColors.border),
+              const SizedBox(height: 14),
+
+              // ── Payment fields ───────────────────────────────────────────────
+              Row(
+                children: [
+                  Expanded(
+                    child: DropdownButtonFormField<String>(
+                      value: _paymentMethod,
+                      decoration: const InputDecoration(
+                        labelText: 'Payment Method *',
+                        prefixIcon: Icon(
+                            Icons.account_balance_rounded,
+                            size: 18),
+                        isDense: true,
+                      ),
+                      items: _paymentMethods
+                          .map((m) =>
+                              DropdownMenuItem(value: m, child: Text(m)))
+                          .toList(),
+                      onChanged: (v) =>
+                          setState(() => _paymentMethod = v),
+                    ),
                   ),
-                  items: _paymentMethods
-                      .map((m) => DropdownMenuItem(value: m, child: Text(m)))
-                      .toList(),
-                  onChanged: (v) => setState(() => _paymentMethod = v),
-                  validator: (v) =>
-                      v == null ? 'Select a payment method' : null,
-                ),
-                const SizedBox(height: 16),
-
-                // Reference Number
-                TextFormField(
-                  controller: _refCtrl,
-                  decoration: const InputDecoration(
-                    labelText: 'Reference / Transaction Number (Optional)',
-                    prefixIcon: Icon(Icons.tag_rounded, size: 18),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: TextFormField(
+                      controller: _refCtrl,
+                      decoration: const InputDecoration(
+                        labelText: 'Reference / Transaction No. (Optional)',
+                        prefixIcon:
+                            Icon(Icons.tag_rounded, size: 18),
+                        isDense: true,
+                      ),
+                    ),
                   ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              TextFormField(
+                controller: _notesCtrl,
+                maxLines: 2,
+                decoration: const InputDecoration(
+                  labelText: 'Notes (Optional)',
+                  alignLabelWithHint: true,
+                  isDense: true,
                 ),
-                const SizedBox(height: 16),
+              ),
+              const SizedBox(height: 18),
 
-                // Notes
-                TextFormField(
-                  controller: _notesCtrl,
-                  maxLines: 2,
-                  decoration: const InputDecoration(
-                    labelText: 'Notes (Optional)',
-                    alignLabelWithHint: true,
-                  ),
-                ),
-                const SizedBox(height: 28),
-
-                // Actions
-                Row(
+              // ── Actions ──────────────────────────────────────────────────────
+              rowsAsync.whenData((allRows) {
+                final unpaid = _unpaid(allRows);
+                return Row(
                   mainAxisAlignment: MainAxisAlignment.end,
                   children: [
                     TextButton(
-                      onPressed:
-                          _saving ? null : () => Navigator.of(context).pop(),
+                      onPressed: _saving
+                          ? null
+                          : () => Navigator.of(context).pop(),
                       child: const Text('Cancel'),
                     ),
                     const SizedBox(width: 12),
                     FilledButton.icon(
-                      onPressed: _saving ? null : _submit,
+                      onPressed: (_saving || _selected.isEmpty)
+                          ? null
+                          : () => _submit(unpaid),
                       icon: _saving
                           ? const SizedBox(
                               width: 16,
                               height: 16,
                               child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                color: Colors.white,
-                              ),
+                                  strokeWidth: 2,
+                                  color: Colors.white),
                             )
                           : const Icon(Icons.check_rounded, size: 18),
-                      label: const Text('Mark as Paid'),
-                      style: FilledButton.styleFrom(
-                        backgroundColor: AppColors.success,
+                      label: Text(
+                        _selected.isEmpty
+                            ? 'Select orders to settle'
+                            : 'Mark ${_selected.length} order${_selected.length == 1 ? '' : 's'} as Paid',
                       ),
+                      style: FilledButton.styleFrom(
+                          backgroundColor: AppColors.success),
                     ),
                   ],
-                ),
-              ],
-            ),
+                );
+              }).valueOrNull ??
+                  const SizedBox.shrink(),
+            ],
           ),
         ),
       ),
@@ -377,8 +381,108 @@ class _SettlementCreateDialogState
   }
 }
 
-class _SummaryItem extends StatelessWidget {
-  const _SummaryItem({
+// ── Booking row widget ─────────────────────────────────────────────────────────
+
+class _BookingSelectRow extends StatelessWidget {
+  const _BookingSelectRow({
+    required this.row,
+    required this.checked,
+    required this.fmt,
+    required this.dateFmt,
+    required this.onToggle,
+  });
+  final VendorBookingRow row;
+  final bool checked;
+  final NumberFormat fmt;
+  final DateFormat dateFmt;
+  final VoidCallback onToggle;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onToggle,
+      child: Container(
+        decoration: BoxDecoration(
+          color: checked
+              ? AppColors.success.withValues(alpha: 0.05)
+              : Colors.transparent,
+          border: const Border(
+            bottom: BorderSide(color: AppColors.border, width: 0.5),
+          ),
+        ),
+        padding:
+            const EdgeInsets.symmetric(horizontal: 4, vertical: 10),
+        child: Row(
+          children: [
+            Checkbox(value: checked, onChanged: (_) => onToggle()),
+            const SizedBox(width: 4),
+            Expanded(
+              flex: 2,
+              child: Text(
+                '#${row.bookingId.length > 8 ? row.bookingId.substring(0, 8).toUpperCase() : row.bookingId.toUpperCase()}',
+                style: const TextStyle(
+                  fontSize: 11,
+                  fontFamily: 'monospace',
+                  color: AppColors.textSecondary,
+                ),
+              ),
+            ),
+            Expanded(
+              flex: 2,
+              child: Text(
+                dateFmt.format(row.completedAt),
+                style: const TextStyle(
+                    fontSize: 12, color: AppColors.textSecondary),
+              ),
+            ),
+            Expanded(
+              flex: 2,
+              child: Text(
+                '₹${fmt.format(row.bookingGross)}',
+                style: const TextStyle(fontSize: 13),
+              ),
+            ),
+            Expanded(
+              flex: 2,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    '₹${fmt.format(row.commissionAmount)}',
+                    style: const TextStyle(
+                        fontSize: 12, color: AppColors.textSecondary),
+                  ),
+                  Text(
+                    row.commissionLabel,
+                    style: const TextStyle(
+                        fontSize: 10, color: AppColors.textSecondary),
+                  ),
+                ],
+              ),
+            ),
+            Expanded(
+              flex: 2,
+              child: Text(
+                '₹${fmt.format(row.netVendorAmount)}',
+                style: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.success,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ── Summary total item ─────────────────────────────────────────────────────────
+
+class _TotalItem extends StatelessWidget {
+  const _TotalItem({
     required this.label,
     required this.value,
     required this.color,
@@ -394,10 +498,9 @@ class _SummaryItem extends StatelessWidget {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Text(
-          label,
-          style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
-        ),
+        Text(label,
+            style: const TextStyle(
+                fontSize: 11, color: AppColors.textSecondary)),
         const SizedBox(height: 4),
         Text(
           value,
@@ -408,17 +511,6 @@ class _SummaryItem extends StatelessWidget {
           ),
         ),
       ],
-    );
-  }
-}
-
-class _Divider extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 1,
-      height: 32,
-      color: AppColors.border,
     );
   }
 }

@@ -84,7 +84,7 @@ class _CommissionSettingsPageState
         ref.invalidate(globalCommissionProvider);
         setState(() => _current = saved);
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text('Commission settings saved.'),
+          content: Text('Platform Commission settings saved.'),
           backgroundColor: AppColors.success,
           behavior: SnackBarBehavior.floating,
         ));
@@ -112,7 +112,7 @@ class _CommissionSettingsPageState
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const Text(
-                'Commission Settings',
+                'Platform Commission Settings',
                 style: TextStyle(
                   fontSize: 22,
                   fontWeight: FontWeight.w800,
@@ -137,7 +137,7 @@ class _CommissionSettingsPageState
                     text: 'Per-category overrides are used when no vendor override exists.'),
                 const SizedBox(height: 4),
                 _BulletRow(
-                    text: 'Commission is shown in the settlement dialog and deducted from vendor payouts.'),
+                    text: 'Platform Commission is shown in the settlement dialog and deducted from vendor payouts.'),
               ]),
               const SizedBox(height: 24),
 
@@ -162,8 +162,8 @@ class _CommissionSettingsPageState
                         children: [
                           Text(
                             _isEnabled
-                                ? 'Commission Enabled'
-                                : 'Commission Disabled',
+                                ? 'Platform Commission Enabled'
+                                : 'Platform Commission Disabled',
                             style: const TextStyle(
                               fontSize: 14,
                               fontWeight: FontWeight.w600,
@@ -194,7 +194,7 @@ class _CommissionSettingsPageState
 
               // Commission Type
               _Card(
-                title: 'Commission Type',
+                title: 'Platform Commission Type',
                 child: Row(
                   children: [
                     Expanded(
@@ -223,7 +223,7 @@ class _CommissionSettingsPageState
 
               // Commission Value
               _Card(
-                title: 'Commission Value',
+                title: 'Platform Commission Value',
                 child: TextFormField(
                   controller: _valueCtrl,
                   decoration: InputDecoration(
@@ -267,7 +267,7 @@ class _CommissionSettingsPageState
                               strokeWidth: 2, color: Colors.white),
                         )
                       : const Text(
-                          'Save Commission Settings',
+                          'Save Platform Commission Settings',
                           style: TextStyle(fontWeight: FontWeight.w700),
                         ),
                 ),
@@ -395,7 +395,7 @@ class _InfoBanner extends StatelessWidget {
                   color: AppColors.primary, size: 16),
               const SizedBox(width: 8),
               const Text(
-                'How commission works',
+                'How platform commission works',
                 style: TextStyle(
                   fontSize: 13,
                   fontWeight: FontWeight.w700,
