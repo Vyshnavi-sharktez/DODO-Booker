@@ -97,6 +97,52 @@ class CatalogNodeConfigsRepository {
         .eq('id', id);
   }
 
+  /// Returns how many descendant nodes of [nodeId] appear under more than one
+  /// parent in the full catalog (i.e. are shared across catalog trees).
+  /// Used to decide whether to show the mode-choice dialog before bulk apply.
+  Future<int> countSharedDescendants(String nodeId) async {
+    final result = await _client.rpc(
+      'count_shared_descendants_in_subtree',
+      params: {'p_root_node_id': nodeId},
+    );
+    return (result as num?)?.toInt() ?? 0;
+  }
+
+  /// Propagates [config] to all descendants of [rootNodeId] for [module].
+  ///
+  /// [mode] controls how shared descendants are handled:
+  ///   'subtree_only'      (default) — shared boundary nodes get a relationship-scoped
+  ///                       config on the specific in-subtree edge; other paths unchanged.
+  ///   'shared_everywhere' — shared descendants get a node-scoped config that affects
+  ///                         them wherever they appear in the catalog.
+  ///
+  /// Returns: deleted = config rows removed, upserted = configs set on shared nodes,
+  /// skipped = shared boundary nodes whose subtrees were not traversed (subtree_only).
+  Future<({int deleted, int upserted, int skipped})> bulkApplyConfigToSubtree(
+    String rootNodeId,
+    String module,
+    Map<String, dynamic> config,
+    bool isEnabled, {
+    String mode = 'subtree_only',
+  }) async {
+    final result = await _client.rpc(
+      'bulk_apply_module_config_to_subtree',
+      params: {
+        'p_root_node_id': rootNodeId,
+        'p_module': module,
+        'p_config': config,
+        'p_is_enabled': isEnabled,
+        'p_mode': mode,
+      },
+    );
+    final row = (result as List<dynamic>).first as Map<String, dynamic>;
+    return (
+      deleted: (row['deleted_count'] as num).toInt(),
+      upserted: (row['upserted_count'] as num).toInt(),
+      skipped: (row['skipped_count'] as num).toInt(),
+    );
+  }
+
   /// Calls resolve_catalog_module_config and returns the effective JSONB config,
   /// or null when no scoped config exists for the given path.
   Future<Map<String, dynamic>?> resolveConfig(
