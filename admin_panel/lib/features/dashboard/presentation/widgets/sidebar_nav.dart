@@ -62,7 +62,7 @@ const _navItems = <_NavItem>[
     requiredPermission: 'booking.view',
   ),
   _NavItem(
-    label: 'Settlements',
+    label: 'Vendor Payouts',
     icon: Icons.account_balance_wallet_rounded,
     route: '/dashboard/vendor-settlement',
     requiredPermission: 'vendor.view',
