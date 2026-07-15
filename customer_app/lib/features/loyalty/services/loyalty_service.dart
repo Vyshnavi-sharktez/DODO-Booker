@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/loyalty_settings_model.dart';
@@ -53,6 +54,35 @@ class LoyaltyService {
     return (data as List)
         .map((e) => LoyaltyTransactionModel.fromJson(e as Map<String, dynamic>))
         .toList();
+  }
+
+  /// Returns the resolved loyalty config JSONB for [serviceId] accessed via
+  /// [parentNodeId], or null when no scoped config exists (caller uses global).
+  Future<Map<String, dynamic>?> getResolvedLoyaltyConfigForService(
+    String serviceId,
+    String? parentNodeId,
+  ) async {
+    debugPrint('[DODO][Loyalty] getResolvedLoyaltyConfigForService: '
+        'serviceId=$serviceId  parentNodeId=$parentNodeId');
+    if (parentNodeId != null) {
+      try {
+        final result = await _client.rpc(
+          'resolve_catalog_module_config',
+          params: {
+            'p_module': 'loyalty',
+            'p_service_id': serviceId,
+            'p_parent_id': parentNodeId,
+          },
+        );
+        debugPrint('[DODO][Loyalty] RPC raw result: $result');
+        if (result != null && result is Map) {
+          return Map<String, dynamic>.from(result);
+        }
+      } catch (e) {
+        debugPrint('[DODO][Loyalty] RPC exception: $e — falling back to null');
+      }
+    }
+    return null;
   }
 
   Future<void> recordRedemption({

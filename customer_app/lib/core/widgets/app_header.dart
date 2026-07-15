@@ -11,7 +11,6 @@ import '../../features/cart/providers/cart_provider.dart';
 import '../../features/cart/utils/cart_launcher.dart';
 import '../../features/auth/providers/auth_provider.dart';
 import '../../features/loyalty/providers/loyalty_providers.dart';
-import '../../features/loyalty/screens/loyalty_screen.dart';
 
 /// Persistent DODO BOOKER header used as the [Scaffold.appBar] across the
 /// main navigation shell. Implements [PreferredSizeWidget] so Flutter can
@@ -548,38 +547,32 @@ class _LoyaltyPill extends ConsumerWidget {
     final points = loyaltyAsync.whenOrNull(data: (l) => l.availablePoints);
     if (points == null) return const SizedBox.shrink();
 
-    return GestureDetector(
-      onTap: () => AppModalDialog.show(
-        context: context,
-        child: const LoyaltyModal(),
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: const Color(0xFF1A1A2E),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: const Color(0xFFFFD700).withAlpha(100),
+          width: 0.8,
+        ),
       ),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-        decoration: BoxDecoration(
-          color: const Color(0xFF1A1A2E),
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(
-            color: const Color(0xFFFFD700).withAlpha(100),
-            width: 0.8,
-          ),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(Icons.stars_rounded,
-                size: 14, color: Color(0xFFFFD700)),
-            const SizedBox(width: 4),
-            Text(
-              '$points',
-              style: const TextStyle(
-                color: Color(0xFFFFD700),
-                fontSize: 12,
-                fontWeight: FontWeight.w700,
-                height: 1,
-              ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.stars_rounded,
+              size: 14, color: Color(0xFFFFD700)),
+          const SizedBox(width: 4),
+          Text(
+            '$points',
+            style: const TextStyle(
+              color: Color(0xFFFFD700),
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+              height: 1,
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }

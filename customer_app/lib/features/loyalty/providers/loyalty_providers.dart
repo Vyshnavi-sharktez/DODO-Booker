@@ -15,3 +15,14 @@ final customerLoyaltyProvider =
 final loyaltyTransactionsProvider =
     FutureProvider<List<LoyaltyTransactionModel>>(
         (ref) => _loyaltyService.getTransactions());
+
+/// Scoped loyalty resolution: returns the resolved loyalty config JSONB for a
+/// service, or null when no catalog override is found (caller uses global rate).
+/// Key: ({serviceId, parentNodeId?}).
+final resolvedLoyaltyConfigProvider =
+    FutureProvider.family<Map<String, dynamic>?, ({String serviceId, String? parentNodeId})>(
+  (ref, key) => _loyaltyService.getResolvedLoyaltyConfigForService(
+    key.serviceId,
+    key.parentNodeId,
+  ),
+);
