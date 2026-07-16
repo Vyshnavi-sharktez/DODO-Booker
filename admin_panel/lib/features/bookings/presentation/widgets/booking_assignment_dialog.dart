@@ -5,7 +5,8 @@ import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/clickable.dart';
 import '../../../dodo_teams/application/providers/dodo_teams_providers.dart';
 import '../../../dodo_teams/domain/models/dodo_team.dart';
-import '../../../vendors/application/providers/vendor_detail_providers.dart';
+import '../../../vendor_serving_areas/application/providers/vendor_serving_areas_providers.dart';
+import '../../../vendor_serving_areas/domain/models/vendor_serving_area.dart';
 import '../../../vendors/application/providers/vendors_providers.dart';
 import '../../../vendors/domain/models/vendor.dart';
 import '../../domain/models/booking.dart';
@@ -54,6 +55,9 @@ class _BookingAssignmentDialogState
   bool get _bookingHasAddress =>
       widget.booking.address != null &&
       widget.booking.address!.trim().isNotEmpty;
+
+  bool get _bookingHasCoordinates =>
+      widget.booking.latitude != null && widget.booking.longitude != null;
 
   @override
   void initState() {
@@ -139,16 +143,19 @@ class _BookingAssignmentDialogState
   @override
   Widget build(BuildContext context) {
     final vendorsAsync = ref.watch(vendorsNotifierProvider);
-    final serviceAreasAsync = ref.watch(allVendorServiceAreasProvider);
+    final servingAreasAsync = ref.watch(vendorServingAreasProvider);
+    final assignmentsAsync = ref.watch(allVendorAreaAssignmentsProvider);
     final dodoTeamsAsync = ref.watch(dodoTeamsNotifierProvider);
 
     final allVendors = vendorsAsync.valueOrNull ?? <Vendor>[];
     final allTeams = dodoTeamsAsync.valueOrNull ?? <DodoTeam>[];
 
-    final vendorResult = VendorAssignmentService.rankVendorAssignees(
-      bookingAddress: widget.booking.address,
+    final vendorResult = VendorAssignmentService.rankVendorAssigneesByServingAreas(
+      bookingLat: widget.booking.latitude,
+      bookingLng: widget.booking.longitude,
       vendors: allVendors,
-      serviceAreasMap: serviceAreasAsync.valueOrNull ?? {},
+      servingAreas: servingAreasAsync.valueOrNull ?? <VendorServingArea>[],
+      assignmentsMap: assignmentsAsync.valueOrNull ?? {},
     );
 
     final teamResult = VendorAssignmentService.rankTeamAssignees(
@@ -181,9 +188,11 @@ class _BookingAssignmentDialogState
                         _buildVendorPanel(
                           result: vendorResult,
                           isLoading: vendorsAsync.isLoading ||
-                              serviceAreasAsync.isLoading,
+                              servingAreasAsync.isLoading ||
+                              assignmentsAsync.isLoading,
                           hasError: vendorsAsync.hasError ||
-                              serviceAreasAsync.hasError,
+                              servingAreasAsync.hasError ||
+                              assignmentsAsync.hasError,
                           allVendors: allVendors,
                         ),
 
@@ -379,19 +388,21 @@ class _BookingAssignmentDialogState
           if (_bookingHasAddress)
             _AddressRow(
               address: widget.booking.address!,
-              trailing: TextButton(
-                onPressed: _saving
-                    ? null
-                    : () => setState(() => _showAllVendors = false),
-                style: TextButton.styleFrom(
-                  minimumSize: Size.zero,
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 8, vertical: 4),
-                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  textStyle: const TextStyle(fontSize: 12),
-                ),
-                child: const Text('In-area only'),
-              ),
+              trailing: _bookingHasCoordinates
+                  ? TextButton(
+                      onPressed: _saving
+                          ? null
+                          : () => setState(() => _showAllVendors = false),
+                      style: TextButton.styleFrom(
+                        minimumSize: Size.zero,
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 4),
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        textStyle: const TextStyle(fontSize: 12),
+                      ),
+                      child: const Text('In-area only'),
+                    )
+                  : null,
             ),
           const SizedBox(height: 4),
           Text(
@@ -419,8 +430,8 @@ class _BookingAssignmentDialogState
       );
     }
 
-    // No booking address — cannot filter by area; require explicit action.
-    if (!_bookingHasAddress) {
+    // No coordinates — cannot match serving areas; require explicit action.
+    if (!_bookingHasCoordinates) {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -429,8 +440,8 @@ class _BookingAssignmentDialogState
             icon: Icons.location_off_rounded,
             color: AppColors.textSecondary,
             message:
-                'This booking has no address. Location-based filtering '
-                'is unavailable.',
+                'This booking has no location data. '
+                'Serving-area filtering is unavailable.',
             actionLabel: 'Show All Vendors',
             onAction: () => setState(() => _showAllVendors = true),
           ),
@@ -438,37 +449,39 @@ class _BookingAssignmentDialogState
       );
     }
 
-    // Booking has address — show in-area vendors only.
-    final addressRow = _AddressRow(
-      address: widget.booking.address!,
-      trailing: result.inArea.isNotEmpty
-          ? TextButton(
-              onPressed: _saving
-                  ? null
-                  : () => setState(() => _showAllVendors = true),
-              style: TextButton.styleFrom(
-                minimumSize: Size.zero,
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 8, vertical: 4),
-                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                textStyle: const TextStyle(fontSize: 12),
-              ),
-              child: Text('Show all (${result.all.length})'),
-            )
-          : null,
-    );
+    // Booking has coordinates — show vendors assigned to the matching area.
+    Widget? addressRow = _bookingHasAddress
+        ? _AddressRow(
+            address: widget.booking.address!,
+            trailing: result.inArea.isNotEmpty
+                ? TextButton(
+                    onPressed: _saving
+                        ? null
+                        : () => setState(() => _showAllVendors = true),
+                    style: TextButton.styleFrom(
+                      minimumSize: Size.zero,
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 4),
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      textStyle: const TextStyle(fontSize: 12),
+                    ),
+                    child: Text('Show all (${result.all.length})'),
+                  )
+                : null,
+          )
+        : null;
 
     if (result.inArea.isEmpty) {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           ?currentAssigneeNote,
-          addressRow,
-          const SizedBox(height: 8),
+          ?addressRow,
+          if (addressRow != null) const SizedBox(height: 8),
           _InfoBanner(
             icon: Icons.search_off_rounded,
             color: AppColors.textSecondary,
-            message: 'No vendors available in this location.',
+            message: 'No vendors are assigned to serve this area.',
             actionLabel: 'Show All Vendors',
             onAction: () => setState(() => _showAllVendors = true),
           ),
@@ -480,10 +493,10 @@ class _BookingAssignmentDialogState
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         ?currentAssigneeNote,
-        addressRow,
+        ?addressRow,
         const SizedBox(height: 4),
         Text(
-          '${result.inArea.length} vendor${result.inArea.length == 1 ? '' : 's'} serving this area',
+          '${result.inArea.length} vendor${result.inArea.length == 1 ? '' : 's'} assigned to serve this area',
           style: TextStyle(
             fontSize: 12,
             color: AppColors.textSecondary,

@@ -7,6 +7,8 @@ import '../../../../core/widgets/clickable.dart';
 import '../../../../core/screens/map_picker_screen.dart';
 import '../../../../core/services/nominatim_service.dart';
 import '../../../auth/presentation/providers/auth_controller.dart';
+import '../../../serving_areas/presentation/providers/serving_areas_provider.dart';
+import '../../../serving_areas/presentation/widgets/serving_areas_selector.dart';
 import '../../domain/models/vendor_profile.dart';
 import '../providers/profile_provider.dart';
 
@@ -30,6 +32,21 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
   double? _longitude;
   bool _isLocating = false;
   String? _locationError;
+
+  // Serving-area selection — seeded once from server, persisted on submit.
+  bool _areasInitialized = false;
+  Set<String> _selectedAreaIds = {};
+  bool _savingAreas = false;
+
+  void _toggleArea(String id) {
+    setState(() {
+      if (_selectedAreaIds.contains(id)) {
+        _selectedAreaIds.remove(id);
+      } else {
+        _selectedAreaIds.add(id);
+      }
+    });
+  }
 
   @override
   void initState() {
@@ -136,10 +153,36 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
     });
   }
 
-  void _submit() {
+  Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
     final user = ref.read(currentVendorUserProvider);
     if (user == null) return;
+
+    // 1. Persist serving-area assignments first.
+    setState(() => _savingAreas = true);
+    try {
+      await ref.read(servingAreasDatasourceProvider).syncAssignments(
+            widget.profile.id,
+            _selectedAreaIds.toList(),
+          );
+      if (mounted) {
+        ref.invalidate(vendorAssignedAreaIdsProvider(widget.profile.id));
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Serving areas failed to save: $e'),
+          backgroundColor: AppColors.error,
+        ),
+      );
+      setState(() => _savingAreas = false);
+      return;
+    }
+    if (mounted) setState(() => _savingAreas = false);
+
+    // 2. Persist profile fields (ref.listen handles success/pop).
+    if (!mounted) return;
     ref.read(editProfileProvider.notifier).save(
       phone: user.phone,
       fields: {
@@ -179,7 +222,20 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
       }
     });
 
-    final isSaving = ref.watch(editProfileProvider).isLoading;
+    // Seed _selectedAreaIds once from server — post-frame to avoid setState-in-build.
+    ref
+        .watch(vendorAssignedAreaIdsProvider(widget.profile.id))
+        .whenData((ids) {
+      if (!_areasInitialized) {
+        _areasInitialized = true;
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) setState(() => _selectedAreaIds = ids.toSet());
+        });
+      }
+    });
+
+    final isSaving =
+        ref.watch(editProfileProvider).isLoading || _savingAreas;
 
     return Scaffold(
       appBar: AppBar(
@@ -233,11 +289,11 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
                 const SizedBox(height: 16),
                 _buildField(
                   controller: _addressCtrl,
-                  label: 'Address',
+                  label: 'Business Address',
                   icon: Icons.place_outlined,
                   maxLines: 3,
                   validator: (v) => (v == null || v.trim().isEmpty)
-                      ? 'Address is required'
+                      ? 'Business address is required'
                       : null,
                 ),
                 const SizedBox(height: 12),
@@ -322,6 +378,14 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
                     ],
                   ),
                 ],
+                const SizedBox(height: 20),
+
+                // Serving Areas — admin-controlled zones the vendor selects
+                ServingAreasSelector(
+                  selected: _selectedAreaIds,
+                  onToggle: _toggleArea,
+                ),
+
                 const SizedBox(height: 32),
                 FilledButton.icon(
                   onPressed: isSaving ? null : _submit,

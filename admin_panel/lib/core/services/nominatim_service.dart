@@ -11,6 +11,20 @@ class NominatimAddress {
   const NominatimAddress({this.line1, this.city, this.state, this.pincode});
 }
 
+class NominatimSearchResult {
+  final String displayName;
+  final double lat;
+  final double lon;
+  final String? city;
+
+  const NominatimSearchResult({
+    required this.displayName,
+    required this.lat,
+    required this.lon,
+    this.city,
+  });
+}
+
 class NominatimService {
   static const _host = 'nominatim.openstreetmap.org';
 
@@ -59,5 +73,43 @@ class NominatimService {
       state: addr['state'] as String?,
       pincode: addr['postcode'] as String?,
     );
+  }
+
+  /// Forward geocoding — searches for [query] and returns up to 5 results.
+  /// Free via Nominatim/OpenStreetMap; no API key required.
+  Future<List<NominatimSearchResult>> search(String query) async {
+    final uri = Uri.https(_host, '/search', {
+      'q': query,
+      'format': 'json',
+      'limit': '5',
+      'accept-language': 'en',
+      'addressdetails': '1',
+    });
+
+    debugPrint('[DODO][Nominatim] search → "$query"');
+    final res = await http
+        .get(uri, headers: {'User-Agent': 'DODO-Booker/1.0'})
+        .timeout(const Duration(seconds: 8));
+    debugPrint('[DODO][Nominatim] search status: ${res.statusCode}');
+
+    if (res.statusCode != 200) {
+      throw Exception('Nominatim HTTP error: ${res.statusCode}');
+    }
+
+    final list = jsonDecode(res.body) as List<dynamic>;
+    return list.map((item) {
+      final m = item as Map<String, dynamic>;
+      final addr = (m['address'] as Map<String, dynamic>?) ?? {};
+      final city = (addr['city'] as String?)
+          ?? (addr['town'] as String?)
+          ?? (addr['village'] as String?)
+          ?? (addr['county'] as String?);
+      return NominatimSearchResult(
+        displayName: m['display_name'] as String? ?? '',
+        lat: double.parse(m['lat'] as String),
+        lon: double.parse(m['lon'] as String),
+        city: city,
+      );
+    }).toList();
   }
 }
