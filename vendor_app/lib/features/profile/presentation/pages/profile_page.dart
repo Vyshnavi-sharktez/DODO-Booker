@@ -149,7 +149,7 @@ class _ProfileBody extends StatelessWidget {
         ),
         if (profile.city != null || profile.address != null)
           _InfoSection(
-            title: 'Location',
+            title: 'Business Address',
             items: [
               if (profile.city != null)
                 _InfoItem(

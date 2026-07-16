@@ -1,5 +1,6 @@
 import 'dart:math';
 import '../../../dodo_teams/domain/models/dodo_team.dart';
+import '../../../vendor_serving_areas/domain/models/vendor_serving_area.dart';
 import '../../../vendors/domain/models/vendor.dart';
 import '../../../vendors/domain/models/vendor_detail.dart';
 
@@ -163,6 +164,57 @@ class VendorAssignmentService {
           areas.any((sa) => _serviceAreaMatchesAddress(sa, addressLower));
 
       if (matches) {
+        inArea.add(AssigneeCandidate.fromVendor(vendor));
+      } else {
+        outside.add(AssigneeCandidate.fromVendor(vendor));
+      }
+    }
+
+    inArea.sort((a, b) => a.name.compareTo(b.name));
+    outside.sort((a, b) => a.name.compareTo(b.name));
+
+    return (inArea: inArea, all: [...inArea, ...outside]);
+  }
+
+  /// Returns `({inArea, all})` using serving-area assignments.
+  ///
+  /// - inArea: active vendors assigned to any serving area that contains the
+  ///   booking coordinates (Haversine ≤ radius_km).  Empty when coordinates
+  ///   are absent or no matching area exists.
+  /// - all: every active vendor — in-area first, alphabetically.
+  static ({List<AssigneeCandidate> inArea, List<AssigneeCandidate> all})
+      rankVendorAssigneesByServingAreas({
+    double? bookingLat,
+    double? bookingLng,
+    required List<Vendor> vendors,
+    required List<VendorServingArea> servingAreas,
+    required Map<String, Set<String>> assignmentsMap,
+  }) {
+    final activeVendors = vendors.where((v) => v.isActive).toList();
+
+    if (bookingLat == null || bookingLng == null) {
+      final all = activeVendors.map(AssigneeCandidate.fromVendor).toList()
+        ..sort((a, b) => a.name.compareTo(b.name));
+      return (inArea: [], all: all);
+    }
+
+    final matchingAreaIds = servingAreas
+        .where((area) =>
+            haversineKm(bookingLat, bookingLng, area.latitude, area.longitude) <=
+            area.radiusKm)
+        .map((area) => area.id)
+        .toSet();
+
+    final inAreaVendorIds = <String>{};
+    for (final areaId in matchingAreaIds) {
+      inAreaVendorIds.addAll(assignmentsMap[areaId] ?? {});
+    }
+
+    final inArea = <AssigneeCandidate>[];
+    final outside = <AssigneeCandidate>[];
+
+    for (final vendor in activeVendors) {
+      if (inAreaVendorIds.contains(vendor.id)) {
         inArea.add(AssigneeCandidate.fromVendor(vendor));
       } else {
         outside.add(AssigneeCandidate.fromVendor(vendor));

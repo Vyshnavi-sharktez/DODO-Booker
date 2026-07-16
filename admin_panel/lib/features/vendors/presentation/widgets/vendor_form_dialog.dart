@@ -420,11 +420,11 @@ class _VendorFormDialogState extends State<VendorFormDialog> {
                       ),
                       const SizedBox(height: 16),
 
-                      // Address
+                      // Business Address
                       TextFormField(
                         controller: _address,
                         decoration: const InputDecoration(
-                          labelText: 'Address',
+                          labelText: 'Business Address',
                           hintText: 'Street address, area',
                           prefixIcon: Icon(Icons.place_rounded),
                         ),
