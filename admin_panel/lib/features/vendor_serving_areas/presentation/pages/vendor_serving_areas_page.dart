@@ -119,7 +119,7 @@ class _VendorServingAreasPageState
     if (count > 0) {
       showDialog<void>(
         context: context,
-        builder: (_) => AlertDialog(
+        builder: (dialogContext) => AlertDialog(
           title: const Text('Cannot Delete'),
           content: Text(
             '"${area.name}" is assigned to $count vendor${count == 1 ? '' : 's'}.\n'
@@ -127,7 +127,7 @@ class _VendorServingAreasPageState
           ),
           actions: [
             FilledButton(
-              onPressed: () => Navigator.of(context).pop(),
+              onPressed: () => Navigator.of(dialogContext).pop(),
               child: const Text('OK'),
             ),
           ],
@@ -138,15 +138,15 @@ class _VendorServingAreasPageState
 
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (_) => AlertDialog(
+      builder: (dialogContext) => AlertDialog(
         title: const Text('Delete Serving Area?'),
         content: Text('Delete "${area.name}"? This cannot be undone.'),
         actions: [
           TextButton(
-              onPressed: () => Navigator.of(context).pop(false),
+              onPressed: () => Navigator.of(dialogContext).pop(false),
               child: const Text('Cancel')),
           FilledButton(
-            onPressed: () => Navigator.of(context).pop(true),
+            onPressed: () => Navigator.of(dialogContext).pop(true),
             style: FilledButton.styleFrom(backgroundColor: AppColors.error),
             child: const Text('Delete'),
           ),
@@ -338,7 +338,7 @@ class _VendorServingAreasPageState
                 }
                 return ListView.separated(
                   itemCount: areas.length,
-                  separatorBuilder: (_, __) => const SizedBox(height: 10),
+                  separatorBuilder: (_, _) => const SizedBox(height: 10),
                   itemBuilder: (_, i) => _AreaCard(
                     area: areas[i],
                     vendorCount: counts[areas[i].id] ?? 0,
@@ -709,7 +709,7 @@ class _VendorsInAreaDialog extends ConsumerWidget {
                     padding: const EdgeInsets.all(16),
                     shrinkWrap: true,
                     itemCount: vendors.length,
-                    separatorBuilder: (_, __) => const SizedBox(height: 8),
+                    separatorBuilder: (_, _) => const SizedBox(height: 8),
                     itemBuilder: (_, i) =>
                         _VendorSummaryTile(vendor: vendors[i]),
                   );

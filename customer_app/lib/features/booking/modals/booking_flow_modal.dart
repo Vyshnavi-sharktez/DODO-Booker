@@ -18,6 +18,8 @@ import '../widgets/date_selector.dart';
 import '../widgets/time_slot_card.dart';
 import '../widgets/available_coupons_sheet.dart';
 import '../../../features/preferred_vendor/widgets/preferred_vendor_section.dart';
+import '../../service_availability/services/serviceability_service.dart';
+import '../../service_availability/widgets/service_area_unavailable_dialog.dart';
 
 /// Desktop booking flow rendered inside [PageSheet].
 /// Uses the same light surface + AppColors design language as Profile dialogs.
@@ -137,6 +139,18 @@ class _BookingFlowModalState extends ConsumerState<BookingFlowModal>
       if (addrs.isEmpty) return;
       _address =
           addrs.firstWhere((a) => a.isDefault, orElse: () => addrs.first);
+    }
+
+    // Serviceability check when leaving the address step.
+    if (_step == 0 && _address != null) {
+      final serviceability = await ServiceabilityService()
+          .check(_address!.latitude, _address!.longitude);
+      if (!mounted) return;
+      if (serviceability != ServiceabilityResult.serviceable) {
+        await showServiceAreaUnavailableDialog(context);
+        if (!mounted) return;
+        return;
+      }
     }
 
     if (_step < 3) {

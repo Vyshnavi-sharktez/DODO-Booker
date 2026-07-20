@@ -16,12 +16,15 @@ class NominatimSearchResult {
   final double lat;
   final double lon;
   final String? city;
+  /// OSM place type — e.g. "suburb", "city", "town", "administrative".
+  final String? placeType;
 
   const NominatimSearchResult({
     required this.displayName,
     required this.lat,
     required this.lon,
     this.city,
+    this.placeType,
   });
 }
 
@@ -75,18 +78,27 @@ class NominatimService {
     );
   }
 
-  /// Forward geocoding — searches for [query] and returns up to 5 results.
+  /// Forward geocoding — searches for [query] and returns up to 8 results.
   /// Free via Nominatim/OpenStreetMap; no API key required.
-  Future<List<NominatimSearchResult>> search(String query) async {
-    final uri = Uri.https(_host, '/search', {
+  ///
+  /// [countrycodes] — optional ISO 3166-1 alpha-2 code (e.g. 'in') to restrict
+  /// results to a specific country. Helps surface suburb/neighbourhood results
+  /// that would otherwise be ranked below the parent city.
+  Future<List<NominatimSearchResult>> search(
+    String query, {
+    String? countrycodes,
+  }) async {
+    final params = <String, String>{
       'q': query,
       'format': 'json',
-      'limit': '5',
+      'limit': '8',
       'accept-language': 'en',
       'addressdetails': '1',
-    });
+    };
+    if (countrycodes != null) params['countrycodes'] = countrycodes;
+    final uri = Uri.https(_host, '/search', params);
 
-    debugPrint('[DODO][Nominatim] search → "$query"');
+    debugPrint('[DODO][Nominatim] search → "$query" countrycodes=$countrycodes');
     final res = await http
         .get(uri, headers: {'User-Agent': 'DODO-Booker/1.0'})
         .timeout(const Duration(seconds: 8));
@@ -109,6 +121,7 @@ class NominatimService {
         lat: double.parse(m['lat'] as String),
         lon: double.parse(m['lon'] as String),
         city: city,
+        placeType: m['type'] as String?,
       );
     }).toList();
   }

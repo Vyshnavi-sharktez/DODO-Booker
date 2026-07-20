@@ -11,6 +11,8 @@ import '../../../models/booking_item.dart';
 import '../../../features/address/modals/address_form_modal.dart';
 import '../services/booking_providers.dart';
 import '../services/coupon_providers.dart';
+import '../../service_availability/services/serviceability_service.dart';
+import '../../service_availability/widgets/service_area_unavailable_dialog.dart';
 import '../../../features/tax/providers/tax_provider.dart';
 import '../../../features/tax/models/tax_settings_model.dart';
 import '../widgets/date_selector.dart';
@@ -123,6 +125,18 @@ class _RebookFlowModalState extends ConsumerState<RebookFlowModal>
       if (addrs.isEmpty) return;
       _address = _matchedAddress(addrs) ??
           addrs.firstWhere((a) => a.isDefault, orElse: () => addrs.first);
+    }
+
+    // Serviceability check when leaving the address step.
+    if (_step == 0 && _address != null) {
+      final serviceability = await ServiceabilityService()
+          .check(_address!.latitude, _address!.longitude);
+      if (!mounted) return;
+      if (serviceability != ServiceabilityResult.serviceable) {
+        await showServiceAreaUnavailableDialog(context);
+        if (!mounted) return;
+        return;
+      }
     }
 
     if (_step < 3) {

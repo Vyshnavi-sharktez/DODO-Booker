@@ -27,6 +27,8 @@ import '../../tax/providers/tax_provider.dart';
 import '../../surge_fee/models/surge_fee_model.dart';
 import '../../surge_fee/providers/surge_fee_provider.dart';
 import '../../preferred_vendor/providers/preferred_vendor_provider.dart';
+import '../../service_availability/services/serviceability_service.dart';
+import '../../service_availability/widgets/service_area_unavailable_dialog.dart';
 
 class CheckoutScreen extends ConsumerStatefulWidget {
   final bool inModal;
@@ -151,6 +153,17 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       _showError('Please select a delivery address.');
       return;
     }
+
+    // Serviceability check against selected service address.
+    final serviceability = await ServiceabilityService()
+        .check(_selectedAddress!.latitude, _selectedAddress!.longitude);
+    if (!mounted) return;
+    if (serviceability != ServiceabilityResult.serviceable) {
+      await showServiceAreaUnavailableDialog(context);
+      if (!mounted) return;
+      return;
+    }
+
     if (_selectedDate == null) {
       _showError('Please select a service date.');
       return;
@@ -1065,7 +1078,7 @@ class _LoyaltySection extends ConsumerWidget {
 
     return settingsAsync.when(
       loading: () => const SizedBox.shrink(),
-      error: (_, __) => const SizedBox.shrink(),
+      error: (_, _) => const SizedBox.shrink(),
       data: (settings) {
         if (!settings.isEnabled || !settings.redeemEnabled) {
           return const SizedBox.shrink();
