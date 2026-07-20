@@ -423,7 +423,7 @@ class _RebookFlowModalState extends ConsumerState<RebookFlowModal>
 
   Widget _buildDateTimeStep() {
     final slotsAsync = ref.watch(timeSlotsProvider(
-      (date: _dateKey, serviceId: widget.booking.serviceId, parentNodeId: _parentNodeId),
+      (date: _dateKey, serviceId: widget.booking.serviceId, parentNodeId: _parentNodeId, vendorId: null),
     ));
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,

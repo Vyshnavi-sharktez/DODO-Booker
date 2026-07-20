@@ -38,6 +38,7 @@ class BookingService {
     String dateStr,
     String serviceId, {
     String? parentNodeId,
+    String? vendorId,
   }) async {
     debugPrint('[DODO][Slots] ══════════ fetchAvailableSlots ══════════');
     debugPrint('[DODO][Slots] date=$dateStr  serviceId="$serviceId"  parentNodeId=$parentNodeId');
@@ -69,7 +70,7 @@ class BookingService {
           // await so that any exception from _buildSlots is caught by this
           // try/catch rather than propagating as an unhandled Future rejection.
           return await _buildSlots(dateStr, serviceId, scopedCfg,
-              configSource: 'scoped');
+              configSource: 'scoped', vendorId: vendorId);
         } else {
           debugPrint('[DODO][Slots] RPC returned null — no scoped config, falling through to global');
         }
@@ -159,13 +160,13 @@ class BookingService {
       return [];
     }
 
-    return await _buildSlots(dateStr, serviceId, scheduleCfg!);
+    return await _buildSlots(dateStr, serviceId, scheduleCfg!, vendorId: vendorId);
   }
 
   /// Shared slot-generation logic used by both scoped and fallback paths.
   Future<List<TimeSlotModel>> _buildSlots(
       String dateStr, String serviceId, Map<String, dynamic> cfg,
-      {String configSource = 'unknown'}) async {
+      {String configSource = 'unknown', String? vendorId}) async {
     debugPrint('[DODO][Slots] ── _buildSlots: configSource=$configSource');
 
     // ── Check working day ────────────────────────────────────────────────────
@@ -196,15 +197,20 @@ class BookingService {
     debugPrint('[DODO][Slots] STAGE parse-slots: after trim=${labels.length} labels=$labels  maxBookings=$maxBookings');
 
     // ── Load existing booking counts for this service+date ───────────────────
+    // When vendorId is set, only count that vendor's bookings so capacity is
+    // vendor-specific (lets customers see slots the chosen vendor can still take).
     final capacityMap = <String, int>{};
     if (serviceId.isNotEmpty) {
       try {
-        final rows = await _client
+        final baseQ = _client
             .from('bookings')
             .select('scheduled_time, status')
             .eq('service_date', dateStr)
             .eq('service_id', serviceId)
             .not('scheduled_time', 'is', null);
+        final rows = vendorId != null
+            ? await baseQ.eq('preferred_vendor_id', vendorId)
+            : await baseQ;
         for (final row in rows) {
           final status = (row['status'] as String?) ?? '';
           if (status == 'cancelled' || status == 'rejected') continue;
@@ -229,6 +235,34 @@ class BookingService {
         'now=${now.hour}:${now.minute.toString().padLeft(2, '0')}  '
         'cutoffMin=$cutoffMin (${cutoffMin ~/ 60}:${(cutoffMin % 60).toString().padLeft(2, '0')})');
 
+    // ── Vendor busy check ────────────────────────────────────────────────────
+    // Uses the get_vendor_busy_status SECURITY DEFINER RPC — the customer app
+    // must not read other customers' bookings directly via the bookings table.
+    int vendorBusyUntilMin = 0;
+    if (vendorId != null && isToday) {
+      final nowMin = now.hour * 60 + now.minute;
+      try {
+        final result = await _client.rpc('get_vendor_busy_status', params: {
+          'p_vendor_id': vendorId,
+          'p_service_date': dateStr,
+          'p_now_minutes': nowMin,
+        });
+        final rows = result as List;
+        if (rows.isNotEmpty) {
+          final row = rows.first as Map<String, dynamic>;
+          final isBusy = row['is_busy'] as bool? ?? false;
+          final busyUntilMin = (row['busy_until_minutes'] as num?)?.toInt();
+          if (isBusy && busyUntilMin != null) {
+            vendorBusyUntilMin = busyUntilMin;
+            debugPrint('[DODO][Slots] Vendor $vendorId busy until approx. '
+                '${vendorBusyUntilMin ~/ 60}:${(vendorBusyUntilMin % 60).toString().padLeft(2, '0')}');
+          }
+        }
+      } catch (e) {
+        debugPrint('[DODO][Slots] Warning: vendor busy check failed: $e');
+      }
+    }
+
     // ── Build TimeSlotModel list ─────────────────────────────────────────────
     final result = <TimeSlotModel>[];
     for (final label in labels) {
@@ -236,6 +270,11 @@ class BookingService {
       if (isToday && slotMin < cutoffMin) {
         debugPrint(
             '[DODO][Slots]   "$label" ($slotMin min) — FILTERED (before cutoff $cutoffMin)');
+        continue;
+      }
+      if (vendorBusyUntilMin > 0 && slotMin < vendorBusyUntilMin) {
+        debugPrint(
+            '[DODO][Slots]   "$label" ($slotMin min) — FILTERED (vendor busy until $vendorBusyUntilMin)');
         continue;
       }
       final bookedCount = capacityMap[label] ?? 0;
@@ -284,6 +323,8 @@ class BookingService {
     double priceAdjustment = 0.0,
     List<SelectedAddon> selectedAddons = const [],
     String? parentNodeId,
+    String? preferredVendorId,
+    double? preferredVendorFeeAmount,
   }) async {
     debugPrint('[DODO][Booking] createBooking started');
     debugPrint('[DODO][Booking] Service: ${service.name} (id=${service.id})');
@@ -297,7 +338,8 @@ class BookingService {
     final addonsTotal = totalAddonsPrice(selectedAddons);
     final subtotal = (service.basePrice ?? 0.0) + priceAdjustment + addonsTotal;
     final tax = await _resolveTaxAmount(subtotal, service.id, parentNodeId);
-    final grossAmount = subtotal + tax;
+    final pvFee = preferredVendorFeeAmount ?? 0.0;
+    final grossAmount = subtotal + tax + pvFee;
     final totalAmount = (grossAmount - discountAmount).clamp(0.0, double.infinity);
     final serviceDate = date.toIso8601String().substring(0, 10);
 
@@ -327,6 +369,11 @@ class BookingService {
       'completion_otp': completionOtp,
       'scheduled_time': slot.label,
       'service_id': service.id,
+      'preferred_vendor_id': ?preferredVendorId,
+      if (pvFee > 0) 'preferred_vendor_fee_amount': pvFee,
+      // Auto-assign: when customer picks a preferred vendor, write vendor_id
+      // immediately so admin dispatch is bypassed for this booking.
+      'vendor_id': ?preferredVendorId,
     };
     debugPrint('[OTP][Create] Payload keys    : ${payload.keys.toList()}');
     debugPrint('[OTP][Create] Payload otp val : ${payload['completion_otp']}');

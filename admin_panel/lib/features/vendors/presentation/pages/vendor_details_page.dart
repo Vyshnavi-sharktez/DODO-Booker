@@ -61,6 +61,8 @@ class _VendorDetailView extends ConsumerWidget {
           latitude,
           longitude,
           commissionRate,
+          required isPreferredVendor,
+          required preferredVendorFee,
         }) async {
           await ref.read(vendorsNotifierProvider.notifier).updateVendor(
                 vendorId,
@@ -77,6 +79,8 @@ class _VendorDetailView extends ConsumerWidget {
                 latitude: latitude,
                 longitude: longitude,
                 commissionRate: commissionRate,
+                isPreferredVendor: isPreferredVendor,
+                preferredVendorFee: preferredVendorFee,
               );
           ref.invalidate(vendorByIdProvider(vendorId));
         },
@@ -269,6 +273,22 @@ class _OverviewTab extends ConsumerWidget {
               label: 'Rating',
               value: vendor.rating?.toStringAsFixed(1) ?? 'No rating',
             ),
+            _InfoCell(
+              icon: Icons.workspace_premium_rounded,
+              label: 'Preferred Vendor',
+              value: vendor.isPreferredVendor ? 'Yes' : 'No',
+              valueColor: vendor.isPreferredVendor
+                  ? AppColors.success
+                  : AppColors.textSecondary,
+            ),
+            if (vendor.isPreferredVendor)
+              _InfoCell(
+                icon: Icons.currency_rupee_rounded,
+                label: 'Preferred Vendor Fee',
+                value: vendor.preferredVendorFee > 0
+                    ? '₹${vendor.preferredVendorFee.toStringAsFixed(2)}'
+                    : '—',
+              ),
             Builder(builder: (context) {
               final pendingAsync =
                   ref.watch(vendorPendingSettlementProvider(vendor.id));

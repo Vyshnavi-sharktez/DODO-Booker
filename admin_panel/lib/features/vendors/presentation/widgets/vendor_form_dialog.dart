@@ -31,6 +31,8 @@ class VendorFormDialog extends StatefulWidget {
     double? latitude,
     double? longitude,
     double? commissionRate,
+    required bool isPreferredVendor,
+    required double preferredVendorFee,
   }) onSave;
 
   const VendorFormDialog({
@@ -61,6 +63,8 @@ class _VendorFormDialogState extends State<VendorFormDialog> {
   double? _longitude;
   bool _isLocating = false;
   String? _locationError;
+  late bool _isPreferredVendor;
+  late final TextEditingController _preferredVendorFee;
 
   @override
   void initState() {
@@ -85,6 +89,12 @@ class _VendorFormDialogState extends State<VendorFormDialog> {
     _isActive = e?.isActive ?? false;
     _latitude = e?.latitude;
     _longitude = e?.longitude;
+    _isPreferredVendor = e?.isPreferredVendor ?? false;
+    _preferredVendorFee = TextEditingController(
+      text: e != null && e.preferredVendorFee > 0
+          ? e.preferredVendorFee.toStringAsFixed(2)
+          : '',
+    );
   }
 
   @override
@@ -98,6 +108,7 @@ class _VendorFormDialogState extends State<VendorFormDialog> {
     _rating.dispose();
     _walletBalance.dispose();
     _commissionRate.dispose();
+    _preferredVendorFee.dispose();
     super.dispose();
   }
 
@@ -197,6 +208,8 @@ class _VendorFormDialogState extends State<VendorFormDialog> {
         latitude: _latitude,
         longitude: _longitude,
         commissionRate: double.tryParse(commissionText) ?? 0.0,
+        isPreferredVendor: _isPreferredVendor,
+        preferredVendorFee: double.tryParse(_preferredVendorFee.text.trim()) ?? 0.0,
       );
       if (mounted) Navigator.of(context).pop();
     } catch (e) {
@@ -602,6 +615,53 @@ class _VendorFormDialogState extends State<VendorFormDialog> {
                         onChanged: (v) => setState(() => _isActive = v),
                         dense: true,
                       ),
+
+                      // Preferred Vendor toggle
+                      SwitchListTile(
+                        contentPadding: EdgeInsets.zero,
+                        title: const Text(
+                          'Preferred Vendor',
+                          style: TextStyle(
+                              fontSize: 14, fontWeight: FontWeight.w500),
+                        ),
+                        subtitle: const Text(
+                          'Show vendor as a selectable preferred option at checkout',
+                          style: TextStyle(fontSize: 12),
+                        ),
+                        value: _isPreferredVendor,
+                        onChanged: (v) =>
+                            setState(() => _isPreferredVendor = v),
+                        dense: true,
+                      ),
+
+                      // Preferred Vendor Fee — shown only when toggle is on
+                      if (_isPreferredVendor) ...[
+                        const SizedBox(height: 8),
+                        TextFormField(
+                          controller: _preferredVendorFee,
+                          decoration: const InputDecoration(
+                            labelText: 'Preferred Vendor Fee (₹)',
+                            hintText: '0.00',
+                            prefixIcon: Icon(Icons.currency_rupee_rounded),
+                            helperText:
+                                'Flat fee added to order when customer selects this vendor',
+                          ),
+                          keyboardType: const TextInputType.numberWithOptions(
+                              decimal: true),
+                          inputFormatters: [
+                            FilteringTextInputFormatter.allow(
+                                RegExp(r'^\d*\.?\d{0,2}')),
+                          ],
+                          validator: (v) {
+                            if (v == null || v.trim().isEmpty) return null;
+                            final f = double.tryParse(v.trim());
+                            if (f == null || f < 0) {
+                              return 'Enter a valid amount';
+                            }
+                            return null;
+                          },
+                        ),
+                      ],
                     ],
                   ),
                 ),

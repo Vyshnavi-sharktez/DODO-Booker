@@ -6,10 +6,15 @@ final taxSettingsProvider = FutureProvider<TaxSettingsModel>(
   (ref) => TaxService().getSettings(),
 );
 
-/// Scoped tax resolution: relationship-scoped → node-scoped → global fallback.
+/// Scoped tax resolution: global master switch → relationship-scoped → node-scoped → global fallback.
+/// If the global tax is disabled, returns the global (disabled) model immediately
+/// without consulting catalog overrides.
 /// Key: ({serviceId, parentNodeId?}).  When parentNodeId is null falls back to global.
 final resolvedTaxProvider = FutureProvider.family<TaxSettingsModel,
     ({String serviceId, String? parentNodeId})>(
-  (ref, key) =>
-      TaxService().getResolvedTaxForService(key.serviceId, key.parentNodeId),
+  (ref, key) async {
+    final global = await ref.watch(taxSettingsProvider.future);
+    if (!global.isEnabled) return global;
+    return TaxService().getResolvedTaxForService(key.serviceId, key.parentNodeId);
+  },
 );

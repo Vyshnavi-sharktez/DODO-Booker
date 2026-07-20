@@ -17,6 +17,7 @@ import '../../../features/tax/models/tax_settings_model.dart';
 import '../widgets/date_selector.dart';
 import '../widgets/time_slot_card.dart';
 import '../widgets/available_coupons_sheet.dart';
+import '../../../features/preferred_vendor/widgets/preferred_vendor_section.dart';
 
 /// Desktop booking flow rendered inside [PageSheet].
 /// Uses the same light surface + AppColors design language as Profile dialogs.
@@ -26,7 +27,6 @@ class BookingFlowModal extends ConsumerStatefulWidget {
   final List<SelectedAttributeOption> selectedAttributes;
   final List<SelectedAddon> selectedAddons;
   final String? parentNodeId;
-
   const BookingFlowModal({
     super.key,
     required this.service,
@@ -48,6 +48,10 @@ class _BookingFlowModalState extends ConsumerState<BookingFlowModal>
   bool _showSuccess = false;
   bool _isCreating = false;
   String? _errorMessage;
+
+  late String? _selectedPvId;
+  late String? _selectedPvName;
+  late double _pvFee;
 
   final _couponCtrl = TextEditingController();
   bool _applyingCoupon = false;
@@ -83,6 +87,9 @@ class _BookingFlowModalState extends ConsumerState<BookingFlowModal>
   @override
   void initState() {
     super.initState();
+    _selectedPvId = null;
+    _selectedPvName = null;
+    _pvFee = 0.0;
     _successCtrl = AnimationController(
       duration: const Duration(milliseconds: 650),
       vsync: this,
@@ -162,6 +169,8 @@ class _BookingFlowModalState extends ConsumerState<BookingFlowModal>
             priceAdjustment: totalPriceAdjustment(widget.selectedAttributes),
             selectedAddons: widget.selectedAddons,
             parentNodeId: widget.parentNodeId,
+            preferredVendorId: _selectedPvId,
+            preferredVendorFeeAmount: _pvFee > 0 ? _pvFee : null,
           );
       ref.read(selectedCouponProvider.notifier).state = null;
       if (!mounted) return;
@@ -256,7 +265,7 @@ class _BookingFlowModalState extends ConsumerState<BookingFlowModal>
   Widget build(BuildContext context) {
     final selectedCoupon = ref.watch(selectedCouponProvider);
     final discount = selectedCoupon?.calculateDiscount(_subtotal) ?? 0.0;
-    final total = (_subtotal - discount).clamp(0.0, double.infinity);
+    final total = (_subtotal + _pvFee - discount).clamp(0.0, double.infinity);
 
     if (_showSuccess) return _buildSuccessView();
 
@@ -407,10 +416,31 @@ class _BookingFlowModalState extends ConsumerState<BookingFlowModal>
                 child: _CompactAddressCard(
                   address: a,
                   isSelected: effective.id == a.id,
-                  onTap: () => setState(() => _address = a),
+                  onTap: () => setState(() {
+                    _address = a;
+                    _selectedPvId = null;
+                    _selectedPvName = null;
+                    _pvFee = 0.0;
+                  }),
                 ),
               ),
             ),
+            if (effective.hasCoordinates) ...[
+              const SizedBox(height: 4),
+              PreferredVendorSection(
+                serviceId: widget.service.id,
+                parentNodeId: widget.parentNodeId,
+                lat: effective.latitude!,
+                lng: effective.longitude!,
+                selectedDate: _date,
+                selectedVendorId: _selectedPvId,
+                onSelect: (id, name, fee) => setState(() {
+                  _selectedPvId = id;
+                  _selectedPvName = name;
+                  _pvFee = fee;
+                }),
+              ),
+            ],
             const SizedBox(height: 8),
             OutlinedButton.icon(
               onPressed: _addNewAddress,
@@ -432,7 +462,7 @@ class _BookingFlowModalState extends ConsumerState<BookingFlowModal>
   Widget _buildDateTimeStep() {
     debugPrint('[DODO][Slots] BookingFlowModal: service.id=${widget.service.id}');
     final slotsAsync = ref.watch(timeSlotsProvider(
-      (date: _dateKey, serviceId: widget.service.id, parentNodeId: widget.parentNodeId),
+      (date: _dateKey, serviceId: widget.service.id, parentNodeId: widget.parentNodeId, vendorId: _selectedPvId),
     ));
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -494,7 +524,7 @@ class _BookingFlowModalState extends ConsumerState<BookingFlowModal>
     final addonsTotal = totalAddonsPrice(widget.selectedAddons);
     final adjustedBase = basePrice + totalAdj + addonsTotal;
     final tax = _taxSettings.computeTax(adjustedBase);
-    final total = (adjustedBase + tax - discount).clamp(0.0, double.infinity);
+    final total = (adjustedBase + tax + _pvFee - discount).clamp(0.0, double.infinity);
 
     const weekdays = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
     const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
@@ -830,6 +860,26 @@ class _BookingFlowModalState extends ConsumerState<BookingFlowModal>
                     fontWeight: FontWeight.w500)),
           ],
         ),
+        if (_pvFee > 0) ...[
+          const SizedBox(height: 6),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Flexible(
+                  child: Text(
+                      _selectedPvName != null
+                          ? 'Vendor: $_selectedPvName'
+                          : 'Preferred Vendor Fee',
+                      style: tt.bodySmall
+                          ?.copyWith(color: AppColors.textSecondary),
+                      overflow: TextOverflow.ellipsis)),
+              Text('+₹${_pvFee.toStringAsFixed(2)}',
+                  style: tt.bodySmall?.copyWith(
+                      color: AppColors.textPrimary,
+                      fontWeight: FontWeight.w500)),
+            ],
+          ),
+        ],
         if (discount > 0) ...[
           const SizedBox(height: 6),
           Row(

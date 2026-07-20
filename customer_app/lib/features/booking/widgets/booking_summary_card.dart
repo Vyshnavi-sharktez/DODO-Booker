@@ -20,6 +20,8 @@ class BookingSummaryCard extends ConsumerWidget {
   final List<SelectedAttributeOption> selectedAttributes;
   final List<SelectedAddon> selectedAddons;
   final String? parentNodeId;
+  final double preferredVendorFee;
+  final String? preferredVendorName;
 
   const BookingSummaryCard({
     super.key,
@@ -33,6 +35,8 @@ class BookingSummaryCard extends ConsumerWidget {
     this.selectedAttributes = const [],
     this.selectedAddons = const [],
     this.parentNodeId,
+    this.preferredVendorFee = 0.0,
+    this.preferredVendorName,
   });
 
   static const _monthNames = [
@@ -60,7 +64,7 @@ class BookingSummaryCard extends ConsumerWidget {
         .valueOrNull ??
         TaxSettingsModel.defaults;
     final tax = taxSettings.computeTax(_adjustedBase);
-    final originalTotal = _adjustedBase + tax;
+    final originalTotal = _adjustedBase + tax + preferredVendorFee;
     final finalTotal = (originalTotal - discountAmount).clamp(0.0, double.infinity);
     final tt = Theme.of(context).textTheme;
     final hasDiscount = discountAmount > 0;
@@ -188,6 +192,16 @@ class BookingSummaryCard extends ConsumerWidget {
             ],
             const SizedBox(height: 6),
             _PriceRow(label: taxSettings.displayLabel, amount: tax),
+            if (preferredVendorFee > 0) ...[
+              const SizedBox(height: 6),
+              _PriceRow(
+                label: preferredVendorName != null
+                    ? 'Vendor: $preferredVendorName'
+                    : 'Preferred Vendor Fee',
+                amount: preferredVendorFee,
+                prefix: '+',
+              ),
+            ],
             if (hasDiscount) ...[
               const SizedBox(height: 6),
               _DiscountRow(

@@ -380,9 +380,13 @@ class _ModalBookingBar extends ConsumerWidget {
   Future<void> _book(BuildContext context, WidgetRef ref) async {
     final selectedAttrs = buildSelectedAttributes(attrs, selections);
     final selectedAddons = buildSelectedAddons(addOns, selectedAddonIds);
-    await launchBookingFlow(context, ref, CatalogNodeModel.fromServiceModel(service),
-        selectedAttributes: selectedAttrs,
-        selectedAddons: selectedAddons);
+    await launchBookingFlow(
+      context,
+      ref,
+      CatalogNodeModel.fromServiceModel(service),
+      selectedAttributes: selectedAttrs,
+      selectedAddons: selectedAddons,
+    );
   }
 
   @override

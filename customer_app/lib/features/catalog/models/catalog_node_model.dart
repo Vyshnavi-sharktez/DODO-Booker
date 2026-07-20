@@ -31,6 +31,13 @@ class CatalogNodeModel {
   /// Count of active direct children.
   final int childrenCount;
 
+  // ── Loyalty earn config (mirrors catalog_nodes.loyalty_earn_* columns) ──────
+  final bool loyaltyEarnEnabled;
+  /// 'global' | 'fixed' | 'percentage'
+  final String loyaltyEarnRule;
+  final int? loyaltyFixedPoints;
+  final int? loyaltyEarnPer100;
+
   const CatalogNodeModel({
     required this.id,
     this.parentIds = const [],
@@ -50,6 +57,10 @@ class CatalogNodeModel {
     this.rating = 0.0,
     this.reviewCount = 0,
     this.childrenCount = 0,
+    this.loyaltyEarnEnabled = true,
+    this.loyaltyEarnRule = 'global',
+    this.loyaltyFixedPoints,
+    this.loyaltyEarnPer100,
   });
 
   bool get hasChildren => childrenCount > 0;
@@ -109,6 +120,10 @@ class CatalogNodeModel {
       rating: (map['rating'] as num?)?.toDouble() ?? 0.0,
       reviewCount: (map['review_count'] as int?) ?? 0,
       childrenCount: (map['children_count'] as int?) ?? 0,
+      loyaltyEarnEnabled: (map['loyalty_earn_enabled'] as bool?) ?? true,
+      loyaltyEarnRule: (map['loyalty_earn_rule'] as String?) ?? 'global',
+      loyaltyFixedPoints: map['loyalty_fixed_points'] as int?,
+      loyaltyEarnPer100: map['loyalty_earn_per_100'] as int?,
     );
   }
 }

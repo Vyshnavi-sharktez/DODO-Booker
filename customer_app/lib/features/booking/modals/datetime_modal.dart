@@ -29,7 +29,7 @@ class _DateTimeModalState extends ConsumerState<DateTimeModal> {
   Widget build(BuildContext context) {
     final tt = Theme.of(context).textTheme;
     final slotsAsync = ref.watch(timeSlotsProvider(
-      (date: _dateKey, serviceId: widget.serviceId, parentNodeId: widget.parentNodeId),
+      (date: _dateKey, serviceId: widget.serviceId, parentNodeId: widget.parentNodeId, vendorId: null),
     ));
 
     return AppModalDialog(

@@ -21,8 +21,12 @@ import '../../bookings/services/bookings_providers.dart';
 import '../../loyalty/models/loyalty_settings_model.dart';
 import '../../loyalty/providers/loyalty_providers.dart';
 import '../../loyalty/services/loyalty_service.dart';
+import '../../loyalty/utils/loyalty_utils.dart';
 import '../../tax/models/tax_settings_model.dart';
 import '../../tax/providers/tax_provider.dart';
+import '../../surge_fee/models/surge_fee_model.dart';
+import '../../surge_fee/providers/surge_fee_provider.dart';
+import '../../preferred_vendor/providers/preferred_vendor_provider.dart';
 
 class CheckoutScreen extends ConsumerStatefulWidget {
   final bool inModal;
@@ -41,6 +45,10 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
   bool _placing = false;
   double _taxTotal = 0.0;
   TaxSettingsModel _displayTax = TaxSettingsModel.defaults;
+  double _surgeTotal = 0.0;
+  SurgeFeeModel _displaySurge = SurgeFeeModel.defaults;
+  String? _selectedPreferredVendorId;
+  double _preferredVendorFeeAmount = 0.0;
 
   static const _monthNames = [
     'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
@@ -58,6 +66,8 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
 
   double get _tax => _taxTotal;
 
+  double get _surge => _surgeTotal;
+
   int get _availablePoints {
     return ref
             .read(customerLoyaltyProvider)
@@ -74,7 +84,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       return 0;
     }
     if (_availablePoints < settings.minRedeemPoints) return 0;
-    final baseTotal = _subtotal + _tax - _discount;
+    final baseTotal = _subtotal + _surge + _tax - _discount;
     final maxDiscount = baseTotal * settings.maxRedeemPercentage / 100;
     return _availablePoints.clamp(0, maxDiscount.floor());
   }
@@ -82,7 +92,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
   double get _loyaltyDiscount => _loyaltyRedeemPoints.toDouble();
 
   double get _grandTotal =>
-      (_subtotal + _tax - _discount - _loyaltyDiscount)
+      (_subtotal + _surge + _preferredVendorFeeAmount + _tax - _discount - _loyaltyDiscount)
           .clamp(0.0, double.infinity);
 
   Future<void> _pickDate() async {
@@ -169,6 +179,34 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
 
     final redeemPoints = _loyaltyRedeemPoints;
 
+    debugPrint('[DODO][PV Assignment] checkout vendor = $_selectedPreferredVendorId');
+
+    // Safety re-check: verify selected vendor has not become busy since selection.
+    if (_selectedPreferredVendorId != null) {
+      final safetyDate = _selectedDate!.toIso8601String().substring(0, 10);
+      debugPrint('[DODO][PV BUSY] vendor=${_selectedPreferredVendorId}');
+      try {
+        final isBusy = await ref.read(vendorBusyProvider((
+          vendorId: _selectedPreferredVendorId!,
+          date: safetyDate,
+        )).future);
+        debugPrint('[DODO][PV BUSY] isBusy=$isBusy');
+        if (!mounted) return;
+        if (isBusy) {
+          setState(() {
+            _selectedPreferredVendorId = null;
+            _preferredVendorFeeAmount = 0.0;
+          });
+          _showError(
+            'This vendor is currently busy. Please select another vendor or No Preference.',
+          );
+          return;
+        }
+      } catch (e) {
+        debugPrint('[DODO][PV BUSY] safety check error: $e — proceeding');
+      }
+    }
+
     debugPrint('[DODO][Checkout] _placeBooking starting — inModal=${widget.inModal}');
     setState(() => _placing = true);
     debugPrint('[DODO][Checkout] _placing=true');
@@ -182,6 +220,12 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         couponId: _selectedCoupon?.id,
         discountAmount: _discount + _loyaltyDiscount,
         taxAmount: _tax,
+        surgeAmount: _surge,
+        surgeName: _displaySurge.isEnabled && _surgeTotal > 0 ? _displaySurge.surgeName : null,
+        surgeType: _displaySurge.isEnabled && _surgeTotal > 0 ? _displaySurge.surgeType : null,
+        surgeValue: _displaySurge.isEnabled && _surgeTotal > 0 ? _displaySurge.surgeValue : null,
+        preferredVendorId: _selectedPreferredVendorId,
+        preferredVendorFeeAmount: _preferredVendorFeeAmount > 0 ? _preferredVendorFeeAmount : null,
         paymentMethod: paymentMethod,
       );
       debugPrint('[DODO][Checkout] ✓ createCartBooking returned — id=${booking.id}');
@@ -305,6 +349,24 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     _taxTotal = newTaxTotal;
     _displayTax = firstTax ?? TaxSettingsModel.defaults;
 
+    // Resolve surge fee per cart item so ancestor-scoped configs apply correctly.
+    var newSurgeTotal = 0.0;
+    SurgeFeeModel? firstSurge;
+    for (final item in items) {
+      final surgeAsync = ref.watch(resolvedSurgeFeeProvider((
+        serviceId: item.serviceId,
+        parentNodeId: item.parentNodeId,
+      )));
+      final surgeSettings = surgeAsync.valueOrNull ?? SurgeFeeModel.defaults;
+      newSurgeTotal += surgeSettings.computeSurge(item.totalPrice);
+      if (surgeAsync.hasValue) firstSurge ??= surgeSettings;
+    }
+    if (items.isEmpty) {
+      firstSurge = ref.watch(surgeFeeSettingsProvider).valueOrNull ?? SurgeFeeModel.defaults;
+    }
+    _surgeTotal = newSurgeTotal;
+    _displaySurge = firstSurge ?? SurgeFeeModel.defaults;
+
     // Resolve loyalty earn points per cart item using scoped catalog config.
     final globalLoyalty =
         ref.watch(loyaltySettingsProvider).valueOrNull ?? LoyaltySettingsModel.defaults;
@@ -316,7 +378,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
           parentNodeId: item.parentNodeId,
         )));
         final cfg = loyaltyAsync.valueOrNull;
-        earnedPoints += _computeItemLoyaltyPoints(cfg, globalLoyalty, item.totalPrice);
+        earnedPoints += computeLoyaltyPoints(cfg, globalLoyalty, item.totalPrice);
       }
     }
     debugPrint('[DODO][Checkout][Tax] totalTax=$_taxTotal  rate=${_displayTax.taxValue}%');
@@ -329,7 +391,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     debugPrint('[DODO][Checkout][Slots] timeSlotsProvider key: '
         'date=$dateStr  serviceId=$serviceId  parentNodeId=$parentNodeId');
     final slotsAsync = dateStr != null
-        ? ref.watch(timeSlotsProvider((date: dateStr, serviceId: serviceId, parentNodeId: parentNodeId)))
+        ? ref.watch(timeSlotsProvider((date: dateStr, serviceId: serviceId, parentNodeId: parentNodeId, vendorId: null)))
         : null;
 
     // Pre-select the default address once loaded
@@ -407,8 +469,11 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                   .map((addr) => _AddressRadioTile(
                         address: addr,
                         selected: _selectedAddress?.id == addr.id,
-                        onTap: () =>
-                            setState(() => _selectedAddress = addr),
+                        onTap: () => setState(() {
+                          _selectedAddress = addr;
+                          _selectedPreferredVendorId = null;
+                          _preferredVendorFeeAmount = 0.0;
+                        }),
                       ))
                   .toList(),
             );
@@ -491,7 +556,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                 error: (e, _) => _ErrorRow(
                   message: 'Could not load time slots',
                   onRetry: () => ref.invalidate(
-                    timeSlotsProvider((date: dateStr!, serviceId: serviceId, parentNodeId: parentNodeId)),
+                    timeSlotsProvider((date: dateStr!, serviceId: serviceId, parentNodeId: parentNodeId, vendorId: null)),
                   ),
                 ),
                 data: (slots) => _SlotGrid(
@@ -534,6 +599,26 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       ),
       const SizedBox(height: 16),
 
+      // Preferred Vendor
+      if (items.isNotEmpty && (_selectedAddress?.hasCoordinates ?? false)) ...[
+        _PreferredVendorSection(
+          serviceId: items.first.serviceId,
+          parentNodeId: items.first.parentNodeId,
+          lat: _selectedAddress!.latitude!,
+          lng: _selectedAddress!.longitude!,
+          selectedVendorId: _selectedPreferredVendorId,
+          date: _selectedDate,
+          onSelect: (vendorId, fee) {
+            debugPrint('[DODO][PV Assignment] selected vendor = $vendorId');
+            setState(() {
+              _selectedPreferredVendorId = vendorId;
+              _preferredVendorFeeAmount = fee;
+            });
+          },
+        ),
+        const SizedBox(height: 16),
+      ],
+
       // Price Summary
       _SectionCard(
         title: 'Price Summary',
@@ -541,8 +626,12 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
           subtotal: _subtotal,
           discount: _discount,
           loyaltyDiscount: _loyaltyDiscount,
+          surge: _surge,
+          preferredVendorFee: _preferredVendorFeeAmount,
           tax: _tax,
           grandTotal: _grandTotal,
+          surgeLabel: _displaySurge.displayLabel,
+          showSurgeLine: _displaySurge.isEnabled && _surge > 0,
           taxLabel: _displayTax.displayLabel,
           showTaxLine: _displayTax.isEnabled &&
               _displayTax.applyOnServices &&
@@ -1056,26 +1145,220 @@ class _LoyaltySection extends ConsumerWidget {
   }
 }
 
-// ── Loyalty points calculation (mirrors backend award_loyalty_points trigger) ──
 
-int _computeItemLoyaltyPoints(
-  Map<String, dynamic>? cfg,
-  LoyaltySettingsModel global,
-  double totalPrice,
-) {
-  if (cfg == null) {
-    return (totalPrice / 100).floor() * global.earnPer100;
+// ── Preferred Vendor Section ──────────────────────────────────────────────────
+
+class _PreferredVendorSection extends ConsumerWidget {
+  final String serviceId;
+  final String? parentNodeId;
+  final double lat;
+  final double lng;
+  final String? selectedVendorId;
+  final DateTime? date;
+  final void Function(String? vendorId, double fee) onSelect;
+
+  const _PreferredVendorSection({
+    required this.serviceId,
+    required this.parentNodeId,
+    required this.lat,
+    required this.lng,
+    required this.selectedVendorId,
+    required this.onSelect,
+    this.date,
+  });
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final vendorsAsync = ref.watch(
+      preferredVendorsForServiceProvider((
+        serviceId: serviceId,
+        parentNodeId: parentNodeId,
+        lat: lat,
+        lng: lng,
+      )),
+    );
+
+    final dateStr = date != null
+        ? '${date!.year}-${date!.month.toString().padLeft(2, '0')}-${date!.day.toString().padLeft(2, '0')}'
+        : null;
+
+    return vendorsAsync.when(
+      loading: () => const SizedBox.shrink(),
+      error: (_, _) => const SizedBox.shrink(),
+      data: (vendors) {
+        if (vendors.isEmpty) return const SizedBox.shrink();
+        return _SectionCard(
+          title: 'Preferred Vendors',
+          child: SizedBox(
+            height: 140,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.only(bottom: 4),
+              itemCount: vendors.length + 1,
+              separatorBuilder: (_, _) => const SizedBox(width: 10),
+              itemBuilder: (_, i) {
+                if (i == 0) {
+                  return _VendorCard(
+                    label: 'No Preference',
+                    sublabel: 'Any available vendor',
+                    feeLabel: null,
+                    selected: selectedVendorId == null,
+                    onTap: () => onSelect(null, 0.0),
+                  );
+                }
+                final v = vendors[i - 1];
+                return _VendorCard(
+                  label: v.businessName,
+                  sublabel: v.rating != null
+                      ? '★ ${v.rating!.toStringAsFixed(1)}'
+                      : null,
+                  feeLabel: v.preferredVendorFee > 0
+                      ? '+₹${v.preferredVendorFee.toInt()}'
+                      : null,
+                  selected: selectedVendorId == v.id,
+                  onTap: () => onSelect(v.id, v.preferredVendorFee),
+                  vendorId: v.id,
+                  date: dateStr,
+                );
+              },
+            ),
+          ),
+        );
+      },
+    );
   }
-  if (cfg['earn_enabled'] == false) return 0;
-  final rule = cfg['earn_rule'] as String?;
-  if (rule == 'fixed') {
-    return (cfg['fixed_points'] as num?)?.toInt() ?? 0;
+}
+
+class _VendorCard extends ConsumerWidget {
+  final String label;
+  final String? sublabel;
+  final String? feeLabel;
+  final bool selected;
+  final VoidCallback onTap;
+  final String? vendorId;
+  final String? date;
+
+  const _VendorCard({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+    this.sublabel,
+    this.feeLabel,
+    this.vendorId,
+    this.date,
+  });
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final tt = Theme.of(context).textTheme;
+
+    bool? isBusyValue;
+    if (vendorId != null && date != null) {
+      isBusyValue = ref
+          .watch(vendorBusyProvider((vendorId: vendorId!, date: date!)))
+          .valueOrNull;
+    }
+    final bool isBusy = isBusyValue ?? false;
+    final bool effectiveSelected = selected && !isBusy;
+
+    return Clickable(
+      onTap: isBusy ? null : onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        width: 130,
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: effectiveSelected ? AppColors.primary : AppColors.border,
+            width: effectiveSelected ? 1.5 : 1,
+          ),
+          color: effectiveSelected
+              ? AppColors.primary.withAlpha(10)
+              : AppColors.surface,
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(
+              effectiveSelected
+                  ? Icons.check_circle_rounded
+                  : Icons.radio_button_off_rounded,
+              size: 14,
+              color: effectiveSelected ? AppColors.primary : AppColors.textHint,
+            ),
+            const SizedBox(height: 6),
+            Text(
+              label,
+              style: tt.labelMedium?.copyWith(
+                fontWeight: FontWeight.w700,
+                color: effectiveSelected
+                    ? AppColors.primary
+                    : AppColors.textPrimary,
+              ),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+            if (sublabel != null) ...[
+              const SizedBox(height: 2),
+              Text(
+                sublabel!,
+                style: tt.labelSmall?.copyWith(color: AppColors.textSecondary),
+              ),
+            ],
+            const SizedBox(height: 6),
+            if (vendorId != null && date != null && isBusyValue != null) ...[
+              const SizedBox(height: 4),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 5,
+                    height: 5,
+                    decoration: BoxDecoration(
+                      color: isBusy ? AppColors.error : AppColors.success,
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                  Flexible(
+                    child: Text(
+                      isBusy ? 'Currently Busy' : 'Available',
+                      style: TextStyle(
+                        fontSize: 9,
+                        color: isBusy ? AppColors.error : AppColors.success,
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: 0.1,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+            if (feeLabel != null) ...[
+              const SizedBox(height: 4),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: AppColors.primary.withAlpha(15),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Text(
+                  feeLabel!,
+                  style: tt.labelSmall?.copyWith(
+                    color: AppColors.primary,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
   }
-  if (rule == 'percentage') {
-    final per = (cfg['earn_per_100'] as num?)?.toInt();
-    if (per != null) return (totalPrice / 100).floor() * per;
-  }
-  return (totalPrice / 100).floor() * global.earnPer100;
 }
 
 // ── Price summary ─────────────────────────────────────────────────────────────
@@ -1084,8 +1367,12 @@ class _PriceSummary extends StatelessWidget {
   final double subtotal;
   final double discount;
   final double loyaltyDiscount;
+  final double surge;
+  final double preferredVendorFee;
   final double tax;
   final double grandTotal;
+  final String surgeLabel;
+  final bool showSurgeLine;
   final String taxLabel;
   final bool showTaxLine;
   final int earnedPoints;
@@ -1094,8 +1381,12 @@ class _PriceSummary extends StatelessWidget {
     required this.subtotal,
     required this.discount,
     required this.loyaltyDiscount,
+    required this.surge,
+    this.preferredVendorFee = 0.0,
     required this.tax,
     required this.grandTotal,
+    this.surgeLabel = 'Surge Fee',
+    this.showSurgeLine = false,
     this.taxLabel = 'GST (18%)',
     this.showTaxLine = true,
     this.earnedPoints = 0,
@@ -1123,6 +1414,18 @@ class _PriceSummary extends StatelessWidget {
             value: '- ₹${loyaltyDiscount.toInt()}',
             tt: tt,
             valueColor: const Color(0xFFFFD700),
+          ),
+        ],
+        if (showSurgeLine && surge > 0) ...[
+          const SizedBox(height: 8),
+          _Row(label: surgeLabel, value: '₹${surge.toInt()}', tt: tt),
+        ],
+        if (preferredVendorFee > 0) ...[
+          const SizedBox(height: 8),
+          _Row(
+            label: 'Preferred Vendor Fee',
+            value: '₹${preferredVendorFee.toInt()}',
+            tt: tt,
           ),
         ],
         if (showTaxLine && tax > 0) ...[

@@ -220,7 +220,7 @@ class _SettlementHistoryDialogState
                                               _HeaderCell('Completed'),
                                               _HeaderCell('Service Amount'),
                                               _HeaderCell('Tax'),
-                                              _HeaderCell('Customer Paid'),
+                                              _HeaderCell('Customer Paid', subtitle: '(Inc. GST)'),
                                               _HeaderCell('Platform Commission'),
                                               _HeaderCell('Commission Rate'),
                                               _HeaderCell('Vendor Receivable'),
@@ -511,22 +511,36 @@ class _StatusBadge extends StatelessWidget {
 // ── Table helpers ──────────────────────────────────────────────────────────────
 
 class _HeaderCell extends StatelessWidget {
-  const _HeaderCell(this.text);
+  const _HeaderCell(this.text, {this.subtitle});
   final String text;
+  final String? subtitle;
+
+  static const _mainStyle = TextStyle(
+    fontSize: 11,
+    fontWeight: FontWeight.w600,
+    color: AppColors.textSecondary,
+    letterSpacing: 0.5,
+  );
+  static const _subStyle = TextStyle(
+    fontSize: 9,
+    color: AppColors.textSecondary,
+    fontStyle: FontStyle.italic,
+  );
 
   @override
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
-      child: Text(
-        text,
-        style: const TextStyle(
-          fontSize: 11,
-          fontWeight: FontWeight.w600,
-          color: AppColors.textSecondary,
-          letterSpacing: 0.5,
-        ),
-      ),
+      child: subtitle == null
+          ? Text(text, style: _mainStyle)
+          : Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(text, style: _mainStyle),
+                Text(subtitle!, style: _subStyle),
+              ],
+            ),
     );
   }
 }

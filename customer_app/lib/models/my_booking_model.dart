@@ -36,6 +36,16 @@ class BookingStatus {
   static const String completed = 'completed';
   static const String cancelled = 'cancelled';
 
+  /// Statuses that indicate the vendor is actively serving a booking right now.
+  static const Set<String> busyStatuses = {
+    assigned,
+    accepted,
+    enRoute,
+    started,
+    inProgress,
+    awaitingVerification,
+  };
+
   // Stages shown for bookings handled by an external vendor.
   static const List<(String, String)> orderedStages = [
     (pending, 'Booking Placed'),

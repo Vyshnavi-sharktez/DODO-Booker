@@ -415,7 +415,7 @@ class _TableHeader extends StatelessWidget {
           _Col(_colDate,   _hdr('Date')),
           _Col(_colSvc,    _hdr('Service Amount')),
           _Col(_colTax,    _hdr('Tax')),
-          _Col(_colPaid,   _hdr('Customer Paid')),
+          _Col(_colPaid,   _hdrWithSub('Customer Paid', '(Inc. GST)')),
           _Col(_colComm,   _hdr('Platform Commission')),
           _Col(_colNet,    _hdr('Vendor Receivable')),
           SizedBox(
@@ -439,6 +439,30 @@ class _TableHeader extends StatelessWidget {
           color: AppColors.textSecondary,
           letterSpacing: 0.4,
         ),
+      );
+
+  static Widget _hdrWithSub(String label, String sub) => Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            label,
+            style: const TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              color: AppColors.textSecondary,
+              letterSpacing: 0.4,
+            ),
+          ),
+          Text(
+            sub,
+            style: const TextStyle(
+              fontSize: 9,
+              color: AppColors.textSecondary,
+              fontStyle: FontStyle.italic,
+            ),
+          ),
+        ],
       );
 }
 
