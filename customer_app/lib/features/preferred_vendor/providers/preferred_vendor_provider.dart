@@ -29,18 +29,38 @@ final preferredVendorsForServiceProvider = FutureProvider.autoDispose
   final cfg = Map<String, dynamic>.from(config as Map);
   if (!(cfg['is_enabled'] as bool? ?? false)) return [];
 
-  final vendorIds =
-      (cfg['vendor_ids'] as List<dynamic>?)?.map((e) => e.toString()).toList() ??
-          [];
+  // Support both new format (vendors: [{id, fee}]) and old format (vendor_ids: [uuid])
+  List<String> vendorIds;
+  Map<String, dynamic>? vendorFees;
+
+  final vendorsArr = cfg['vendors'] as List<dynamic>?;
+  if (vendorsArr != null) {
+    vendorIds =
+        vendorsArr.map((e) => (e as Map)['id'] as String).toList();
+    vendorFees = {
+      for (final e in vendorsArr.cast<Map<String, dynamic>>())
+        e['id'] as String: (e['fee'] as num?)?.toDouble() ?? 0.0,
+    };
+  } else {
+    vendorIds = (cfg['vendor_ids'] as List<dynamic>?)
+            ?.map((e) => e.toString())
+            .toList() ??
+        [];
+    vendorFees = null;
+  }
+
   if (vendorIds.isEmpty) return [];
+
+  final rpcParams = <String, dynamic>{
+    'p_vendor_ids': vendorIds,
+    'p_lat': key.lat,
+    'p_lng': key.lng,
+  };
+  if (vendorFees != null) rpcParams['p_vendor_fees'] = vendorFees;
 
   final result = await client.rpc(
     'get_preferred_vendors_by_ids_and_location',
-    params: {
-      'p_vendor_ids': vendorIds,
-      'p_lat': key.lat,
-      'p_lng': key.lng,
-    },
+    params: rpcParams,
   );
   if (result == null) return [];
   return (result as List<dynamic>)
