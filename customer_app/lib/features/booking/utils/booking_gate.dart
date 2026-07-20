@@ -12,6 +12,8 @@ import '../../../models/service_attribute_model.dart';
 import '../../../models/addon_model.dart';
 import '../modals/address_modal.dart';
 import '../modals/datetime_modal.dart';
+import '../../service_availability/services/serviceability_service.dart';
+import '../../service_availability/widgets/service_area_unavailable_dialog.dart';
 import '../modals/booking_summary_modal.dart';
 import '../modals/booking_flow_modal.dart';
 import '../modals/payment_modal.dart';
@@ -97,6 +99,16 @@ Future<void> launchBookingFlow(
   );
   final address = await addressFuture;
   if (!context.mounted || address == null) return;
+
+  // ── Step 3b: Serviceability check ────────────────────────────────────────
+  final serviceability = await ServiceabilityService()
+      .check(address.latitude, address.longitude);
+  if (!context.mounted) return;
+  if (serviceability != ServiceabilityResult.serviceable) {
+    await showServiceAreaUnavailableDialog(context);
+    if (!context.mounted) return;
+    return;
+  }
 
   // ── Step 4: Date & time ───────────────────────────────────────────────────
   final dtFuture = AppModalDialog.show(

@@ -41,6 +41,7 @@ const Map<String, String> routePermissions = {
   '/global-scheduling': 'settings.manage',
   '/commission': 'settings.manage',
   '/vendor-serving-areas': 'vendor.view',
+  '/service-availability-areas': 'settings.manage',
   '/surge-fees': 'settings.manage',
 };
 

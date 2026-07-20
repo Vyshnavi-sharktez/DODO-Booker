@@ -56,10 +56,16 @@ const _navItems = <_NavItem>[
     requiredPermission: 'dodo_team.view',
   ),
   _NavItem(
-    label: 'Serving Areas',
+    label: 'Vendor Serving Areas',
     icon: Icons.location_on_rounded,
     route: '/dashboard/vendor-serving-areas',
     requiredPermission: 'vendor.view',
+  ),
+  _NavItem(
+    label: 'Service Areas',
+    icon: Icons.map_rounded,
+    route: '/dashboard/service-availability-areas',
+    requiredPermission: 'settings.manage',
   ),
   _NavItem(
     label: 'Bookings',
