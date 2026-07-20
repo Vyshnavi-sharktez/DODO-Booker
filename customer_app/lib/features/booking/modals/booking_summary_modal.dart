@@ -10,10 +10,12 @@ import '../../../models/coupon_model.dart';
 import '../../../models/service_attribute_model.dart';
 import '../../../models/addon_model.dart';
 import '../services/coupon_providers.dart';
+import '../services/booking_providers.dart';
 import '../widgets/booking_summary_card.dart';
 import '../widgets/available_coupons_sheet.dart';
 import '../../../features/tax/providers/tax_provider.dart';
 import '../../../features/tax/models/tax_settings_model.dart';
+import '../../../features/preferred_vendor/widgets/preferred_vendor_section.dart';
 
 /// Booking summary modal. Pops with `true` when the user confirms booking.
 class BookingSummaryModal extends ConsumerStatefulWidget {
@@ -146,6 +148,7 @@ class _BookingSummaryModalState extends ConsumerState<BookingSummaryModal> {
     debugPrint('SUMMARY MODAL ACTIVE');
     final tt = Theme.of(context).textTheme;
     final selectedCoupon = ref.watch(selectedCouponProvider);
+    final pvSelection = ref.watch(selectedPreferredVendorProvider);
     final taxSettings = ref.watch(resolvedTaxProvider((
       serviceId: widget.service.id,
       parentNodeId: widget.parentNodeId,
@@ -170,7 +173,27 @@ class _BookingSummaryModalState extends ConsumerState<BookingSummaryModal> {
             selectedAttributes: widget.selectedAttributes,
             selectedAddons: widget.selectedAddons,
             parentNodeId: widget.parentNodeId,
+            preferredVendorFee: pvSelection.fee,
+            preferredVendorName: pvSelection.name,
           ),
+
+          // ── Preferred Vendor ──────────────────────────────────────────────
+          if (widget.address.hasCoordinates)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
+              child: PreferredVendorSection(
+                serviceId: widget.service.id,
+                parentNodeId: widget.parentNodeId,
+                lat: widget.address.latitude!,
+                lng: widget.address.longitude!,
+                selectedDate: widget.date,
+                selectedVendorId: pvSelection.id,
+                onSelect: (id, name, fee) {
+                  ref.read(selectedPreferredVendorProvider.notifier).state =
+                      (id: id, name: name, fee: fee);
+                },
+              ),
+            ),
 
           // ── Coupon input / applied state ──────────────────────────────────
           Padding(

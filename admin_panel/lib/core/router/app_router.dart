@@ -31,6 +31,7 @@ import '../../features/tax_settings/presentation/pages/tax_settings_page.dart';
 import '../../features/global_scheduling/presentation/pages/global_scheduling_page.dart';
 import '../../features/commission/presentation/pages/commission_settings_page.dart';
 import '../../features/vendor_serving_areas/presentation/pages/vendor_serving_areas_page.dart';
+import '../../features/surge_fees/presentation/pages/surge_fee_settings_page.dart';
 import '../../shared/pages/unauthorized_page.dart';
 import '../rbac/permission_guard.dart';
 
@@ -325,6 +326,13 @@ final routerProvider = Provider<GoRouter>((ref) {
             name: 'vendorServingAreas',
             pageBuilder: (context, state) => const NoTransitionPage(
               child: VendorServingAreasPage(),
+            ),
+          ),
+          GoRoute(
+            path: '/dashboard/surge-fees',
+            name: 'surgeFees',
+            pageBuilder: (context, state) => const NoTransitionPage(
+              child: SurgeFeeSettingsPage(),
             ),
           ),
         ],

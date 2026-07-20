@@ -98,14 +98,33 @@ class _CatalogNodeConfigDialogState extends State<CatalogNodeConfigDialog>
   final _commValueCtrl = TextEditingController();
   String _commType = 'percentage';
 
-  static const _modules = ['tax', 'loyalty', 'scheduling', 'commission'];
-  static const _tabLabels = ['Tax', 'Loyalty', 'Scheduling', 'Platform Commission'];
+  // Surge fee
+  final _surgeValueCtrl = TextEditingController();
+  String _surgeType = 'percentage';
+  final _surgeNameCtrl = TextEditingController(text: 'Surge Fee');
+
+  // Preferred vendors
+  bool _pvEnabled = false;
+  Set<String> _pvSelectedIds = {};
+  List<Map<String, dynamic>> _pvVendors = []; // loaded from DB
+
+  // Global module master-switch states (null = still loading)
+  bool? _globalTaxEnabled;
+  bool? _globalLoyaltyEnabled;
+  bool? _globalSurgeEnabled;
+
+  static const _modules = [
+    'tax', 'loyalty', 'scheduling', 'commission', 'surge', 'preferred_vendors',
+  ];
+  static const _tabLabels = [
+    'Tax', 'Loyalty', 'Scheduling', 'Platform Commission', 'Surge Fee', 'Preferred Vendors',
+  ];
   static const _dayLabels = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 4, vsync: this);
+    _tabController = TabController(length: 6, vsync: this);
     for (final m in _modules) {
       _applyToChildren[m] = false;
     }
@@ -122,6 +141,8 @@ class _CatalogNodeConfigDialogState extends State<CatalogNodeConfigDialog>
     _schedMaxCtrl.dispose();
     _schedSlotsCtrl.dispose();
     _commValueCtrl.dispose();
+    _surgeValueCtrl.dispose();
+    _surgeNameCtrl.dispose();
     super.dispose();
   }
 
@@ -172,11 +193,44 @@ class _CatalogNodeConfigDialogState extends State<CatalogNodeConfigDialog>
         }
       }
 
+      // Load vendors available for the preferred_vendors picker (one-time)
+      if (_pvVendors.isEmpty) {
+        final vendorRows = await Supabase.instance.client
+            .from('vendors')
+            .select('id, business_name, preferred_vendor_fee, rating')
+            .eq('is_preferred_vendor', true)
+            .eq('is_active', true)
+            .order('business_name');
+        _pvVendors = (vendorRows as List<dynamic>)
+            .cast<Map<String, dynamic>>();
+      }
+
+      // Fetch global master-switch states for modules that have them
+      try {
+        final taxRow = await Supabase.instance.client
+            .from('tax_settings').select('is_enabled').limit(1).maybeSingle();
+        _globalTaxEnabled = (taxRow?['is_enabled'] as bool?) ?? true;
+
+        final loyaltyRow = await Supabase.instance.client
+            .from('loyalty_settings').select('is_enabled').limit(1).maybeSingle();
+        _globalLoyaltyEnabled = (loyaltyRow?['is_enabled'] as bool?) ?? true;
+
+        final surgeRow = await Supabase.instance.client
+            .from('surge_fee_settings').select('is_enabled').limit(1).maybeSingle();
+        _globalSurgeEnabled = (surgeRow?['is_enabled'] as bool?) ?? false;
+      } catch (_) {
+        _globalTaxEnabled ??= true;
+        _globalLoyaltyEnabled ??= true;
+        _globalSurgeEnabled ??= false;
+      }
+
       // Populate form fields from existing configs (prefer active scope)
       _populateTax();
       _populateLoyalty();
       _populateScheduling();
       _populateCommission();
+      _populateSurge();
+      _populatePreferredVendors();
 
       if (mounted) setState(() => _loading = false);
     } catch (e) {
@@ -216,6 +270,8 @@ class _CatalogNodeConfigDialogState extends State<CatalogNodeConfigDialog>
     _populateLoyalty();
     _populateScheduling();
     _populateCommission();
+    _populateSurge();
+    _populatePreferredVendors();
   }
 
   CatalogNodeConfigModel? _activeConfig(String module) {
@@ -279,6 +335,30 @@ class _CatalogNodeConfigDialogState extends State<CatalogNodeConfigDialog>
       _commType = cfg.config['commission_type'] as String? ?? 'percentage';
       _commValueCtrl.text =
           (cfg.config['commission_value'] as num?)?.toString() ?? '';
+    }
+  }
+
+  void _populateSurge() {
+    final cfg = _activeConfig('surge');
+    if (cfg != null) {
+      _surgeNameCtrl.text = cfg.config['surge_name'] as String? ?? 'Surge Fee';
+      _surgeType = cfg.config['surge_type'] as String? ?? 'percentage';
+      _surgeValueCtrl.text =
+          (cfg.config['surge_value'] as num?)?.toString() ?? '';
+    }
+  }
+
+  void _populatePreferredVendors() {
+    final cfg = _activeConfig('preferred_vendors');
+    if (cfg != null) {
+      _pvEnabled = cfg.config['is_enabled'] as bool? ?? false;
+      _pvSelectedIds = (cfg.config['vendor_ids'] as List<dynamic>?)
+              ?.map((e) => e.toString())
+              .toSet() ??
+          {};
+    } else {
+      _pvEnabled = false;
+      _pvSelectedIds = {};
     }
   }
 
@@ -538,6 +618,19 @@ class _CatalogNodeConfigDialogState extends State<CatalogNodeConfigDialog>
           'commission_value':
               double.tryParse(_commValueCtrl.text.trim()) ?? 0.0,
         };
+      case 'surge':
+        return {
+          'surge_name': _surgeNameCtrl.text.trim().isEmpty
+              ? 'Surge Fee'
+              : _surgeNameCtrl.text.trim(),
+          'surge_type': _surgeType,
+          'surge_value': double.tryParse(_surgeValueCtrl.text.trim()) ?? 0.0,
+        };
+      case 'preferred_vendors':
+        return {
+          'is_enabled': _pvEnabled,
+          'vendor_ids': _pvSelectedIds.toList(),
+        };
       default:
         return {};
     }
@@ -636,6 +729,21 @@ class _CatalogNodeConfigDialogState extends State<CatalogNodeConfigDialog>
     );
   }
 
+  /// Returns false when the module has a global master switch that is currently OFF.
+  /// Modules without a global switch (scheduling, commission, preferred_vendors) always return true.
+  bool _moduleGloballyEnabled(String module) {
+    switch (module) {
+      case 'tax':
+        return _globalTaxEnabled ?? true;
+      case 'loyalty':
+        return _globalLoyaltyEnabled ?? true;
+      case 'surge':
+        return _globalSurgeEnabled ?? false;
+      default:
+        return true;
+    }
+  }
+
   Widget _buildModuleTab(String module) {
     final hasParent = widget.parentNodeId != null && _relationshipId != null;
     final useRel = _useRelScope[module] ?? false;
@@ -647,11 +755,56 @@ class _CatalogNodeConfigDialogState extends State<CatalogNodeConfigDialog>
     // or no inherited config is available to show in place of the form.
     final showForm = existing != null || creating || inherited == null;
 
+    final globallyEnabled = _moduleGloballyEnabled(module);
+
     return SingleChildScrollView(
       padding: const EdgeInsets.all(20),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // ── Global disabled banner ────────────────────────────────────
+          if (!globallyEnabled) ...[
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFFF8E1),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: const Color(0xFFFFCA28)),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Icon(Icons.warning_amber_rounded,
+                      color: Color(0xFFF57F17), size: 18),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '${_tabLabels[_modules.indexOf(module)]} is globally disabled',
+                          style: const TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: Color(0xFF5D4037),
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        const Text(
+                          'These settings are saved but won\'t take effect until this module is enabled in Global Settings.',
+                          style: TextStyle(
+                              fontSize: 11, color: Color(0xFF795548)),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+          ],
+
           // ── Scope selector ────────────────────────────────────────────
           if (hasParent) ...[
             const Text(
@@ -832,6 +985,10 @@ class _CatalogNodeConfigDialogState extends State<CatalogNodeConfigDialog>
         _populateScheduling();
       case 'commission':
         _populateCommission();
+      case 'surge':
+        _populateSurge();
+      case 'preferred_vendors':
+        _populatePreferredVendors();
     }
   }
 
@@ -937,6 +1094,25 @@ class _CatalogNodeConfigDialogState extends State<CatalogNodeConfigDialog>
           '${type == 'percentage' ? 'Rate' : 'Amount'}: $value'
               '${type == 'percentage' ? '%' : ' ₹'}',
         ];
+      case 'surge':
+        final sName = cfg['surge_name'] as String? ?? 'Surge Fee';
+        final sType = cfg['surge_type'] as String? ?? 'percentage';
+        final sValue = cfg['surge_value'] as num? ?? 0;
+        return [
+          'Charge name: $sName',
+          'Type: ${sType == 'percentage' ? 'Percentage (%)' : 'Fixed (₹)'}',
+          '${sType == 'percentage' ? 'Rate' : 'Amount'}: $sValue'
+              '${sType == 'percentage' ? '%' : ' ₹'}',
+        ];
+      case 'preferred_vendors':
+        final pvEnabled = cfg['is_enabled'] as bool? ?? false;
+        if (!pvEnabled) return ['Preferred vendors: Disabled'];
+        final pvIds =
+            (cfg['vendor_ids'] as List<dynamic>?)?.cast<String>() ?? [];
+        return [
+          'Preferred vendors: Enabled',
+          '${pvIds.length} vendor${pvIds.length == 1 ? '' : 's'} configured',
+        ];
       default:
         return [];
     }
@@ -975,6 +1151,16 @@ class _CatalogNodeConfigDialogState extends State<CatalogNodeConfigDialog>
         _commType = cfg['commission_type'] as String? ?? 'percentage';
         _commValueCtrl.text =
             (cfg['commission_value'] as num?)?.toString() ?? '';
+      case 'surge':
+        _surgeNameCtrl.text = cfg['surge_name'] as String? ?? 'Surge Fee';
+        _surgeType = cfg['surge_type'] as String? ?? 'percentage';
+        _surgeValueCtrl.text = (cfg['surge_value'] as num?)?.toString() ?? '';
+      case 'preferred_vendors':
+        _pvEnabled = cfg['is_enabled'] as bool? ?? false;
+        _pvSelectedIds = (cfg['vendor_ids'] as List<dynamic>?)
+                ?.map((e) => e.toString())
+                .toSet() ??
+            {};
     }
   }
 
@@ -988,6 +1174,10 @@ class _CatalogNodeConfigDialogState extends State<CatalogNodeConfigDialog>
         return _buildSchedulingFields();
       case 'commission':
         return _buildCommissionFields();
+      case 'surge':
+        return _buildSurgeFields();
+      case 'preferred_vendors':
+        return _buildPreferredVendorsFields();
       default:
         return const SizedBox.shrink();
     }
@@ -1161,6 +1351,114 @@ class _CatalogNodeConfigDialogState extends State<CatalogNodeConfigDialog>
             FilteringTextInputFormatter.allow(RegExp(r'[0-9.]')),
           ],
         ),
+      ],
+    );
+  }
+
+  Widget _buildSurgeFields() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _label('Charge Name'),
+        const SizedBox(height: 4),
+        TextField(
+          controller: _surgeNameCtrl,
+          decoration: _inputDeco('e.g. Surge Fee, Peak Hours'),
+        ),
+        const SizedBox(height: 12),
+        _label('Charge Type'),
+        const SizedBox(height: 4),
+        SegmentedButton<String>(
+          segments: const [
+            ButtonSegment(value: 'percentage', label: Text('Percentage (%)')),
+            ButtonSegment(value: 'fixed', label: Text('Fixed (₹)')),
+          ],
+          selected: {_surgeType},
+          onSelectionChanged: (s) =>
+              setState(() => _surgeType = s.first),
+        ),
+        const SizedBox(height: 12),
+        _label(_surgeType == 'percentage' ? 'Surge Rate (%)' : 'Fixed Amount (₹)'),
+        const SizedBox(height: 4),
+        TextField(
+          controller: _surgeValueCtrl,
+          decoration: _inputDeco(
+              _surgeType == 'percentage' ? 'e.g. 10' : 'e.g. 50'),
+          keyboardType:
+              const TextInputType.numberWithOptions(decimal: true),
+          inputFormatters: [
+            FilteringTextInputFormatter.allow(RegExp(r'[0-9.]')),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildPreferredVendorsFields() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SwitchListTile(
+          contentPadding: EdgeInsets.zero,
+          dense: true,
+          title: const Text('Enable Preferred Vendors',
+              style: TextStyle(fontSize: 13)),
+          subtitle: const Text(
+            'Show a vendor selection section at checkout for this service',
+            style: TextStyle(fontSize: 11),
+          ),
+          value: _pvEnabled,
+          activeColor: AppColors.primary,
+          onChanged: (v) => setState(() => _pvEnabled = v),
+        ),
+        if (_pvEnabled) ...[
+          const SizedBox(height: 12),
+          _label('Available Vendors'),
+          const SizedBox(height: 8),
+          if (_pvVendors.isEmpty)
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: AppColors.background,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: AppColors.border),
+              ),
+              child: const Text(
+                'No preferred vendors found. Enable "Preferred Vendor" on '
+                'vendor profiles first.',
+                style: TextStyle(
+                    fontSize: 12, color: AppColors.textSecondary),
+              ),
+            )
+          else
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: _pvVendors.map((v) {
+                final id = v['id'] as String;
+                final name = v['business_name'] as String? ?? '';
+                final fee =
+                    (v['preferred_vendor_fee'] as num?)?.toDouble() ?? 0.0;
+                final isSelected = _pvSelectedIds.contains(id);
+                return FilterChip(
+                  label: Text(
+                    fee > 0 ? '$name (+₹${fee.toInt()})' : name,
+                    style: const TextStyle(fontSize: 12),
+                  ),
+                  selected: isSelected,
+                  selectedColor: AppColors.primary.withValues(alpha: 0.15),
+                  checkmarkColor: AppColors.primary,
+                  onSelected: (val) => setState(() {
+                    if (val) {
+                      _pvSelectedIds.add(id);
+                    } else {
+                      _pvSelectedIds.remove(id);
+                    }
+                  }),
+                );
+              }).toList(),
+            ),
+        ],
       ],
     );
   }

@@ -51,29 +51,54 @@ class GlobalSchedulingRepository {
   /// Falls back to in-memory defaults if the table is empty (should never
   /// happen after migration, but keeps the page safe).
   Future<GlobalSchedulingConfig> fetch() async {
-    final rows = await _client.from('global_scheduling').select().limit(1);
+    final rows = await _client
+        .from('global_scheduling')
+        .select()
+        .order('updated_at', ascending: false)
+        .limit(1);
     if (rows.isEmpty) return GlobalSchedulingConfig.defaults();
     return GlobalSchedulingConfig.fromMap(rows.first);
   }
 
-  /// Persists the config and returns the saved version.
-  /// Uses UPDATE when an id is available (normal path after migration seed),
-  /// INSERT otherwise (fallback if the table was somehow empty).
+  /// Persists the config and returns the saved (DB-confirmed) version.
+  /// Chains .select() on the UPDATE so we can verify a row was actually
+  /// modified — Supabase SDK v2 returns empty instead of throwing when 0
+  /// rows match the filter.
   Future<GlobalSchedulingConfig> save(GlobalSchedulingConfig config) async {
     final payload = config.toMap();
+
+    // Try to UPDATE by known id, confirmed via .select().
     if (config.id != null) {
-      await _client
+      final updated = await _client
           .from('global_scheduling')
           .update(payload)
-          .eq('id', config.id!);
-      return config;
-    } else {
-      final row = await _client
-          .from('global_scheduling')
-          .insert(payload)
-          .select()
-          .single();
-      return GlobalSchedulingConfig.fromMap(row);
+          .eq('id', config.id!)
+          .select();
+      if (updated.isNotEmpty) return GlobalSchedulingConfig.fromMap(updated.first);
     }
+
+    // id unknown or UPDATE matched 0 rows: find the actual singleton row.
+    final existing = await _client
+        .from('global_scheduling')
+        .select('id')
+        .order('updated_at', ascending: false)
+        .limit(1);
+    if (existing.isNotEmpty) {
+      final existingId = existing.first['id'] as String;
+      final updated = await _client
+          .from('global_scheduling')
+          .update(payload)
+          .eq('id', existingId)
+          .select();
+      if (updated.isNotEmpty) return GlobalSchedulingConfig.fromMap(updated.first);
+    }
+
+    // Table is somehow empty: insert the singleton row.
+    final row = await _client
+        .from('global_scheduling')
+        .insert(payload)
+        .select()
+        .single();
+    return GlobalSchedulingConfig.fromMap(row);
   }
 }

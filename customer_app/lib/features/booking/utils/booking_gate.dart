@@ -107,9 +107,11 @@ Future<void> launchBookingFlow(
   if (!context.mounted || dtResult == null) return;
   final (date, slot) = dtResult as (DateTime, dynamic);
 
-  // ── Step 5: Booking summary (coupon applied here) ─────────────────────────
-  // Reset any leftover coupon from a previous booking attempt.
+  // ── Step 5: Booking summary (coupon + preferred vendor applied here) ─────────
+  // Seed vendor selection from the service detail page (or clear leftover state).
   ref.read(selectedCouponProvider.notifier).state = null;
+  ref.read(selectedPreferredVendorProvider.notifier).state =
+      (id: null, name: null, fee: 0.0);
 
   final priceAdjustment = totalPriceAdjustment(selectedAttributes);
   final addonsTotal = totalAddonsPrice(selectedAddons);
@@ -129,8 +131,9 @@ Future<void> launchBookingFlow(
   final confirmed = await summaryFuture;
   if (!context.mounted || confirmed != true) return;
 
-  // Read coupon state after the summary modal closes.
+  // Read coupon and preferred vendor state after the summary modal closes.
   final selectedCoupon = ref.read(selectedCouponProvider);
+  final pvSelection = ref.read(selectedPreferredVendorProvider);
   final taxSettings = ref
       .read(resolvedTaxProvider((
         serviceId: service.id,
@@ -140,7 +143,7 @@ Future<void> launchBookingFlow(
   final baseSubtotal = (service.basePrice ?? 0.0) + priceAdjustment + addonsTotal;
   final subtotal = baseSubtotal + taxSettings.computeTax(baseSubtotal);
   final discountAmount = selectedCoupon?.calculateDiscount(subtotal) ?? 0.0;
-  final finalTotal = (subtotal - discountAmount).clamp(0.0, double.infinity);
+  final finalTotal = (subtotal + pvSelection.fee - discountAmount).clamp(0.0, double.infinity);
 
   // ── Step 6: Payment ───────────────────────────────────────────────────────
   final payFuture = AppModalDialog.show<bool>(
@@ -166,6 +169,8 @@ Future<void> launchBookingFlow(
           priceAdjustment: priceAdjustment,
           selectedAddons: selectedAddons,
           parentNodeId: parentNodeId,
+          preferredVendorId: pvSelection.id,
+          preferredVendorFeeAmount: pvSelection.fee > 0 ? pvSelection.fee : null,
         );
     ref.read(selectedCouponProvider.notifier).state = null;
     if (!context.mounted) return;

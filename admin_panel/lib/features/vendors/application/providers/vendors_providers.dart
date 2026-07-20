@@ -35,6 +35,8 @@ class VendorsNotifier extends StateNotifier<AsyncValue<List<Vendor>>> {
     double? latitude,
     double? longitude,
     double commissionRate = 0.0,
+    bool isPreferredVendor = false,
+    double preferredVendorFee = 0.0,
   }) async {
     await _repo.createVendor(
       businessName: businessName,
@@ -50,6 +52,8 @@ class VendorsNotifier extends StateNotifier<AsyncValue<List<Vendor>>> {
       latitude: latitude,
       longitude: longitude,
       commissionRate: commissionRate,
+      isPreferredVendor: isPreferredVendor,
+      preferredVendorFee: preferredVendorFee,
     );
     await _load();
   }
@@ -69,6 +73,8 @@ class VendorsNotifier extends StateNotifier<AsyncValue<List<Vendor>>> {
     double? latitude,
     double? longitude,
     double? commissionRate,
+    bool isPreferredVendor = false,
+    double preferredVendorFee = 0.0,
   }) async {
     await _repo.updateVendor(
       id,
@@ -85,6 +91,8 @@ class VendorsNotifier extends StateNotifier<AsyncValue<List<Vendor>>> {
       latitude: latitude,
       longitude: longitude,
       commissionRate: commissionRate,
+      isPreferredVendor: isPreferredVendor,
+      preferredVendorFee: preferredVendorFee,
     );
     await _load();
   }

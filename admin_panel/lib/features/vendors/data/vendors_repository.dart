@@ -30,6 +30,8 @@ class VendorsRepository {
     double? latitude,
     double? longitude,
     double commissionRate = 0.0,
+    bool isPreferredVendor = false,
+    double preferredVendorFee = 0.0,
   }) async {
     final data = await _supabase
         .from('vendors')
@@ -47,6 +49,8 @@ class VendorsRepository {
           'latitude': ?latitude,
           'longitude': ?longitude,
           'commission_rate': commissionRate,
+          'is_preferred_vendor': isPreferredVendor,
+          'preferred_vendor_fee': preferredVendorFee,
         })
         .select()
         .single();
@@ -68,6 +72,8 @@ class VendorsRepository {
     double? latitude,
     double? longitude,
     double? commissionRate,
+    bool isPreferredVendor = false,
+    double preferredVendorFee = 0.0,
   }) async {
     final data = await _supabase
         .from('vendors')
@@ -85,6 +91,8 @@ class VendorsRepository {
           'latitude': ?latitude,
           'longitude': ?longitude,
           'commission_rate': commissionRate ?? 0.0,
+          'is_preferred_vendor': isPreferredVendor,
+          'preferred_vendor_fee': preferredVendorFee,
         })
         .eq('id', id)
         .select()

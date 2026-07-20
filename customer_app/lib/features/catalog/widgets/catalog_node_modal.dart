@@ -14,6 +14,8 @@ import '../../reviews/widgets/service_reviews_section.dart';
 import '../../service/widgets/faq_section.dart';
 import '../../service/widgets/service_addon_section.dart';
 import '../../service/widgets/service_attribute_section.dart';
+import '../../loyalty/providers/loyalty_providers.dart';
+import '../../loyalty/utils/loyalty_utils.dart';
 import '../../wishlist/widgets/heart_button.dart';
 import '../models/catalog_node_model.dart';
 import '../providers/catalog_providers.dart';
@@ -81,6 +83,17 @@ class _CatalogNodeModalState extends ConsumerState<CatalogNodeModal> {
   final Set<String> _selectedAddonIds = {};
 
   CatalogNodeModel get node => widget.node;
+
+  @override
+  void initState() {
+    super.initState();
+    // Invalidate loyaltySettingsProvider on each modal open so the loyalty badge
+    // always reflects the latest global earn_per_100, even when the admin changed
+    // settings since the provider was last fetched.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) ref.invalidate(loyaltySettingsProvider);
+    });
+  }
 
   void _onOptionSelected(
       String attrId, String optId, List<ServiceAttributeModel> attrs) {
@@ -726,6 +739,7 @@ class _ModalChildrenList extends StatelessWidget {
             separatorBuilder: (_, _) => const SizedBox(height: 10),
             itemBuilder: (ctx, i) => _ModalChildItem(
               node: children[i],
+              parentNodeId: node.id,
               onTap: () => CatalogNodeModal.open(
                 ctx,
                 children[i],
@@ -741,9 +755,16 @@ class _ModalChildrenList extends StatelessWidget {
 // ── Child list item ───────────────────────────────────────────────────────────
 
 class _ModalChildItem extends StatefulWidget {
-  const _ModalChildItem({required this.node, required this.onTap});
+  const _ModalChildItem({
+    required this.node,
+    required this.onTap,
+    this.parentNodeId,
+  });
   final CatalogNodeModel node;
   final VoidCallback onTap;
+  /// The node.id of the parent through which this item is being displayed.
+  /// Drives path-scoped loyalty resolution for shared services.
+  final String? parentNodeId;
 
   @override
   State<_ModalChildItem> createState() => _ModalChildItemState();
@@ -885,6 +906,41 @@ class _ModalChildItemState extends State<_ModalChildItem> {
                           ],
                         ],
                       ),
+
+                      // Loyalty earn badge — uses catalog-scoped resolved config
+                      // so parent-level loyalty rules are inherited correctly.
+                      if (node.isLeafBookable && node.loyaltyEarnEnabled)
+                        Consumer(
+                          builder: (_, ref, _) {
+                            final settings = ref
+                                .watch(loyaltySettingsProvider)
+                                .valueOrNull;
+                            if (settings == null ||
+                                !settings.isEnabled ||
+                                !settings.earnEnabled) {
+                              return const SizedBox.shrink();
+                            }
+                            final cfgAsync = ref.watch(
+                              resolvedLoyaltyConfigProvider((
+                                serviceId: node.id,
+                                parentNodeId: widget.parentNodeId ?? node.parentId,
+                              )),
+                            );
+                            if (!cfgAsync.hasValue) {
+                              return const SizedBox.shrink();
+                            }
+                            final pts = computeLoyaltyPoints(
+                              cfgAsync.valueOrNull,
+                              settings,
+                              node.basePrice ?? 0,
+                            );
+                            if (pts <= 0) return const SizedBox.shrink();
+                            return Padding(
+                              padding: const EdgeInsets.only(top: 4),
+                              child: _LoyaltyEarnBadge(points: pts),
+                            );
+                          },
+                        ),
                     ],
                   ),
                 ),
@@ -906,6 +962,43 @@ class _ModalChildItemState extends State<_ModalChildItem> {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+// ── Loyalty earn badge ────────────────────────────────────────────────────────
+
+class _LoyaltyEarnBadge extends StatelessWidget {
+  final int points;
+  const _LoyaltyEarnBadge({required this.points});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+      decoration: BoxDecoration(
+        color: AppColors.gold.withAlpha(22),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: AppColors.gold.withAlpha(60), width: 0.5),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.workspace_premium_rounded,
+              size: 10, color: AppColors.gold),
+          const SizedBox(width: 3),
+          Text(
+            'Earn $points Loyalty Points',
+            style: const TextStyle(
+              fontSize: 9,
+              fontWeight: FontWeight.w700,
+              color: AppColors.gold,
+              height: 1.2,
+              letterSpacing: 0.1,
+            ),
+          ),
+        ],
       ),
     );
   }

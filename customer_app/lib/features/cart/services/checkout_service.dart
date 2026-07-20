@@ -31,31 +31,46 @@ class CheckoutService {
     String? couponId,
     double discountAmount = 0.0,
     double taxAmount = 0.0,
+    double surgeAmount = 0.0,
+    String? surgeName,
+    String? surgeType,
+    double? surgeValue,
+    String? preferredVendorId,
+    double? preferredVendorFeeAmount,
     String paymentMethod = 'cash',
     String paymentStatus = 'pending',
   }) async {
     assert(items.isNotEmpty, 'Cannot create a booking with an empty cart');
     debugPrint('[DODO][Checkout] createCartBooking started — ${items.length} item(s)');
+    debugPrint('[DODO][PV Assignment] createBooking preferredVendorId = $preferredVendorId');
 
     final customerId = await _getCustomerId();
     debugPrint('[DODO][Checkout] customer_id=$customerId');
 
     final subtotal = items.fold(0.0, (sum, i) => sum + i.totalPrice);
     final tax = taxAmount;
-    final gross = subtotal + tax;
+    final surge = surgeAmount;
+    final pvFee = preferredVendorFeeAmount ?? 0.0;
+    final gross = subtotal + surge + pvFee + tax;
     final totalAmount = (gross - discountAmount).clamp(0.0, double.infinity);
     final serviceDate = date.toIso8601String().substring(0, 10);
 
-    debugPrint('[DODO][Checkout] subtotal=₹$subtotal  tax=₹$tax  discount=₹$discountAmount  total=₹$totalAmount');
+    debugPrint('[DODO][Checkout] subtotal=₹$subtotal  surge=₹$surge  tax=₹$tax  discount=₹$discountAmount  total=₹$totalAmount');
     debugPrint('[DODO][Checkout] Address object — id=${address.id}  lat=${address.latitude}  lng=${address.longitude}  full="${address.fullAddress}"');
     debugPrint('[DODO][Checkout] Booking payload — lat=${address.latitude}  lng=${address.longitude}');
 
     // ── INSERT bookings row ──────────────────────────────────────────────────
+    // When a preferred vendor is selected, immediately assign the booking as
+    // the admin "Confirm Assignment" flow would: status=assigned,
+    // assignment_type=External Vendor, vendor_id=preferred vendor.
+    // No admin intervention required — booking goes straight to Vendor App.
     final primaryItem = items.isNotEmpty ? items.first : null;
+    final hasPv = preferredVendorId != null;
     final payload = {
       'customer_id': customerId,
       'service_date': serviceDate,
-      'status': 'pending',
+      'status': hasPv ? 'assigned' : 'pending',
+      if (hasPv) 'assignment_type': 'External Vendor',
       'subtotal': subtotal,
       'discount_amount': discountAmount,
       'total_amount': totalAmount,
@@ -67,7 +82,17 @@ class CheckoutService {
       if (primaryItem != null) 'service_id': primaryItem.serviceId,
       'payment_method': paymentMethod,
       'payment_status': paymentStatus,
+      if (surge > 0 && surgeName != null) 'surge_fee_name': surgeName,
+      if (surge > 0 && surgeType != null) 'surge_fee_type': surgeType,
+      if (surge > 0 && surgeValue != null) 'surge_fee_value': surgeValue,
+      if (surge > 0) 'surge_fee_amount': surge,
+      'preferred_vendor_id': ?preferredVendorId,
+      // Set vendor_id = preferred vendor so booking skips admin assignment queue.
+      'vendor_id': ?preferredVendorId,
+      if (pvFee > 0) 'preferred_vendor_fee_amount': pvFee,
     };
+    debugPrint('[DODO][PV Assignment] INSERT preferred_vendor_id = $preferredVendorId');
+    debugPrint('[DODO][PV Assignment] INSERT vendor_id = $preferredVendorId');
     debugPrint('BOOKING LAT=${address.latitude}');
     debugPrint('BOOKING LNG=${address.longitude}');
     debugPrint('BOOKING PAYLOAD=$payload');
@@ -142,6 +167,46 @@ class CheckoutService {
       });
     } catch (e) {
       debugPrint('[DODO][Checkout] Warning: customer notification failed (non-fatal): $e');
+    }
+
+    // ── Preferred Vendor assignment notifications ──────────────────────────────
+    // The booking is INSERTed with vendor_id already set, so the DB trigger
+    // (trg_notify_customer_vendor_assigned) does not fire — it only fires on
+    // UPDATE OF vendor_id. Send the same two notifications Admin sends on
+    // "Confirm Assignment" → External Vendor.
+    if (hasPv) {
+      final bookingNumber =
+          bookingData['booking_number']?.toString() ?? bookingId;
+      try {
+        await _client.from('notifications').insert({
+          'user_type': 'vendor',
+          'user_id': preferredVendorId,
+          'title': 'New Booking Assigned',
+          'message': 'You have been assigned booking #$bookingNumber.',
+          'notification_type': 'vendor_assigned',
+          'is_read': false,
+          'entity_type': 'booking',
+          'entity_id': bookingId,
+        });
+        debugPrint('[DODO][PV Assignment] Vendor notification sent → vendor=$preferredVendorId booking=$bookingNumber');
+      } catch (e) {
+        debugPrint('[DODO][PV Assignment] Warning: vendor notification failed (non-fatal): $e');
+      }
+      try {
+        await _client.from('notifications').insert({
+          'user_type': 'customer',
+          'user_id': customerId,
+          'title': 'Provider Assigned',
+          'message': 'A service provider has been assigned to your booking.',
+          'notification_type': 'vendor_assigned',
+          'is_read': false,
+          'entity_type': 'booking',
+          'entity_id': bookingId,
+        });
+        debugPrint('[DODO][PV Assignment] Customer vendor_assigned notification sent → customer=$customerId');
+      } catch (e) {
+        debugPrint('[DODO][PV Assignment] Warning: customer vendor_assigned notification failed (non-fatal): $e');
+      }
     }
 
     debugPrint('[DODO][Checkout] Flow complete — id=$bookingId');

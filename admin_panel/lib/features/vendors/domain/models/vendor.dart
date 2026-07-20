@@ -16,6 +16,8 @@ class Vendor {
   final double? latitude;
   final double? longitude;
   final double commissionRate;
+  final bool isPreferredVendor;
+  final double preferredVendorFee;
 
   const Vendor({
     required this.id,
@@ -35,6 +37,8 @@ class Vendor {
     this.latitude,
     this.longitude,
     this.commissionRate = 0.0,
+    this.isPreferredVendor = false,
+    this.preferredVendorFee = 0.0,
   });
 
   factory Vendor.fromMap(Map<String, dynamic> map) {
@@ -60,6 +64,8 @@ class Vendor {
       latitude: (map['latitude'] as num?)?.toDouble(),
       longitude: (map['longitude'] as num?)?.toDouble(),
       commissionRate: (map['commission_rate'] as num?)?.toDouble() ?? 0.0,
+      isPreferredVendor: (map['is_preferred_vendor'] as bool?) ?? false,
+      preferredVendorFee: (map['preferred_vendor_fee'] as num?)?.toDouble() ?? 0.0,
     );
   }
 
@@ -77,6 +83,8 @@ class Vendor {
     double? latitude,
     double? longitude,
     double? commissionRate,
+    bool? isPreferredVendor,
+    double? preferredVendorFee,
   }) {
     return Vendor(
       id: id,
@@ -95,6 +103,8 @@ class Vendor {
       latitude: latitude ?? this.latitude,
       longitude: longitude ?? this.longitude,
       commissionRate: commissionRate ?? this.commissionRate,
+      isPreferredVendor: isPreferredVendor ?? this.isPreferredVendor,
+      preferredVendorFee: preferredVendorFee ?? this.preferredVendorFee,
     );
   }
 }

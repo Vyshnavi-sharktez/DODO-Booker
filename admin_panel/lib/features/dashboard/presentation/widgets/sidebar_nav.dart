@@ -116,6 +116,12 @@ const _navItems = <_NavItem>[
     requiredPermission: 'settings.manage',
   ),
   _NavItem(
+    label: 'Surge Fee',
+    icon: Icons.bolt_rounded,
+    route: '/dashboard/surge-fees',
+    requiredPermission: 'settings.manage',
+  ),
+  _NavItem(
     label: 'Settings',
     icon: Icons.settings_rounded,
     route: '/dashboard/settings',
