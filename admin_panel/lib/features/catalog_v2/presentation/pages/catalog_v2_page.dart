@@ -7,6 +7,7 @@ import '../../application/providers/catalog_node_providers.dart';
 import '../../domain/models/catalog_node.dart';
 import '../../../service_scheduling/presentation/widgets/service_scheduling_dialog.dart';
 import '../../../catalog_configs/presentation/widgets/catalog_node_config_dialog.dart';
+import '../widgets/catalog_node_availability_dialog.dart';
 import '../widgets/catalog_node_form_dialog.dart';
 import '../widgets/catalog_node_parents_dialog.dart';
 import '../widgets/catalog_node_tile.dart';
@@ -242,20 +243,54 @@ class _CatalogV2PageState extends ConsumerState<CatalogV2Page> {
     }
   }
 
-  // ── Toggles ───────────────────────────────────────────────────────────────────
+  // ── Availability ──────────────────────────────────────────────────────────────
 
-  void _toggleActive(CatalogNode node, bool isActive) async {
-    try {
-      await ref
-          .read(catalogNodeNotifierProvider.notifier)
-          .toggleActive(node.id, isActive: isActive);
-    } catch (e) {
+  Future<void> _openAvailabilityDialog(
+      CatalogNode node, String? parentIdContext) async {
+    if (!node.isActive) {
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('Error: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+              content: Text(
+                  'This item is globally disabled. Use Edit to re-enable it.')),
+        );
       }
+      return;
     }
+
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => CatalogNodeAvailabilityDialog(
+        node: node,
+        parentIdContext: parentIdContext,
+        fetchCurrentState: () async {
+          if (parentIdContext != null) {
+            return ref
+                .read(catalogNodeRepositoryProvider)
+                .fetchRelationshipAvailability(parentIdContext, node.id);
+          }
+          return (
+            status: node.availabilityStatus,
+            message: node.unavailabilityMessage,
+          );
+        },
+        onSave: (status, message) async {
+          await ref
+              .read(catalogNodeNotifierProvider.notifier)
+              .setAvailability(node.id, parentIdContext, status, message);
+          // Refresh the relationship status map so the icon updates immediately.
+          ref.invalidate(relAvailabilityProvider);
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Availability updated.')),
+            );
+          }
+        },
+      ),
+    );
   }
+
+  // ── Toggles ───────────────────────────────────────────────────────────────────
 
   void _toggleBookable(CatalogNode node, bool isBookable) async {
     try {
@@ -405,7 +440,7 @@ class _CatalogV2PageState extends ConsumerState<CatalogV2Page> {
       onManageParents: _manageParents,
       onRemoveFromParent: _removeFromParent,
       onDelete: _deleteNode,
-      onToggleActive: _toggleActive,
+      onSetAvailability: _openAvailabilityDialog,
       onToggleBookable: _toggleBookable,
       onOpenScheduling: _openScheduling,
       onOpenConfig: _openConfigPanel,

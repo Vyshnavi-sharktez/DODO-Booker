@@ -19,6 +19,11 @@ class CatalogNode {
   final bool isActive;
   final bool isBookable;
 
+  /// Node-scoped availability status: 'active' | 'unavailable' | 'hidden'.
+  /// For per-path control use setRelationshipAvailability instead.
+  final String availabilityStatus;
+  final String? unavailabilityMessage;
+
   final double? basePrice;
   final int? estimatedDuration;
   final double? minimumOrderAmount;
@@ -44,6 +49,8 @@ class CatalogNode {
     required this.sortOrder,
     required this.isActive,
     required this.isBookable,
+    this.availabilityStatus = 'active',
+    this.unavailabilityMessage,
     this.basePrice,
     this.estimatedDuration,
     this.minimumOrderAmount,
@@ -84,6 +91,8 @@ class CatalogNode {
       sortOrder: map['sort_order'] as int? ?? 0,
       isActive: map['is_active'] as bool? ?? true,
       isBookable: map['is_bookable'] as bool? ?? false,
+      availabilityStatus: map['availability_status'] as String? ?? 'active',
+      unavailabilityMessage: map['unavailability_message'] as String?,
       basePrice: (map['base_price'] as num?)?.toDouble(),
       estimatedDuration: map['estimated_duration'] as int?,
       minimumOrderAmount: (map['minimum_order_amount'] as num?)?.toDouble(),
@@ -110,6 +119,8 @@ class CatalogNode {
     int? sortOrder,
     bool? isActive,
     bool? isBookable,
+    String? availabilityStatus,
+    String? unavailabilityMessage,
     double? basePrice,
     int? estimatedDuration,
     double? minimumOrderAmount,
@@ -128,6 +139,8 @@ class CatalogNode {
       sortOrder: sortOrder ?? this.sortOrder,
       isActive: isActive ?? this.isActive,
       isBookable: isBookable ?? this.isBookable,
+      availabilityStatus: availabilityStatus ?? this.availabilityStatus,
+      unavailabilityMessage: unavailabilityMessage ?? this.unavailabilityMessage,
       basePrice: basePrice ?? this.basePrice,
       estimatedDuration: estimatedDuration ?? this.estimatedDuration,
       minimumOrderAmount: minimumOrderAmount ?? this.minimumOrderAmount,

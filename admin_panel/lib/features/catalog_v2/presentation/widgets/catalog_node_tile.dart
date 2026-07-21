@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../../core/theme/app_theme.dart';
 import '../../../../../core/widgets/highlighted_text.dart';
+import '../../application/providers/catalog_node_providers.dart';
 import '../../domain/models/catalog_node.dart';
 
 /// Callbacks passed from [CatalogV2Page] down to each tile.
@@ -12,7 +14,7 @@ class NodeCallbacks {
     required this.onManageParents,
     required this.onRemoveFromParent,
     required this.onDelete,
-    required this.onToggleActive,
+    required this.onSetAvailability,
     required this.onToggleBookable,
     required this.onOpenScheduling,
     required this.onOpenConfig,
@@ -29,7 +31,10 @@ class NodeCallbacks {
   final void Function(CatalogNode node, String parentId) onRemoveFromParent;
 
   final void Function(CatalogNode node) onDelete;
-  final void Function(CatalogNode node, bool isActive) onToggleActive;
+
+  /// Opens the availability dialog for [node] accessed via [parentIdContext].
+  /// [parentIdContext] is null for root nodes — the change is then node-scoped.
+  final void Function(CatalogNode node, String? parentIdContext) onSetAvailability;
   final void Function(CatalogNode node, bool isBookable) onToggleBookable;
   final void Function(CatalogNode node) onOpenScheduling;
 
@@ -209,11 +214,24 @@ class CatalogNodeTile extends StatelessWidget {
                   const SizedBox(width: 4),
                 ],
 
-                // Active toggle
-                Switch(
-                  value: node.isActive,
-                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  onChanged: (v) => callbacks.onToggleActive(node, v),
+                // Availability control.
+                // For non-root nodes look up the per-relationship status so
+                // the icon reflects the path-scoped state, not the node-global one.
+                Consumer(
+                  builder: (ctx, ref, _) {
+                    final relMap =
+                        ref.watch(relAvailabilityProvider).valueOrNull ?? {};
+                    final effectiveStatus = parentIdContext != null
+                        ? (relMap['$parentIdContext|${node.id}'] ?? 'active')
+                        : node.availabilityStatus;
+                    return _AvailabilityButton(
+                      isGloballyDisabled: !node.isActive,
+                      availabilityStatus: effectiveStatus,
+                      isPathScoped: parentIdContext != null,
+                      onTap: () =>
+                          callbacks.onSetAvailability(node, parentIdContext),
+                    );
+                  },
                 ),
 
                 // Bookable toggle — hidden when node has children
@@ -341,6 +359,67 @@ class CatalogNodeTile extends StatelessWidget {
     if (depth == 0) return AppColors.primary;
     if (depth == 1) return AppColors.primaryLight;
     return AppColors.textSecondary;
+  }
+}
+
+// ── Availability icon button ───────────────────────────────────────────────────
+
+class _AvailabilityButton extends StatelessWidget {
+  const _AvailabilityButton({
+    required this.isGloballyDisabled,
+    required this.availabilityStatus,
+    required this.isPathScoped,
+    required this.onTap,
+  });
+
+  final bool isGloballyDisabled;
+
+  /// Effective availability status — relationship-scoped for non-root nodes,
+  /// node-scoped for root nodes.
+  final String availabilityStatus;
+
+  /// True when this tile is rendered under a specific parent (non-root).
+  final bool isPathScoped;
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    if (isGloballyDisabled) {
+      return Tooltip(
+        message: 'Globally disabled — use Edit to re-enable',
+        child: Padding(
+          padding: const EdgeInsets.all(8.0),
+          child: Icon(Icons.block_rounded, size: 17, color: AppColors.error),
+        ),
+      );
+    }
+    final scope = isPathScoped ? 'this path' : 'globally';
+    final (IconData icon, Color color, String tooltip) = switch (availabilityStatus) {
+      'unavailable' => (
+          Icons.pause_circle_outline_rounded,
+          const Color(0xFFF59E0B),
+          'Temporarily unavailable ($scope) — click to change',
+        ),
+      'hidden' => (
+          Icons.visibility_off_outlined,
+          AppColors.textSecondary,
+          'Hidden ($scope) — click to change',
+        ),
+      _ => (
+          Icons.check_circle_outline_rounded,
+          AppColors.success,
+          'Active — click to set availability',
+        ),
+    };
+    return Tooltip(
+      message: tooltip,
+      child: IconButton(
+        icon: Icon(icon, size: 17, color: color),
+        onPressed: onTap,
+        visualDensity: VisualDensity.compact,
+      ),
+    );
   }
 }
 

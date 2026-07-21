@@ -30,3 +30,15 @@ final catalogNodeFaqsProvider =
     FutureProvider.family<List<FaqModel>, String>((ref, nodeId) {
   return ref.read(catalogServiceProvider).fetchFaqsForNode(nodeId);
 });
+
+/// Effective availability of a node for a given parent context.
+/// Pass parentId = node.parentId as fallback when the true path is unknown
+/// (deep-link entry) so the canonical path is used instead.
+typedef _AvailabilityParams = ({String nodeId, String? parentId});
+
+final nodeAvailabilityProvider = FutureProvider.family<
+    ({String status, String? message}), _AvailabilityParams>(
+  (ref, params) => ref
+      .read(catalogServiceProvider)
+      .checkAvailability(params.nodeId, params.parentId),
+);

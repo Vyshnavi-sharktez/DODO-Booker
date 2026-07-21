@@ -31,6 +31,19 @@ class CatalogNodeModel {
   /// Count of active direct children.
   final int childrenCount;
 
+  // ── Availability (from catalog_nodes.availability_status) ───────────────────
+  /// Node-scoped availability: 'active' | 'unavailable' | 'hidden'.
+  /// For path-aware availability use the nodeAvailabilityProvider instead.
+  final String availabilityStatus;
+  final String? unavailabilityMessage;
+
+  /// Relationship-scoped availability for the specific parent→child edge used
+  /// to fetch this node. Populated only when fetched via get_catalog_node_children;
+  /// falls back to [availabilityStatus] for direct/root fetches.
+  /// Use this for inline child-list badges so shared nodes appear correctly
+  /// under each parent independently.
+  final String relAvailabilityStatus;
+
   // ── Loyalty earn config (mirrors catalog_nodes.loyalty_earn_* columns) ──────
   final bool loyaltyEarnEnabled;
   /// 'global' | 'fixed' | 'percentage'
@@ -57,6 +70,9 @@ class CatalogNodeModel {
     this.rating = 0.0,
     this.reviewCount = 0,
     this.childrenCount = 0,
+    this.availabilityStatus = 'active',
+    this.unavailabilityMessage,
+    this.relAvailabilityStatus = 'active',
     this.loyaltyEarnEnabled = true,
     this.loyaltyEarnRule = 'global',
     this.loyaltyFixedPoints,
@@ -120,6 +136,10 @@ class CatalogNodeModel {
       rating: (map['rating'] as num?)?.toDouble() ?? 0.0,
       reviewCount: (map['review_count'] as int?) ?? 0,
       childrenCount: (map['children_count'] as int?) ?? 0,
+      availabilityStatus: (map['availability_status'] as String?) ?? 'active',
+      unavailabilityMessage: map['unavailability_message'] as String?,
+      relAvailabilityStatus: (map['rel_availability_status'] as String?) ??
+          (map['availability_status'] as String? ?? 'active'),
       loyaltyEarnEnabled: (map['loyalty_earn_enabled'] as bool?) ?? true,
       loyaltyEarnRule: (map['loyalty_earn_rule'] as String?) ?? 'global',
       loyaltyFixedPoints: map['loyalty_fixed_points'] as int?,

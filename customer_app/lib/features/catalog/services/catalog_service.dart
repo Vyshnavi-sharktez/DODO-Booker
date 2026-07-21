@@ -21,6 +21,7 @@ class CatalogService {
           .select()
           .eq('is_root_node', true)
           .eq('is_active', true)
+          .neq('availability_status', 'hidden')
           .order('sort_order', ascending: true)
           .order('name', ascending: true);
       return (data as List)
@@ -81,6 +82,32 @@ class CatalogService {
     } catch (e) {
       debugPrint('[CatalogService] fetchFaqsForNode($nodeId) error: $e');
       return [];
+    }
+  }
+
+  /// Checks the effective availability of [nodeId] accessed via [parentId].
+  /// Uses check_node_availability RPC which walks the catalog ancestry path.
+  /// Returns (status: 'active'|'unavailable'|'hidden', message: text|null).
+  /// Falls back to active on any error so the UI never blocks on a failed check.
+  Future<({String status, String? message})> checkAvailability(
+    String nodeId,
+    String? parentId,
+  ) async {
+    if (!_ready) return (status: 'active', message: null);
+    try {
+      final result = await _db.rpc('check_node_availability', params: {
+        'p_node_id': nodeId,
+        'p_parent_id': parentId,
+      });
+      if (result == null) return (status: 'active', message: null);
+      final map = result as Map<String, dynamic>;
+      return (
+        status: (map['status'] as String?) ?? 'active',
+        message: map['message'] as String?,
+      );
+    } catch (e) {
+      debugPrint('[CatalogService] checkAvailability($nodeId) error: $e');
+      return (status: 'active', message: null);
     }
   }
 

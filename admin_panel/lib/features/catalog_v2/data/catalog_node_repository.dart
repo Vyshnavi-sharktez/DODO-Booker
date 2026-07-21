@@ -150,6 +150,71 @@ class CatalogNodeRepository {
         .eq('id', id);
   }
 
+  /// Sets availability on the relationship edge (parent → child).
+  /// Use for non-root nodes so the change is path-scoped.
+  Future<void> setRelationshipAvailability(
+    String parentId,
+    String childId,
+    String status,
+    String? message,
+  ) async {
+    await _supabase
+        .from('catalog_node_relationships')
+        .update({
+          'availability_status': status,
+          'unavailability_message': message,
+        })
+        .eq('parent_id', parentId)
+        .eq('child_id', childId);
+  }
+
+  /// Sets availability on the node itself.
+  /// Use for root nodes (no parent) or global node-wide overrides.
+  Future<void> setNodeAvailability(
+    String nodeId,
+    String status,
+    String? message,
+  ) async {
+    await _supabase
+        .from('catalog_nodes')
+        .update({
+          'availability_status': status,
+          'unavailability_message': message,
+        })
+        .eq('id', nodeId);
+  }
+
+  /// Fetches ALL relationship availability statuses in one query.
+  /// Returns a map keyed by "$parentId|$childId" → availability_status.
+  /// Used by the admin tree to show the correct per-path icon without N+1 queries.
+  Future<Map<String, String>> fetchAllRelationshipStatuses() async {
+    final data = await _supabase
+        .from('catalog_node_relationships')
+        .select('parent_id, child_id, availability_status');
+    return {
+      for (final row in data as List<dynamic>)
+        '${(row as Map<String, dynamic>)['parent_id']}|${row['child_id']}':
+            (row['availability_status'] as String?) ?? 'active',
+    };
+  }
+
+  /// Returns the current availability state for a specific relationship edge.
+  Future<({String status, String? message})> fetchRelationshipAvailability(
+    String parentId,
+    String childId,
+  ) async {
+    final row = await _supabase
+        .from('catalog_node_relationships')
+        .select('availability_status, unavailability_message')
+        .eq('parent_id', parentId)
+        .eq('child_id', childId)
+        .single();
+    return (
+      status: (row['availability_status'] as String?) ?? 'active',
+      message: row['unavailability_message'] as String?,
+    );
+  }
+
   Future<void> toggleBookable(String id, {required bool isBookable}) async {
     await _supabase
         .from('catalog_nodes')
