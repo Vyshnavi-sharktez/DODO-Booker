@@ -10,6 +10,8 @@ import '../../../catalog_configs/presentation/widgets/catalog_node_config_dialog
 import '../widgets/catalog_node_form_dialog.dart';
 import '../widgets/catalog_node_parents_dialog.dart';
 import '../widgets/catalog_node_tile.dart';
+import '../../../bulk_upload/data/modules/catalog_bulk_module.dart';
+import '../../../bulk_upload/presentation/bulk_upload_dialog.dart';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // CatalogV2Page
@@ -454,6 +456,15 @@ class _CatalogV2PageState extends ConsumerState<CatalogV2Page> {
               ],
             ),
           ),
+          OutlinedButton.icon(
+            onPressed: () => BulkUploadDialog.show(
+              context,
+              CatalogBulkModule(),
+            ),
+            icon: const Icon(Icons.upload_file_rounded, size: 16),
+            label: const Text('Bulk Upload'),
+          ),
+          const SizedBox(width: 10),
           FilledButton.icon(
             onPressed: () => _openCreate(),
             icon: const Icon(Icons.add, size: 18),

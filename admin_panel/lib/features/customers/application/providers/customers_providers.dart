@@ -75,6 +75,14 @@ class CustomersNotifier extends StateNotifier<AsyncValue<List<Customer>>> {
     }
   }
 
+  Future<void> deleteCustomer(String id) async {
+    await _repo.deleteCustomer(id);
+    final current = state.valueOrNull;
+    if (current != null) {
+      state = AsyncValue.data(current.where((c) => c.id != id).toList());
+    }
+  }
+
   Future<void> toggleActive(String id, {required bool currentIsActive}) async {
     final newIsActive = !currentIsActive;
     final current = state.valueOrNull;

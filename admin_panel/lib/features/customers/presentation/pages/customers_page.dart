@@ -12,6 +12,8 @@ import '../../domain/models/customer.dart';
 import '../../domain/models/customer_search_record.dart';
 import '../widgets/customer_create_dialog.dart';
 import '../widgets/customer_edit_dialog.dart';
+import '../../../bulk_upload/data/modules/customer_bulk_module.dart';
+import '../../../bulk_upload/presentation/bulk_upload_dialog.dart';
 
 final _dateFmtShort = DateFormat('dd MMM yyyy');
 
@@ -140,6 +142,113 @@ class _CustomersPageState extends ConsumerState<CustomersPage> {
     );
   }
 
+  Future<void> _confirmDelete(Customer c) async {
+    bool hasBookings;
+    try {
+      hasBookings = await ref
+          .read(customersRepositoryProvider)
+          .hasBookings(c.id);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Could not check booking history: $e'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+      return;
+    }
+
+    if (!mounted) return;
+
+    if (hasBookings) {
+      final deactivate = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          title: const Text('Cannot Permanently Delete'),
+          content: Text(
+            '"${c.fullName}" has booking history.\n\n'
+            'Permanently deleting this customer would break historical records. '
+            'Would you like to deactivate them instead? '
+            'Deactivated customers are hidden from active listings but all their history is preserved.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(ctx).pop(true),
+              style:
+                  FilledButton.styleFrom(backgroundColor: AppColors.error),
+              child: const Text('Deactivate'),
+            ),
+          ],
+        ),
+      );
+      if (deactivate != true || !mounted) return;
+      if (c.isActive) {
+        await _toggleActive(c);
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+              content: Text('"${c.fullName}" is already inactive.')),
+        );
+      }
+      return;
+    }
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape:
+            RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        title: const Text('Delete Customer'),
+        content: Text(
+          'Are you sure you want to permanently delete "${c.fullName}"?\n\n'
+          'This will also remove their addresses, wishlist, and loyalty data. '
+          'This action cannot be undone.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            style:
+                FilledButton.styleFrom(backgroundColor: AppColors.error),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    try {
+      await ref
+          .read(customersNotifierProvider.notifier)
+          .deleteCustomer(c.id);
+      ref.invalidate(customerSearchIndexProvider);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('"${c.fullName}" deleted')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Delete failed: $e'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+    }
+  }
+
   Future<void> _toggleActive(Customer c) async {
     try {
       await ref
@@ -205,6 +314,15 @@ class _CustomersPageState extends ConsumerState<CustomersPage> {
                 ],
               ),
               const Spacer(),
+              OutlinedButton.icon(
+                onPressed: () => BulkUploadDialog.show(
+                  context,
+                  CustomerBulkModule(),
+                ),
+                icon: const Icon(Icons.upload_file_rounded, size: 16),
+                label: const Text('Bulk Upload'),
+              ),
+              const SizedBox(width: 10),
               FilledButton.icon(
                 onPressed: _openCreate,
                 icon: const Icon(Icons.person_add_rounded, size: 16),
@@ -319,6 +437,7 @@ class _CustomersPageState extends ConsumerState<CustomersPage> {
                   onViewDetails: _openDetails,
                   onEdit: _openEdit,
                   onToggleActive: _toggleActive,
+                  onDelete: _confirmDelete,
                 );
               },
             ),
@@ -488,6 +607,7 @@ class _CustomersTable extends StatelessWidget {
   final void Function(Customer) onViewDetails;
   final void Function(Customer) onEdit;
   final void Function(Customer) onToggleActive;
+  final void Function(Customer) onDelete;
 
   const _CustomersTable({
     required this.customers,
@@ -496,6 +616,7 @@ class _CustomersTable extends StatelessWidget {
     required this.onViewDetails,
     required this.onEdit,
     required this.onToggleActive,
+    required this.onDelete,
   });
 
   static const double _minTableWidth = 720;
@@ -558,6 +679,7 @@ class _CustomersTable extends StatelessWidget {
                                   onEdit: () => onEdit(customers[i]),
                                   onToggleActive: () =>
                                       onToggleActive(customers[i]),
+                                  onDelete: () => onDelete(customers[i]),
                                 );
                               },
                             ),
@@ -620,6 +742,7 @@ class _CustomerRow extends StatelessWidget {
   final VoidCallback onViewDetails;
   final VoidCallback onEdit;
   final VoidCallback onToggleActive;
+  final VoidCallback onDelete;
 
   const _CustomerRow({
     required this.customer,
@@ -627,6 +750,7 @@ class _CustomerRow extends StatelessWidget {
     required this.onViewDetails,
     required this.onEdit,
     required this.onToggleActive,
+    required this.onDelete,
   });
 
   @override
@@ -759,6 +883,13 @@ class _CustomerRow extends StatelessWidget {
                     ),
                     visualDensity: VisualDensity.compact,
                   ),
+                ),
+                IconButton(
+                  onPressed: onDelete,
+                  icon: const Icon(Icons.delete_outline_rounded, size: 16),
+                  tooltip: 'Delete',
+                  color: AppColors.error,
+                  visualDensity: VisualDensity.compact,
                 ),
               ],
             ),

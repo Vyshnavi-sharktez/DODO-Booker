@@ -244,18 +244,18 @@ class _RoleCard extends ConsumerWidget {
   void _confirmDelete(BuildContext context, WidgetRef ref) {
     showDialog<void>(
       context: context,
-      builder: (_) => AlertDialog(
+      builder: (ctx) => AlertDialog(
         title: const Text('Delete Role'),
         content: Text('Delete "${role.name}"? This cannot be undone.'),
         actions: [
           TextButton(
-            onPressed: () => Navigator.of(context).pop(),
+            onPressed: () => Navigator.of(ctx).pop(),
             child: const Text('Cancel'),
           ),
           FilledButton(
             style: FilledButton.styleFrom(backgroundColor: AppColors.error),
             onPressed: () {
-              Navigator.of(context).pop();
+              Navigator.of(ctx).pop();
               ref.read(rolesNotifierProvider.notifier).deleteRole(role.id);
             },
             child: const Text('Delete'),
