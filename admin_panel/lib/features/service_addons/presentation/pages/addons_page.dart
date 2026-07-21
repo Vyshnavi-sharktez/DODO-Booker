@@ -6,6 +6,8 @@ import '../../../../core/widgets/admin_search_bar.dart';
 import '../../application/providers/service_addons_providers.dart';
 import '../../domain/models/service_addon.dart';
 import '../widgets/addon_form_dialog.dart';
+import '../../../bulk_upload/data/modules/addon_bulk_module.dart';
+import '../../../bulk_upload/presentation/bulk_upload_dialog.dart';
 
 class AddonsPage extends ConsumerStatefulWidget {
   const AddonsPage({super.key});
@@ -63,7 +65,7 @@ class _AddonsPageState extends ConsumerState<AddonsPage> {
   Future<void> _confirmDelete(ServiceAddon addon) async {
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (_) => AlertDialog(
+      builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         title: const Text('Delete Add-on?'),
         content: Text(
@@ -71,11 +73,11 @@ class _AddonsPageState extends ConsumerState<AddonsPage> {
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
+            onPressed: () => Navigator.of(ctx).pop(false),
             child: const Text('Cancel'),
           ),
           FilledButton(
-            onPressed: () => Navigator.of(context).pop(true),
+            onPressed: () => Navigator.of(ctx).pop(true),
             style: FilledButton.styleFrom(backgroundColor: AppColors.error),
             child: const Text('Delete'),
           ),
@@ -135,6 +137,18 @@ class _AddonsPageState extends ConsumerState<AddonsPage> {
                     ],
                   ),
                 ),
+                OutlinedButton.icon(
+                  onPressed: () => BulkUploadDialog.show(
+                    context,
+                    AddonBulkModule(),
+                    onComplete: () => ref
+                        .read(allAddonsNotifierProvider.notifier)
+                        .refresh(),
+                  ),
+                  icon: const Icon(Icons.upload_file_rounded, size: 16),
+                  label: const Text('Bulk Upload'),
+                ),
+                const SizedBox(width: 10),
                 FilledButton.icon(
                   onPressed: _openCreate,
                   icon: const Icon(Icons.add_rounded, size: 18),

@@ -102,4 +102,17 @@ class CustomersRepository {
         .update({'is_active': isActive})
         .eq('id', id);
   }
+
+  Future<bool> hasBookings(String id) async {
+    final data = await _supabase
+        .from('bookings')
+        .select('id')
+        .eq('customer_id', id)
+        .limit(1);
+    return (data as List).isNotEmpty;
+  }
+
+  Future<void> deleteCustomer(String id) async {
+    await _supabase.from('customers').delete().eq('id', id);
+  }
 }

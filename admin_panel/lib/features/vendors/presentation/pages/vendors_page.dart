@@ -8,6 +8,8 @@ import '../../../../core/widgets/highlighted_text.dart';
 import '../../application/providers/vendors_providers.dart';
 import '../../domain/models/vendor.dart';
 import '../widgets/vendor_form_dialog.dart';
+import '../../../bulk_upload/data/modules/vendor_bulk_module.dart';
+import '../../../bulk_upload/presentation/bulk_upload_dialog.dart';
 
 // ── Status display config ─────────────────────────────────────────────────────
 
@@ -212,6 +214,15 @@ class _VendorsPageState extends ConsumerState<VendorsPage> {
                     ],
                   ),
                   if (narrow) const SizedBox(height: 12) else const Spacer(),
+                  OutlinedButton.icon(
+                    onPressed: () => BulkUploadDialog.show(
+                      context,
+                      VendorBulkModule(),
+                    ),
+                    icon: const Icon(Icons.upload_file_rounded, size: 16),
+                    label: const Text('Bulk Upload'),
+                  ),
+                  const SizedBox(width: 10),
                   FilledButton.icon(
                     onPressed: _openCreate,
                     icon: const Icon(Icons.add_rounded, size: 18),
