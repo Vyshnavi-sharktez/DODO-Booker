@@ -20,6 +20,7 @@ import '../../loyalty/utils/loyalty_utils.dart';
 import '../models/catalog_node_model.dart';
 import '../providers/catalog_providers.dart';
 import '../utils/catalog_launcher.dart';
+import '../widgets/catalog_unavailability_widgets.dart';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // CatalogNodeScreen — generic screen for any catalog node at any depth.
@@ -93,6 +94,15 @@ class _CatalogNodeScreenState extends ConsumerState<CatalogNodeScreen> {
         node.isLeafBookable
             ? (ref.watch(catalogNodeFaqsProvider(node.id)).valueOrNull ?? [])
             : <FaqModel>[];
+
+    // Availability check — uses canonical parent as fallback for deep-link entry
+    final availAsync = ref.watch(nodeAvailabilityProvider((
+      nodeId: node.id,
+      parentId: widget.parentNodeId ?? node.parentId,
+    )));
+    final avail = availAsync.valueOrNull;
+    final isUnavailable = avail?.status == 'unavailable';
+    final isEffectivelyHidden = avail?.status == 'hidden';
 
     final addonsTotal =
         totalAddonsPrice(buildSelectedAddons(addOns, _selectedAddonIds));
@@ -219,10 +229,16 @@ class _CatalogNodeScreenState extends ConsumerState<CatalogNodeScreen> {
 
                 // ── Children list ──────────────────────────────────────────
                 if (node.hasChildren)
-                  _ChildrenSection(
-                    node: node,
-                    children: children,
-                  ),
+                  (isUnavailable || isEffectivelyHidden)
+                      ? CatalogUnavailabilityBanner(
+                          message:
+                              isUnavailable ? avail?.message : null,
+                          isHidden: isEffectivelyHidden,
+                        )
+                      : _ChildrenSection(
+                          node: node,
+                          children: children,
+                        ),
 
                 // ── Add-ons ────────────────────────────────────────────────
                 if (node.isLeafBookable && addOns.isNotEmpty)
@@ -251,15 +267,19 @@ class _CatalogNodeScreenState extends ConsumerState<CatalogNodeScreen> {
         ],
       ),
 
-      // ── Sticky cart bar ──────────────────────────────────────────────────
+      // ── Sticky cart bar / unavailability bar ────────────────────────────
       bottomNavigationBar: node.isLeafBookable
-          ? _NodeBookingBar(
-              node: node,
-              displayPrice: displayPrice,
-              priceAdjustment: _priceAdjustment,
-              addonsTotal: addonsTotal,
-              parentNodeId: widget.parentNodeId,
-            )
+          ? (isUnavailable || isEffectivelyHidden)
+              ? CatalogUnavailabilityBar(
+                  message: isUnavailable ? avail?.message : null,
+                )
+              : _NodeBookingBar(
+                  node: node,
+                  displayPrice: displayPrice,
+                  priceAdjustment: _priceAdjustment,
+                  addonsTotal: addonsTotal,
+                  parentNodeId: widget.parentNodeId,
+                )
           : null,
     );
   }
@@ -878,6 +898,25 @@ class _ChildListItemState extends State<_ChildListItem> {
                           height: 1.3,
                         ),
                       ),
+                      if (node.relAvailabilityStatus == 'unavailable') ...[
+                        const SizedBox(height: 3),
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: const [
+                            Icon(Icons.pause_circle_outline_rounded,
+                                size: 11, color: Color(0xFFF59E0B)),
+                            SizedBox(width: 3),
+                            Text(
+                              'Temporarily unavailable',
+                              style: TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.w600,
+                                color: Color(0xFFF59E0B),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
                       if (node.description?.isNotEmpty == true) ...[
                         const SizedBox(height: 3),
                         Text(

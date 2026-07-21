@@ -265,8 +265,8 @@ class _CatalogNodeFormDialogState extends State<CatalogNodeFormDialog> {
             // ── Toggles ──────────────────────────────────────────────────────
             _buildToggleRow(
               icon: Icons.visibility_outlined,
-              label: 'Active',
-              subtitle: 'Visible to customers',
+              label: 'Globally Active',
+              subtitle: 'Disable to hide from all catalog paths and search',
               value: _isActive,
               onChanged: (v) => setState(() => _isActive = v),
               activeColor: AppColors.success,

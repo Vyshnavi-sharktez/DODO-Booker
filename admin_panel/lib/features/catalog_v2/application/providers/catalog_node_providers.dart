@@ -110,6 +110,25 @@ class CatalogNodeNotifier
     await _load();
   }
 
+  // ── Availability ───────────────────────────────────────────────────────────
+
+  /// Sets availability for [nodeId].
+  /// When [parentIdContext] is non-null: updates the relationship row (path-scoped).
+  /// When null: updates the node row directly (node-scoped; use for root nodes).
+  Future<void> setAvailability(
+    String nodeId,
+    String? parentIdContext,
+    String status,
+    String? message,
+  ) async {
+    if (parentIdContext != null) {
+      await _repo.setRelationshipAvailability(parentIdContext, nodeId, status, message);
+    } else {
+      await _repo.setNodeAvailability(nodeId, status, message);
+    }
+    await _load();
+  }
+
   // ── Optimistic toggles ─────────────────────────────────────────────────────
 
   Future<void> toggleActive(String id, {required bool isActive}) async {
@@ -269,6 +288,17 @@ class CatalogNodeAttributesNotifier
     );
   }
 }
+
+// ── Relationship availability map ──────────────────────────────────────────────
+// Keyed by "$parentId|$childId" → availability_status.
+// Loaded once and invalidated after any setAvailability save so the admin tree
+// immediately reflects the updated per-path icon without a full page reload.
+
+final relAvailabilityProvider =
+    FutureProvider<Map<String, String>>((ref) {
+  final repo = ref.watch(catalogNodeRepositoryProvider);
+  return repo.fetchAllRelationshipStatuses();
+});
 
 final catalogNodeAttributesNotifierProvider = StateNotifierProvider<
     CatalogNodeAttributesNotifier,
