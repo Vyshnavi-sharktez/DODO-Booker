@@ -217,17 +217,27 @@ class CatalogNodeTile extends StatelessWidget {
                 // Availability control.
                 // For non-root nodes look up the per-relationship status so
                 // the icon reflects the path-scoped state, not the node-global one.
+                // Also checks locationRestrictionsProvider so the 4th
+                // "location-wise" icon appears without opening the dialog.
                 Consumer(
                   builder: (ctx, ref, _) {
                     final relMap =
                         ref.watch(relAvailabilityProvider).valueOrNull ?? {};
+                    final locationKeys =
+                        ref.watch(locationRestrictionsProvider).valueOrNull ??
+                            {};
                     final effectiveStatus = parentIdContext != null
                         ? (relMap['$parentIdContext|${node.id}'] ?? 'active')
                         : node.availabilityStatus;
+                    final hasLocationRestriction = parentIdContext != null
+                        ? locationKeys
+                            .contains('rel:$parentIdContext|${node.id}')
+                        : locationKeys.contains('node:${node.id}');
                     return _AvailabilityButton(
                       isGloballyDisabled: !node.isActive,
                       availabilityStatus: effectiveStatus,
                       isPathScoped: parentIdContext != null,
+                      hasLocationRestriction: hasLocationRestriction,
                       onTap: () =>
                           callbacks.onSetAvailability(node, parentIdContext),
                     );
@@ -369,6 +379,7 @@ class _AvailabilityButton extends StatelessWidget {
     required this.isGloballyDisabled,
     required this.availabilityStatus,
     required this.isPathScoped,
+    required this.hasLocationRestriction,
     required this.onTap,
   });
 
@@ -380,6 +391,11 @@ class _AvailabilityButton extends StatelessWidget {
 
   /// True when this tile is rendered under a specific parent (non-root).
   final bool isPathScoped;
+
+  /// True when at least one location restriction row exists for this
+  /// node/path. Only shown when [availabilityStatus] is 'active' — if the
+  /// node is also marked unavailable/hidden that state takes precedence.
+  final bool hasLocationRestriction;
 
   final VoidCallback onTap;
 
@@ -395,23 +411,30 @@ class _AvailabilityButton extends StatelessWidget {
       );
     }
     final scope = isPathScoped ? 'this path' : 'globally';
-    final (IconData icon, Color color, String tooltip) = switch (availabilityStatus) {
-      'unavailable' => (
-          Icons.pause_circle_outline_rounded,
-          const Color(0xFFF59E0B),
-          'Temporarily unavailable ($scope) — click to change',
-        ),
-      'hidden' => (
-          Icons.visibility_off_outlined,
-          AppColors.textSecondary,
-          'Hidden ($scope) — click to change',
-        ),
-      _ => (
-          Icons.check_circle_outline_rounded,
-          AppColors.success,
-          'Active — click to set availability',
-        ),
-    };
+    final (IconData icon, Color color, String tooltip) =
+        hasLocationRestriction && availabilityStatus == 'active'
+            ? (
+                Icons.location_on_rounded,
+                const Color(0xFF6366F1),
+                'Location-wise Availability — click to change',
+              )
+            : switch (availabilityStatus) {
+                'unavailable' => (
+                    Icons.pause_circle_outline_rounded,
+                    const Color(0xFFF59E0B),
+                    'Temporarily unavailable ($scope) — click to change',
+                  ),
+                'hidden' => (
+                    Icons.visibility_off_outlined,
+                    AppColors.textSecondary,
+                    'Hidden ($scope) — click to change',
+                  ),
+                _ => (
+                    Icons.check_circle_outline_rounded,
+                    AppColors.success,
+                    'Active — click to set availability',
+                  ),
+              };
     return Tooltip(
       message: tooltip,
       child: IconButton(

@@ -222,6 +222,111 @@ class CatalogNodeRepository {
         .eq('id', id);
   }
 
+  // ── Location restrictions ─────────────────────────────────────────────────────
+
+  /// Returns the area IDs currently blocked for [nodeId] in the given scope.
+  /// When [parentId] is set, returns the relationship-scoped restrictions for
+  /// the (parentId → nodeId) edge. When null, returns node-scoped restrictions.
+  Future<List<String>> fetchLocationRestrictions(
+      String nodeId, String? parentId) async {
+    if (parentId != null) {
+      final relRow = await _supabase
+          .from('catalog_node_relationships')
+          .select('id')
+          .eq('parent_id', parentId)
+          .eq('child_id', nodeId)
+          .single();
+      final relId = relRow['id'] as String;
+      final rows = await _supabase
+          .from('catalog_node_location_restrictions')
+          .select('area_id')
+          .eq('node_id', nodeId)
+          .eq('relationship_id', relId);
+      return (rows as List<dynamic>)
+          .map((r) => (r as Map<String, dynamic>)['area_id'] as String)
+          .toList();
+    } else {
+      final rows = await _supabase
+          .from('catalog_node_location_restrictions')
+          .select('area_id')
+          .eq('node_id', nodeId)
+          .isFilter('relationship_id', null);
+      return (rows as List<dynamic>)
+          .map((r) => (r as Map<String, dynamic>)['area_id'] as String)
+          .toList();
+    }
+  }
+
+  /// Replaces location restrictions for [nodeId] in the given scope.
+  /// Deletes existing rows then inserts the new [areaIds].
+  /// An empty [areaIds] list clears all restrictions for the scope.
+  Future<void> saveLocationRestrictions(
+      String nodeId, String? parentId, List<String> areaIds) async {
+    String? relId;
+    if (parentId != null) {
+      final relRow = await _supabase
+          .from('catalog_node_relationships')
+          .select('id')
+          .eq('parent_id', parentId)
+          .eq('child_id', nodeId)
+          .single();
+      relId = relRow['id'] as String;
+      await _supabase
+          .from('catalog_node_location_restrictions')
+          .delete()
+          .eq('node_id', nodeId)
+          .eq('relationship_id', relId);
+    } else {
+      await _supabase
+          .from('catalog_node_location_restrictions')
+          .delete()
+          .eq('node_id', nodeId)
+          .isFilter('relationship_id', null);
+    }
+    if (areaIds.isNotEmpty) {
+      await _supabase.from('catalog_node_location_restrictions').insert(
+            areaIds
+                .map((aId) => {
+                      'node_id': nodeId,
+                      if (relId != null) 'relationship_id': relId,
+                      'area_id': aId,
+                    })
+                .toList(),
+          );
+    }
+  }
+
+  /// Returns a set of lookup keys indicating which nodes/paths have at least
+  /// one location restriction row.
+  ///
+  ///   "node:<nodeId>"            — node-scoped restriction (relationship_id IS NULL)
+  ///   "rel:<parentId>|<nodeId>"  — path-scoped restriction for a specific edge
+  ///
+  /// Used by the admin tree to show the location-restricted icon without
+  /// opening the dialog. Deduplicated via Set (multiple areas per path produce
+  /// only one key).
+  Future<Set<String>> fetchAllLocationRestrictionKeys() async {
+    final rows = await _supabase
+        .from('catalog_node_location_restrictions')
+        .select('node_id, relationship_id, catalog_node_relationships(parent_id)');
+    final keys = <String>{};
+    for (final r in rows as List<dynamic>) {
+      final row = r as Map<String, dynamic>;
+      final nodeId = row['node_id'] as String;
+      final relId = row['relationship_id'] as String?;
+      if (relId == null) {
+        keys.add('node:$nodeId');
+      } else {
+        final rel = row['catalog_node_relationships'] as Map<String, dynamic>?;
+        final parentId = rel?['parent_id'] as String?;
+        if (parentId != null) {
+          keys.add('rel:$parentId|$nodeId');
+        }
+      }
+    }
+    return keys;
+  }
+
   // ── Category relationship management ─────────────────────────────────────────
 
   /// Lists [nodeId] under [parentId] as a new parent category.

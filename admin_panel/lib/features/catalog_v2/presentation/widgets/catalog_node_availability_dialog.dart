@@ -1,19 +1,20 @@
 import 'package:flutter/material.dart';
 
 import '../../../../../core/theme/app_theme.dart';
+import '../../../service_availability_areas/domain/models/service_availability_area.dart';
 import '../../domain/models/catalog_node.dart';
 
 /// Dialog for setting the availability of a catalog node.
 ///
-/// Shows one of three options:
-///   • Active — visible and bookable.
-///   • Temporarily Unavailable — visible but non-bookable; requires a
-///     fully admin-defined customer-facing message (no hardcoded copy).
-///   • Disable & Hide — hidden from navigation for the current path
-///     (relationship-scoped when parentIdContext != null; node-scoped for roots).
+/// Four mutually exclusive options:
+///   • Active                   — visible and bookable.
+///   • Temporarily Unavailable  — visible but non-bookable; requires a message.
+///   • Hide from catalog        — hidden from this path (or all paths for roots).
+///   • Location-wise            — active globally but blocked in specific areas.
 ///
-/// [fetchCurrentState] is called once on open to load the existing state.
-/// [onSave] is called with the chosen status and optional message.
+/// Scoping matches the existing availability system:
+///   parentIdContext != null → relationship-scoped (path-specific).
+///   parentIdContext == null → node-scoped (all paths).
 class CatalogNodeAvailabilityDialog extends StatefulWidget {
   const CatalogNodeAvailabilityDialog({
     super.key,
@@ -21,12 +22,26 @@ class CatalogNodeAvailabilityDialog extends StatefulWidget {
     required this.parentIdContext,
     required this.fetchCurrentState,
     required this.onSave,
+    required this.fetchAreas,
+    required this.fetchLocationRestrictions,
+    required this.onSaveLocationRestrictions,
   });
 
   final CatalogNode node;
   final String? parentIdContext;
   final Future<({String status, String? message})> Function() fetchCurrentState;
   final Future<void> Function(String status, String? message) onSave;
+
+  /// Returns all active service availability areas for the platform.
+  final Future<List<ServiceAvailabilityArea>> Function() fetchAreas;
+
+  /// Returns the area IDs that are currently disabled for this node/path.
+  final Future<List<String>> Function() fetchLocationRestrictions;
+
+  /// Called when saving location restrictions.
+  /// Receives the set of area IDs where the node should be unavailable.
+  final Future<void> Function(List<String> disabledAreaIds)
+      onSaveLocationRestrictions;
 
   @override
   State<CatalogNodeAvailabilityDialog> createState() =>
@@ -35,10 +50,14 @@ class CatalogNodeAvailabilityDialog extends StatefulWidget {
 
 class _CatalogNodeAvailabilityDialogState
     extends State<CatalogNodeAvailabilityDialog> {
+  // 'active' | 'unavailable' | 'hidden' | 'location_wise'
   String _selectedStatus = 'active';
   final _messageCtrl = TextEditingController();
   bool _loading = true;
   bool _saving = false;
+
+  List<ServiceAvailabilityArea> _areas = [];
+  Set<String> _disabledAreaIds = {};
 
   @override
   void initState() {
@@ -54,11 +73,27 @@ class _CatalogNodeAvailabilityDialogState
 
   Future<void> _loadCurrentState() async {
     try {
-      final result = await widget.fetchCurrentState();
+      final results = await Future.wait([
+        widget.fetchCurrentState(),
+        widget.fetchAreas(),
+        widget.fetchLocationRestrictions(),
+      ]);
+      final stateResult =
+          results[0] as ({String status, String? message});
+      final areas = results[1] as List<ServiceAvailabilityArea>;
+      final disabledIds = results[2] as List<String>;
+
       if (mounted) {
         setState(() {
-          _selectedStatus = result.status;
-          _messageCtrl.text = result.message ?? '';
+          _areas = areas;
+          _disabledAreaIds = disabledIds.toSet();
+          // Show location_wise only when status is active and restrictions exist
+          if (stateResult.status == 'active' && disabledIds.isNotEmpty) {
+            _selectedStatus = 'location_wise';
+          } else {
+            _selectedStatus = stateResult.status;
+            _messageCtrl.text = stateResult.message ?? '';
+          }
           _loading = false;
         });
       }
@@ -77,14 +112,32 @@ class _CatalogNodeAvailabilityDialogState
       );
       return;
     }
+    if (_selectedStatus == 'location_wise' && _disabledAreaIds.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+            content: Text(
+                'Select at least one area to restrict, or choose Active.')),
+      );
+      return;
+    }
+
     setState(() => _saving = true);
     try {
-      await widget.onSave(
-        _selectedStatus,
-        _selectedStatus == 'unavailable'
-            ? _messageCtrl.text.trim()
-            : null,
-      );
+      if (_selectedStatus == 'location_wise') {
+        // Ensure the node status is active, then store location restrictions.
+        await widget.onSave('active', null);
+        await widget
+            .onSaveLocationRestrictions(_disabledAreaIds.toList());
+      } else {
+        // Clear location restrictions when switching to any other option.
+        await widget.onSave(
+          _selectedStatus,
+          _selectedStatus == 'unavailable'
+              ? _messageCtrl.text.trim()
+              : null,
+        );
+        await widget.onSaveLocationRestrictions([]);
+      }
       if (mounted) Navigator.of(context).pop();
     } catch (e) {
       if (mounted) {
@@ -220,6 +273,103 @@ class _CatalogNodeAvailabilityDialogState
                 ? 'Hidden when accessed via this parent. Visible under other parents.'
                 : 'Completely hidden from all catalog paths and navigation.',
           ),
+          const SizedBox(height: 10),
+          _buildOption(
+            value: 'location_wise',
+            icon: Icons.location_on_outlined,
+            iconColor: const Color(0xFF6366F1),
+            label: 'Location-wise Availability',
+            subtitle:
+                'Active everywhere except the areas you select below.',
+          ),
+          if (_selectedStatus == 'location_wise') ...[
+            const SizedBox(height: 12),
+            _buildAreaSelector(),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAreaSelector() {
+    if (_areas.isEmpty) {
+      return Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: AppColors.background,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: AppColors.border),
+        ),
+        child: const Text(
+          'No service areas configured. Add areas in Settings → Service Areas.',
+          style:
+              TextStyle(fontSize: 12, color: AppColors.textSecondary),
+        ),
+      );
+    }
+
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.background,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(
+            color: AppColors.primary.withValues(alpha: 0.4), width: 1.2),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(14, 12, 14, 6),
+            child: Text(
+              'Unavailable in:',
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                color: AppColors.textSecondary,
+                letterSpacing: 0.4,
+              ),
+            ),
+          ),
+          const Divider(height: 1),
+          ListView.separated(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            itemCount: _areas.length,
+            separatorBuilder: (_, __) =>
+                const Divider(height: 1, indent: 14),
+            itemBuilder: (_, i) {
+              final area = _areas[i];
+              final blocked = _disabledAreaIds.contains(area.id);
+              return CheckboxListTile(
+                value: blocked,
+                onChanged: (v) {
+                  setState(() {
+                    if (v == true) {
+                      _disabledAreaIds.add(area.id);
+                    } else {
+                      _disabledAreaIds.remove(area.id);
+                    }
+                  });
+                },
+                title: Text(
+                  area.name,
+                  style: const TextStyle(
+                      fontSize: 13, fontWeight: FontWeight.w500),
+                ),
+                subtitle: Text(
+                  area.city,
+                  style: const TextStyle(
+                      fontSize: 11, color: AppColors.textSecondary),
+                ),
+                activeColor: const Color(0xFF6366F1),
+                dense: true,
+                controlAffinity: ListTileControlAffinity.trailing,
+                contentPadding:
+                    const EdgeInsets.symmetric(horizontal: 14, vertical: 2),
+              );
+            },
+          ),
+          const SizedBox(height: 4),
         ],
       ),
     );

@@ -1,6 +1,8 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/widgets/clickable.dart';
 import '../../../core/widgets/page_sheet.dart';
@@ -13,6 +15,7 @@ import '../../../features/booking/widgets/booking_success_dialog.dart';
 import '../../../features/address/screens/address_screen.dart';
 import '../../../features/bookings/utils/my_bookings_launcher.dart';
 import '../../../features/address/services/address_providers.dart';
+import '../../catalog/services/catalog_service.dart';
 import '../models/cart_item.dart';
 import '../providers/cart_provider.dart';
 import '../services/checkout_service.dart';
@@ -186,6 +189,18 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       }
     }
 
+    // ── Location availability pre-check ─────────────────────────────────────
+    // Runs before opening the payment sheet so the customer never sees a
+    // "Booking failed" error for a location-restricted service. Shows the
+    // same "Service Not Available in Your Area" dialog used elsewhere in the
+    // app; customer dismisses it and stays on the checkout screen.
+    final locationError = await _checkLocationAvailability(items);
+    if (!mounted) return;
+    if (locationError != null) {
+      await showServiceAreaUnavailableDialog(context, message: locationError);
+      return;
+    }
+
     // ── Payment method selection ─────────────────────────────────────────────
     final paymentMethod = await _selectPaymentMethod();
     if (!mounted || paymentMethod == null) return;
@@ -308,6 +323,59 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       if (mounted) setState(() => _placing = false);
       debugPrint('[DODO][Checkout] finally done');
     }
+  }
+
+  /// Returns a customer-facing error string if any cart item is unavailable
+  /// at [_selectedAddress], or null if all items are available.
+  ///
+  /// With coordinates: calls check_node_availability RPC per item using the
+  /// full path context (serviceId + parentNodeId) — same check the catalog
+  /// modal shows. Falls back silently on RPC errors (checkout enforces it).
+  ///
+  /// Without coordinates: checks whether any location restriction rows exist
+  /// for each service. If so, the customer must pin their address on the map
+  /// before we can verify eligibility.
+  Future<String?> _checkLocationAvailability(List<CartItem> items) async {
+    final address = _selectedAddress!;
+    final checked = <String>{};
+
+    if (address.latitude != null && address.longitude != null) {
+      final service = CatalogService();
+      for (final item in items) {
+        if (checked.contains(item.serviceId)) continue;
+        checked.add(item.serviceId);
+        final result = await service.checkAvailability(
+          item.serviceId,
+          item.parentNodeId,
+          lat: address.latitude,
+          lng: address.longitude,
+        );
+        if (result.status != 'active') {
+          return '${item.serviceName} is not available in your area.';
+        }
+      }
+    } else {
+      final db = Supabase.instance.client;
+      for (final item in items) {
+        if (checked.contains(item.serviceId)) continue;
+        checked.add(item.serviceId);
+        try {
+          final rows = await db
+              .from('catalog_node_location_restrictions')
+              .select('id')
+              .eq('node_id', item.serviceId)
+              .limit(1);
+          if ((rows as List).isNotEmpty) {
+            return '${item.serviceName} has location restrictions. '
+                'Please update your address with a map pin to confirm availability.';
+          }
+        } catch (e) {
+          debugPrint('[DODO][Checkout] Location pre-check (no-coords) error: $e');
+        }
+      }
+    }
+
+    return null;
   }
 
   Future<void> _openAddressScreen() async {

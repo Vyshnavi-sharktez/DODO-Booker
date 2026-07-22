@@ -7,6 +7,7 @@ import '../../application/providers/catalog_node_providers.dart';
 import '../../domain/models/catalog_node.dart';
 import '../../../service_scheduling/presentation/widgets/service_scheduling_dialog.dart';
 import '../../../catalog_configs/presentation/widgets/catalog_node_config_dialog.dart';
+import '../../../service_availability_areas/application/providers/service_availability_areas_providers.dart';
 import '../widgets/catalog_node_availability_dialog.dart';
 import '../widgets/catalog_node_form_dialog.dart';
 import '../widgets/catalog_node_parents_dialog.dart';
@@ -274,17 +275,27 @@ class _CatalogV2PageState extends ConsumerState<CatalogV2Page> {
             message: node.unavailabilityMessage,
           );
         },
+        fetchAreas: () =>
+            ref.read(serviceAvailabilityAreasRepositoryProvider).fetchAll(),
+        fetchLocationRestrictions: () => ref
+            .read(catalogNodeRepositoryProvider)
+            .fetchLocationRestrictions(node.id, parentIdContext),
         onSave: (status, message) async {
           await ref
               .read(catalogNodeNotifierProvider.notifier)
               .setAvailability(node.id, parentIdContext, status, message);
-          // Refresh the relationship status map so the icon updates immediately.
           ref.invalidate(relAvailabilityProvider);
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(content: Text('Availability updated.')),
             );
           }
+        },
+        onSaveLocationRestrictions: (areaIds) async {
+          await ref
+              .read(catalogNodeRepositoryProvider)
+              .saveLocationRestrictions(node.id, parentIdContext, areaIds);
+          ref.invalidate(locationRestrictionsProvider);
         },
       ),
     );

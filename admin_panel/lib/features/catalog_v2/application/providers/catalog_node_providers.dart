@@ -300,6 +300,20 @@ final relAvailabilityProvider =
   return repo.fetchAllRelationshipStatuses();
 });
 
+// ── Location restrictions key set ─────────────────────────────────────────────
+// Indicates which nodes/paths have at least one location restriction row.
+// Keys:
+//   "node:<nodeId>"           — node-scoped (root nodes, relationship_id IS NULL)
+//   "rel:<parentId>|<nodeId>" — path-scoped (specific parent→child edge)
+// Invalidated after saveLocationRestrictions so the admin tree icon updates
+// immediately without a manual refresh.
+
+final locationRestrictionsProvider =
+    FutureProvider<Set<String>>((ref) {
+  final repo = ref.watch(catalogNodeRepositoryProvider);
+  return repo.fetchAllLocationRestrictionKeys();
+});
+
 final catalogNodeAttributesNotifierProvider = StateNotifierProvider<
     CatalogNodeAttributesNotifier,
     AsyncValue<List<ServiceAttribute>>>((ref) {

@@ -89,15 +89,22 @@ class CatalogService {
   /// Uses check_node_availability RPC which walks the catalog ancestry path.
   /// Returns (status: 'active'|'unavailable'|'hidden', message: text|null).
   /// Falls back to active on any error so the UI never blocks on a failed check.
+  ///
+  /// Pass [lat]/[lng] to also enforce location restrictions. When null, the
+  /// location check is skipped and only the general status is returned.
   Future<({String status, String? message})> checkAvailability(
     String nodeId,
-    String? parentId,
-  ) async {
+    String? parentId, {
+    double? lat,
+    double? lng,
+  }) async {
     if (!_ready) return (status: 'active', message: null);
     try {
       final result = await _db.rpc('check_node_availability', params: {
         'p_node_id': nodeId,
         'p_parent_id': parentId,
+        if (lat != null) 'p_lat': lat,
+        if (lng != null) 'p_lng': lng,
       });
       if (result == null) return (status: 'active', message: null);
       final map = result as Map<String, dynamic>;

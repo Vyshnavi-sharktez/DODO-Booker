@@ -14,6 +14,7 @@ import '../../reviews/widgets/service_reviews_section.dart';
 import '../../service/widgets/faq_section.dart';
 import '../../service/widgets/service_addon_section.dart';
 import '../../service/widgets/service_attribute_section.dart';
+import '../../address/services/address_providers.dart';
 import '../../loyalty/providers/loyalty_providers.dart';
 import '../../loyalty/utils/loyalty_utils.dart';
 import '../../wishlist/widgets/heart_button.dart';
@@ -133,10 +134,18 @@ class _CatalogNodeModalState extends ConsumerState<CatalogNodeModal> {
         ? (ref.watch(catalogNodeFaqsProvider(node.id)).valueOrNull ?? [])
         : <FaqModel>[];
 
+    // Use the customer's default address coordinates for location restriction checks.
+    final addresses =
+        ref.watch(addressNotifierProvider).valueOrNull ?? [];
+    final defaultAddress = addresses.where((a) => a.isDefault).firstOrNull ??
+        (addresses.isNotEmpty ? addresses.first : null);
+
     // Availability check — uses canonical parent as fallback for deep-link entry
     final availAsync = ref.watch(nodeAvailabilityProvider((
       nodeId: node.id,
       parentId: widget.parentNodeId ?? node.parentId,
+      lat: defaultAddress?.latitude,
+      lng: defaultAddress?.longitude,
     )));
     final avail = availAsync.valueOrNull;
     final isUnavailable = avail?.status == 'unavailable';

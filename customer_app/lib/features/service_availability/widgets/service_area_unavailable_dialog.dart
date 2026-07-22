@@ -4,7 +4,14 @@ import '../../../core/constants/app_colors.dart';
 /// Shows a compact, centered "service not available" dialog.
 /// Uses the dialog builder context for Navigator.pop so it works correctly
 /// inside GoRouter-nested navigators.
-Future<void> showServiceAreaUnavailableDialog(BuildContext context) =>
+///
+/// [message] overrides the default body text. Use it to show a service-specific
+/// reason (e.g. "Deep Cleaning is not available in your area."). When null the
+/// generic platform-wide copy is shown instead.
+Future<void> showServiceAreaUnavailableDialog(
+  BuildContext context, {
+  String? message,
+}) =>
     showDialog<void>(
       context: context,
       builder: (dialogContext) => Dialog(
@@ -44,11 +51,12 @@ Future<void> showServiceAreaUnavailableDialog(BuildContext context) =>
                   ),
                 ),
                 const SizedBox(height: 10),
-                const Text(
-                  "We're sorry, DODO Booker is not currently serving your "
-                  "area. We're expanding quickly and hope to serve you soon.",
+                Text(
+                  message ??
+                      "We're sorry, DODO Booker is not currently serving your "
+                      "area. We're expanding quickly and hope to serve you soon.",
                   textAlign: TextAlign.center,
-                  style: TextStyle(
+                  style: const TextStyle(
                     fontSize: 13,
                     height: 1.5,
                     color: AppColors.textSecondary,
