@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/clickable.dart';
 import '../../../dodo_teams/application/providers/dodo_teams_providers.dart';
@@ -13,6 +14,28 @@ import '../../domain/models/booking.dart';
 import '../../domain/services/vendor_assignment_service.dart';
 
 final _dateFmt = DateFormat('dd MMM yyyy');
+final _isoDateFmt = DateFormat('yyyy-MM-dd');
+
+/// Single-query busy check: returns the set of vendor IDs that already have an
+/// accepted (or active in-progress) booking on the given service date.
+/// Keyed as '$dateISO|$excludeBookingId' so the family auto-refreshes when the
+/// date picker changes without an extra query per vendor.
+final _vendorBusyProvider = FutureProvider.autoDispose
+    .family<Set<String>, String>((ref, params) async {
+  final pipe = params.indexOf('|');
+  final date = params.substring(0, pipe);
+  final excludeId = params.substring(pipe + 1);
+  final rows = await Supabase.instance.client
+      .from('bookings')
+      .select('vendor_id')
+      .eq('service_date', date)
+      .inFilter('status', ['accepted', 'on_the_way', 'arrived', 'in_progress'])
+      .neq('id', excludeId);
+  return {
+    for (final r in rows as List)
+      if (r['vendor_id'] != null) r['vendor_id'] as String,
+  };
+});
 
 enum _AssigneeType { vendor, team, unassigned }
 
@@ -147,6 +170,16 @@ class _BookingAssignmentDialogState
     final assignmentsAsync = ref.watch(allVendorAreaAssignmentsProvider);
     final dodoTeamsAsync = ref.watch(dodoTeamsNotifierProvider);
 
+    // One query for the whole date — no per-vendor round trip.
+    // Shows Available while loading; updates to Busy once query resolves.
+    final busyKey = _serviceDate == null
+        ? null
+        : '${_isoDateFmt.format(_serviceDate!)}|${widget.booking.id}';
+    final busyVendorIds = busyKey == null
+        ? const <String>{}
+        : ref.watch(_vendorBusyProvider(busyKey)).valueOrNull ??
+            const <String>{};
+
     final allVendors = vendorsAsync.valueOrNull ?? <Vendor>[];
     final allTeams = dodoTeamsAsync.valueOrNull ?? <DodoTeam>[];
 
@@ -156,6 +189,7 @@ class _BookingAssignmentDialogState
       vendors: allVendors,
       servingAreas: servingAreasAsync.valueOrNull ?? <VendorServingArea>[],
       assignmentsMap: assignmentsAsync.valueOrNull ?? {},
+      busyVendorIds: busyVendorIds,
     );
 
     final teamResult = VendorAssignmentService.rankTeamAssignees(
@@ -424,7 +458,7 @@ class _BookingAssignmentDialogState
             ..._candidateCards(
               result.all,
               selectedId: _vendorId,
-              onSelect: (id) => setState(() => _vendorId = id),
+              onSelect: (id) => setState(() => _vendorId = _vendorId == id ? '' : id),
             ),
         ],
       );
@@ -579,7 +613,7 @@ class _BookingAssignmentDialogState
           ..._candidateCards(
             result.all,
             selectedId: _dodoTeamId,
-            onSelect: (id) => setState(() => _dodoTeamId = id),
+            onSelect: (id) => setState(() => _dodoTeamId = _dodoTeamId == id ? '' : id),
           ),
         ],
       );
@@ -671,13 +705,16 @@ class _BookingAssignmentDialogState
     String? selectedId,
     void Function(String id)? onSelect,
   }) {
-    return candidates
-        .map((candidate) => _AssigneeCandidateCard(
-              candidate: candidate,
-              isSelected: selectedId == candidate.id,
-              onSelect: _saving ? null : () => onSelect?.call(candidate.id),
-            ))
-        .toList();
+    return candidates.map((candidate) {
+      final isBusy = candidate.status == AssigneeStatus.busy;
+      return _AssigneeCandidateCard(
+        candidate: candidate,
+        isSelected: selectedId == candidate.id,
+        onSelect: (_saving || isBusy)
+            ? null
+            : () => onSelect?.call(candidate.id),
+      );
+    }).toList();
   }
 
   Widget _buildFooter() {
@@ -700,7 +737,11 @@ class _BookingAssignmentDialogState
           ),
           const SizedBox(width: 12),
           FilledButton(
-            onPressed: _saving ? null : _submit,
+            onPressed: (_saving ||
+                    (_assigneeType == _AssigneeType.vendor &&
+                        _vendorId.isEmpty))
+                ? null
+                : _submit,
             style: FilledButton.styleFrom(
               backgroundColor: AppColors.primary,
               padding: const EdgeInsets.symmetric(
@@ -835,21 +876,20 @@ class _AssigneeCandidateCard extends StatelessWidget {
           Align(
             alignment: Alignment.centerRight,
             child: isSelected
-                ? Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.check_circle_rounded,
-                          size: 16, color: AppColors.primary),
-                      const SizedBox(width: 4),
-                      Text(
-                        'Selected',
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                          color: AppColors.primary,
-                        ),
-                      ),
-                    ],
+                ? OutlinedButton.icon(
+                    onPressed: onSelect,
+                    icon: const Icon(Icons.check_circle_rounded, size: 15),
+                    label: const Text('Selected'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppColors.primary,
+                      side: BorderSide(color: AppColors.primary),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 7),
+                      minimumSize: Size.zero,
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      textStyle: const TextStyle(
+                          fontSize: 13, fontWeight: FontWeight.w600),
+                    ),
                   )
                 : FilledButton(
                     onPressed: onSelect,
@@ -861,7 +901,7 @@ class _AssigneeCandidateCard extends StatelessWidget {
                       tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                       textStyle: const TextStyle(fontSize: 13),
                     ),
-                    child: const Text('Assign'),
+                    child: const Text('Select'),
                   ),
           ),
         ],

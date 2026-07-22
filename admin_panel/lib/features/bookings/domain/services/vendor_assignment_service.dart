@@ -182,6 +182,10 @@ class VendorAssignmentService {
   ///   booking coordinates (Haversine ≤ radius_km).  Empty when coordinates
   ///   are absent or no matching area exists.
   /// - all: every active vendor — in-area first, alphabetically.
+  /// - [busyVendorIds]: vendor IDs that already have an accepted booking on
+  ///   the service date.  Those vendors get [AssigneeStatus.busy] instead of
+  ///   [AssigneeStatus.available].  Computed with a single batch query by the
+  ///   caller — no per-vendor round trip.
   static ({List<AssigneeCandidate> inArea, List<AssigneeCandidate> all})
       rankVendorAssigneesByServingAreas({
     double? bookingLat,
@@ -189,11 +193,24 @@ class VendorAssignmentService {
     required List<Vendor> vendors,
     required List<VendorServingArea> servingAreas,
     required Map<String, Set<String>> assignmentsMap,
+    Set<String> busyVendorIds = const {},
   }) {
     final activeVendors = vendors.where((v) => v.isActive).toList();
 
+    AssigneeCandidate toCandidate(Vendor v) => busyVendorIds.contains(v.id)
+        ? AssigneeCandidate(
+            id: v.id,
+            name: v.businessName,
+            subtitle: v.ownerName,
+            rating: v.rating,
+            distanceKm: null,
+            status: AssigneeStatus.busy,
+            kind: AssigneeKind.vendor,
+          )
+        : AssigneeCandidate.fromVendor(v);
+
     if (bookingLat == null || bookingLng == null) {
-      final all = activeVendors.map(AssigneeCandidate.fromVendor).toList()
+      final all = activeVendors.map(toCandidate).toList()
         ..sort((a, b) => a.name.compareTo(b.name));
       return (inArea: [], all: all);
     }
@@ -214,10 +231,11 @@ class VendorAssignmentService {
     final outside = <AssigneeCandidate>[];
 
     for (final vendor in activeVendors) {
+      final candidate = toCandidate(vendor);
       if (inAreaVendorIds.contains(vendor.id)) {
-        inArea.add(AssigneeCandidate.fromVendor(vendor));
+        inArea.add(candidate);
       } else {
-        outside.add(AssigneeCandidate.fromVendor(vendor));
+        outside.add(candidate);
       }
     }
 
