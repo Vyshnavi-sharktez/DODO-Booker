@@ -123,6 +123,7 @@ class MyBookingModel {
   final String? vendorPhone;
   final String? completionOtp;
   final List<BookingStatusEvent> timeline;
+  final bool hasReview;
 
   const MyBookingModel({
     required this.id,
@@ -146,6 +147,7 @@ class MyBookingModel {
     this.vendorPhone,
     this.completionOtp,
     this.timeline = const [],
+    this.hasReview = false,
   });
 
   bool get isDodoTeam => assignmentType == 'DODO Team';
@@ -266,6 +268,7 @@ class MyBookingModel {
             DateTime.parse(createdAtStr),
             assignmentType: assignmentType,
           ),
+      hasReview: json['has_review'] as bool? ?? false,
     );
   }
 

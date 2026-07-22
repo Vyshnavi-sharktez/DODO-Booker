@@ -19,6 +19,12 @@ class _NotificationsModalState extends ConsumerState<NotificationsModal> {
   // Tracks IDs marked read locally so the UI updates instantly.
   final _locallyRead = <String>{};
 
+  @override
+  void initState() {
+    super.initState();
+    debugPrint('[DODO][Notif] modal initState — ${DateTime.now().millisecondsSinceEpoch}ms');
+  }
+
   bool _isRead(NotificationModel n) =>
       n.isRead || _locallyRead.contains(n.id);
 
@@ -59,13 +65,23 @@ class _NotificationsModalState extends ConsumerState<NotificationsModal> {
           child: Center(child: CircularProgressIndicator()),
         ),
         error: (e, _) => const _EmptyState(),
-        data: (notifications) => notifications.isEmpty
-            ? const _EmptyState()
-            : _NotificationList(
-                notifications: notifications,
-                isRead: _isRead,
-                onTap: _handleTap,
-              ),
+        data: (notifications) {
+            // During a refresh (isAuth false→true), Riverpod calls data: with
+            // the stale [] instead of loading:. Treat that as loading.
+            if (notifications.isEmpty && notificationsAsync.isLoading) {
+              return const SizedBox(
+                height: 200,
+                child: Center(child: CircularProgressIndicator()),
+              );
+            }
+            return notifications.isEmpty
+                ? const _EmptyState()
+                : _NotificationList(
+                    notifications: notifications,
+                    isRead: _isRead,
+                    onTap: _handleTap,
+                  );
+          },
       ),
     );
   }

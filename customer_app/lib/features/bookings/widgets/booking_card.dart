@@ -118,7 +118,17 @@ class BookingCard extends StatelessWidget {
                       ],
                     ),
                   ),
-                  _StatusChip(label: statusLabel, color: statusColor),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      _StatusChip(label: statusLabel, color: statusColor),
+                      if (booking.hasReview) ...[
+                        const SizedBox(height: 4),
+                        const _ReviewedChip(),
+                      ],
+                    ],
+                  ),
                 ],
               ),
 
@@ -259,6 +269,37 @@ class _StatusChip extends StatelessWidget {
           fontWeight: FontWeight.w700,
           color: color,
         ),
+      ),
+    );
+  }
+}
+
+class _ReviewedChip extends StatelessWidget {
+  const _ReviewedChip();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: AppColors.goldLight,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: AppColors.gold.withAlpha(100)),
+      ),
+      child: const Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.star_rounded, size: 11, color: AppColors.gold),
+          SizedBox(width: 3),
+          Text(
+            'Reviewed',
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+              color: AppColors.gold,
+            ),
+          ),
+        ],
       ),
     );
   }

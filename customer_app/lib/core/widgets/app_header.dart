@@ -137,10 +137,10 @@ class _WideRow extends StatelessWidget {
         const _LoyaltyPill(),
         const SizedBox(width: 8),
         _NotifButton(
-          onTap: () => AppModalDialog.show(
-            context: context,
-            child: const NotificationsModal(),
-          ),
+          onTap: () {
+            debugPrint('[DODO][Notif] tap fired — ${DateTime.now().millisecondsSinceEpoch}ms');
+            AppModalDialog.show(context: context, child: const NotificationsModal());
+          },
         ),
         const SizedBox(width: 8),
         const _CartButton(),
@@ -182,10 +182,10 @@ class _MobileRow extends StatelessWidget {
         const _CartButton(),
         const SizedBox(width: 4),
         _NotifButton(
-          onTap: () => AppModalDialog.show(
-            context: context,
-            child: const NotificationsModal(),
-          ),
+          onTap: () {
+            debugPrint('[DODO][Notif] tap fired — ${DateTime.now().millisecondsSinceEpoch}ms');
+            AppModalDialog.show(context: context, child: const NotificationsModal());
+          },
         ),
         const SizedBox(width: 6),
         _ProfileAvatar(onTap: onProfileTap),
