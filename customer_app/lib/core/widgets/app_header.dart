@@ -10,6 +10,7 @@ import '../../features/profile/services/profile_providers.dart';
 import '../../features/cart/providers/cart_provider.dart';
 import '../../features/cart/utils/cart_launcher.dart';
 import '../../features/auth/providers/auth_provider.dart';
+import '../../features/auth/utils/auth_modal_gate.dart';
 import '../../features/loyalty/providers/loyalty_providers.dart';
 
 /// Persistent DODO BOOKER header used as the [Scaffold.appBar] across the
@@ -638,18 +639,22 @@ class _ProfileAvatarState extends ConsumerState<_ProfileAvatar> {
 
   @override
   Widget build(BuildContext context) {
-    final initials = ref.watch(profileProvider).when(
-          data: (p) => p.initials,
-          loading: () => '',
-          error: (e, st) => '',
-        );
+    final isAuth = ref.watch(isAuthenticatedProvider);
+
+    final initials = isAuth
+        ? ref.watch(profileProvider).when(
+              data: (p) => p.initials,
+              loading: () => '',
+              error: (e, st) => '',
+            )
+        : '';
 
     return MouseRegion(
       cursor: SystemMouseCursors.click,
       onEnter: (_) => setState(() => _hovered = true),
       onExit: (_) => setState(() => _hovered = false),
       child: GestureDetector(
-        onTap: widget.onTap,
+        onTap: isAuth ? widget.onTap : () => requireAuth(context, ref),
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 150),
           width: 40,
