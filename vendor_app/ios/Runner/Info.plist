@@ -68,5 +68,9 @@
 	</array>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>DODO Booker uses your location to help you set your business location accurately.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>DODO Booker uses your camera to capture before and after service photos.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>DODO Booker accesses your photo library to select service and profile photos.</string>
 </dict>
 </plist>

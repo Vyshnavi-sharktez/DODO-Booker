@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'app.dart';
+import 'core/config/supabase_config.dart';
 import 'core/theme/theme_provider.dart';
 
 void main() async {
@@ -13,15 +14,11 @@ void main() async {
   final initialTheme =
       savedTheme == 'dark' ? ThemeMode.dark : ThemeMode.light;
 
-  // Only initialise when credentials are provided via --dart-define.
-  // Without credentials the app runs with the dev fallback dataset.
-   {
-    await Supabase.initialize(
-      url: 'https://qspilpbvcldgelgwwrdr.supabase.co',
-      // ignore: deprecated_member_use
-      anonKey: 'sb_publishable_6jGP7zViURbDBG-PiwsoJg_7FQSfeWz',
-    );
-  }
+  await Supabase.initialize(
+    url: SupabaseConfig.supabaseUrl,
+    // ignore: deprecated_member_use
+    anonKey: SupabaseConfig.supabaseAnonKey,
+  );
 
   runApp(
     ProviderScope(
