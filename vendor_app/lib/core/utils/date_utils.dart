@@ -2,13 +2,13 @@ import 'package:intl/intl.dart';
 
 abstract final class AppDateUtils {
   static String formatDisplay(DateTime date) =>
-      DateFormat('dd MMM yyyy').format(date);
+      DateFormat('dd MMM yyyy').format(date.toLocal());
 
   static String formatWithTime(DateTime date) =>
-      DateFormat('dd MMM yyyy, hh:mm a').format(date);
+      DateFormat('dd MMM yyyy, hh:mm a').format(date.toLocal());
 
   static String formatTimeOnly(DateTime date) =>
-      DateFormat('hh:mm a').format(date);
+      DateFormat('hh:mm a').format(date.toLocal());
 
   static String formatIsoDate(DateTime date) =>
       date.toIso8601String().substring(0, 10);

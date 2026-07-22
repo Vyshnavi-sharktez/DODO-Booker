@@ -11,6 +11,10 @@ class BookingsService {
   // RLS or PostgREST might silently omit (e.g. completion_otp).
   // booking_addons is NOT embedded here — PostgREST cannot resolve the join
   // without a recognised FK. Addons are fetched via a separate query.
+  // customer_reviews is NOT embedded here. UNIQUE(booking_id) on that table
+  // changes PostgREST's relationship inference to one-to-one, which breaks the
+  // embedded join in some PostgREST versions. Review presence is batch-fetched
+  // separately in _injectReviewFlags(), same pattern as _injectAddons().
   static const _bookingSelect = '''
     id, booking_number, customer_id, vendor_id, dodo_team_id,
     assignment_type, service_date, status,
@@ -62,6 +66,7 @@ class BookingsService {
       debugPrint('[DODO][Bookings] Rows returned: ${rows.length}');
 
       await _injectAddons(rows);
+      await _injectReviewFlags(rows, customerId);
 
       final bookings = rows.map(MyBookingModel.fromJson).toList();
       for (final b in bookings) {
@@ -102,6 +107,44 @@ class BookingsService {
     debugPrint('[OTP][Customer] model.status       = ${booking.status}');
     debugPrint('[OTP][Customer] model.completionOtp= ${booking.completionOtp}');
     return booking;
+  }
+
+  // Batch-fetches review presence for completed bookings owned by this customer.
+  // Injects 'has_review' bool into each row — avoids an embedded PostgREST join
+  // whose cardinality changed after UNIQUE(booking_id) was added to
+  // customer_reviews, which broke the join in some PostgREST versions.
+  Future<void> _injectReviewFlags(
+    List<Map<String, dynamic>> rows,
+    String customerId,
+  ) async {
+    if (rows.isEmpty) return;
+    final completedIds = rows
+        .where((r) => r['status'] == 'completed')
+        .map((r) => r['id'] as String)
+        .toList();
+    // Default all rows to false; only completed bookings can have reviews.
+    for (final row in rows) {
+      row['has_review'] = false;
+    }
+    if (completedIds.isEmpty) return;
+    try {
+      final data = await _client
+          .from('customer_reviews')
+          .select('booking_id')
+          .eq('customer_id', customerId)
+          .inFilter('booking_id', completedIds);
+      final reviewed = {
+        for (final r in data as List<dynamic>)
+          (r as Map<String, dynamic>)['booking_id'] as String
+      };
+      for (final row in rows) {
+        if (reviewed.contains(row['id'])) row['has_review'] = true;
+      }
+      debugPrint('[DODO][Bookings] Review flags: ${reviewed.length} reviewed of ${completedIds.length} completed');
+    } catch (e) {
+      debugPrint('[DODO][Bookings] Warning: review flags fetch failed (non-fatal): $e');
+      // has_review already defaulted to false above — no further action needed.
+    }
   }
 
   // Fetches booking_addons via a plain filter (no PostgREST FK join needed)

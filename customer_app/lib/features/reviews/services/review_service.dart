@@ -25,9 +25,11 @@ class ReviewService {
         .from('customer_reviews')
         .select('*')
         .eq('booking_id', bookingId)
-        .maybeSingle();
-    if (data == null) return null;
-    return ReviewModel.fromJson(data);
+        .order('created_at', ascending: false)
+        .limit(1);
+    final rows = data as List;
+    if (rows.isEmpty) return null;
+    return ReviewModel.fromJson(rows.first as Map<String, dynamic>);
   }
 
   /// Returns all reviews for a service (two-step via booking_items join).
@@ -67,15 +69,15 @@ class ReviewService {
   }) async {
     final customerId = await _getCustomerId();
 
-    // Duplicate guard
+    // Duplicate guard — list query avoids 406 if the DB somehow has 2 rows
     final existing = await _client
         .from('customer_reviews')
         .select('id')
         .eq('booking_id', bookingId)
         .eq('customer_id', customerId)
-        .maybeSingle();
+        .limit(1);
 
-    if (existing != null) {
+    if ((existing as List).isNotEmpty) {
       debugPrint('[DODO][Review] Duplicate review prevented for bookingId=$bookingId');
       throw Exception('You have already reviewed this booking.');
     }
@@ -98,20 +100,22 @@ class ReviewService {
 
     debugPrint('[DODO][Review] Review submitted for bookingId=$bookingId rating=$rating');
 
-    // Update denormalised rating on the services table
-    final serviceId = await _getServiceIdForBooking(bookingId);
-    if (serviceId != null) {
+    // Update denormalised rating on all services in this booking
+    final serviceIds = await _getServiceIdsForBooking(bookingId);
+    for (final serviceId in serviceIds) {
       await _updateServiceRating(serviceId, rating);
     }
   }
 
-  Future<String?> _getServiceIdForBooking(String bookingId) async {
+  Future<List<String>> _getServiceIdsForBooking(String bookingId) async {
     final data = await _client
         .from('booking_items')
         .select('service_id')
-        .eq('booking_id', bookingId)
-        .maybeSingle();
-    return data?['service_id'] as String?;
+        .eq('booking_id', bookingId);
+    return (data as List)
+        .map((e) => e['service_id'] as String?)
+        .whereType<String>()
+        .toList();
   }
 
   Future<void> _updateServiceRating(String serviceId, int newRating) async {

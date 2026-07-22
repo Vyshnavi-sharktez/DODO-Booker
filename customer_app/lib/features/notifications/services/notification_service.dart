@@ -7,15 +7,28 @@ class NotificationService {
   static const _phoneKey = 'dodo_auth_phone';
   final _client = Supabase.instance.client;
 
+  // Customer ID is stable per phone number. Cached after the first DB lookup
+  // so that re-fetches (e.g., after markAsRead) skip the extra network roundtrip.
+  // Keyed by phone so a different user logging in on the same device gets a
+  // fresh lookup rather than the previous user's ID.
+  String? _cachedPhone;
+  String? _cachedCustomerId;
+
   Future<String> _getCustomerId() async {
     final phone = (await SharedPreferences.getInstance()).getString(_phoneKey);
     if (phone == null) throw Exception('Not authenticated');
+    if (phone != _cachedPhone) {
+      _cachedPhone = phone;
+      _cachedCustomerId = null;
+    }
+    if (_cachedCustomerId != null) return _cachedCustomerId!;
     final row = await _client
         .from('customers')
         .select('id')
         .eq('phone', phone)
         .single();
-    return row['id'] as String;
+    _cachedCustomerId = row['id'] as String;
+    return _cachedCustomerId!;
   }
 
   /// Loads personal notifications (user_id = customerId) plus broadcast

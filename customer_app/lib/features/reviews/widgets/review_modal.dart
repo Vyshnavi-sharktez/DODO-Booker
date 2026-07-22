@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/widgets/app_modal_dialog.dart';
 import '../../../core/widgets/clickable.dart';
+import '../../bookings/services/bookings_providers.dart';
 import '../models/review_model.dart';
 import '../services/review_providers.dart';
 
@@ -43,7 +44,7 @@ class _ReviewModalState extends ConsumerState<ReviewModal> {
           height: 120,
           child: Center(child: CircularProgressIndicator()),
         ),
-        error: (e, _) => _ErrorBody(message: '$e'),
+        error: (e, _) => const _ErrorBody(message: 'Unable to load review. Please try again.'),
         data: (existing) => existing != null
             ? _ExistingReviewBody(review: existing)
             : _ReviewForm(
@@ -74,6 +75,7 @@ class _ReviewModalState extends ConsumerState<ReviewModal> {
           );
       ref.invalidate(bookingReviewProvider(widget.bookingId));
       ref.invalidate(reviewsForServiceProvider);
+      ref.invalidate(myBookingsProvider);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -85,8 +87,11 @@ class _ReviewModalState extends ConsumerState<ReviewModal> {
       }
     } catch (e) {
       if (mounted) {
+        final msg = (e is Exception)
+            ? e.toString().replaceFirst('Exception: ', '')
+            : 'Something went wrong. Please try again.';
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('$e')),
+          SnackBar(content: Text(msg), backgroundColor: AppColors.error),
         );
       }
     } finally {
@@ -273,7 +278,7 @@ class _ErrorBody extends StatelessWidget {
       padding: const EdgeInsets.symmetric(vertical: 24),
       child: Center(
         child: Text(
-          'Error: $message',
+          message,
           style: const TextStyle(color: AppColors.error),
           textAlign: TextAlign.center,
         ),
