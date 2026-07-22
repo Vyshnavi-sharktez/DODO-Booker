@@ -6,6 +6,7 @@ import '../../../core/widgets/clickable.dart';
 import '../../../core/widgets/page_sheet.dart';
 import '../models/cart_item.dart';
 import '../providers/cart_provider.dart';
+import '../../auth/utils/auth_modal_gate.dart';
 import '../../tax/models/tax_settings_model.dart';
 import '../../tax/providers/tax_provider.dart';
 import 'checkout_screen.dart';
@@ -603,7 +604,14 @@ class _CheckoutBar extends ConsumerWidget {
               const SizedBox(width: 16),
               Expanded(
                 child: FilledButton(
-                  onPressed: canCheckout ? () => context.go('/cart/checkout') : null,
+                  onPressed: canCheckout
+                      ? () async {
+                          final ok = await requireAuth(context, ref);
+                          if (ok && context.mounted) {
+                            context.go('/cart/checkout');
+                          }
+                        }
+                      : null,
                   style: FilledButton.styleFrom(
                     minimumSize: const Size.fromHeight(48),
                   ),
@@ -687,11 +695,15 @@ class _ModalCheckoutBar extends ConsumerWidget {
               Expanded(
                 child: FilledButton(
                   onPressed: canCheckout
-                      ? () => PageSheet.show(
+                      ? () async {
+                          final ok = await requireAuth(context, ref);
+                          if (!ok || !context.mounted) return;
+                          PageSheet.show(
                             context,
                             title: 'Checkout',
                             child: const CheckoutScreen(inModal: true),
-                          )
+                          );
+                        }
                       : null,
                   style: FilledButton.styleFrom(
                     minimumSize: const Size.fromHeight(48),

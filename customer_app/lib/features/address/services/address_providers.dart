@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../models/address_model.dart';
+import '../../auth/providers/auth_provider.dart';
 import 'address_service.dart';
 
 final addressServiceProvider = Provider<AddressService>(
@@ -10,8 +11,9 @@ class AddressNotifier
     extends StateNotifier<AsyncValue<List<AddressModel>>> {
   final AddressService _service;
 
-  AddressNotifier(this._service) : super(const AsyncValue.loading()) {
-    load();
+  AddressNotifier(this._service, {bool autoLoad = true})
+      : super(autoLoad ? const AsyncValue.loading() : const AsyncValue.data([])) {
+    if (autoLoad) load();
   }
 
   Future<void> load() async {
@@ -91,5 +93,8 @@ class AddressNotifier
 
 final addressNotifierProvider = StateNotifierProvider<AddressNotifier,
     AsyncValue<List<AddressModel>>>(
-  (ref) => AddressNotifier(ref.read(addressServiceProvider)),
+  (ref) {
+    final isAuth = ref.watch(isAuthenticatedProvider);
+    return AddressNotifier(ref.read(addressServiceProvider), autoLoad: isAuth);
+  },
 );
