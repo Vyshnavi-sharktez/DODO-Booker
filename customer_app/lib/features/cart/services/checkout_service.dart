@@ -59,6 +59,56 @@ class CheckoutService {
     debugPrint('[DODO][Checkout] Address object — id=${address.id}  lat=${address.latitude}  lng=${address.longitude}  full="${address.fullAddress}"');
     debugPrint('[DODO][Checkout] Booking payload — lat=${address.latitude}  lng=${address.longitude}');
 
+    // ── Location-availability enforcement ────────────────────────────────────
+    final checked = <String>{};
+    if (address.latitude == null || address.longitude == null) {
+      // No coordinates: block if the service has any location restrictions —
+      // eligibility cannot be verified without coordinates.
+      for (final item in items) {
+        if (checked.contains(item.serviceId)) continue;
+        checked.add(item.serviceId);
+        final rows = await _client
+            .from('catalog_node_location_restrictions')
+            .select('id')
+            .eq('node_id', item.serviceId)
+            .limit(1);
+        if ((rows as List).isNotEmpty) {
+          throw Exception(
+            '${item.serviceName}: This service has location restrictions. '
+            'Please select an address with valid coordinates to continue.',
+          );
+        }
+      }
+    } else {
+      for (final item in items) {
+        if (checked.contains(item.serviceId)) continue;
+        checked.add(item.serviceId);
+        try {
+          final avail = await _client.rpc('check_node_availability', params: {
+            'p_node_id': item.serviceId,
+            'p_parent_id': item.parentNodeId,
+            'p_lat': address.latitude,
+            'p_lng': address.longitude,
+          });
+          if (avail is Map) {
+            final status =
+                (avail as Map<String, dynamic>)['status'] as String? ??
+                    'active';
+            if (status != 'active') {
+              final msg =
+                  (avail)['message'] as String? ??
+                      'Not available in your area.';
+              throw Exception('${item.serviceName}: $msg');
+            }
+          }
+        } catch (e) {
+          if (e is Exception) rethrow;
+          debugPrint(
+              '[DODO][Checkout] Location check warning (non-fatal): $e');
+        }
+      }
+    }
+
     // ── INSERT bookings row ──────────────────────────────────────────────────
     // When a preferred vendor is selected, immediately assign the booking as
     // the admin "Confirm Assignment" flow would: status=assigned,

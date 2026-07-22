@@ -34,11 +34,21 @@ final catalogNodeFaqsProvider =
 /// Effective availability of a node for a given parent context.
 /// Pass parentId = node.parentId as fallback when the true path is unknown
 /// (deep-link entry) so the canonical path is used instead.
-typedef _AvailabilityParams = ({String nodeId, String? parentId});
+/// Provide lat/lng from the customer's default address to also enforce
+/// location restrictions; omit to skip the location check.
+typedef _AvailabilityParams = ({
+  String nodeId,
+  String? parentId,
+  double? lat,
+  double? lng,
+});
 
 final nodeAvailabilityProvider = FutureProvider.family<
     ({String status, String? message}), _AvailabilityParams>(
-  (ref, params) => ref
-      .read(catalogServiceProvider)
-      .checkAvailability(params.nodeId, params.parentId),
+  (ref, params) => ref.read(catalogServiceProvider).checkAvailability(
+        params.nodeId,
+        params.parentId,
+        lat: params.lat,
+        lng: params.lng,
+      ),
 );
