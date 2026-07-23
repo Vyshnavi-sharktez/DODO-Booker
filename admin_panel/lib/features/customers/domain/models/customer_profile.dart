@@ -105,9 +105,16 @@ class CustomerBooking {
     final dodoTeam =
         map['dodo_teams'] as Map<String, dynamic>?;
 
-    final reviewList = map['customer_reviews'] as List<dynamic>?;
+    // PostgREST may return a single Map (to-one) or a List (to-many) depending
+    // on whether it infers the FK join as singular. Normalise to a list.
+    final reviewRaw = map['customer_reviews'];
+    final List<dynamic> reviewList = reviewRaw is List
+        ? reviewRaw
+        : reviewRaw != null
+            ? [reviewRaw]
+            : const [];
     CustomerBookingReview? review;
-    if (reviewList != null && reviewList.isNotEmpty) {
+    if (reviewList.isNotEmpty) {
       review = CustomerBookingReview.fromMap(
           reviewList.first as Map<String, dynamic>);
     }

@@ -218,6 +218,8 @@ class _VendorsPageState extends ConsumerState<VendorsPage> {
                     onPressed: () => BulkUploadDialog.show(
                       context,
                       VendorBulkModule(),
+                      onComplete: () =>
+                          ref.read(vendorsNotifierProvider.notifier).refresh(),
                     ),
                     icon: const Icon(Icons.upload_file_rounded, size: 16),
                     label: const Text('Bulk Upload'),

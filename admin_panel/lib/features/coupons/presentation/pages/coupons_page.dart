@@ -11,6 +11,10 @@ import '../widgets/coupon_form_dialog.dart';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
+// Minimum table width: sum of all column SizedBox widths (1113) + row horizontal
+// padding (16×2 = 32) = 1145. A small buffer gives 1150.
+const _kMinTableWidth = 1150.0;
+
 const _discountTypeConfig = <String, (String, Color)>{
   'percentage': ('% Off', Color(0xFF805AD5)),
   'flat': ('₹ Off', Color(0xFF3182CE)),
@@ -492,39 +496,48 @@ class _CouponsTable extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // Scrollable table
+            // Scrollable table — expands to fill available width when there is
+            // room; falls back to _kMinTableWidth and scrolls horizontally
+            // when the window is narrower than the table needs to be.
             Expanded(
-              child: SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: SizedBox(
-                  width: 1140,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      // Header
-                      _TableHeader(),
-                      const Divider(height: 1),
-                      // Rows
-                      Expanded(
-                        child: ListView.separated(
-                          itemCount: coupons.length,
-                          separatorBuilder: (_, idx) =>
-                              const Divider(height: 1),
-                          itemBuilder: (ctx, i) {
-                            final c = coupons[i];
-                            return _CouponRow(
-                              coupon: c,
-                              onEdit: () => onEdit(c),
-                              onDelete: () => onDelete(c),
-                              onToggle: () => onToggle(c),
-                              searchQuery: searchQuery,
-                            );
-                          },
-                        ),
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final tableWidth = constraints.maxWidth > _kMinTableWidth
+                      ? constraints.maxWidth
+                      : _kMinTableWidth;
+                  return SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: SizedBox(
+                      width: tableWidth,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          // Header
+                          _TableHeader(),
+                          const Divider(height: 1),
+                          // Rows
+                          Expanded(
+                            child: ListView.separated(
+                              itemCount: coupons.length,
+                              separatorBuilder: (_, idx) =>
+                                  const Divider(height: 1),
+                              itemBuilder: (ctx, i) {
+                                final c = coupons[i];
+                                return _CouponRow(
+                                  coupon: c,
+                                  onEdit: () => onEdit(c),
+                                  onDelete: () => onDelete(c),
+                                  onToggle: () => onToggle(c),
+                                  searchQuery: searchQuery,
+                                );
+                              },
+                            ),
+                          ),
+                        ],
                       ),
-                    ],
-                  ),
-                ),
+                    ),
+                  );
+                },
               ),
             ),
             // Footer
@@ -566,7 +579,7 @@ class _TableHeader extends StatelessWidget {
           _HCell('Valid From', width: 100),
           _HCell('Valid To', width: 100),
           _HCell('Status', width: 100),
-          _HCell('Actions', width: 124, align: TextAlign.center),
+          _HCell('Actions', width: 148, align: TextAlign.center),
         ],
       ),
     );
@@ -774,7 +787,7 @@ class _CouponRow extends StatelessWidget {
 
           // Actions
           SizedBox(
-            width: 105,
+            width: 148,
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [

@@ -1,12 +1,12 @@
 {
-    "name": "admin_panel",
-    "short_name": "admin_panel",
+    "name": "DODO BOOKER Admin",
+    "short_name": "DODO Admin",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
-    "orientation": "portrait-primary",
+    "background_color": "#1E3A5F",
+    "theme_color": "#1E3A5F",
+    "description": "DODO BOOKER Admin Panel — manage bookings, vendors, and operations.",
+    "orientation": "any",
     "prefer_related_applications": false,
     "icons": [
         {

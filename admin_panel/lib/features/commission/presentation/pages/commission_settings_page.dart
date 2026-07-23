@@ -19,7 +19,6 @@ class _CommissionSettingsPageState
   bool _saving = false;
   String? _error;
 
-  CommissionRule? _current;
   bool _isEnabled = true;
   String _commissionType = 'percentage';
   final _valueCtrl = TextEditingController();
@@ -49,7 +48,6 @@ class _CommissionSettingsPageState
   }
 
   void _apply(CommissionRule? rule) {
-    _current = rule;
     _isEnabled = rule?.isEnabled ?? true;
     _commissionType = rule?.commissionType ?? 'percentage';
     final v = rule?.commissionValue ?? 10.0;
@@ -82,7 +80,6 @@ class _CommissionSettingsPageState
           );
       if (mounted) {
         ref.invalidate(globalCommissionProvider);
-        setState(() => _current = saved);
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
           content: Text('Platform Commission settings saved.'),
           backgroundColor: AppColors.success,

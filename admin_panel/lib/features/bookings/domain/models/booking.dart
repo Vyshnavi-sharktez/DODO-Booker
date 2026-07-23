@@ -18,7 +18,7 @@ class BookingReview {
   factory BookingReview.fromMap(Map<String, dynamic> map) {
     return BookingReview(
       id: map['id'] as String,
-      rating: (map['rating'] as int?) ?? 0,
+      rating: ((map['rating'] as num?)?.round()) ?? 0,
       reviewText: map['review_text'] as String? ?? '',
       createdAt: map['created_at'] != null
           ? DateTime.tryParse(map['created_at'] as String)

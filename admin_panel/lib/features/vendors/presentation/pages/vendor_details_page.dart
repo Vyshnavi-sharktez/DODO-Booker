@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 import '../../../../core/theme/app_theme.dart';
+import '../../../../core/widgets/admin_back_button.dart';
 import '../../../vendor_settlement/application/providers/vendor_settlement_providers.dart';
 import '../../application/providers/vendor_detail_providers.dart';
 import '../../application/providers/vendors_providers.dart';
@@ -140,22 +141,9 @@ class _PageHeader extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        InkWell(
+        AdminBackButton(
+          label: 'Vendors',
           onTap: () => context.go('/dashboard/vendors'),
-          borderRadius: BorderRadius.circular(4),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(Icons.arrow_back_rounded,
-                  size: 16, color: AppColors.textSecondary),
-              const SizedBox(width: 4),
-              Text(
-                'Vendors',
-                style: TextStyle(
-                    fontSize: 13, color: AppColors.textSecondary),
-              ),
-            ],
-          ),
         ),
         const SizedBox(height: 12),
         Row(

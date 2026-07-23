@@ -506,6 +506,8 @@ class _CatalogV2PageState extends ConsumerState<CatalogV2Page> {
             onPressed: () => BulkUploadDialog.show(
               context,
               CatalogBulkModule(),
+              onComplete: () =>
+                  ref.read(catalogNodeNotifierProvider.notifier).refresh(),
             ),
             icon: const Icon(Icons.upload_file_rounded, size: 16),
             label: const Text('Bulk Upload'),

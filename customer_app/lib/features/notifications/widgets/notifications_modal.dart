@@ -49,7 +49,7 @@ class _NotificationsModalState extends ConsumerState<NotificationsModal> {
       final route = AppRoutes.notificationBooking.replaceFirst(':id', n.entityId!);
       debugPrint('[NOTIF][Customer] navigating → $route');
       Navigator.of(context).pop();
-      router.go(route);
+      router.push(route);
     }
   }
 

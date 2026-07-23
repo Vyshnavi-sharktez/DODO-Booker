@@ -2,7 +2,9 @@ import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../features/booking/services/coupon_providers.dart';
 import '../../features/bookings/services/bookings_providers.dart';
+import '../../features/notifications/services/notification_providers.dart';
 import '../../features/catalog/providers/catalog_providers.dart';
 import '../../features/home/services/home_providers.dart';
 import '../../features/loyalty/providers/loyalty_providers.dart';
@@ -27,6 +29,8 @@ import '../../features/tax/providers/tax_provider.dart';
 ///   loyalty_settings                         → _invalidateConfig()  [debounced]
 ///   catalog_node_configs                     → _invalidateConfig()  [debounced]
 ///   banners                                  → homeBannersProvider
+///   coupons                                  → activeCouponsProvider
+///   notifications                            → notificationsProvider (+ unreadCountProvider)
 ///   bookings                                 → myBookingsProvider
 class CustomerRealtimeSync {
   final Ref _ref;
@@ -94,6 +98,20 @@ class CustomerRealtimeSync {
           table: 'banners',
           callback: (_) => _ref.invalidate(homeBannersProvider),
         )
+        // ── Coupon changes (admin creates/updates/deactivates coupons) ────────
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'coupons',
+          callback: (_) => _ref.invalidate(activeCouponsProvider),
+        )
+        // ── Notifications (admin sends personal or broadcast notifications) ────
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'notifications',
+          callback: (_) => _ref.invalidate(notificationsProvider),
+        )
         // ── Booking status changes (admin updates customer booking) ───────────
         .onPostgresChanges(
           event: PostgresChangeEvent.all,
@@ -148,6 +166,8 @@ class CustomerRealtimeSync {
     _invalidateConfig();
     _ref.invalidate(myBookingsProvider);
     _ref.invalidate(homeBannersProvider);
+    _ref.invalidate(activeCouponsProvider);
+    _ref.invalidate(notificationsProvider);
   }
 
   void dispose() {

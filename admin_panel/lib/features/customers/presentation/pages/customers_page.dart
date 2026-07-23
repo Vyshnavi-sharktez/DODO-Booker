@@ -318,6 +318,8 @@ class _CustomersPageState extends ConsumerState<CustomersPage> {
                 onPressed: () => BulkUploadDialog.show(
                   context,
                   CustomerBulkModule(),
+                  onComplete: () =>
+                      ref.read(customersNotifierProvider.notifier).refresh(),
                 ),
                 icon: const Icon(Icons.upload_file_rounded, size: 16),
                 label: const Text('Bulk Upload'),

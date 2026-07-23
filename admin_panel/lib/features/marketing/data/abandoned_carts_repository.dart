@@ -75,7 +75,7 @@ class AbandonedCartsRepository {
       );
     }
 
-    final cutoff = DateTime.now().subtract(const Duration(hours: 6));
+    final cutoff = DateTime.now().subtract(const Duration(seconds: 5));
     final result = <AbandonedCart>[];
 
     for (final entry in grouped.entries) {

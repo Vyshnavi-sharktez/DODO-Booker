@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 import '../../../../core/theme/app_theme.dart';
+import '../../../../core/widgets/admin_back_button.dart';
 import '../../application/providers/customer_profile_providers.dart';
 import '../../application/providers/customers_providers.dart';
 import '../../domain/models/customer.dart';
@@ -150,21 +151,9 @@ class _ProfileHeader extends ConsumerWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Breadcrumb back link
-        InkWell(
+        AdminBackButton(
+          label: 'Customers',
           onTap: () => context.go('/dashboard/customers'),
-          borderRadius: BorderRadius.circular(4),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(Icons.arrow_back_rounded,
-                  size: 16, color: AppColors.textSecondary),
-              const SizedBox(width: 4),
-              Text('Customers',
-                  style: TextStyle(
-                      fontSize: 13, color: AppColors.textSecondary)),
-            ],
-          ),
         ),
         const SizedBox(height: 12),
         Row(

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import '../../../../core/theme/app_theme.dart';
+import '../../../../core/widgets/admin_back_button.dart';
 import '../../../../core/widgets/admin_search_bar.dart';
 import '../../../../core/widgets/highlighted_text.dart';
 import '../../application/providers/sub_categories_providers.dart';
@@ -327,6 +328,13 @@ class _SubCategoriesPageState extends ConsumerState<SubCategoriesPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          if (widget.filterCategoryId != null) ...[
+            AdminBackButton(
+              label: 'Categories',
+              onTap: () => context.go('/dashboard/categories'),
+            ),
+            const SizedBox(height: 12),
+          ],
           // ── Responsive Header ────────────────────────────────────────────
           LayoutBuilder(
             builder: (context, constraints) {

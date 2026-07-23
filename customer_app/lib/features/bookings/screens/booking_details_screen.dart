@@ -18,11 +18,13 @@ import '../services/invoice_service.dart';
 class BookingDetailsScreen extends ConsumerStatefulWidget {
   final MyBookingModel booking;
   final bool inModal;
+  final VoidCallback? onClose;
 
   const BookingDetailsScreen({
     super.key,
     required this.booking,
     this.inModal = false,
+    this.onClose,
   });
 
   @override
@@ -76,6 +78,14 @@ class _BookingDetailsScreenState extends ConsumerState<BookingDetailsScreen> {
                       ),
                     ],
                   ),
+                  actions: [
+                    if (widget.onClose != null)
+                      IconButton(
+                        icon: const Icon(Icons.close_rounded),
+                        tooltip: 'Close',
+                        onPressed: widget.onClose,
+                      ),
+                  ],
                 ),
           body: SingleChildScrollView(
             padding: EdgeInsets.symmetric(

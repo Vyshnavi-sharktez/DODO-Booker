@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import '../../../../core/theme/app_theme.dart';
+import '../../../../core/widgets/admin_back_button.dart';
 import '../../application/providers/service_attributes_providers.dart';
 import '../../domain/models/service_attribute.dart';
 import '../widgets/attribute_form_dialog.dart';
@@ -169,6 +171,13 @@ class _ServiceAttributesPageState
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          if (widget.filterServiceId != null) ...[
+            AdminBackButton(
+              label: 'Services',
+              onTap: () => context.go('/dashboard/services'),
+            ),
+            const SizedBox(height: 12),
+          ],
           // ── Responsive Header ─────────────────────────────────────────────
           LayoutBuilder(
             builder: (context, constraints) {

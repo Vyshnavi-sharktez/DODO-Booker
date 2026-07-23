@@ -1,15 +1,27 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import '../../../core/constants/app_colors.dart';
+import '../../../routes/app_router.dart';
 import '../../bookings/screens/booking_details_screen.dart';
 import '../../bookings/services/bookings_providers.dart';
 
 /// Opened when a customer taps a booking notification deep-link.
 /// Fetches the booking by ID from Supabase and shows BookingDetailsScreen.
+///
+/// Navigation contract:
+///   ← back  → pops this route (returns to wherever we came from)
+///   ✕ close → context.go(home), replacing the stack to Customer Home
 class NotificationBookingScreen extends ConsumerWidget {
   const NotificationBookingScreen({super.key, required this.bookingId});
 
   final String bookingId;
+
+  Widget _closeButton(BuildContext context) => IconButton(
+        icon: const Icon(Icons.close_rounded),
+        tooltip: 'Close',
+        onPressed: () => context.go(AppRoutes.home),
+      );
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -17,13 +29,17 @@ class NotificationBookingScreen extends ConsumerWidget {
     final asyncBooking = ref.watch(bookingByIdProvider(bookingId));
 
     return asyncBooking.when(
-      loading: () => const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
+      loading: () => Scaffold(
+        appBar: AppBar(actions: [_closeButton(context)]),
+        body: const Center(child: CircularProgressIndicator()),
       ),
       error: (e, _) {
         debugPrint('[NOTIF][Customer] booking load ERROR — $e');
         return Scaffold(
-          appBar: AppBar(title: const Text('Booking')),
+          appBar: AppBar(
+            title: const Text('Booking'),
+            actions: [_closeButton(context)],
+          ),
           body: Center(
             child: Padding(
               padding: const EdgeInsets.all(32),
@@ -53,7 +69,10 @@ class NotificationBookingScreen extends ConsumerWidget {
         debugPrint('[NOTIF][Customer] booking loaded — ${booking == null ? "null (not found)" : "id=${booking.id}"}');
         if (booking == null) {
           return Scaffold(
-            appBar: AppBar(title: const Text('Booking')),
+            appBar: AppBar(
+              title: const Text('Booking'),
+              actions: [_closeButton(context)],
+            ),
             body: Center(
               child: Padding(
                 padding: const EdgeInsets.all(32),
@@ -79,7 +98,10 @@ class NotificationBookingScreen extends ConsumerWidget {
             ),
           );
         }
-        return BookingDetailsScreen(booking: booking);
+        return BookingDetailsScreen(
+          booking: booking,
+          onClose: () => context.go(AppRoutes.home),
+        );
       },
     );
   }
