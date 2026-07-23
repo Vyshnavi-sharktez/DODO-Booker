@@ -60,52 +60,61 @@ class DashboardPage extends ConsumerWidget {
                   // ── Overview ───────────────────────────────────────────────
                   const _SectionHeader('Overview'),
                   const SizedBox(height: 12),
-                  GridView.count(
-                    crossAxisCount: 2,
-                    crossAxisSpacing: 12,
-                    mainAxisSpacing: 12,
-                    childAspectRatio: 1.55,
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
+                  Row(
                     children: [
-                      StatsCard(
-                        label: 'Assigned',
-                        value: '${stats.assignedCount}',
-                        icon: Icons.assignment_ind_outlined,
-                        color: AppColors.statusAssigned,
-                        onTap: () => context.goNamed(
-                          RouteNames.bookings,
-                          queryParameters: {'tab': '0'},
+                      Expanded(
+                        child: StatsCard(
+                          label: 'Assigned',
+                          value: '${stats.assignedCount}',
+                          icon: Icons.assignment_ind_outlined,
+                          color: AppColors.statusAssigned,
+                          onTap: () => context.goNamed(
+                            RouteNames.bookings,
+                            queryParameters: {'tab': '0'},
+                          ),
                         ),
                       ),
-                      StatsCard(
-                        label: 'In Progress',
-                        value: '${stats.inProgressCount}',
-                        icon: Icons.pending_actions_outlined,
-                        color: AppColors.statusInProgress,
-                        onTap: () => context.goNamed(
-                          RouteNames.bookings,
-                          queryParameters: {'tab': '1'},
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: StatsCard(
+                          label: 'In Progress',
+                          value: '${stats.inProgressCount}',
+                          icon: Icons.pending_actions_outlined,
+                          color: AppColors.statusInProgress,
+                          onTap: () => context.goNamed(
+                            RouteNames.bookings,
+                            queryParameters: {'tab': '1'},
+                          ),
                         ),
                       ),
-                      StatsCard(
-                        label: 'Completed',
-                        value: '${stats.completedCount}',
-                        icon: Icons.check_circle_outline_rounded,
-                        color: AppColors.statusCompleted,
-                        onTap: () => context.goNamed(
-                          RouteNames.bookings,
-                          queryParameters: {'tab': '2'},
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: StatsCard(
+                          label: 'Completed',
+                          value: '${stats.completedCount}',
+                          icon: Icons.check_circle_outline_rounded,
+                          color: AppColors.statusCompleted,
+                          onTap: () => context.goNamed(
+                            RouteNames.bookings,
+                            queryParameters: {'tab': '2'},
+                          ),
                         ),
                       ),
-                      StatsCard(
-                        label: 'Rejected',
-                        value: '${stats.rejectedCount}',
-                        icon: Icons.cancel_outlined,
-                        color: AppColors.error,
-                        onTap: () => context.goNamed(
-                          RouteNames.bookings,
-                          queryParameters: {'tab': '3'},
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: StatsCard(
+                          label: 'Rejected',
+                          value: '${stats.rejectedCount}',
+                          icon: Icons.cancel_outlined,
+                          color: AppColors.error,
+                          onTap: () => context.goNamed(
+                            RouteNames.bookings,
+                            queryParameters: {'tab': '3'},
+                          ),
                         ),
                       ),
                     ],
@@ -179,7 +188,7 @@ class DashboardPage extends ConsumerWidget {
                         icon: Icons.notifications_outlined,
                         color: AppColors.warning,
                         onTap: () =>
-                            context.go(RoutePaths.notifications),
+                            context.push(RoutePaths.notifications),
                       ),
                     ],
                   ),
@@ -232,7 +241,7 @@ class DashboardPage extends ConsumerWidget {
                         label: 'Notifications',
                         icon: Icons.notifications_outlined,
                         onTap: () =>
-                            context.go(RoutePaths.notifications),
+                            context.push(RoutePaths.notifications),
                       ),
                     ],
                   ),
@@ -610,7 +619,7 @@ class _UpcomingTile extends StatelessWidget {
         : '—';
 
     return InkWell(
-      onTap: () => context.goNamed(
+      onTap: () => context.pushNamed(
         RouteNames.bookingDetail,
         pathParameters: {'id': booking.id},
       ),
@@ -756,7 +765,7 @@ class _RecentBookingTile extends StatelessWidget {
     final dateLabel = date != null ? DateFormat('d MMM').format(date) : '—';
 
     return InkWell(
-      onTap: () => context.goNamed(
+      onTap: () => context.pushNamed(
         RouteNames.bookingDetail,
         pathParameters: {'id': booking.id},
       ),

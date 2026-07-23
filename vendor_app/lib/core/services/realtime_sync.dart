@@ -3,54 +3,62 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../features/auth/domain/entities/vendor_user.dart';
+import '../../features/auth/presentation/providers/auth_controller.dart';
 import '../../features/bookings/presentation/providers/bookings_provider.dart';
 import '../../features/dashboard/presentation/providers/dashboard_provider.dart';
+import '../../features/notifications/presentation/providers/notifications_provider.dart';
 
-/// Manages Supabase Realtime subscriptions for the vendor app.
+/// Manages all Supabase Realtime subscriptions for the vendor app.
 ///
-/// Kept alive for the lifetime of the ProviderScope via [vendorRealtimeSyncProvider].
+/// Two channels are maintained:
+///   bookings  — PostgresChangeEvent.all  — invalidates booking + dashboard providers.
+///   notifications — PostgresChangeEvent.insert — invalidates vendorNotificationsProvider.
 ///
-/// The channel is first created during [VendorApp.initState] — before the vendor
-/// has authenticated.  Supabase Realtime evaluates RLS using the JWT that was
-/// active when the channel was subscribed; updating the JWT later does not
-/// retroactively re-evaluate existing channel filters on the server side.
-/// To ensure the channel carries the vendor's authenticated JWT (and therefore
-/// receives events gated by `auth.uid() = vendor_id`), the channel is
-/// re-subscribed on [AuthChangeEvent.signedIn], [AuthChangeEvent.initialSession]
-/// (saved session restored on app open — the common production path), and
-/// [AuthChangeEvent.tokenRefreshed] (JWT rotation mid-session).
+/// The bookings channel carries no user-level filter (handled by query-level
+/// filtering in the providers). The notifications channel is filtered by
+/// `user_id = vendorId` to avoid waking up on other vendors' events.
 ///
-/// Event → action map:
-///   bookings INSERT/UPDATE/DELETE → invalidate vendorBookingsProvider + dashboardStatsProvider
+/// The channel is created under the Supabase anon key (this app uses custom
+/// phone auth — there is no Supabase Auth session/JWT).  The `_authSub`
+/// listener handles JWT rotation / reconnection when Supabase Auth IS in use
+/// and is retained for future compatibility, but does not fire under the
+/// current custom-auth implementation.
+///
+/// Notifications channel lifecycle:
+///   vendorRealtimeSyncProvider calls ref.listen(currentVendorUserProvider, ...)
+///   with fireImmediately: true so the channel is created as soon as the
+///   vendor ID is known (including on the initial build if already logged in)
+///   and torn down on sign-out.
 class VendorRealtimeSync {
   final Ref _ref;
   final SupabaseClient _client;
-  RealtimeChannel? _channel;
+
+  RealtimeChannel? _bookingsChannel;
+  RealtimeChannel? _notifChannel;
   StreamSubscription<AuthState>? _authSub;
 
   VendorRealtimeSync(this._ref, this._client) {
-    _subscribe();
+    _subscribeBookings();
     _authSub = _client.auth.onAuthStateChange.listen((data) {
-      // signedIn    → vendor explicitly logs in (fresh session).
-      // initialSession → saved session restored on app open (pre-authenticated
-      //                  vendor). This is the common production case and was
-      //                  previously unhandled, causing the channel to remain
-      //                  subscribed with the anon JWT so RLS dropped all events.
-      // tokenRefreshed → JWT rotated mid-session; channel must re-auth or
-      //                  events stop arriving after the old token expires.
       final event = data.event;
       if ((event == AuthChangeEvent.signedIn ||
               event == AuthChangeEvent.initialSession ||
               event == AuthChangeEvent.tokenRefreshed) &&
           data.session != null) {
-        debugPrint('[DODO][VendorSync] auth=$event — re-subscribing with vendor JWT');
-        _resubscribe();
+        debugPrint('[DODO][VendorSync] auth=$event — re-subscribing channels');
+        _resubscribeBookings();
+        // Re-subscribe notifications with the vendor ID currently in state.
+        final vendorId = _ref.read(currentVendorUserProvider)?.id;
+        resubscribeNotifications(vendorId);
       }
     });
   }
 
-  void _subscribe() {
-    _channel = _client
+  // ── Bookings ────────────────────────────────────────────────────────────────
+
+  void _subscribeBookings() {
+    _bookingsChannel = _client
         .channel('dodo-vendor-sync')
         .onPostgresChanges(
           event: PostgresChangeEvent.all,
@@ -65,17 +73,17 @@ class VendorRealtimeSync {
           },
         )
         .subscribe((status, error) {
-          debugPrint('[DODO][VendorSync] channel status=$status error=$error');
+          debugPrint('[DODO][VendorSync] bookings channel status=$status error=$error');
         });
-    debugPrint('[DODO][VendorSync] channel subscribed');
+    debugPrint('[DODO][VendorSync] bookings channel subscribed');
   }
 
-  void _resubscribe() {
-    if (_channel != null) {
-      _client.removeChannel(_channel!);
-      _channel = null;
+  void _resubscribeBookings() {
+    if (_bookingsChannel != null) {
+      _client.removeChannel(_bookingsChannel!);
+      _bookingsChannel = null;
     }
-    _subscribe();
+    _subscribeBookings();
   }
 
   void _invalidateBookings() {
@@ -84,17 +92,62 @@ class VendorRealtimeSync {
     _ref.invalidate(dashboardStatsProvider);
   }
 
+  // ── Notifications ───────────────────────────────────────────────────────────
+
+  void resubscribeNotifications(String? vendorId) {
+    if (_notifChannel != null) {
+      _client.removeChannel(_notifChannel!);
+      _notifChannel = null;
+    }
+    if (vendorId == null) return;
+
+    _notifChannel = _client
+        .channel('dodo-vendor-notif-$vendorId')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.insert,
+          schema: 'public',
+          table: 'notifications',
+          filter: PostgresChangeFilter(
+            type: PostgresChangeFilterType.eq,
+            column: 'user_id',
+            value: vendorId,
+          ),
+          callback: (_) {
+            debugPrint('[DODO][VendorSync] notification INSERT → invalidating vendorNotificationsProvider');
+            _ref.invalidate(vendorNotificationsProvider);
+          },
+        )
+        .subscribe((status, error) {
+          debugPrint('[DODO][VendorSync] notif channel status=$status error=$error');
+        });
+    debugPrint('[DODO][VendorSync] notification channel subscribed for vendor=$vendorId');
+  }
+
+  // ── Lifecycle ───────────────────────────────────────────────────────────────
+
   /// Called by the lifecycle observer on resume after an extended pause.
   void refetchAll() => _invalidateBookings();
 
   void dispose() {
     _authSub?.cancel();
-    if (_channel != null) _client.removeChannel(_channel!);
+    if (_bookingsChannel != null) _client.removeChannel(_bookingsChannel!);
+    if (_notifChannel != null) _client.removeChannel(_notifChannel!);
   }
 }
 
 final vendorRealtimeSyncProvider = Provider<VendorRealtimeSync>((ref) {
   final sync = VendorRealtimeSync(ref, Supabase.instance.client);
   ref.onDispose(sync.dispose);
+
+  // React to vendor user changes so the notification channel is created/destroyed
+  // at the right time. fireImmediately:true covers the case where the vendor is
+  // already authenticated when this provider first runs (e.g., hot-restart or
+  // if the provider is lazily initialised after session restore).
+  ref.listen<VendorUser?>(
+    currentVendorUserProvider,
+    (_, user) => sync.resubscribeNotifications(user?.id),
+    fireImmediately: true,
+  );
+
   return sync;
 });

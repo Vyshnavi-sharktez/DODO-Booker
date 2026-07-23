@@ -1,8 +1,10 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'route_names.dart';
 import '../../features/auth/presentation/pages/login_page.dart';
 import '../../features/auth/presentation/pages/otp_page.dart';
+import '../../features/auth/presentation/pages/splash_page.dart';
 import '../../features/auth/presentation/providers/auth_controller.dart';
 import '../../features/auth/presentation/providers/auth_state.dart';
 import '../../features/dashboard/presentation/pages/dashboard_page.dart';
@@ -16,23 +18,52 @@ import '../../features/documents/presentation/pages/documents_page.dart';
 import '../../features/notifications/presentation/pages/notifications_page.dart';
 import '../../features/settings/presentation/pages/settings_page.dart';
 
+// Bridges Riverpod auth state into a Listenable so GoRouter re-evaluates its
+// redirect whenever auth state changes (e.g. session restored on cold start).
+class _AuthRouterNotifier extends ChangeNotifier {
+  _AuthRouterNotifier(Ref ref) {
+    ref.listen<AuthState>(authControllerProvider, (_, _) => notifyListeners());
+  }
+}
+
 final routerProvider = Provider<GoRouter>((ref) {
+  final notifier = _AuthRouterNotifier(ref);
+
   return GoRouter(
-    initialLocation: RoutePaths.login,
+    // Splash is the true first frame. Redirect drives every destination from here.
+    initialLocation: RoutePaths.splash,
     debugLogDiagnostics: false,
+    refreshListenable: notifier,
     redirect: (context, state) {
       final authState = ref.read(authControllerProvider);
       final path = state.matchedLocation;
-      final onAuthPage = path == RoutePaths.login || path == RoutePaths.otp;
 
       return switch (authState) {
-        AuthInitial() || AuthLoading() => null,
-        AuthAuthenticated() => onAuthPage ? RoutePaths.dashboard : null,
-        AuthOtpSent() => path == RoutePaths.login ? RoutePaths.otp : null,
-        AuthUnauthenticated() || AuthError() => !onAuthPage ? RoutePaths.login : null,
+        // Stay on splash until auth resolves — prevents Login flash on cold start.
+        AuthInitial() || AuthLoading() =>
+          path == RoutePaths.splash ? null : RoutePaths.splash,
+        // Authenticated: leave auth/splash pages, stay put everywhere else.
+        AuthAuthenticated() =>
+          (path == RoutePaths.splash ||
+                  path == RoutePaths.login ||
+                  path == RoutePaths.otp)
+              ? RoutePaths.dashboard
+              : null,
+        // OTP flow: ensure we're on the OTP page.
+        AuthOtpSent() => path == RoutePaths.otp ? null : RoutePaths.otp,
+        // Unauthenticated / error: go to login unless already on an auth page.
+        AuthUnauthenticated() || AuthError() =>
+          (path == RoutePaths.login || path == RoutePaths.otp)
+              ? null
+              : RoutePaths.login,
       };
     },
     routes: [
+      GoRoute(
+        path: RoutePaths.splash,
+        name: RouteNames.splash,
+        builder: (context, state) => const SplashPage(),
+      ),
       GoRoute(
         path: RoutePaths.login,
         name: RouteNames.login,

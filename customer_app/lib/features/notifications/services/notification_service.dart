@@ -14,7 +14,7 @@ class NotificationService {
   String? _cachedPhone;
   String? _cachedCustomerId;
 
-  Future<String> _getCustomerId() async {
+  Future<String> getCustomerId() async {
     final phone = (await SharedPreferences.getInstance()).getString(_phoneKey);
     if (phone == null) throw Exception('Not authenticated');
     if (phone != _cachedPhone) {
@@ -34,7 +34,7 @@ class NotificationService {
   /// Loads personal notifications (user_id = customerId) plus broadcast
   /// notifications (user_type = 'customer' AND user_id IS NULL).
   Future<List<NotificationModel>> fetchNotifications() async {
-    final customerId = await _getCustomerId();
+    final customerId = await getCustomerId();
     debugPrint('[DODO][Notification] Loading for customer_id=$customerId');
 
     final data = await _client

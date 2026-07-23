@@ -62,35 +62,51 @@ class VendorScaffold extends ConsumerWidget {
         _tabs.indexWhere((t) => t.path == location).clamp(0, _tabs.length - 1);
     final unreadCount = ref.watch(vendorUnreadCountProvider);
 
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(title),
-        actions: [
-          ...?actions,
-          _NotificationBell(
-            unreadCount: unreadCount,
-            onTap: () => context.go(RoutePaths.notifications),
-          ),
-        ],
-      ),
-      body: child,
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: currentIndex,
-        onDestinationSelected: (i) {
-          if (_tabs[i].path != location) context.go(_tabs[i].path);
-        },
-        backgroundColor: AppColors.surface,
-        indicatorColor: AppColors.primaryLight,
-        labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
-        destinations: _tabs
-            .map(
-              (t) => NavigationDestination(
-                icon: Icon(t.icon),
-                selectedIcon: Icon(t.selectedIcon),
-                label: t.label,
-              ),
-            )
-            .toList(),
+    // True only when this VendorScaffold is rendering one of the 5 bottom-nav
+    // tab pages (the pages navigated to via context.go). Pushed child pages
+    // that happen to use VendorScaffold (e.g. notifications) have a location
+    // that is NOT in _tabs, so they keep canPop:true and get the auto-inserted
+    // AppBar ← button from Flutter for free.
+    final isTabPage = _tabs.any((t) => t.path == location);
+    final isRootTab = location == RoutePaths.dashboard;
+
+    return PopScope(
+      // Non-root tab pages intercept Back and go to Dashboard.
+      // Root (Dashboard) and pushed child pages allow the default behavior.
+      canPop: !isTabPage || isRootTab,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) context.go(RoutePaths.dashboard);
+      },
+      child: Scaffold(
+        appBar: AppBar(
+          title: Text(title),
+          actions: [
+            ...?actions,
+            _NotificationBell(
+              unreadCount: unreadCount,
+              onTap: () => context.push(RoutePaths.notifications),
+            ),
+          ],
+        ),
+        body: child,
+        bottomNavigationBar: NavigationBar(
+          selectedIndex: currentIndex,
+          onDestinationSelected: (i) {
+            if (_tabs[i].path != location) context.go(_tabs[i].path);
+          },
+          backgroundColor: AppColors.surface,
+          indicatorColor: AppColors.primaryLight,
+          labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
+          destinations: _tabs
+              .map(
+                (t) => NavigationDestination(
+                  icon: Icon(t.icon),
+                  selectedIcon: Icon(t.selectedIcon),
+                  label: t.label,
+                ),
+              )
+              .toList(),
+        ),
       ),
     );
   }

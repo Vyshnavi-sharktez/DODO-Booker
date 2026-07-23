@@ -7,6 +7,19 @@ final notificationServiceProvider = Provider<NotificationService>(
   (ref) => NotificationService(),
 );
 
+/// Resolves and caches the current customer's UUID.
+/// Returns null when unauthenticated or during the initial async lookup.
+/// Used by [realtimeSyncProvider] to set up the per-customer notification channel.
+final currentCustomerIdProvider = FutureProvider<String?>((ref) async {
+  final isAuth = ref.watch(isAuthenticatedProvider);
+  if (!isAuth) return null;
+  try {
+    return await ref.read(notificationServiceProvider).getCustomerId();
+  } catch (_) {
+    return null;
+  }
+});
+
 /// Personal + broadcast notifications for the current customer.
 /// Returns empty list when unauthenticated. Re-fetches on auth change.
 final notificationsProvider =

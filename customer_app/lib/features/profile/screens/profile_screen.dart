@@ -12,7 +12,7 @@ import '../../auth/utils/auth_modal_gate.dart';
 import '../../address/screens/address_screen.dart';
 import '../../wishlist/screens/wishlist_screen.dart';
 import 'settings_screen.dart';
-import 'package:customer_app/features/bookings/modals/my_bookings_modal.dart';
+import '../../bookings/utils/my_bookings_launcher.dart';
 class ProfileScreen extends ConsumerWidget {
   const ProfileScreen({super.key});
 
@@ -133,19 +133,7 @@ class _ProfileBody extends ConsumerWidget {
                   iconColor: Colors.blue,
                   title: 'My Bookings',
                   subtitle: 'View and manage your bookings',
-                  onTap: () => _openResponsive(
-                    context,
-                    desktopModal: () => PageSheet.show(
-                      context,
-                      title: 'My Bookings',
-                      child: const MyBookingsModal(),
-                    ),
-                    mobileRoute: () => Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) => const MyBookingsModal(),
-                      ),
-                    ),
-                  ),
+                  onTap: () => openMyBookings(context),
                 ),
               ),
 
