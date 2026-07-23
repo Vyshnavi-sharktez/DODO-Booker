@@ -1,12 +1,14 @@
 {
-    "name": "customer_app",
-    "short_name": "customer_app",
-    "start_url": ".",
+    "id": "/",
+    "name": "DODO Booker",
+    "short_name": "DODO",
+    "start_url": "/",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
-    "orientation": "portrait-primary",
+    "background_color": "#FFFFFF",
+    "theme_color": "#111111",
+    "description": "Book trusted home services on demand — cleaning, repairs, beauty, and more.",
+    "orientation": "any",
+    "lang": "en",
     "prefer_related_applications": false,
     "icons": [
         {
