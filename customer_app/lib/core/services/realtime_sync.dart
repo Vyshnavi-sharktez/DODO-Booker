@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -14,7 +15,20 @@ import '../../features/tax/providers/tax_provider.dart';
 /// Manages all Supabase Realtime subscriptions for the customer app.
 ///
 /// Kept alive for the lifetime of the ProviderScope via [realtimeSyncProvider].
-/// All subscriptions share a single channel to avoid duplicate connections.
+///
+/// Two channels are maintained:
+///   dodo-customer-sync  — shared channel for catalog, config, banners, coupons,
+///                         bookings, and broadcast notifications (user_type='customer').
+///   dodo-customer-notif-{id} — per-customer channel for personal notifications
+///                              filtered by user_id = customerId. Created after auth
+///                              via ref.listen(currentCustomerIdProvider, ...).
+///
+/// Why two channels for notifications?
+///   Supabase Realtime evaluates RLS using the connection's JWT. With the anon
+///   key (no auth.uid()), an UNFILTERED subscription on `notifications` fails RLS
+///   and events are silently dropped. An explicit filter (user_id = X or
+///   user_type = 'customer') gives Supabase a concrete row predicate to evaluate,
+///   which succeeds under the permissive anon-read RLS on this table.
 ///
 /// Catalog and config callbacks are debounced (300 ms) so that a burst of
 /// related events (e.g., a multi-row admin update) collapses into a single
@@ -30,12 +44,14 @@ import '../../features/tax/providers/tax_provider.dart';
 ///   catalog_node_configs                     → _invalidateConfig()  [debounced]
 ///   banners                                  → homeBannersProvider
 ///   coupons                                  → activeCouponsProvider
-///   notifications                            → notificationsProvider (+ unreadCountProvider)
+///   notifications (broadcast, user_type=customer) → notificationsProvider
+///   notifications (personal,  user_id=cust)  → notificationsProvider
 ///   bookings                                 → myBookingsProvider
 class CustomerRealtimeSync {
   final Ref _ref;
   final SupabaseClient _client;
   RealtimeChannel? _channel;
+  RealtimeChannel? _notifChannel;
   Timer? _catalogDebounce;
   Timer? _configDebounce;
 
@@ -105,12 +121,22 @@ class CustomerRealtimeSync {
           table: 'coupons',
           callback: (_) => _ref.invalidate(activeCouponsProvider),
         )
-        // ── Notifications (admin sends personal or broadcast notifications) ────
+        // ── Broadcast notifications (user_type='customer', user_id IS NULL) ───
+        // Filtered by user_type so Supabase evaluates a concrete row predicate
+        // rather than sending all rows (which fails RLS with the anon key).
         .onPostgresChanges(
           event: PostgresChangeEvent.all,
           schema: 'public',
           table: 'notifications',
-          callback: (_) => _ref.invalidate(notificationsProvider),
+          filter: PostgresChangeFilter(
+            type: PostgresChangeFilterType.eq,
+            column: 'user_type',
+            value: 'customer',
+          ),
+          callback: (_) {
+            debugPrint('[DODO][CustomerSync] broadcast notification event → invalidating notificationsProvider');
+            _ref.invalidate(notificationsProvider);
+          },
         )
         // ── Booking status changes (admin updates customer booking) ───────────
         .onPostgresChanges(
@@ -119,7 +145,40 @@ class CustomerRealtimeSync {
           table: 'bookings',
           callback: (_) => _ref.invalidate(myBookingsProvider),
         )
-        .subscribe();
+        .subscribe((status, error) {
+          debugPrint('[DODO][CustomerSync] shared channel status=$status error=$error');
+        });
+  }
+
+  // ── Personal notification channel ────────────────────────────────────────────
+
+  void resubscribeNotifications(String? customerId) {
+    if (_notifChannel != null) {
+      _client.removeChannel(_notifChannel!);
+      _notifChannel = null;
+    }
+    if (customerId == null) return;
+
+    _notifChannel = _client
+        .channel('dodo-customer-notif-$customerId')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.insert,
+          schema: 'public',
+          table: 'notifications',
+          filter: PostgresChangeFilter(
+            type: PostgresChangeFilterType.eq,
+            column: 'user_id',
+            value: customerId,
+          ),
+          callback: (_) {
+            debugPrint('[DODO][CustomerSync] personal notification INSERT → invalidating notificationsProvider');
+            _ref.invalidate(notificationsProvider);
+          },
+        )
+        .subscribe((status, error) {
+          debugPrint('[DODO][CustomerSync] notif channel status=$status error=$error');
+        });
+    debugPrint('[DODO][CustomerSync] notification channel subscribed for customer=$customerId');
   }
 
   // Collapse rapid catalog events into one invalidation cycle.
@@ -174,11 +233,23 @@ class CustomerRealtimeSync {
     _catalogDebounce?.cancel();
     _configDebounce?.cancel();
     if (_channel != null) _client.removeChannel(_channel!);
+    if (_notifChannel != null) _client.removeChannel(_notifChannel!);
   }
 }
 
 final realtimeSyncProvider = Provider<CustomerRealtimeSync>((ref) {
   final sync = CustomerRealtimeSync(ref, Supabase.instance.client);
   ref.onDispose(sync.dispose);
+
+  // React to customer ID changes (sign-in, sign-out, session restore) and
+  // (re)create the personal notification channel accordingly.  fireImmediately
+  // ensures the channel is set up even if the customer is already authenticated
+  // when this provider first runs.
+  ref.listen<AsyncValue<String?>>(
+    currentCustomerIdProvider,
+    (_, next) => next.whenData((id) => sync.resubscribeNotifications(id)),
+    fireImmediately: true,
+  );
+
   return sync;
 });

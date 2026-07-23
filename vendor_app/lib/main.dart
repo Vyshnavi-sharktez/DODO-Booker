@@ -5,7 +5,6 @@ import 'core/config/supabase_config.dart';
 import 'core/routes/app_router.dart';
 import 'core/services/realtime_sync.dart';
 import 'core/theme/app_theme.dart';
-import 'features/notifications/presentation/providers/notifications_provider.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -36,7 +35,6 @@ class _VendorAppState extends ConsumerState<VendorApp>
     // Initialise Realtime subscriptions. Not autoDispose — lives for the
     // ProviderScope lifetime. ref.onDispose inside each provider closes the channel.
     ref.read(vendorRealtimeSyncProvider);
-    ref.read(vendorNotificationsRealtimeProvider);
   }
 
   @override

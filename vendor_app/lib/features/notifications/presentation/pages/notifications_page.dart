@@ -39,7 +39,7 @@ class _NotificationsPageState extends ConsumerState<NotificationsPage> {
     if (n.entityType == 'booking' && n.entityId != null) {
       final router = GoRouter.of(context);
       debugPrint('[NOTIF][Vendor] navigating → ${RouteNames.bookingDetail} id=${n.entityId}');
-      router.goNamed(
+      router.pushNamed(
         RouteNames.bookingDetail,
         pathParameters: {'id': n.entityId!},
       );
