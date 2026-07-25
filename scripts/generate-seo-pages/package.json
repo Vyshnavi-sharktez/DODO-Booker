@@ -1,0 +1,14 @@
+{
+  "name": "dodo-seo-generator",
+  "version": "1.0.0",
+  "description": "Generates static SEO HTML pages for DODO Booker catalog nodes",
+  "type": "module",
+  "scripts": {
+    "generate": "node index.js",
+    "serve": "npx serve dist/"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.45.4",
+    "dotenv": "^16.4.5"
+  }
+}

@@ -1,0 +1,3 @@
+# Local combined test build — created by build-local.ps1 / scripts/merge.mjs
+# Never commit: contains generated output and is recreated on every merge run
+deploy-test/

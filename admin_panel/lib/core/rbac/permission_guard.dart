@@ -43,6 +43,7 @@ const Map<String, String> routePermissions = {
   '/vendor-serving-areas': 'vendor.view',
   '/service-availability-areas': 'settings.manage',
   '/surge-fees': 'settings.manage',
+  '/seo': 'settings.manage',
 };
 
 // ── Permission guard widget ────────────────────────────────────────────────────

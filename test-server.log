@@ -1,0 +1,37 @@
+
+DODO Local Test Server
+  URL     : http://localhost:3000
+  Serving : C:\DODO-Services\DODO-Booker\deploy-test
+
+  Routing contract:
+    /s/**           → SEO static HTML (dir/index.html)
+    /sitemap.xml    → served directly
+    /robots.txt     → served directly
+    /catalog/**     → Flutter SPA (index.html fallback)
+    /**             → Flutter SPA (index.html fallback)
+
+  Press Ctrl+C to stop.
+
+  200  /  (file)
+  200  /s/home-cleaning/basic-full-home-cleaning/furnished-apartment/1-bhk-furnished-basic-cleaning/  (dir/index.html)
+  200  /s/home-cleaning/basic-full-home-cleaning/furnished-apartment/1-bhk-furnished-basic-cleaning/  (dir/index.html)
+  200  /catalog/79ff89ce-8a65-4172-8ab3-f33bd5ef4b52  (→ Flutter SPA)
+  200  /catalog/79ff89ce-8a65-4172-8ab3-f33bd5ef4b52  (→ Flutter SPA)
+  200  /catalog/some-direct-path  (→ Flutter SPA)
+  200  /manifest.json  (file)
+  200  /icons/Icon-192.png  (file)
+  200  /icons/Icon-512.png  (file)
+  200  /flutter_service_worker.js  (file)
+  200  /sitemap.xml  (file)
+  200  /robots.txt  (file)
+  200  /s/home-cleaning/basic-full-home-cleaning/furnished-apartment/1-bhk-furnished-basic-cleaning/  (dir/index.html)
+  200  /catalog/79ff89ce-8a65-4172-8ab3-f33bd5ef4b52  (→ Flutter SPA)
+  200  /flutter_bootstrap.js  (file)
+  200  /manifest.json  (file)
+  200  /main.dart.js  (file)
+  200  /assets/FontManifest.json  (file)
+  200  /assets/fonts/MaterialIcons-Regular.otf  (file)
+  200  /assets/packages/cupertino_icons/assets/CupertinoIcons.ttf  (file)
+  200  /icons/Icon-192.png  (file)
+  200  /assets/AssetManifest.bin.json  (file)
+  200  /assets/assets/images/logo.png  (file)

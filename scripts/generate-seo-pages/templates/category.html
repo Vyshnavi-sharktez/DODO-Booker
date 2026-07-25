@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{TITLE}}</title>
+  <meta name="description" content="{{META_DESCRIPTION}}">
+  <meta name="robots" content="index, follow">
+  <link rel="canonical" href="{{CANONICAL_URL}}">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="{{CANONICAL_URL}}">
+  <meta property="og:title" content="{{OG_TITLE}}">
+  <meta property="og:description" content="{{OG_DESCRIPTION}}">
+  <!-- IF:HAS_OG_IMAGE -->
+  <meta property="og:image" content="{{OG_IMAGE}}">
+  <meta name="twitter:card" content="summary_large_image">
+  <!-- /IF:HAS_OG_IMAGE -->
+  <meta name="twitter:title" content="{{OG_TITLE}}">
+  <meta name="twitter:description" content="{{OG_DESCRIPTION}}">
+  <script type="application/ld+json">
+{{JSON_LD}}
+  </script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 0; color: #1a1a1a; background: #fff; line-height: 1.6; }
+    .container { max-width: 860px; margin: 0 auto; padding: 24px 20px 48px; }
+    nav { font-size: 13px; color: #666; margin-bottom: 28px; }
+    nav a { color: #0066cc; text-decoration: none; }
+    nav a:hover { text-decoration: underline; }
+    nav span { margin: 0 6px; color: #bbb; }
+    h1 { font-size: 28px; font-weight: 700; margin: 0 0 14px; color: #111; }
+    .description { font-size: 16px; color: #444; margin: 0 0 20px; }
+    .seo-content { font-size: 15px; color: #333; margin-bottom: 28px; }
+    .seo-content p { margin: 0 0 14px; }
+    .services-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 16px; margin-bottom: 32px; }
+    .service-card { border: 1px solid #e5e7eb; border-radius: 10px; padding: 18px; text-decoration: none; color: inherit; display: block; transition: box-shadow 0.15s; }
+    .service-card:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+    .service-card h2 { font-size: 16px; font-weight: 600; margin: 0 0 6px; color: #111; }
+    .service-card .price { font-size: 14px; color: #0066cc; font-weight: 500; margin: 0; }
+    .cta { display: inline-block; background: #0066cc; color: #fff; font-size: 16px; font-weight: 600; padding: 14px 32px; border-radius: 8px; text-decoration: none; }
+    .cta:hover { background: #0055a8; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <nav>{{BREADCRUMB_NAV}}</nav>
+    <h1>{{H1}}</h1>
+    <!-- IF:HAS_DESCRIPTION -->
+    <p class="description">{{BODY_DESCRIPTION}}</p>
+    <!-- /IF:HAS_DESCRIPTION -->
+    <!-- IF:HAS_SEO_CONTENT -->
+    <div class="seo-content">
+      {{SEO_CONTENT}}
+    </div>
+    <!-- /IF:HAS_SEO_CONTENT -->
+    <!-- IF:HAS_CHILDREN -->
+    <div class="services-grid">
+      {{CHILDREN_LIST}}
+    </div>
+    <!-- /IF:HAS_CHILDREN -->
+    <a href="{{CTA_URL}}" class="cta">{{CTA_TEXT}}</a>
+  </div>
+</body>
+</html>

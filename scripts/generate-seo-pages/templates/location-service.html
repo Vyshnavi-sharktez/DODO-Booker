@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{TITLE}}</title>
+  <meta name="description" content="{{META_DESCRIPTION}}">
+  <meta name="robots" content="{{ROBOTS}}">
+  <link rel="canonical" href="{{CANONICAL_URL}}">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="{{CANONICAL_URL}}">
+  <meta property="og:title" content="{{OG_TITLE}}">
+  <meta property="og:description" content="{{OG_DESCRIPTION}}">
+  <!-- IF:HAS_OG_IMAGE -->
+  <meta property="og:image" content="{{OG_IMAGE}}">
+  <meta name="twitter:card" content="summary_large_image">
+  <!-- /IF:HAS_OG_IMAGE -->
+  <meta name="twitter:title" content="{{OG_TITLE}}">
+  <meta name="twitter:description" content="{{OG_DESCRIPTION}}">
+  <script type="application/ld+json">
+{{JSON_LD}}
+  </script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 0; color: #1a1a1a; background: #fff; line-height: 1.6; }
+    .container { max-width: 760px; margin: 0 auto; padding: 24px 20px 48px; }
+    nav { font-size: 13px; color: #666; margin-bottom: 28px; }
+    nav a { color: #0066cc; text-decoration: none; }
+    nav a:hover { text-decoration: underline; }
+    nav span { margin: 0 6px; color: #bbb; }
+    h1 { font-size: 28px; font-weight: 700; margin: 0 0 14px; color: #111; }
+    .description { font-size: 16px; color: #444; margin: 0 0 20px; }
+    .area-badge { display: inline-flex; align-items: center; gap: 6px; background: #f0f4ff; color: #3355aa; font-size: 13px; font-weight: 500; padding: 6px 14px; border-radius: 20px; margin-bottom: 20px; border: 1px solid #d0daff; }
+    .price-badge { display: inline-block; background: #f0f7ff; color: #0055b3; font-size: 18px; font-weight: 600; padding: 8px 18px; border-radius: 8px; margin-bottom: 24px; }
+    .seo-content { font-size: 15px; color: #333; margin-bottom: 28px; }
+    .seo-content p { margin: 0 0 14px; }
+    .cta { display: inline-block; background: #0066cc; color: #fff; font-size: 16px; font-weight: 600; padding: 14px 32px; border-radius: 8px; text-decoration: none; }
+    .cta:hover { background: #0055a8; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <nav>{{BREADCRUMB_NAV}}</nav>
+    <h1>{{H1}}</h1>
+    <!-- IF:HAS_AREA_FACTS -->
+    <div class="area-badge">&#128205; {{AREA_NAME}}, {{AREA_CITY}}</div>
+    <!-- /IF:HAS_AREA_FACTS -->
+    <!-- IF:HAS_DESCRIPTION -->
+    <p class="description">{{BODY_DESCRIPTION}}</p>
+    <!-- /IF:HAS_DESCRIPTION -->
+    <!-- IF:HAS_PRICE -->
+    <div class="price-badge">Starting from &#8377;{{PRICE}}</div>
+    <!-- /IF:HAS_PRICE -->
+    <!-- IF:HAS_SEO_CONTENT -->
+    <div class="seo-content">
+      {{SEO_CONTENT}}
+    </div>
+    <!-- /IF:HAS_SEO_CONTENT -->
+    <a href="{{CTA_URL}}" class="cta">{{CTA_TEXT}}</a>
+  </div>
+</body>
+</html>
