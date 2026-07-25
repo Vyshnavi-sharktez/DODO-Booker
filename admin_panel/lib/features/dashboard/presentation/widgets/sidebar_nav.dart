@@ -32,6 +32,12 @@ const _navItems = <_NavItem>[
     requiredPermission: 'rbac.manage',
   ),
   _NavItem(
+    label: 'SEO',
+    icon: Icons.travel_explore_rounded,
+    route: '/dashboard/seo',
+    requiredPermission: 'settings.manage',
+  ),
+  _NavItem(
     label: 'Catalog',
     icon: Icons.layers_rounded,
     route: '/dashboard/catalog',

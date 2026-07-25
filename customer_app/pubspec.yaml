@@ -10,6 +10,8 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+  flutter_web_plugins:
+    sdk: flutter
 
   supabase_flutter: ^2.9.1
   flutter_riverpod: ^2.6.1
