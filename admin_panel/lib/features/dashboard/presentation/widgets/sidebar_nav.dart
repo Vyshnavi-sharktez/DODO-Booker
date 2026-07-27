@@ -134,6 +134,12 @@ const _navItems = <_NavItem>[
     requiredPermission: 'settings.manage',
   ),
   _NavItem(
+    label: 'Subscriptions',
+    icon: Icons.workspace_premium_rounded,
+    route: '/dashboard/vendor-subscriptions',
+    requiredPermission: 'vendor.view',
+  ),
+  _NavItem(
     label: 'Settings',
     icon: Icons.settings_rounded,
     route: '/dashboard/settings',

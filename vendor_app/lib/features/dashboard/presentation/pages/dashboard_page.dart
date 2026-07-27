@@ -10,6 +10,7 @@ import '../../../../core/widgets/vendor_scaffold.dart';
 import '../../../auth/presentation/providers/auth_controller.dart';
 import '../../../bookings/presentation/widgets/booking_status_badge.dart';
 import '../../../notifications/presentation/providers/notifications_provider.dart';
+import '../../../profile/presentation/providers/profile_provider.dart';
 import '../../domain/models/dashboard_stats.dart';
 import '../providers/dashboard_provider.dart';
 import '../widgets/stats_card.dart';
@@ -55,7 +56,11 @@ class DashboardPage extends ConsumerWidget {
                 children: [
                   // ── Welcome ────────────────────────────────────────────────
                   _WelcomeHeader(greeting: greeting, name: vendorName),
-                  const SizedBox(height: 24),
+                  const SizedBox(height: 16),
+
+                  // ── Online / Offline toggle ────────────────────────────────
+                  const _OnlineStatusToggle(),
+                  const SizedBox(height: 8),
 
                   // ── Overview ───────────────────────────────────────────────
                   const _SectionHeader('Overview'),
@@ -979,6 +984,125 @@ class _ErrorState extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+// ── Online / Offline status toggle ────────────────────────────────────────────
+
+class _OnlineStatusToggle extends ConsumerStatefulWidget {
+  const _OnlineStatusToggle();
+
+  @override
+  ConsumerState<_OnlineStatusToggle> createState() =>
+      _OnlineStatusToggleState();
+}
+
+class _OnlineStatusToggleState extends ConsumerState<_OnlineStatusToggle> {
+  bool _saving = false;
+
+  Future<void> _toggle(String vendorId, bool currentIsOnline) async {
+    if (_saving) return;
+    setState(() => _saving = true);
+    try {
+      await ref.read(profileDatasourceProvider).updateById(
+        id: vendorId,
+        fields: {'is_online': !currentIsOnline},
+      );
+      ref.invalidate(vendorProfileProvider);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to update status: $e'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final asyncProfile = ref.watch(vendorProfileProvider);
+    final vendorUser = ref.watch(currentVendorUserProvider);
+
+    final profile = asyncProfile.valueOrNull;
+    if (profile == null || vendorUser == null) return const SizedBox.shrink();
+
+    final isOnline = profile.isOnline;
+    final statusColor = isOnline ? AppColors.success : AppColors.textSecondary;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: isOnline
+            ? AppColors.success.withValues(alpha: 0.07)
+            : AppColors.background,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: isOnline
+              ? AppColors.success.withValues(alpha: 0.35)
+              : AppColors.border,
+        ),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 10,
+            height: 10,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: statusColor,
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  isOnline ? 'Online' : 'Offline',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    color: statusColor,
+                  ),
+                ),
+                Text(
+                  isOnline
+                      ? 'Available for new booking assignments'
+                      : 'Not receiving new assignments',
+                  style: const TextStyle(
+                    fontSize: 11,
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          _saving
+              ? const SizedBox(
+                  width: 36,
+                  height: 20,
+                  child: Center(
+                    child: SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                  ),
+                )
+              : Switch(
+                  value: isOnline,
+                  onChanged: (_) => _toggle(vendorUser.id, isOnline),
+                  activeColor: AppColors.success,
+                ),
+        ],
       ),
     );
   }

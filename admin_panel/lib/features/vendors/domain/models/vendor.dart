@@ -18,6 +18,7 @@ class Vendor {
   final double commissionRate;
   final bool isPreferredVendor;
   final double preferredVendorFee;
+  final bool isOnline;
 
   const Vendor({
     required this.id,
@@ -39,6 +40,7 @@ class Vendor {
     this.commissionRate = 0.0,
     this.isPreferredVendor = false,
     this.preferredVendorFee = 0.0,
+    this.isOnline = true,
   });
 
   factory Vendor.fromMap(Map<String, dynamic> map) {
@@ -66,6 +68,7 @@ class Vendor {
       commissionRate: (map['commission_rate'] as num?)?.toDouble() ?? 0.0,
       isPreferredVendor: (map['is_preferred_vendor'] as bool?) ?? false,
       preferredVendorFee: (map['preferred_vendor_fee'] as num?)?.toDouble() ?? 0.0,
+      isOnline: map['is_online'] as bool? ?? true,
     );
   }
 
@@ -85,6 +88,7 @@ class Vendor {
     double? commissionRate,
     bool? isPreferredVendor,
     double? preferredVendorFee,
+    bool? isOnline,
   }) {
     return Vendor(
       id: id,
@@ -105,6 +109,7 @@ class Vendor {
       commissionRate: commissionRate ?? this.commissionRate,
       isPreferredVendor: isPreferredVendor ?? this.isPreferredVendor,
       preferredVendorFee: preferredVendorFee ?? this.preferredVendorFee,
+      isOnline: isOnline ?? this.isOnline,
     );
   }
 }

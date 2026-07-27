@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "generate": "node index.js",
+    "server": "node server.js",
     "serve": "npx serve dist/"
   },
   "dependencies": {

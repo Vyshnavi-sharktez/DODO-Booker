@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/routes/route_names.dart';
 import '../../../../core/widgets/vendor_scaffold.dart';
+import '../../../subscription/presentation/providers/subscription_provider.dart';
 import '../../domain/models/vendor_profile.dart';
 import '../providers/profile_provider.dart';
 import '../widgets/profile_header.dart';
@@ -252,6 +253,7 @@ class _ProfileBody extends StatelessWidget {
             ],
           ),
         ),
+        _SubscriptionTile(),
         const SizedBox(height: 16),
       ],
     );
@@ -325,6 +327,69 @@ class _InfoItem extends StatelessWidget {
             ),
       ),
       dense: true,
+    );
+  }
+}
+
+class _SubscriptionTile extends ConsumerWidget {
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final sub = ref.watch(mySubscriptionProvider).valueOrNull;
+    final expiringSoon = sub?.isExpiringSoon ?? false;
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            child: Text(
+              'Subscription',
+              style: Theme.of(context)
+                  .textTheme
+                  .labelLarge
+                  ?.copyWith(color: AppColors.primary),
+            ),
+          ),
+          Card(
+            elevation: 0,
+            color: AppColors.surface,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+              side: BorderSide(
+                color: expiringSoon ? AppColors.warning : AppColors.border,
+              ),
+            ),
+            child: ListTile(
+              leading: Icon(
+                Icons.workspace_premium_rounded,
+                color: expiringSoon ? AppColors.warning : AppColors.primary,
+              ),
+              title: Text(
+                sub?.plan?.name ?? 'My Subscription',
+                style: const TextStyle(fontWeight: FontWeight.w600),
+              ),
+              subtitle: Text(
+                sub == null
+                    ? 'No active subscription'
+                    : expiringSoon
+                        ? 'Expires in ${sub.remainingDays} days — renew now!'
+                        : '${sub.status[0].toUpperCase() + sub.status.substring(1)}  ·  ${sub.remainingDays}d remaining',
+                style: TextStyle(
+                  color: expiringSoon ? AppColors.warning : AppColors.textSecondary,
+                  fontSize: 12,
+                ),
+              ),
+              trailing: const Icon(
+                Icons.chevron_right_rounded,
+                color: AppColors.textSecondary,
+              ),
+              onTap: () => context.push(RoutePaths.subscription),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

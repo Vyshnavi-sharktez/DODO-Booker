@@ -34,6 +34,7 @@ import '../../features/vendor_serving_areas/presentation/pages/vendor_serving_ar
 import '../../features/service_availability_areas/presentation/pages/service_availability_areas_page.dart';
 import '../../features/surge_fees/presentation/pages/surge_fee_settings_page.dart';
 import '../../features/seo/presentation/pages/seo_management_page.dart';
+import '../../features/vendor_subscriptions/presentation/pages/vendor_subscriptions_page.dart';
 import '../../shared/pages/unauthorized_page.dart';
 import '../rbac/permission_guard.dart';
 
@@ -349,6 +350,13 @@ final routerProvider = Provider<GoRouter>((ref) {
             name: 'seo',
             pageBuilder: (context, state) => const NoTransitionPage(
               child: SeoManagementPage(),
+            ),
+          ),
+          GoRoute(
+            path: '/dashboard/vendor-subscriptions',
+            name: 'vendorSubscriptions',
+            pageBuilder: (context, state) => const NoTransitionPage(
+              child: VendorSubscriptionsPage(),
             ),
           ),
         ],

@@ -12,6 +12,10 @@ abstract final class RouteNames {
   static const String profile = 'profile';
   static const String documents = 'documents';
   static const String settings = 'settings';
+  static const String subscription = 'subscription';
+  static const String browsePlans = 'browsePlans';
+  static const String planConfirmation = 'planConfirmation';
+  static const String payment = 'payment';
 }
 
 abstract final class RoutePaths {
@@ -28,4 +32,8 @@ abstract final class RoutePaths {
   static const String profile = '/profile';
   static const String documents = '/documents';
   static const String settings = '/settings';
+  static const String subscription = '/subscription';
+  static const String browsePlans = '/subscription/plans';
+  static const String planConfirmation = '/subscription/confirm';
+  static const String payment = '/subscription/payment';
 }

@@ -18,6 +18,9 @@ class AssigneeCandidate {
   final double? distanceKm; // populated only by legacy Haversine path
   final AssigneeStatus status;
   final AssigneeKind kind;
+  // True when the booking is COD and this vendor has no active subscription.
+  // Selection is disabled in the assignment dialog; backend enforces the same rule.
+  final bool ineligibleForCod;
 
   const AssigneeCandidate({
     required this.id,
@@ -27,18 +30,25 @@ class AssigneeCandidate {
     this.distanceKm,
     required this.status,
     required this.kind,
+    this.ineligibleForCod = false,
   });
 
-  factory AssigneeCandidate.fromVendor(Vendor v, {double? distanceKm}) =>
+  factory AssigneeCandidate.fromVendor(
+    Vendor v, {
+    double? distanceKm,
+    bool ineligibleForCod = false,
+  }) =>
       AssigneeCandidate(
         id: v.id,
         name: v.businessName,
         subtitle: v.ownerName,
         rating: v.rating,
         distanceKm: distanceKm,
-        status:
-            v.isActive ? AssigneeStatus.available : AssigneeStatus.offline,
+        status: (v.isActive && v.isOnline)
+            ? AssigneeStatus.available
+            : AssigneeStatus.offline,
         kind: AssigneeKind.vendor,
+        ineligibleForCod: ineligibleForCod,
       );
 
   factory AssigneeCandidate.fromTeam(DodoTeam t) => AssigneeCandidate(
@@ -97,7 +107,7 @@ class VendorAssignmentService {
   }) {
     final candidates = <VendorCandidate>[];
     for (final vendor in vendors) {
-      if (!vendor.isActive) continue;
+      if (!vendor.isActive || !vendor.isOnline) continue;
       if (vendor.latitude == null || vendor.longitude == null) continue;
       final areas = serviceAreasMap[vendor.id] ?? [];
       final radii = areas
@@ -152,7 +162,7 @@ class VendorAssignmentService {
     final outside = <AssigneeCandidate>[];
 
     for (final vendor in vendors) {
-      if (!vendor.isActive) continue;
+      if (!vendor.isActive || !vendor.isOnline) continue;
 
       if (!hasAddress) {
         outside.add(AssigneeCandidate.fromVendor(vendor));
@@ -182,10 +192,10 @@ class VendorAssignmentService {
   ///   booking coordinates (Haversine ≤ radius_km).  Empty when coordinates
   ///   are absent or no matching area exists.
   /// - all: every active vendor — in-area first, alphabetically.
-  /// - [busyVendorIds]: vendor IDs that already have an accepted booking on
-  ///   the service date.  Those vendors get [AssigneeStatus.busy] instead of
-  ///   [AssigneeStatus.available].  Computed with a single batch query by the
-  ///   caller — no per-vendor round trip.
+  /// - [busyVendorIds]: vendor IDs with a committed booking on the service date
+  ///   (statuses: accepted, in_progress, awaiting_verification).  'assigned'
+  ///   is excluded — the vendor has not yet accepted so they are still
+  ///   available.  Computed with a single batch query by the caller.
   static ({List<AssigneeCandidate> inArea, List<AssigneeCandidate> all})
       rankVendorAssigneesByServingAreas({
     double? bookingLat,
@@ -194,20 +204,26 @@ class VendorAssignmentService {
     required List<VendorServingArea> servingAreas,
     required Map<String, Set<String>> assignmentsMap,
     Set<String> busyVendorIds = const {},
+    Set<String> codIneligibleVendorIds = const {},
   }) {
-    final activeVendors = vendors.where((v) => v.isActive).toList();
+    final activeVendors = vendors.where((v) => v.isActive && v.isOnline).toList();
 
-    AssigneeCandidate toCandidate(Vendor v) => busyVendorIds.contains(v.id)
-        ? AssigneeCandidate(
-            id: v.id,
-            name: v.businessName,
-            subtitle: v.ownerName,
-            rating: v.rating,
-            distanceKm: null,
-            status: AssigneeStatus.busy,
-            kind: AssigneeKind.vendor,
-          )
-        : AssigneeCandidate.fromVendor(v);
+    AssigneeCandidate toCandidate(Vendor v) {
+      final ineligible = codIneligibleVendorIds.contains(v.id);
+      if (busyVendorIds.contains(v.id)) {
+        return AssigneeCandidate(
+          id: v.id,
+          name: v.businessName,
+          subtitle: v.ownerName,
+          rating: v.rating,
+          distanceKm: null,
+          status: AssigneeStatus.busy,
+          kind: AssigneeKind.vendor,
+          ineligibleForCod: ineligible,
+        );
+      }
+      return AssigneeCandidate.fromVendor(v, ineligibleForCod: ineligible);
+    }
 
     if (bookingLat == null || bookingLng == null) {
       final all = activeVendors.map(toCandidate).toList()
