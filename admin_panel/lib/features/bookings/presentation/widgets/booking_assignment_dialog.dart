@@ -6,6 +6,7 @@ import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/clickable.dart';
 import '../../../dodo_teams/application/providers/dodo_teams_providers.dart';
 import '../../../dodo_teams/domain/models/dodo_team.dart';
+import '../../../settings/application/providers/settings_providers.dart';
 import '../../../vendor_serving_areas/application/providers/vendor_serving_areas_providers.dart';
 import '../../../vendor_serving_areas/domain/models/vendor_serving_area.dart';
 import '../../../vendors/application/providers/vendors_providers.dart';
@@ -16,10 +17,20 @@ import '../../domain/services/vendor_assignment_service.dart';
 final _dateFmt = DateFormat('dd MMM yyyy');
 final _isoDateFmt = DateFormat('yyyy-MM-dd');
 
-/// Single-query busy check: returns the set of vendor IDs that already have an
-/// accepted (or active in-progress) booking on the given service date.
-/// Keyed as '$dateISO|$excludeBookingId' so the family auto-refreshes when the
-/// date picker changes without an extra query per vendor.
+// Booking statuses that mean the vendor has committed to a job and cannot
+// take another on the same date.
+//
+// 'assigned' is intentionally excluded: it means the admin offered the
+// booking but the vendor has not yet accepted — the vendor is not actively
+// working and is still available for other assignments.
+//
+// Must stay in sync with get_vendor_busy_status RPC (supabase/migrations).
+const _kBusyStatuses = ['accepted', 'in_progress', 'awaiting_verification'];
+
+/// Single-query busy check: returns the set of vendor IDs that already have a
+/// committed booking on the given service date.
+/// Keyed as '$dateISO|$excludeBookingId' so the family auto-refreshes when
+/// the date picker changes without an extra query per vendor.
 final _vendorBusyProvider = FutureProvider.autoDispose
     .family<Set<String>, String>((ref, params) async {
   final pipe = params.indexOf('|');
@@ -29,12 +40,25 @@ final _vendorBusyProvider = FutureProvider.autoDispose
       .from('bookings')
       .select('vendor_id')
       .eq('service_date', date)
-      .inFilter('status', ['accepted', 'on_the_way', 'arrived', 'in_progress'])
+      .inFilter('status', _kBusyStatuses)
       .neq('id', excludeId);
   return {
     for (final r in rows as List)
       if (r['vendor_id'] != null) r['vendor_id'] as String,
   };
+});
+
+/// Single-query COD subscription check: returns the set of vendor IDs that
+/// currently have an active, non-expired subscription. Only watched when the
+/// booking payment_method is 'cod' and subscription enforcement is active.
+final _vendorSubscribedProvider =
+    FutureProvider.autoDispose<Set<String>>((ref) async {
+  final rows = await Supabase.instance.client
+      .from('vendor_subscriptions')
+      .select('vendor_id')
+      .eq('status', 'active')
+      .gt('expiry_date', DateTime.now().toIso8601String());
+  return {for (final r in rows as List) r['vendor_id'] as String};
 });
 
 enum _AssigneeType { vendor, team, unassigned }
@@ -151,9 +175,17 @@ class _BookingAssignmentDialogState
       if (mounted) Navigator.of(context).pop();
     } catch (e) {
       if (mounted) {
+        // P0001 is the SQLSTATE raised by fn_enforce_cod_vendor_eligibility.
+        // The raw message contains the vendor UUID — replace with a clean message.
+        final message = (e is PostgrestException && e.code == 'P0001')
+            ? 'This vendor cannot accept COD bookings. '
+                'Ensure they have an active subscription with COD permission.'
+            : e is PostgrestException
+                ? e.message
+                : e.toString().replaceFirst('Exception: ', '');
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Error: $e'),
+            content: Text(message),
             backgroundColor: AppColors.error,
           ),
         );
@@ -180,8 +212,33 @@ class _BookingAssignmentDialogState
         : ref.watch(_vendorBusyProvider(busyKey)).valueOrNull ??
             const <String>{};
 
+    // COD enforcement: mirror check_vendor_cod_eligibility settings logic.
+    // subscription_enabled + subscription_require_active must both be true,
+    // and subscription_allow_free_vendors must be false, for any vendor to be
+    // blocked. Only active when the booking is COD.
+    final settings = ref.watch(settingsNotifierProvider).valueOrNull ?? {};
+    final isCodBooking = widget.booking.isCod;
+    final codEnforced = isCodBooking &&
+        settings['subscription_enabled'] == 'true' &&
+        settings['subscription_require_active'] == 'true' &&
+        (settings['subscription_allow_free_vendors'] ?? 'true') != 'true';
+
+    // Fetch subscribed vendor IDs only when enforcement is active.
+    final subscribedVendorIds = codEnforced
+        ? ref.watch(_vendorSubscribedProvider).valueOrNull
+        : null;
+
     final allVendors = vendorsAsync.valueOrNull ?? <Vendor>[];
     final allTeams = dodoTeamsAsync.valueOrNull ?? <DodoTeam>[];
+
+    // Vendors that are active but have no active subscription are ineligible
+    // for COD assignment. Empty when enforcement is off or data is still loading.
+    final codIneligibleVendorIds = (codEnforced && subscribedVendorIds != null)
+        ? allVendors
+            .where((v) => v.isActive && !subscribedVendorIds.contains(v.id))
+            .map((v) => v.id)
+            .toSet()
+        : const <String>{};
 
     final vendorResult = VendorAssignmentService.rankVendorAssigneesByServingAreas(
       bookingLat: widget.booking.latitude,
@@ -190,6 +247,7 @@ class _BookingAssignmentDialogState
       servingAreas: servingAreasAsync.valueOrNull ?? <VendorServingArea>[],
       assignmentsMap: assignmentsAsync.valueOrNull ?? {},
       busyVendorIds: busyVendorIds,
+      codIneligibleVendorIds: codIneligibleVendorIds,
     );
 
     final teamResult = VendorAssignmentService.rankTeamAssignees(
@@ -228,6 +286,7 @@ class _BookingAssignmentDialogState
                               servingAreasAsync.hasError ||
                               assignmentsAsync.hasError,
                           allVendors: allVendors,
+                          codEnforced: codEnforced,
                         ),
 
                       if (_assigneeType == _AssigneeType.team)
@@ -381,6 +440,7 @@ class _BookingAssignmentDialogState
     required bool isLoading,
     required bool hasError,
     required List<Vendor> allVendors,
+    bool codEnforced = false,
   }) {
     if (isLoading) {
       return const Center(
@@ -398,6 +458,17 @@ class _BookingAssignmentDialogState
         message: 'Failed to load vendor data. Please try again.',
       );
     }
+
+    // COD enforcement banner — shown whenever enforcement is active so the
+    // admin understands why some vendors are disabled.
+    Widget? codBanner = codEnforced
+        ? _InfoBanner(
+            icon: Icons.credit_card_off_rounded,
+            color: const Color(0xFFD69E2E),
+            message:
+                'COD booking — only vendors with an active subscription can be assigned.',
+          )
+        : null;
 
     // Surface currently-assigned vendor if they are not in the active list
     // (e.g. deactivated after the booking was made).
@@ -418,6 +489,8 @@ class _BookingAssignmentDialogState
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          ?codBanner,
+          if (codBanner != null) const SizedBox(height: 12),
           ?currentAssigneeNote,
           if (_bookingHasAddress)
             _AddressRow(
@@ -469,6 +542,8 @@ class _BookingAssignmentDialogState
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          ?codBanner,
+          if (codBanner != null) const SizedBox(height: 12),
           ?currentAssigneeNote,
           _InfoBanner(
             icon: Icons.location_off_rounded,
@@ -509,6 +584,8 @@ class _BookingAssignmentDialogState
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          ?codBanner,
+          if (codBanner != null) const SizedBox(height: 12),
           ?currentAssigneeNote,
           ?addressRow,
           if (addressRow != null) const SizedBox(height: 8),
@@ -526,6 +603,8 @@ class _BookingAssignmentDialogState
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        ?codBanner,
+        if (codBanner != null) const SizedBox(height: 12),
         ?currentAssigneeNote,
         ?addressRow,
         const SizedBox(height: 4),
@@ -707,12 +786,11 @@ class _BookingAssignmentDialogState
   }) {
     return candidates.map((candidate) {
       final isBusy = candidate.status == AssigneeStatus.busy;
+      final blocked = _saving || isBusy || candidate.ineligibleForCod;
       return _AssigneeCandidateCard(
         candidate: candidate,
         isSelected: selectedId == candidate.id,
-        onSelect: (_saving || isBusy)
-            ? null
-            : () => onSelect?.call(candidate.id),
+        onSelect: blocked ? null : () => onSelect?.call(candidate.id),
       );
     }).toList();
   }
@@ -834,7 +912,10 @@ class _AssigneeCandidateCard extends StatelessWidget {
           ),
           const SizedBox(height: 8),
 
-          // ── Meta row (rating · status) ────────────────────────────────────
+          // ── Meta row (rating · primary status) ───────────────────────────
+          // COD ineligibility is the primary status. Busy is shown as a
+          // secondary line beneath it when both conditions apply, so the admin
+          // sees both reasons the vendor cannot receive this booking.
           Row(
             children: [
               if (candidate.rating != null) ...[
@@ -855,21 +936,58 @@ class _AssigneeCandidateCard extends StatelessWidget {
                 ),
                 const SizedBox(width: 12),
               ],
-              Container(
-                width: 6,
-                height: 6,
-                decoration: BoxDecoration(
-                  color: statusColor,
-                  shape: BoxShape.circle,
+              if (candidate.ineligibleForCod) ...[
+                Icon(Icons.credit_card_off_rounded,
+                    size: 13, color: AppColors.error),
+                const SizedBox(width: 4),
+                Flexible(
+                  child: Text(
+                    'No Active Subscription · COD Not Allowed',
+                    style: TextStyle(fontSize: 12, color: AppColors.error),
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ),
-              ),
-              const SizedBox(width: 4),
-              Text(
-                statusLabel,
-                style: TextStyle(fontSize: 12, color: statusColor),
-              ),
+              ] else ...[
+                Container(
+                  width: 6,
+                  height: 6,
+                  decoration: BoxDecoration(
+                    color: statusColor,
+                    shape: BoxShape.circle,
+                  ),
+                ),
+                const SizedBox(width: 4),
+                Text(
+                  statusLabel,
+                  style: TextStyle(fontSize: 12, color: statusColor),
+                ),
+              ],
             ],
           ),
+          // Secondary busy indicator — only shown when the vendor is also busy,
+          // so the admin knows they are blocked for two independent reasons.
+          if (candidate.ineligibleForCod &&
+              candidate.status == AssigneeStatus.busy) ...[
+            const SizedBox(height: 4),
+            Row(
+              children: [
+                Container(
+                  width: 6,
+                  height: 6,
+                  decoration: const BoxDecoration(
+                    color: Color(0xFFD69E2E),
+                    shape: BoxShape.circle,
+                  ),
+                ),
+                const SizedBox(width: 4),
+                Text(
+                  'Also busy on this date',
+                  style: TextStyle(
+                      fontSize: 11, color: AppColors.textSecondary),
+                ),
+              ],
+            ),
+          ],
           const SizedBox(height: 10),
 
           // ── Action ────────────────────────────────────────────────────────

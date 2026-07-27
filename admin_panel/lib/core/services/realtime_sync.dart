@@ -3,6 +3,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../features/auth/application/providers/auth_provider.dart';
 import '../../features/bookings/application/providers/bookings_providers.dart';
+import '../../features/vendors/application/providers/vendors_providers.dart';
 
 /// Manages Supabase Realtime subscriptions for the admin panel.
 ///
@@ -43,11 +44,23 @@ class AdminRealtimeSync {
           table: 'customer_reviews',
           callback: (_) => _refreshBookings(),
         )
+        // Vendor toggles online/offline → assignment dialog reflects new status
+        // immediately without admin needing to refresh.
+        .onPostgresChanges(
+          event: PostgresChangeEvent.update,
+          schema: 'public',
+          table: 'vendors',
+          callback: (_) => _refreshVendors(),
+        )
         .subscribe();
   }
 
   void _refreshBookings() {
     _ref.read(bookingsNotifierProvider.notifier).refresh();
+  }
+
+  void _refreshVendors() {
+    _ref.read(vendorsNotifierProvider.notifier).refresh();
   }
 
   /// Called by the lifecycle observer on admin panel resume after a long pause.

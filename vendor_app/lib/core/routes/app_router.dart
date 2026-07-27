@@ -17,6 +17,12 @@ import '../../features/profile/presentation/pages/profile_page.dart';
 import '../../features/documents/presentation/pages/documents_page.dart';
 import '../../features/notifications/presentation/pages/notifications_page.dart';
 import '../../features/settings/presentation/pages/settings_page.dart';
+import '../../features/subscription/data/subscription_repository.dart';
+import '../../features/subscription/domain/models/subscription_plan.dart';
+import '../../features/subscription/presentation/pages/subscription_page.dart';
+import '../../features/subscription/presentation/pages/browse_plans_page.dart';
+import '../../features/subscription/presentation/pages/plan_confirmation_page.dart';
+import '../../features/subscription/presentation/pages/payment_page.dart';
 
 // Bridges Riverpod auth state into a Listenable so GoRouter re-evaluates its
 // redirect whenever auth state changes (e.g. session restored on cold start).
@@ -129,6 +135,32 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: RoutePaths.settings,
         name: RouteNames.settings,
         builder: (context, state) => const SettingsPage(),
+      ),
+      GoRoute(
+        path: RoutePaths.subscription,
+        name: RouteNames.subscription,
+        builder: (context, state) => const SubscriptionPage(),
+      ),
+      GoRoute(
+        path: RoutePaths.browsePlans,
+        name: RouteNames.browsePlans,
+        builder: (context, state) => const BrowsePlansPage(),
+      ),
+      GoRoute(
+        path: RoutePaths.planConfirmation,
+        name: RouteNames.planConfirmation,
+        builder: (context, state) {
+          final plan = state.extra as SubscriptionPlan;
+          return PlanConfirmationPage(plan: plan);
+        },
+      ),
+      GoRoute(
+        path: RoutePaths.payment,
+        name: RouteNames.payment,
+        builder: (context, state) {
+          final info = state.extra as PendingPaymentInfo;
+          return PaymentPage(info: info);
+        },
       ),
     ],
   );

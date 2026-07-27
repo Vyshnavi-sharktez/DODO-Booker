@@ -219,6 +219,63 @@ class SettingsPage extends ConsumerWidget {
         ),
       ],
     ),
+    SettingSectionDef(
+      id: 'subscription',
+      title: 'Subscription Settings',
+      description: 'Control the vendor subscription module and enforcement',
+      icon: Icons.workspace_premium_rounded,
+      color: Color(0xFF6B46C1),
+      fields: [
+        SettingFieldDef(
+          key: 'subscription_enabled',
+          label: 'Enable Subscription Module',
+          hint: 'Master switch — enables subscription plans and enforcement',
+          type: SettingFieldType.toggle,
+        ),
+        SettingFieldDef(
+          key: 'subscription_require_active',
+          label: 'Require Active Subscription',
+          hint: 'Vendors must have an active subscription to receive bookings',
+          type: SettingFieldType.toggle,
+        ),
+        SettingFieldDef(
+          key: 'subscription_allow_free_vendors',
+          label: 'Allow Free Vendors',
+          hint: 'Vendors without a subscription can still operate (limited)',
+          type: SettingFieldType.toggle,
+        ),
+        SettingFieldDef(
+          key: 'subscription_auto_disable_cod',
+          label: 'Auto Disable COD on Expiry',
+          hint: 'Automatically block COD when subscription expires',
+          type: SettingFieldType.toggle,
+        ),
+        SettingFieldDef(
+          key: 'subscription_auto_disable_assignment',
+          label: 'Auto Disable Assignment on Expiry',
+          hint: 'Block manual booking assignment when subscription expires',
+          type: SettingFieldType.toggle,
+        ),
+        SettingFieldDef(
+          key: 'subscription_grace_period_days',
+          label: 'Grace Period',
+          hint: 'Days after expiry before restrictions apply',
+          type: SettingFieldType.integer,
+          unit: 'days',
+          min: 0,
+          max: 30,
+        ),
+        SettingFieldDef(
+          key: 'subscription_reminder_days',
+          label: 'Reminder Days Before Expiry',
+          hint: 'Send expiry reminder N days in advance',
+          type: SettingFieldType.integer,
+          unit: 'days',
+          min: 1,
+          max: 60,
+        ),
+      ],
+    ),
   ];
 
   @override

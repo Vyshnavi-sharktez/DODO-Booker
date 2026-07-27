@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/theme/app_theme.dart';
+import '../../application/providers/seo_providers.dart';
+import '../../data/seo_repository.dart';
 import '../widgets/catalog_seo_tab.dart';
 import '../widgets/global_seo_tab.dart';
 import '../widgets/location_pages_tab.dart';
@@ -25,6 +27,7 @@ class SeoManagementPage extends ConsumerStatefulWidget {
 class _SeoManagementPageState extends ConsumerState<SeoManagementPage>
     with SingleTickerProviderStateMixin {
   late final TabController _tabController;
+  bool _generating = false;
 
   @override
   void initState() {
@@ -38,6 +41,41 @@ class _SeoManagementPageState extends ConsumerState<SeoManagementPage>
     super.dispose();
   }
 
+  Future<void> _generate() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (_) => const _GenerateConfirmDialog(),
+    );
+    if (confirmed != true || !mounted) return;
+
+    setState(() => _generating = true);
+
+    final SeoGenerationResult result =
+        await ref.read(seoRepositoryProvider).generateSeoPages();
+
+    if (!mounted) return;
+    setState(() => _generating = false);
+
+    if (result.success) {
+      ref.invalidate(seoGlobalSettingsProvider);
+      ref.invalidate(seoCoverageStatsProvider);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('SEO pages generated successfully.'),
+          backgroundColor: AppColors.success,
+          duration: Duration(seconds: 4),
+        ),
+      );
+    } else {
+      await showDialog<void>(
+        context: context,
+        builder: (_) => _GenerationErrorDialog(
+          error: result.error ?? 'Unknown error during generation.',
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -46,7 +84,11 @@ class _SeoManagementPageState extends ConsumerState<SeoManagementPage>
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // ── Page header ────────────────────────────────────────────────────
-          _PageHeader(tabController: _tabController),
+          _PageHeader(
+            tabController: _tabController,
+            isGenerating: _generating,
+            onGenerate: _generate,
+          ),
           // ── SEO coverage overview ──────────────────────────────────────────
           const SeoOverviewCard(),
           // ── Tab body ───────────────────────────────────────────────────────
@@ -73,8 +115,14 @@ class _SeoManagementPageState extends ConsumerState<SeoManagementPage>
 // ── Page header ────────────────────────────────────────────────────────────────
 
 class _PageHeader extends StatelessWidget {
-  const _PageHeader({required this.tabController});
+  const _PageHeader({
+    required this.tabController,
+    required this.isGenerating,
+    required this.onGenerate,
+  });
   final TabController tabController;
+  final bool isGenerating;
+  final VoidCallback onGenerate;
 
   @override
   Widget build(BuildContext context) {
@@ -102,25 +150,32 @@ class _PageHeader extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(width: 14),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: const [
-                    Text(
-                      'SEO Management',
-                      style: TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.textPrimary,
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: const [
+                      Text(
+                        'SEO Management',
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.textPrimary,
+                        ),
                       ),
-                    ),
-                    Text(
-                      'Manage search engine optimisation settings for the platform',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: AppColors.textSecondary,
+                      Text(
+                        'Manage search engine optimisation settings for the platform',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: AppColors.textSecondary,
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 16),
+                _GenerateButton(
+                  isGenerating: isGenerating,
+                  onGenerate: onGenerate,
                 ),
               ],
             ),
@@ -154,3 +209,110 @@ class _PageHeader extends StatelessWidget {
   }
 }
 
+// ── Generate button ────────────────────────────────────────────────────────────
+
+class _GenerateButton extends StatelessWidget {
+  const _GenerateButton({
+    required this.isGenerating,
+    required this.onGenerate,
+  });
+  final bool isGenerating;
+  final VoidCallback onGenerate;
+
+  @override
+  Widget build(BuildContext context) {
+    return FilledButton.icon(
+      onPressed: isGenerating ? null : onGenerate,
+      icon: isGenerating
+          ? const SizedBox(
+              width: 14,
+              height: 14,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                color: Colors.white,
+              ),
+            )
+          : const Icon(Icons.refresh_rounded, size: 16),
+      label: Text(isGenerating ? 'Generating…' : 'Generate SEO Pages'),
+      style: FilledButton.styleFrom(
+        backgroundColor: AppColors.primary,
+        disabledBackgroundColor: AppColors.primary.withValues(alpha: 0.5),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        textStyle: const TextStyle(
+          fontSize: 13,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+    );
+  }
+}
+
+// ── Dialogs ───────────────────────────────────────────────────────────────────
+
+class _GenerateConfirmDialog extends StatelessWidget {
+  const _GenerateConfirmDialog();
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Generate SEO Pages?'),
+      content: const Text(
+        'This will regenerate all SEO assets — HTML pages, sitemap.xml, '
+        'robots.txt, structured data, canonical URLs, and location pages — '
+        'using the latest SEO configuration.\n\n'
+        'The generator server must be running:\n'
+        '  cd scripts/generate-seo-pages && node server.js',
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(false),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.of(context).pop(true),
+          style: FilledButton.styleFrom(
+            backgroundColor: AppColors.primary,
+          ),
+          child: const Text('Generate'),
+        ),
+      ],
+    );
+  }
+}
+
+class _GenerationErrorDialog extends StatelessWidget {
+  const _GenerationErrorDialog({required this.error});
+  final String error;
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: Row(
+        children: [
+          const Icon(Icons.error_outline_rounded, color: AppColors.error),
+          const SizedBox(width: 8),
+          const Text('Generation Failed'),
+        ],
+      ),
+      content: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 520, maxHeight: 320),
+        child: SingleChildScrollView(
+          child: SelectableText(
+            error,
+            style: const TextStyle(
+              fontSize: 12,
+              fontFamily: 'monospace',
+              color: AppColors.textPrimary,
+            ),
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Close'),
+        ),
+      ],
+    );
+  }
+}

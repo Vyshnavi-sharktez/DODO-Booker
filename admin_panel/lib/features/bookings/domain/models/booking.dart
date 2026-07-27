@@ -51,6 +51,7 @@ class Booking {
   final double? latitude;
   final double? longitude;
   final String? completionOtp;
+  final String paymentMethod; // 'cash' | 'cod' | 'online' — mirrors DB default 'cash'
 
   const Booking({
     required this.id,
@@ -76,9 +77,13 @@ class Booking {
     this.latitude,
     this.longitude,
     this.completionOtp,
+    this.paymentMethod = 'cash',
   });
 
   bool get isUnassigned => assignmentType == 'Unassigned';
+  // 'cash' is the canonical value written by the customer app ("Cash After Service").
+  // 'cod' is accepted as an alias for backward compatibility.
+  bool get isCod => paymentMethod == 'cash' || paymentMethod == 'cod';
 
   factory Booking.fromMap(Map<String, dynamic> map) {
     BookingReview? review;
@@ -137,6 +142,7 @@ class Booking {
       latitude: (map['latitude'] as num?)?.toDouble(),
       longitude: (map['longitude'] as num?)?.toDouble(),
       completionOtp: map['completion_otp'] as String?,
+      paymentMethod: map['payment_method'] as String? ?? 'cash',
     );
   }
 
@@ -174,6 +180,7 @@ class Booking {
       latitude: latitude,
       longitude: longitude,
       completionOtp: completionOtp ?? this.completionOtp,
+      paymentMethod: paymentMethod,
     );
   }
 }

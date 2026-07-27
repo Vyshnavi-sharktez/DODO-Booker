@@ -16,6 +16,7 @@ class VendorProfile {
     this.updatedAt,
     this.latitude,
     this.longitude,
+    this.isOnline = true,
   });
 
   final String id;
@@ -34,6 +35,7 @@ class VendorProfile {
   final DateTime? updatedAt;
   final double? latitude;
   final double? longitude;
+  final bool isOnline;
 
   factory VendorProfile.fromMap(Map<String, dynamic> map) {
     return VendorProfile(
@@ -53,6 +55,7 @@ class VendorProfile {
       updatedAt: _parseDate(map['updated_at']),
       latitude: (map['latitude'] as num?)?.toDouble(),
       longitude: (map['longitude'] as num?)?.toDouble(),
+      isOnline: map['is_online'] as bool? ?? true,
     );
   }
 

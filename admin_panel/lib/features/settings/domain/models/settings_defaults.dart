@@ -38,4 +38,13 @@ const Map<String, String> kSettingDefaults = {
   // Customer
   'allow_customer_registration': 'true',
   'allow_referral_program': 'false',
+
+  // Subscription
+  'subscription_enabled': 'false',
+  'subscription_require_active': 'false',
+  'subscription_allow_free_vendors': 'true',
+  'subscription_grace_period_days': '3',
+  'subscription_reminder_days': '7',
+  'subscription_auto_disable_cod': 'false',
+  'subscription_auto_disable_assignment': 'false',
 };

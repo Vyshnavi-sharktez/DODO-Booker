@@ -1,8 +1,27 @@
+import 'dart:async';
+import 'dart:convert';
+
+import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../domain/models/catalog_node_seo.dart';
 import '../domain/models/seo_coverage_stats.dart';
 import '../domain/models/seo_global_settings.dart';
+
+/// Result of [SeoRepository.generateSeoPages].
+class SeoGenerationResult {
+  const SeoGenerationResult({
+    required this.success,
+    required this.output,
+    this.error,
+  });
+
+  final bool success;
+  final String output;
+
+  /// Non-null when [success] is false.
+  final String? error;
+}
 
 class SeoRepository {
   final SupabaseClient _supabase;
@@ -171,6 +190,55 @@ class SeoRepository {
             CatalogNodeSeo.fromMap(row),
     };
   }
+
+  // ── SEO Generation ────────────────────────────────────────────────────────
+
+  /// Triggers the SEO generator by calling the local server (server.js).
+  ///
+  /// The server spawns `node index.js` and waits for completion. Returns a
+  /// [SeoGenerationResult] — never throws; connection/timeout errors are
+  /// surfaced as a failed result with a human-readable [SeoGenerationResult.error].
+  ///
+  /// Prerequisites:
+  ///   cd scripts/generate-seo-pages && node server.js
+  Future<SeoGenerationResult> generateSeoPages() async {
+    const url = 'http://localhost:4040/generate';
+    http.Response response;
+    try {
+      response = await http
+          .post(
+            Uri.parse(url),
+            headers: {'Content-Type': 'application/json'},
+          )
+          .timeout(const Duration(minutes: 5));
+    } on TimeoutException {
+      return const SeoGenerationResult(
+        success: false,
+        output: '',
+        error: 'Generation timed out after 5 minutes.',
+      );
+    } catch (_) {
+      return const SeoGenerationResult(
+        success: false,
+        output: '',
+        error:
+            'Could not connect to the generator server.\n\n'
+            'Start it first:\n'
+            '  cd scripts/generate-seo-pages\n'
+            '  node server.js',
+      );
+    }
+
+    final body = jsonDecode(response.body) as Map<String, dynamic>;
+    return SeoGenerationResult(
+      success: response.statusCode == 200 &&
+          (body['success'] as bool? ?? false),
+      output: body['output'] as String? ?? '',
+      error: body['error'] as String?,
+    );
+  }
+
+  // ── Catalog Node SEO ──────────────────────────────────────────────────────
 
   /// Upserts the SEO configuration for [nodeId].
   /// Conflicts on node_id (UNIQUE constraint) — safe to call repeatedly.

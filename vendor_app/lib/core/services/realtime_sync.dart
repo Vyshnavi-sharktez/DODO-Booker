@@ -8,6 +8,7 @@ import '../../features/auth/presentation/providers/auth_controller.dart';
 import '../../features/bookings/presentation/providers/bookings_provider.dart';
 import '../../features/dashboard/presentation/providers/dashboard_provider.dart';
 import '../../features/notifications/presentation/providers/notifications_provider.dart';
+import '../../features/subscription/presentation/providers/subscription_provider.dart';
 
 /// Manages all Supabase Realtime subscriptions for the vendor app.
 ///
@@ -36,10 +37,13 @@ class VendorRealtimeSync {
 
   RealtimeChannel? _bookingsChannel;
   RealtimeChannel? _notifChannel;
+  RealtimeChannel? _subscriptionChannel;
+  RealtimeChannel? _settingsChannel;
   StreamSubscription<AuthState>? _authSub;
 
   VendorRealtimeSync(this._ref, this._client) {
     _subscribeBookings();
+    _subscribeSettings();
     _authSub = _client.auth.onAuthStateChange.listen((data) {
       final event = data.event;
       if ((event == AuthChangeEvent.signedIn ||
@@ -92,6 +96,69 @@ class VendorRealtimeSync {
     _ref.invalidate(dashboardStatsProvider);
   }
 
+  // ── Settings ────────────────────────────────────────────────────────────────
+  //
+  // Listens for UPDATE events on the settings table so that when the admin
+  // changes subscription_enabled (or any other setting), the vendor app
+  // invalidates its cached settings immediately — no manual refresh needed.
+  //
+  // No filter is applied: settings changes are infrequent and global; any
+  // updated row should trigger a re-fetch of the subscription settings.
+
+  void _subscribeSettings() {
+    _settingsChannel = _client
+        .channel('dodo-vendor-settings')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'settings',
+          callback: (payload) {
+            debugPrint(
+                '[DODO][VendorSync] settings ${payload.eventType} → '
+                'invalidating subscriptionSettingsProvider');
+            _ref.invalidate(subscriptionSettingsProvider);
+          },
+        )
+        .subscribe((status, error) {
+          debugPrint(
+              '[DODO][VendorSync] settings channel status=$status error=$error');
+        });
+    debugPrint('[DODO][VendorSync] settings channel subscribed');
+  }
+
+  // ── Subscription ────────────────────────────────────────────────────────────
+
+  void resubscribeSubscription(String? vendorId) {
+    if (_subscriptionChannel != null) {
+      _client.removeChannel(_subscriptionChannel!);
+      _subscriptionChannel = null;
+    }
+    if (vendorId == null) return;
+
+    _subscriptionChannel = _client
+        .channel('dodo-vendor-sub-$vendorId')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'vendor_subscriptions',
+          filter: PostgresChangeFilter(
+            type: PostgresChangeFilterType.eq,
+            column: 'vendor_id',
+            value: vendorId,
+          ),
+          callback: (_) {
+            debugPrint('[DODO][VendorSync] vendor_subscriptions change → '
+                'invalidating mySubscriptionProvider');
+            _ref.invalidate(mySubscriptionProvider);
+          },
+        )
+        .subscribe((status, error) {
+          debugPrint(
+              '[DODO][VendorSync] subscription channel status=$status error=$error');
+        });
+    debugPrint('[DODO][VendorSync] subscription channel subscribed for vendor=$vendorId');
+  }
+
   // ── Notifications ───────────────────────────────────────────────────────────
 
   void resubscribeNotifications(String? vendorId) {
@@ -126,12 +193,17 @@ class VendorRealtimeSync {
   // ── Lifecycle ───────────────────────────────────────────────────────────────
 
   /// Called by the lifecycle observer on resume after an extended pause.
-  void refetchAll() => _invalidateBookings();
+  void refetchAll() {
+    _invalidateBookings();
+    _ref.invalidate(subscriptionSettingsProvider);
+  }
 
   void dispose() {
     _authSub?.cancel();
     if (_bookingsChannel != null) _client.removeChannel(_bookingsChannel!);
     if (_notifChannel != null) _client.removeChannel(_notifChannel!);
+    if (_subscriptionChannel != null) _client.removeChannel(_subscriptionChannel!);
+    if (_settingsChannel != null) _client.removeChannel(_settingsChannel!);
   }
 }
 
@@ -145,7 +217,10 @@ final vendorRealtimeSyncProvider = Provider<VendorRealtimeSync>((ref) {
   // if the provider is lazily initialised after session restore).
   ref.listen<VendorUser?>(
     currentVendorUserProvider,
-    (_, user) => sync.resubscribeNotifications(user?.id),
+    (_, user) {
+      sync.resubscribeNotifications(user?.id);
+      sync.resubscribeSubscription(user?.id);
+    },
     fireImmediately: true,
   );
 
