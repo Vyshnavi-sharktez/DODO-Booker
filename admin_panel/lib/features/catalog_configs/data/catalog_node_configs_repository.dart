@@ -90,6 +90,32 @@ class CatalogNodeConfigsRepository {
     await _client.from('catalog_node_configs').delete().eq('id', id);
   }
 
+  /// Returns all node-scoped vendor_subscription configs with their catalog
+  /// node names. Used by the admin Subscription Plans overview tab.
+  Future<List<Map<String, dynamic>>> fetchAllCatalogVsConfigs() async {
+    final data = await _client
+        .from('catalog_node_configs')
+        .select('id, node_id, is_enabled, config, catalog_nodes(name)')
+        .eq('module', 'vendor_subscription')
+        .isFilter('relationship_id', null);
+    return (data as List).cast<Map<String, dynamic>>();
+  }
+
+  /// Updates is_enabled inside the VS config JSONB without changing any
+  /// other field. Used by the Subscription Plans toggle.
+  Future<void> updateCatalogVsEnabled(
+    String configId,
+    Map<String, dynamic> currentConfig,
+    bool enabled,
+  ) async {
+    final updated = Map<String, dynamic>.from(currentConfig)
+      ..['is_enabled'] = enabled;
+    await _client
+        .from('catalog_node_configs')
+        .update({'config': updated})
+        .eq('id', configId);
+  }
+
   Future<void> setEnabled(String id, {required bool enabled}) async {
     await _client
         .from('catalog_node_configs')

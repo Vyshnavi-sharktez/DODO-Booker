@@ -3,7 +3,9 @@ import 'subscription_plan.dart';
 class VendorSubscription {
   final String id;
   final String vendorId;
-  final String planId;
+  final String? planId;
+  final String? catalogNodeId;
+  final String? catalogNodeName;
   final String status;
   final DateTime? startDate;
   final DateTime? expiryDate;
@@ -16,7 +18,9 @@ class VendorSubscription {
   const VendorSubscription({
     required this.id,
     required this.vendorId,
-    required this.planId,
+    this.planId,
+    this.catalogNodeId,
+    this.catalogNodeName,
     required this.status,
     this.startDate,
     this.expiryDate,
@@ -27,6 +31,9 @@ class VendorSubscription {
     this.payments = const [],
   });
 
+  bool get isCatalogSub => catalogNodeId != null;
+  String get displayPlanName =>
+      plan?.name ?? (catalogNodeName != null ? 'Catalog: $catalogNodeName' : 'Subscription');
   bool get isActive => status == 'active';
 
   SubscriptionPayment? get pendingPayment =>
@@ -41,18 +48,19 @@ class VendorSubscription {
   bool get isExpiringSoon => isActive && remainingDays <= 7;
 
   factory VendorSubscription.fromMap(Map<String, dynamic> map) {
-    // PostgREST returns many-to-one joins as Map and one-to-many as List.
-    // Guard with runtime type checks instead of direct casts so FK ambiguity
-    // or a missing join never throws a _CastError.
     final planRaw = map['subscription_plans'];
+    final nodeRaw = map['catalog_nodes'];
     final paymentsRaw = map['vendor_subscription_payments'];
     final planMap = planRaw is Map<String, dynamic> ? planRaw : null;
+    final nodeMap = nodeRaw is Map<String, dynamic> ? nodeRaw : null;
     final paymentsList = paymentsRaw is List ? paymentsRaw : null;
 
     return VendorSubscription(
       id: map['id'] as String,
       vendorId: map['vendor_id'] as String,
-      planId: map['plan_id'] as String,
+      planId: map['plan_id'] as String?,
+      catalogNodeId: map['catalog_node_id'] as String?,
+      catalogNodeName: nodeMap?['name'] as String?,
       status: map['status'] as String? ?? 'pending',
       startDate: _parseDate(map['start_date']),
       expiryDate: _parseDate(map['expiry_date']),

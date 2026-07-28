@@ -14,11 +14,25 @@ final activePlansProvider = FutureProvider.autoDispose<List<SubscriptionPlan>>((
   return ref.read(subscriptionRepositoryProvider).fetchActivePlans();
 });
 
+final catalogSubscriptionOfferingsProvider =
+    FutureProvider.autoDispose<List<SubscriptionPlan>>((ref) {
+  return ref.read(subscriptionRepositoryProvider).fetchCatalogSubscriptionOfferings();
+});
+
 final mySubscriptionProvider =
     FutureProvider.autoDispose<VendorSubscription?>((ref) {
   final vendor = ref.watch(currentVendorUserProvider);
   if (vendor == null) return Future.value(null);
   return ref.read(subscriptionRepositoryProvider).fetchMySubscription(vendor.id);
+});
+
+final myCatalogSubscriptionsProvider =
+    FutureProvider.autoDispose<List<VendorSubscription>>((ref) {
+  final vendor = ref.watch(currentVendorUserProvider);
+  if (vendor == null) return Future.value([]);
+  return ref
+      .read(subscriptionRepositoryProvider)
+      .fetchMyCatalogSubscriptions(vendor.id);
 });
 
 final subscriptionSettingsProvider =

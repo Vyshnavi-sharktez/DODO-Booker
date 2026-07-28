@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../auth/application/providers/auth_provider.dart';
+import '../../../catalog_configs/data/catalog_node_configs_repository.dart';
 import '../../data/subscription_repository.dart';
 import '../../domain/models/subscription_plan.dart';
 import '../../domain/models/vendor_subscription.dart';
@@ -126,7 +127,7 @@ class VendorSubscriptionsNotifier
 
   Future<void> updateSubscription(
     String id, {
-    required String planId,
+    String? planId,
     required String status,
     DateTime? startDate,
     DateTime? expiryDate,
@@ -223,4 +224,14 @@ final vendorSubscriptionsNotifierProvider = StateNotifierProvider<
 final subscriptionDashboardProvider =
     FutureProvider.autoDispose<Map<String, dynamic>>((ref) {
   return ref.read(subscriptionRepositoryProvider).fetchDashboardStats();
+});
+
+// ── Catalog VS configs provider ───────────────────────────────────────────────
+// Returns all node-scoped vendor_subscription catalog_node_configs rows
+// (with catalog_nodes.name joined). Used by the Subscription Plans tab.
+
+final catalogVsConfigsProvider =
+    FutureProvider.autoDispose<List<Map<String, dynamic>>>((ref) {
+  return CatalogNodeConfigsRepository(ref.watch(supabaseClientProvider))
+      .fetchAllCatalogVsConfigs();
 });

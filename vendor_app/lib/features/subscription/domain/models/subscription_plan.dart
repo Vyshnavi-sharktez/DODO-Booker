@@ -9,6 +9,8 @@ class SubscriptionPlan {
   final Map<String, dynamic> permissions;
   final bool isActive;
   final int sortOrder;
+  final String? catalogNodeId;
+  final String? catalogNodeName;
 
   const SubscriptionPlan({
     required this.id,
@@ -21,10 +23,15 @@ class SubscriptionPlan {
     required this.permissions,
     required this.isActive,
     required this.sortOrder,
+    this.catalogNodeId,
+    this.catalogNodeName,
   });
 
+  bool get isCatalogPlan => catalogNodeId != null;
   bool get allowCod => permissions['allow_cod'] == true;
-  bool get allowBookingAssignment => permissions['allow_booking_assignment'] == true;
+  bool get allowBookingAssignment =>
+      permissions['allow_booking_assignment'] == true ||
+      permissions['allow_assignment'] == true;
   bool get priorityListing => permissions['priority_listing'] == true;
   double get reducedCommissionPct =>
       (permissions['reduced_commission_pct'] as num?)?.toDouble() ?? 0.0;
@@ -41,6 +48,28 @@ class SubscriptionPlan {
       permissions: (map['permissions'] as Map<String, dynamic>?) ?? {},
       isActive: map['is_active'] as bool? ?? true,
       sortOrder: map['sort_order'] as int? ?? 0,
+    );
+  }
+
+  factory SubscriptionPlan.fromCatalogConfig({
+    required String nodeId,
+    required String nodeName,
+    required Map<String, dynamic> config,
+  }) {
+    final perms = config['permissions'] as Map<String, dynamic>? ?? {};
+    return SubscriptionPlan(
+      id: 'catalog:$nodeId',
+      name: config['name'] as String? ?? nodeName,
+      description: config['description'] as String?,
+      billingCycle: config['billing_cycle'] as String? ?? 'monthly',
+      durationDays: (config['duration_days'] as num?)?.toInt() ?? 30,
+      joiningFee: (config['joining_fee'] as num?)?.toDouble(),
+      subscriptionFee: (config['subscription_fee'] as num?)?.toDouble(),
+      permissions: perms,
+      isActive: config['is_active'] as bool? ?? false,
+      sortOrder: 0,
+      catalogNodeId: nodeId,
+      catalogNodeName: nodeName,
     );
   }
 }

@@ -219,6 +219,19 @@ class _PlanSummary extends StatelessWidget {
                         fontSize: 18,
                         fontWeight: FontWeight.w800)),
                 const SizedBox(height: 4),
+                if (plan.isCatalogPlan && plan.catalogNodeName != null) ...[
+                  Row(
+                    children: [
+                      const Icon(Icons.folder_outlined,
+                          size: 12, color: Colors.white60),
+                      const SizedBox(width: 4),
+                      Text(plan.catalogNodeName!,
+                          style: const TextStyle(
+                              color: Colors.white60, fontSize: 11)),
+                    ],
+                  ),
+                  const SizedBox(height: 2),
+                ],
                 Text(
                   '${plan.billingCycle[0].toUpperCase() + plan.billingCycle.substring(1)}  ·  ${plan.durationDays} days',
                   style: const TextStyle(

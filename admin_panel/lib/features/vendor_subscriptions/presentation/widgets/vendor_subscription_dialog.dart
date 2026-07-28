@@ -22,7 +22,7 @@ class VendorSubscriptionDialog extends StatefulWidget {
   final String vendorId;
   final String vendorName;
   final Future<void> Function({
-    required String planId,
+    required String? planId,
     required String status,
     DateTime? startDate,
     DateTime? expiryDate,
@@ -68,7 +68,10 @@ class _VendorSubscriptionDialogState extends State<VendorSubscriptionDialog>
     _tabCtrl = TabController(
         length: widget.existing != null ? 3 : 1, vsync: this);
     final s = widget.existing;
-    _planId = s?.planId ?? (widget.plans.isNotEmpty ? widget.plans.first.id : null);
+    // For catalog subscriptions plan_id is always null; don't fall back to the
+    // first global plan or the admin would accidentally assign a global plan.
+    final isCatalogSub = s?.catalogNodeId != null;
+    _planId = s?.planId ?? (isCatalogSub ? null : (widget.plans.isNotEmpty ? widget.plans.first.id : null));
     _status = s?.status ?? 'active';
     _startDate = s?.startDate;
     _expiryDate = s?.expiryDate;
@@ -104,11 +107,12 @@ class _VendorSubscriptionDialogState extends State<VendorSubscriptionDialog>
 
   Future<void> _submitSubscription() async {
     if (!_formKey.currentState!.validate()) return;
-    if (_planId == null) return;
+    final isCatalogSub = widget.existing?.catalogNodeId != null;
+    if (!isCatalogSub && _planId == null) return;
     setState(() => _saving = true);
     try {
       await widget.onSave(
-        planId: _planId!,
+        planId: _planId,
         status: _status,
         startDate: _startDate,
         expiryDate: _expiryDate,
@@ -248,17 +252,41 @@ class _VendorSubscriptionDialogState extends State<VendorSubscriptionDialog>
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _label('Plan'),
-            const SizedBox(height: 6),
-            DropdownButtonFormField<String>(
-              value: _planId,
-              decoration: _inputDecoration(),
-              validator: (v) => v == null ? 'Select a plan' : null,
-              items: widget.plans
-                  .map((p) => DropdownMenuItem(value: p.id, child: Text(p.name)))
-                  .toList(),
-              onChanged: (v) => setState(() => _planId = v),
-            ),
+            if (widget.existing?.catalogNodeId != null) ...[
+              _label('Catalog'),
+              const SizedBox(height: 6),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                decoration: BoxDecoration(
+                  color: AppColors.background,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: AppColors.border),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.account_tree_rounded,
+                        size: 16, color: AppColors.textSecondary),
+                    const SizedBox(width: 8),
+                    Text(
+                      widget.existing!.catalogNodeName ?? 'Catalog Subscription',
+                      style: const TextStyle(fontSize: 14, color: AppColors.textPrimary),
+                    ),
+                  ],
+                ),
+              ),
+            ] else ...[
+              _label('Plan'),
+              const SizedBox(height: 6),
+              DropdownButtonFormField<String>(
+                value: _planId,
+                decoration: _inputDecoration(),
+                validator: (v) => v == null ? 'Select a plan' : null,
+                items: widget.plans
+                    .map((p) => DropdownMenuItem(value: p.id, child: Text(p.name)))
+                    .toList(),
+                onChanged: (v) => setState(() => _planId = v),
+              ),
+            ],
             const SizedBox(height: 14),
 
             _label('Status'),

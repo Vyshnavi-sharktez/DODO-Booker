@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../../core/theme/app_theme.dart';
+import '../../../catalog_configs/data/catalog_node_configs_repository.dart';
+import '../../../catalog_configs/presentation/widgets/catalog_node_config_dialog.dart';
 import '../../application/providers/subscription_providers.dart';
 import '../../domain/models/subscription_plan.dart';
 import '../../domain/models/vendor_subscription.dart';
@@ -37,7 +40,7 @@ class _VendorSubscriptionsPageState
   @override
   void initState() {
     super.initState();
-    _tab = TabController(length: 4, vsync: this);
+    _tab = TabController(length: 5, vsync: this);
   }
 
   @override
@@ -149,7 +152,7 @@ class _VendorSubscriptionsPageState
         vendorId: existing.vendorId,
         vendorName: existing.vendorBusinessName ?? 'Vendor',
         onSave: ({
-          required planId,
+          required String? planId,
           required status,
           startDate,
           expiryDate,
@@ -193,6 +196,20 @@ class _VendorSubscriptionsPageState
         },
       ),
     );
+  }
+
+  // ── Catalog config (from Subscription Plans tab) ──────────────────────────
+
+  void _openCatalogConfigDialog(String nodeId, String nodeName) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => CatalogNodeConfigDialog(
+        nodeId: nodeId,
+        nodeName: nodeName,
+        initialTabIndex: 6, // Vendor Subscription tab
+      ),
+    ).then((_) => ref.invalidate(catalogVsConfigsProvider));
   }
 
   // ── Build ─────────────────────────────────────────────────────────────────
@@ -248,6 +265,7 @@ class _VendorSubscriptionsPageState
                     Tab(text: 'Subscribers'),
                     Tab(text: 'Dashboard'),
                     Tab(text: 'Settings'),
+                    Tab(text: 'All Plans'),
                   ],
                 ),
               ],
@@ -266,6 +284,10 @@ class _VendorSubscriptionsPageState
                 ),
                 const _DashboardTab(),
                 const _SettingsPlaceholderTab(),
+                _SubscriptionPlansTab(
+                  onEditGlobal: _openPlanForm,
+                  onOpenCatalog: _openCatalogConfigDialog,
+                ),
               ],
             ),
           ),
@@ -481,7 +503,7 @@ class _SubscribersTab extends ConsumerWidget {
         title: const Text('Cancel Subscription'),
         content: Text(
           'Cancel ${sub.vendorBusinessName ?? 'this vendor'}\'s '
-          '"${sub.planName ?? 'subscription'}"?\n\n'
+          '"${sub.displayPlanName}"?\n\n'
           'The vendor will lose access to premium features immediately.',
         ),
         actions: [
@@ -647,7 +669,7 @@ class _SubscriptionCard extends StatelessWidget {
                   ),
                   const SizedBox(height: 2),
                   Text(
-                    sub.planName ?? 'Unknown Plan',
+                    sub.displayPlanName,
                     style: const TextStyle(
                         fontSize: 12, color: AppColors.textSecondary),
                   ),
@@ -859,6 +881,524 @@ class _SettingsPlaceholderTab extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+// ── Subscription Plans Tab (unified overview) ─────────────────────────────────
+
+/// Flattened representation of either a global plan or a catalog VS config.
+class _PlanEntry {
+  const _PlanEntry.global(SubscriptionPlan p)
+      : isGlobal = true,
+        globalPlan = p,
+        configId = null,
+        nodeId = null,
+        _nodeName = null,
+        config = null;
+
+  const _PlanEntry.catalog({
+    required String configId,
+    required String nodeId,
+    required String nodeName,
+    required Map<String, dynamic> config,
+  })  : isGlobal = false,
+        globalPlan = null,
+        this.configId = configId,
+        this.nodeId = nodeId,
+        _nodeName = nodeName,
+        this.config = config;
+
+  final bool isGlobal;
+  final SubscriptionPlan? globalPlan;
+  final String? configId;
+  final String? nodeId;
+  final String? _nodeName;
+  final Map<String, dynamic>? config;
+
+  String get nodeName => _nodeName ?? '';
+
+  String get displayName {
+    if (isGlobal) return globalPlan!.name;
+    return config?['name'] as String? ?? _nodeName ?? '';
+  }
+
+  bool get isEnabled {
+    if (isGlobal) return globalPlan!.isActive;
+    return config?['is_enabled'] as bool? ?? false;
+  }
+
+  String get billingCycle {
+    if (isGlobal) return globalPlan!.billingCycle;
+    return config?['billing_cycle'] as String? ?? 'monthly';
+  }
+
+  int get durationDays {
+    if (isGlobal) return globalPlan!.durationDays;
+    return (config?['duration_days'] as num?)?.toInt() ?? 30;
+  }
+
+  double get totalFee {
+    final joining = isGlobal
+        ? (globalPlan!.joiningFee ?? 0)
+        : (config?['joining_fee'] as num?)?.toDouble() ?? 0;
+    final sub = isGlobal
+        ? (globalPlan!.subscriptionFee ?? 0)
+        : (config?['subscription_fee'] as num?)?.toDouble() ?? 0;
+    return joining + sub;
+  }
+
+  String get searchText =>
+      '${displayName.toLowerCase()} ${_nodeName?.toLowerCase() ?? ''}';
+}
+
+class _SubscriptionPlansTab extends ConsumerStatefulWidget {
+  const _SubscriptionPlansTab({
+    required this.onEditGlobal,
+    required this.onOpenCatalog,
+  });
+
+  final void Function(SubscriptionPlan) onEditGlobal;
+  final void Function(String nodeId, String nodeName) onOpenCatalog;
+
+  @override
+  ConsumerState<_SubscriptionPlansTab> createState() =>
+      _SubscriptionPlansTabState();
+}
+
+class _SubscriptionPlansTabState
+    extends ConsumerState<_SubscriptionPlansTab> {
+  final _searchCtrl = TextEditingController();
+  String _query = '';
+  String? _scopeFilter; // null = All, 'global', 'catalog'
+  bool? _statusFilter; // null = All, true = Enabled, false = Disabled
+  bool _toggling = false;
+
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    super.dispose();
+  }
+
+  List<_PlanEntry> _applyFilters(List<_PlanEntry> all) {
+    var result = all;
+    if (_query.isNotEmpty) {
+      result =
+          result.where((e) => e.searchText.contains(_query)).toList();
+    }
+    if (_scopeFilter != null) {
+      result = result
+          .where((e) =>
+              _scopeFilter == 'global' ? e.isGlobal : !e.isGlobal)
+          .toList();
+    }
+    if (_statusFilter != null) {
+      result = result
+          .where((e) => e.isEnabled == _statusFilter)
+          .toList();
+    }
+    result.sort((a, b) => a.displayName
+        .toLowerCase()
+        .compareTo(b.displayName.toLowerCase()));
+    return result;
+  }
+
+  Future<void> _toggleGlobal(SubscriptionPlan plan) async {
+    setState(() => _toggling = true);
+    try {
+      await ref.read(plansNotifierProvider.notifier).toggleActive(
+            plan.id,
+            currentIsActive: plan.isActive,
+          );
+    } catch (e) {
+      if (mounted) _showError(e);
+    } finally {
+      if (mounted) setState(() => _toggling = false);
+    }
+  }
+
+  Future<void> _toggleCatalog(
+    String configId,
+    Map<String, dynamic> currentConfig,
+    bool enabled,
+  ) async {
+    setState(() => _toggling = true);
+    try {
+      await CatalogNodeConfigsRepository(Supabase.instance.client)
+          .updateCatalogVsEnabled(configId, currentConfig, enabled);
+      ref.invalidate(catalogVsConfigsProvider);
+    } catch (e) {
+      if (mounted) _showError(e);
+    } finally {
+      if (mounted) setState(() => _toggling = false);
+    }
+  }
+
+  void _showError(Object e) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(e is Exception
+          ? e.toString().replaceFirst('Exception: ', '')
+          : 'Update failed: $e'),
+      backgroundColor: AppColors.error,
+    ));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final plansAsync = ref.watch(plansNotifierProvider);
+    final catalogAsync = ref.watch(catalogVsConfigsProvider);
+
+    final loading = plansAsync.isLoading || catalogAsync.isLoading;
+    final globalPlans = plansAsync.valueOrNull ?? [];
+    final catalogRows = catalogAsync.valueOrNull ?? [];
+
+    final allEntries = [
+      ...globalPlans.map(_PlanEntry.global),
+      ...catalogRows.map((row) {
+        final nodeMap =
+            row['catalog_nodes'] as Map<String, dynamic>? ?? {};
+        return _PlanEntry.catalog(
+          configId: row['id'] as String,
+          nodeId: row['node_id'] as String,
+          nodeName: nodeMap['name'] as String? ?? '',
+          config: (row['config'] as Map<String, dynamic>?) ?? {},
+        );
+      }),
+    ];
+
+    final filtered = _applyFilters(allEntries);
+
+    if (loading && allEntries.isEmpty) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    return Padding(
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // ── Search + filters ──────────────────────────────────────────
+          Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: _searchCtrl,
+                  decoration: InputDecoration(
+                    hintText: 'Search by plan name or catalog…',
+                    hintStyle: const TextStyle(
+                        fontSize: 13, color: AppColors.textSecondary),
+                    prefixIcon: const Icon(Icons.search_rounded,
+                        size: 18, color: AppColors.textSecondary),
+                    isDense: true,
+                    contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 14, vertical: 10),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide:
+                          const BorderSide(color: AppColors.border),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide:
+                          const BorderSide(color: AppColors.border),
+                    ),
+                    filled: true,
+                    fillColor: AppColors.surface,
+                  ),
+                  onChanged: (v) =>
+                      setState(() => _query = v.toLowerCase().trim()),
+                ),
+              ),
+              const SizedBox(width: 10),
+              _DropdownFilter<String?>(
+                value: _scopeFilter,
+                items: const [
+                  DropdownMenuItem(value: null, child: Text('All Scopes')),
+                  DropdownMenuItem(
+                      value: 'global', child: Text('Global')),
+                  DropdownMenuItem(
+                      value: 'catalog', child: Text('Catalog')),
+                ],
+                onChanged: (v) => setState(() => _scopeFilter = v),
+              ),
+              const SizedBox(width: 10),
+              _DropdownFilter<bool?>(
+                value: _statusFilter,
+                items: const [
+                  DropdownMenuItem(
+                      value: null, child: Text('All Statuses')),
+                  DropdownMenuItem(
+                      value: true, child: Text('Enabled')),
+                  DropdownMenuItem(
+                      value: false, child: Text('Disabled')),
+                ],
+                onChanged: (v) => setState(() => _statusFilter = v),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Text(
+            '${filtered.length} of ${allEntries.length} plan${allEntries.length == 1 ? '' : 's'}',
+            style: const TextStyle(
+                fontSize: 12, color: AppColors.textSecondary),
+          ),
+          const SizedBox(height: 8),
+
+          // ── List ──────────────────────────────────────────────────────
+          Expanded(
+            child: filtered.isEmpty
+                ? _Empty(
+                    icon: Icons.workspace_premium_outlined,
+                    message: allEntries.isEmpty
+                        ? 'No subscription plans found.'
+                        : 'No plans match the current filter.',
+                  )
+                : ListView.separated(
+                    itemCount: filtered.length,
+                    separatorBuilder: (_, __) =>
+                        const SizedBox(height: 10),
+                    itemBuilder: (_, i) {
+                      final e = filtered[i];
+                      return _PlanOverviewRow(
+                        entry: e,
+                        toggling: _toggling,
+                        onTap: () => e.isGlobal
+                            ? widget.onEditGlobal(e.globalPlan!)
+                            : widget.onOpenCatalog(
+                                e.nodeId!, e.nodeName),
+                        onToggle: (enabled) => e.isGlobal
+                            ? _toggleGlobal(e.globalPlan!)
+                            : _toggleCatalog(
+                                e.configId!, e.config!, enabled),
+                      );
+                    },
+                  ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PlanOverviewRow extends StatelessWidget {
+  const _PlanOverviewRow({
+    required this.entry,
+    required this.toggling,
+    required this.onTap,
+    required this.onToggle,
+  });
+
+  final _PlanEntry entry;
+  final bool toggling;
+  final VoidCallback onTap;
+  final ValueChanged<bool> onToggle;
+
+  static const _catalogColor = Color(0xFF9C27B0);
+
+  @override
+  Widget build(BuildContext context) {
+    final accentColor =
+        entry.isGlobal ? AppColors.primary : _catalogColor;
+
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(16, 14, 12, 14),
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(12),
+          border:
+              Border.all(color: AppColors.border.withValues(alpha: 0.7)),
+          boxShadow: [
+            BoxShadow(
+                color: Colors.black.withValues(alpha: 0.03),
+                blurRadius: 6,
+                offset: const Offset(0, 2)),
+          ],
+        ),
+        child: Row(
+          children: [
+            // ── Scope icon ───────────────────────────────────────────
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: accentColor.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(
+                entry.isGlobal
+                    ? Icons.workspace_premium_rounded
+                    : Icons.folder_special_rounded,
+                size: 20,
+                color: accentColor,
+              ),
+            ),
+            const SizedBox(width: 12),
+
+            // ── Info ─────────────────────────────────────────────────
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          entry.displayName,
+                          style: const TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w700,
+                              color: AppColors.textPrimary),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      _ScopeBadge(
+                          label: entry.isGlobal ? 'Global' : 'Catalog',
+                          color: accentColor),
+                    ],
+                  ),
+                  if (!entry.isGlobal && entry.nodeName.isNotEmpty) ...[
+                    const SizedBox(height: 3),
+                    Row(
+                      children: [
+                        const Icon(Icons.folder_outlined,
+                            size: 11, color: AppColors.textSecondary),
+                        const SizedBox(width: 3),
+                        Text(
+                          entry.nodeName,
+                          style: const TextStyle(
+                              fontSize: 11, color: AppColors.textSecondary),
+                        ),
+                      ],
+                    ),
+                  ],
+                  const SizedBox(height: 5),
+                  Wrap(
+                    spacing: 12,
+                    children: [
+                      _MetaItem(
+                          icon: Icons.calendar_today_outlined,
+                          label: '${entry.durationDays}d'),
+                      _MetaItem(
+                          icon: Icons.currency_rupee_rounded,
+                          label: entry.totalFee > 0
+                              ? entry.totalFee.toStringAsFixed(0)
+                              : 'Free'),
+                      _MetaItem(
+                          icon: Icons.refresh_rounded,
+                          label: entry.billingCycle[0].toUpperCase() +
+                              entry.billingCycle.substring(1)),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+
+            // ── Toggle ───────────────────────────────────────────────
+            Column(
+              children: [
+                Switch(
+                  value: entry.isEnabled,
+                  activeColor: AppColors.success,
+                  onChanged: toggling ? null : onToggle,
+                ),
+                Text(
+                  entry.isEnabled ? 'Enabled' : 'Disabled',
+                  style: TextStyle(
+                      fontSize: 10,
+                      color: entry.isEnabled
+                          ? AppColors.success
+                          : AppColors.textSecondary),
+                ),
+              ],
+            ),
+            const SizedBox(width: 4),
+            const Icon(Icons.chevron_right_rounded,
+                size: 18, color: AppColors.textSecondary),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ScopeBadge extends StatelessWidget {
+  const _ScopeBadge({required this.label, required this.color});
+  final String label;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: color.withValues(alpha: 0.25)),
+      ),
+      child: Text(label,
+          style: TextStyle(
+              fontSize: 10,
+              color: color,
+              fontWeight: FontWeight.w700)),
+    );
+  }
+}
+
+class _MetaItem extends StatelessWidget {
+  const _MetaItem({required this.icon, required this.label});
+  final IconData icon;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 11, color: AppColors.textSecondary),
+        const SizedBox(width: 3),
+        Text(label,
+            style: const TextStyle(
+                fontSize: 11, color: AppColors.textSecondary)),
+      ],
+    );
+  }
+}
+
+class _DropdownFilter<T> extends StatelessWidget {
+  const _DropdownFilter({
+    required this.value,
+    required this.items,
+    required this.onChanged,
+  });
+
+  final T value;
+  final List<DropdownMenuItem<T>> items;
+  final ValueChanged<T?> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 40,
+      padding: const EdgeInsets.symmetric(horizontal: 10),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: DropdownButton<T>(
+        value: value,
+        items: items,
+        onChanged: onChanged,
+        underline: const SizedBox.shrink(),
+        isDense: true,
+        style: const TextStyle(
+            fontSize: 13, color: AppColors.textPrimary),
+        icon: const Icon(Icons.keyboard_arrow_down_rounded,
+            size: 18, color: AppColors.textSecondary),
       ),
     );
   }

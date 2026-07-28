@@ -105,14 +105,14 @@ class SubscriptionRepository {
   Future<List<VendorSubscription>> fetchSubscriptions() async {
     final data = await _supabase
         .from('vendor_subscriptions')
-        .select('*, subscription_plans(name), vendors(business_name), vendor_subscription_payments(*)')
+        .select('*, subscription_plans(name), vendors(business_name), catalog_nodes(name), vendor_subscription_payments(*)')
         .order('created_at', ascending: false);
     return (data as List).map((r) => VendorSubscription.fromMap(r as Map<String, dynamic>)).toList();
   }
 
   Future<VendorSubscription> updateSubscription(
     String id, {
-    required String planId,
+    String? planId,
     required String status,
     DateTime? startDate,
     DateTime? expiryDate,
@@ -121,14 +121,14 @@ class SubscriptionRepository {
     final data = await _supabase
         .from('vendor_subscriptions')
         .update({
-          'plan_id': planId,
+          if (planId != null) 'plan_id': planId,
           'status': status,
           'start_date': startDate?.toIso8601String(),
           'expiry_date': expiryDate?.toIso8601String(),
           'notes': notes?.isNotEmpty == true ? notes : null,
         })
         .eq('id', id)
-        .select('*, subscription_plans(name), vendors(business_name), vendor_subscription_payments(*)')
+        .select('*, subscription_plans(name), vendors(business_name), catalog_nodes(name), vendor_subscription_payments(*)')
         .single();
     return VendorSubscription.fromMap(data);
   }

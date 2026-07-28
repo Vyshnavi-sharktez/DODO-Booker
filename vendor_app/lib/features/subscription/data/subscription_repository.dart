@@ -26,12 +26,44 @@ class SubscriptionRepository extends BaseRepository {
         .from('vendor_subscriptions')
         .select('*, subscription_plans(*), vendor_subscription_payments(*)')
         .eq('vendor_id', vendorId)
-        .eq('status', 'active')
+        .isFilter('catalog_node_id', null)
+        .inFilter('status', ['active', 'pending_payment'])
         .order('created_at', ascending: false)
         .limit(1);
     final list = data as List;
     if (list.isEmpty) return null;
     return VendorSubscription.fromMap(list.first as Map<String, dynamic>);
+  }
+
+  Future<List<VendorSubscription>> fetchMyCatalogSubscriptions(
+      String vendorId) async {
+    final data = await supabase
+        .from('vendor_subscriptions')
+        .select('*, catalog_nodes(name), vendor_subscription_payments(*)')
+        .eq('vendor_id', vendorId)
+        .not('catalog_node_id', 'is', null)
+        .inFilter('status', ['active', 'pending_payment'])
+        .order('created_at', ascending: false);
+    return (data as List)
+        .map((r) => VendorSubscription.fromMap(r as Map<String, dynamic>))
+        .toList();
+  }
+
+  Future<List<SubscriptionPlan>> fetchCatalogSubscriptionOfferings() async {
+    final data = await supabase
+        .rpc('get_catalog_vendor_subscription_offerings');
+    return (data as List).map((r) {
+      final row = r as Map<String, dynamic>;
+      final config = row['config'];
+      final configMap = config is Map<String, dynamic>
+          ? config
+          : <String, dynamic>{};
+      return SubscriptionPlan.fromCatalogConfig(
+        nodeId: row['node_id'] as String,
+        nodeName: row['node_name'] as String? ?? '',
+        config: configMap,
+      );
+    }).toList();
   }
 
   Future<void> cancelSubscription(String id) async {
@@ -87,13 +119,19 @@ class SubscriptionRepository extends BaseRepository {
   }) async {
     final amount = (plan.joiningFee ?? 0) + (plan.subscriptionFee ?? 0);
 
+    final insertPayload = <String, dynamic>{
+      'vendor_id': vendorId,
+      'status': 'pending_payment',
+      if (plan.isCatalogPlan) ...{
+        'catalog_node_id': plan.catalogNodeId,
+        'subscription_permissions': plan.permissions,
+      } else
+        'plan_id': plan.id,
+    };
+
     final subData = await supabase
         .from('vendor_subscriptions')
-        .insert({
-          'vendor_id': vendorId,
-          'plan_id': plan.id,
-          'status': 'pending_payment',
-        })
+        .insert(insertPayload)
         .select()
         .single();
     final subscriptionId = subData['id'] as String;
