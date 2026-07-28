@@ -16,6 +16,7 @@ class SubscriptionPage extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final subAsync = ref.watch(mySubscriptionProvider);
+    final catalogSubsAsync = ref.watch(myCatalogSubscriptionsProvider);
     final settingsAsync = ref.watch(subscriptionSettingsProvider);
     final enabled = settingsAsync.valueOrNull?['subscription_enabled'] == 'true';
     debugPrint('[DODO][SubscriptionPage] settingsAsync=$settingsAsync  '
@@ -27,6 +28,7 @@ class SubscriptionPage extends ConsumerWidget {
       child: RefreshIndicator(
         onRefresh: () async {
           ref.invalidate(mySubscriptionProvider);
+          ref.invalidate(myCatalogSubscriptionsProvider);
           ref.invalidate(subscriptionSettingsProvider);
         },
         child: SingleChildScrollView(
@@ -65,6 +67,31 @@ class SubscriptionPage extends ConsumerWidget {
                         sub: sub,
                         onBrowsePlans: () => _browsePlans(context),
                         onCancel: () => _cancelSubscription(context, ref, sub.id),
+                      ),
+              ),
+              // ── Catalog subscriptions ────────────────────────────────────
+              catalogSubsAsync.when(
+                loading: () => const SizedBox.shrink(),
+                error: (_, __) => const SizedBox.shrink(),
+                data: (catalogSubs) => catalogSubs.isEmpty
+                    ? const SizedBox.shrink()
+                    : Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const SizedBox(height: 24),
+                          _SectionHeader('Catalog Subscriptions'),
+                          const SizedBox(height: 12),
+                          ...catalogSubs.map((cs) => Padding(
+                                padding: const EdgeInsets.only(bottom: 14),
+                                child: _CatalogSubCard(
+                                  sub: cs,
+                                  onCancel: cs.isActive
+                                      ? () => _cancelSubscription(
+                                          context, ref, cs.id)
+                                      : null,
+                                ),
+                              )),
+                        ],
                       ),
               ),
             ],
@@ -170,6 +197,35 @@ class _SubscriptionBody extends StatelessWidget {
           const SizedBox(height: 12),
           _PaymentHistoryList(payments: sub.payments),
         ],
+
+        const SizedBox(height: 28),
+        const Divider(height: 1),
+        const SizedBox(height: 20),
+        _SectionHeader('Explore Plans'),
+        const SizedBox(height: 8),
+        const Text(
+          'Browse all available plans, including catalog-specific subscriptions.',
+          style: TextStyle(
+              fontSize: 12, color: AppColors.textSecondary, height: 1.4),
+        ),
+        const SizedBox(height: 12),
+        SizedBox(
+          width: double.infinity,
+          child: OutlinedButton.icon(
+            onPressed: onBrowsePlans,
+            style: OutlinedButton.styleFrom(
+              foregroundColor: AppColors.primary,
+              side: const BorderSide(color: AppColors.primary),
+              padding: const EdgeInsets.symmetric(vertical: 14),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12)),
+            ),
+            icon: const Icon(Icons.search_rounded, size: 18),
+            label: const Text('View All Plans',
+                style:
+                    TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+          ),
+        ),
       ],
     );
   }
@@ -484,6 +540,156 @@ class _BenefitsCard extends StatelessWidget {
           }),
         ],
       ),
+    );
+  }
+}
+
+// ── Catalog subscription card ─────────────────────────────────────────────────
+
+class _CatalogSubCard extends StatelessWidget {
+  const _CatalogSubCard({required this.sub, this.onCancel});
+  final VendorSubscription sub;
+  final VoidCallback? onCancel;
+
+  @override
+  Widget build(BuildContext context) {
+    final fmt = DateFormat('d MMM yyyy');
+    final statusColor = switch (sub.status) {
+      'active' => AppColors.success,
+      'expired' => AppColors.error,
+      'pending_payment' || 'pending_approval' || 'pending' => AppColors.warning,
+      _ => AppColors.textHint,
+    };
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.border.withValues(alpha: 0.7)),
+        boxShadow: [
+          BoxShadow(
+              color: Colors.black.withValues(alpha: 0.04),
+              blurRadius: 8,
+              offset: const Offset(0, 2)),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 38,
+                height: 38,
+                decoration: BoxDecoration(
+                  color: AppColors.primary.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(Icons.folder_special_rounded,
+                    color: AppColors.primary, size: 20),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      sub.displayPlanName,
+                      style: const TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.textPrimary),
+                    ),
+                    if (sub.catalogNodeName != null) ...[
+                      const SizedBox(height: 2),
+                      Row(
+                        children: [
+                          const Icon(Icons.folder_outlined,
+                              size: 11, color: AppColors.textHint),
+                          const SizedBox(width: 3),
+                          Text(sub.catalogNodeName!,
+                              style: const TextStyle(
+                                  fontSize: 11, color: AppColors.textHint)),
+                        ],
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: statusColor.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text(
+                  sub.status[0].toUpperCase() + sub.status.substring(1),
+                  style: TextStyle(
+                      fontSize: 11,
+                      color: statusColor,
+                      fontWeight: FontWeight.w600),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          const Divider(height: 1),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              _DateChip(
+                  label: 'Expires',
+                  value: sub.expiryDate != null
+                      ? fmt.format(sub.expiryDate!)
+                      : '—'),
+              const SizedBox(width: 16),
+              if (sub.isActive)
+                _DateChip(
+                    label: 'Remaining',
+                    value: '${sub.remainingDays}d'),
+            ],
+          ),
+          if (onCancel != null) ...[
+            const SizedBox(height: 10),
+            TextButton.icon(
+              onPressed: onCancel,
+              style: TextButton.styleFrom(
+                foregroundColor: AppColors.error,
+                visualDensity: VisualDensity.compact,
+                padding: EdgeInsets.zero,
+              ),
+              icon: const Icon(Icons.cancel_outlined, size: 14),
+              label: const Text('Cancel',
+                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _DateChip extends StatelessWidget {
+  const _DateChip({required this.label, required this.value});
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label,
+            style: const TextStyle(
+                fontSize: 10, color: AppColors.textHint)),
+        Text(value,
+            style: const TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: AppColors.textPrimary)),
+      ],
     );
   }
 }

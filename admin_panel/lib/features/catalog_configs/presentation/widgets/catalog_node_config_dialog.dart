@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../../core/theme/app_theme.dart';
+import '../../../vendor_subscriptions/domain/models/subscription_plan.dart'
+    show kBillingCycles;
 import '../../data/catalog_node_configs_repository.dart';
 import '../../domain/models/catalog_node_config_model.dart';
 
@@ -28,6 +30,7 @@ class CatalogNodeConfigDialog extends StatefulWidget {
   final String? parentNodeId;
   final String? parentNodeName;
   final bool hasChildren;
+  final int initialTabIndex;
 
   const CatalogNodeConfigDialog({
     super.key,
@@ -36,6 +39,7 @@ class CatalogNodeConfigDialog extends StatefulWidget {
     this.parentNodeId,
     this.parentNodeName,
     this.hasChildren = false,
+    this.initialTabIndex = 0,
   });
 
   @override
@@ -110,6 +114,20 @@ class _CatalogNodeConfigDialogState extends State<CatalogNodeConfigDialog>
   final Map<String, TextEditingController> _pvFeeControllers = {};
   List<Map<String, dynamic>> _pvVendors = []; // loaded from DB
 
+  // Vendor Subscription — plan config embedded in catalog_node_configs JSONB
+  bool _vsEnabled = false;
+  final _vsNameCtrl = TextEditingController();
+  final _vsDescCtrl = TextEditingController();
+  String _vsBillingCycle = 'monthly';
+  final _vsDurationCtrl = TextEditingController(text: '30');
+  final _vsJoiningFeeCtrl = TextEditingController();
+  final _vsSubFeeCtrl = TextEditingController();
+  final _vsCommissionPctCtrl = TextEditingController();
+  bool _vsIsActive = true;
+  bool _vsAllowCod = false;
+  bool _vsAllowAssignment = false;
+  bool _vsPriorityListing = false;
+
   // Global module master-switch states (null = still loading)
   bool? _globalTaxEnabled;
   bool? _globalLoyaltyEnabled;
@@ -117,16 +135,19 @@ class _CatalogNodeConfigDialogState extends State<CatalogNodeConfigDialog>
 
   static const _modules = [
     'tax', 'loyalty', 'scheduling', 'commission', 'surge', 'preferred_vendors',
+    'vendor_subscription',
   ];
   static const _tabLabels = [
     'Tax', 'Loyalty', 'Scheduling', 'Platform Commission', 'Surge Fee', 'Preferred Vendors',
+    'Vendor Subscription',
   ];
   static const _dayLabels = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 6, vsync: this);
+    _tabController = TabController(
+        length: 7, vsync: this, initialIndex: widget.initialTabIndex);
     for (final m in _modules) {
       _applyToChildren[m] = false;
     }
@@ -148,6 +169,12 @@ class _CatalogNodeConfigDialogState extends State<CatalogNodeConfigDialog>
     for (final ctrl in _pvFeeControllers.values) {
       ctrl.dispose();
     }
+    _vsNameCtrl.dispose();
+    _vsDescCtrl.dispose();
+    _vsDurationCtrl.dispose();
+    _vsJoiningFeeCtrl.dispose();
+    _vsSubFeeCtrl.dispose();
+    _vsCommissionPctCtrl.dispose();
     super.dispose();
   }
 
@@ -178,10 +205,17 @@ class _CatalogNodeConfigDialogState extends State<CatalogNodeConfigDialog>
         // A3: rel-scoped override exists → "This path only".
         // A4: node-scoped override exists (no rel) → "All occurrences".
         // A5: no override → default to path scope when parent context available.
-        _useRelScope[m] = _relConfigs[m] != null
-            ? true
-            : (_nodeConfigs[m] != null ? false : _relationshipId != null);
-        _savedScope[m] = _useRelScope[m]!;
+        // vendor_subscription is always node-scoped (subscription config belongs
+        // to the catalog node itself, not any specific parent→child path).
+        if (m == 'vendor_subscription') {
+          _useRelScope[m] = false;
+          _savedScope[m] = false;
+        } else {
+          _useRelScope[m] = _relConfigs[m] != null
+              ? true
+              : (_nodeConfigs[m] != null ? false : _relationshipId != null);
+          _savedScope[m] = _useRelScope[m]!;
+        }
       }
 
       // Resolve inherited config for modules that have no direct override at all.
@@ -236,6 +270,7 @@ class _CatalogNodeConfigDialogState extends State<CatalogNodeConfigDialog>
       _populateCommission();
       _populateSurge();
       _populatePreferredVendors();
+      _populateVendorSubscription();
 
       if (mounted) setState(() => _loading = false);
     } catch (e) {
@@ -277,6 +312,7 @@ class _CatalogNodeConfigDialogState extends State<CatalogNodeConfigDialog>
     _populateCommission();
     _populateSurge();
     _populatePreferredVendors();
+    _populateVendorSubscription();
   }
 
   CatalogNodeConfigModel? _activeConfig(String module) {
@@ -680,6 +716,32 @@ class _CatalogNodeConfigDialogState extends State<CatalogNodeConfigDialog>
               .map((id) => {'id': id, 'fee': _pvVendorFees[id] ?? 0.0})
               .toList(),
         };
+      case 'vendor_subscription':
+        final perms = <String, dynamic>{
+          'allow_cod': _vsAllowCod,
+          'allow_booking_assignment': _vsAllowAssignment,
+          'priority_listing': _vsPriorityListing,
+          if (_vsCommissionPctCtrl.text.trim().isNotEmpty)
+            'reduced_commission_pct':
+                double.tryParse(_vsCommissionPctCtrl.text.trim()) ?? 0.0,
+        };
+        return {
+          'is_enabled': _vsEnabled,
+          'name': _vsNameCtrl.text.trim(),
+          'description': _vsDescCtrl.text.trim().isEmpty
+              ? null
+              : _vsDescCtrl.text.trim(),
+          'billing_cycle': _vsBillingCycle,
+          'duration_days': int.tryParse(_vsDurationCtrl.text.trim()) ?? 30,
+          'joining_fee': _vsJoiningFeeCtrl.text.trim().isEmpty
+              ? null
+              : double.tryParse(_vsJoiningFeeCtrl.text.trim()),
+          'subscription_fee': _vsSubFeeCtrl.text.trim().isEmpty
+              ? null
+              : double.tryParse(_vsSubFeeCtrl.text.trim()),
+          'is_active': _vsIsActive,
+          'permissions': perms,
+        };
       default:
         return {};
     }
@@ -855,7 +917,30 @@ class _CatalogNodeConfigDialogState extends State<CatalogNodeConfigDialog>
           ],
 
           // ── Scope selector ────────────────────────────────────────────
-          if (hasParent) ...[
+          if (module == 'vendor_subscription') ...[
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: AppColors.background,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Row(
+                children: [
+                  Icon(Icons.lock_outline_rounded,
+                      size: 14, color: AppColors.textSecondary),
+                  SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      'Vendor Subscription config is always node-scoped — it applies only to this catalog node.',
+                      style: TextStyle(
+                          fontSize: 11, color: AppColors.textSecondary),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+          ] else if (hasParent) ...[
             const Text(
               'Apply to',
               style: TextStyle(
@@ -917,7 +1002,7 @@ class _CatalogNodeConfigDialogState extends State<CatalogNodeConfigDialog>
               ),
             ),
             const SizedBox(height: 16),
-          ] else ...[
+          ] else if (module != 'vendor_subscription') ...[
             Container(
               padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(
@@ -962,7 +1047,7 @@ class _CatalogNodeConfigDialogState extends State<CatalogNodeConfigDialog>
           if (showForm) ...[
             _buildModuleFields(module),
 
-            if (widget.hasChildren) ...[
+            if (widget.hasChildren && module != 'vendor_subscription') ...[
               const SizedBox(height: 16),
               _buildApplyToChildrenCheckbox(module),
             ],
@@ -1038,6 +1123,8 @@ class _CatalogNodeConfigDialogState extends State<CatalogNodeConfigDialog>
         _populateSurge();
       case 'preferred_vendors':
         _populatePreferredVendors();
+      case 'vendor_subscription':
+        _populateVendorSubscription();
     }
   }
 
@@ -1164,6 +1251,21 @@ class _CatalogNodeConfigDialogState extends State<CatalogNodeConfigDialog>
           'Preferred vendors: Enabled',
           '$count vendor${count == 1 ? '' : 's'} configured',
         ];
+      case 'vendor_subscription':
+        final vsEnabled = cfg['is_enabled'] as bool? ?? false;
+        if (!vsEnabled) return ['Vendor Subscription: Disabled'];
+        final vsName = cfg['name'] as String? ?? '';
+        final vsCycle = cfg['billing_cycle'] as String? ?? 'monthly';
+        final vsDur = cfg['duration_days'] as num? ?? 30;
+        final vsSubFee = cfg['subscription_fee'] as num?;
+        final vsActive = cfg['is_active'] as bool? ?? false;
+        return [
+          'Vendor Subscription: Enabled',
+          if (vsName.isNotEmpty) 'Plan name: $vsName',
+          'Billing cycle: $vsCycle ($vsDur days)',
+          if (vsSubFee != null) 'Subscription fee: ₹$vsSubFee',
+          'Status: ${vsActive ? 'Active' : 'Inactive'}',
+        ];
       default:
         return [];
     }
@@ -1231,6 +1333,24 @@ class _CatalogNodeConfigDialogState extends State<CatalogNodeConfigDialog>
           };
         }
         _syncPvFeeControllers();
+      case 'vendor_subscription':
+        _vsEnabled = cfg['is_enabled'] as bool? ?? false;
+        _vsNameCtrl.text = cfg['name'] as String? ?? '';
+        _vsDescCtrl.text = cfg['description'] as String? ?? '';
+        _vsBillingCycle = cfg['billing_cycle'] as String? ?? 'monthly';
+        _vsDurationCtrl.text =
+            (cfg['duration_days'] as num?)?.toString() ?? '30';
+        _vsJoiningFeeCtrl.text =
+            (cfg['joining_fee'] as num?)?.toString() ?? '';
+        _vsSubFeeCtrl.text =
+            (cfg['subscription_fee'] as num?)?.toString() ?? '';
+        _vsCommissionPctCtrl.text =
+            (cfg['commission_percentage'] as num?)?.toString() ?? '';
+        _vsIsActive = cfg['is_active'] as bool? ?? false;
+        final vsPerms = cfg['permissions'] as Map<String, dynamic>? ?? {};
+        _vsAllowCod = vsPerms['allow_cod'] as bool? ?? false;
+        _vsAllowAssignment = vsPerms['allow_assignment'] as bool? ?? true;
+        _vsPriorityListing = vsPerms['priority_listing'] as bool? ?? false;
     }
   }
 
@@ -1248,6 +1368,8 @@ class _CatalogNodeConfigDialogState extends State<CatalogNodeConfigDialog>
         return _buildSurgeFields();
       case 'preferred_vendors':
         return _buildPreferredVendorsFields();
+      case 'vendor_subscription':
+        return _buildVendorSubscriptionFields();
       default:
         return const SizedBox.shrink();
     }
@@ -1578,6 +1700,238 @@ class _CatalogNodeConfigDialogState extends State<CatalogNodeConfigDialog>
           ],
         ],
       ],
+    );
+  }
+
+  void _populateVendorSubscription() {
+    final cfg = _activeConfig('vendor_subscription');
+    if (cfg != null) {
+      _vsEnabled = cfg.config['is_enabled'] as bool? ?? false;
+      _vsNameCtrl.text = cfg.config['name'] as String? ?? '';
+      _vsDescCtrl.text = cfg.config['description'] as String? ?? '';
+      _vsBillingCycle = cfg.config['billing_cycle'] as String? ?? 'monthly';
+      _vsDurationCtrl.text =
+          (cfg.config['duration_days'] as num?)?.toString() ?? '30';
+      final jf = cfg.config['joining_fee'];
+      _vsJoiningFeeCtrl.text =
+          jf != null ? (jf as num).toStringAsFixed(2) : '';
+      final sf = cfg.config['subscription_fee'];
+      _vsSubFeeCtrl.text =
+          sf != null ? (sf as num).toStringAsFixed(2) : '';
+      _vsIsActive = cfg.config['is_active'] as bool? ?? true;
+      final perms =
+          (cfg.config['permissions'] as Map?)?.cast<String, dynamic>() ?? {};
+      _vsAllowCod = perms['allow_cod'] == true;
+      _vsAllowAssignment = perms['allow_booking_assignment'] == true;
+      _vsPriorityListing = perms['priority_listing'] == true;
+      final commPct = perms['reduced_commission_pct'];
+      _vsCommissionPctCtrl.text =
+          commPct != null ? (commPct as num).toStringAsFixed(0) : '';
+    }
+  }
+
+  Widget _buildVendorSubscriptionFields() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SwitchListTile(
+          contentPadding: EdgeInsets.zero,
+          dense: true,
+          title: const Text('Enable Vendor Subscription',
+              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+          subtitle: const Text(
+            'Vendors can purchase a subscription scoped to this catalog node',
+            style: TextStyle(fontSize: 11),
+          ),
+          value: _vsEnabled,
+          activeColor: AppColors.primary,
+          onChanged: (v) => setState(() => _vsEnabled = v),
+        ),
+        if (_vsEnabled) ...[
+          const SizedBox(height: 14),
+          _label('Plan Name'),
+          const SizedBox(height: 4),
+          TextField(
+            controller: _vsNameCtrl,
+            decoration: _inputDeco('e.g. Plumbing Pro Plan'),
+          ),
+          const SizedBox(height: 12),
+          _label('Description (optional)'),
+          const SizedBox(height: 4),
+          TextField(
+            controller: _vsDescCtrl,
+            maxLines: 2,
+            decoration: _inputDeco('Brief description for vendors'),
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _label('Billing Cycle'),
+                    const SizedBox(height: 4),
+                    DropdownButtonFormField<String>(
+                      value: _vsBillingCycle,
+                      decoration: _inputDeco(''),
+                      items: kBillingCycles
+                          .map((c) => DropdownMenuItem(
+                                value: c,
+                                child: Text(
+                                    c[0].toUpperCase() + c.substring(1),
+                                    style: const TextStyle(fontSize: 13)),
+                              ))
+                          .toList(),
+                      onChanged: (v) =>
+                          setState(() => _vsBillingCycle = v!),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _label('Duration (days)'),
+                    const SizedBox(height: 4),
+                    TextField(
+                      controller: _vsDurationCtrl,
+                      keyboardType: TextInputType.number,
+                      decoration: _inputDeco('30'),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _label('Joining Fee (optional)'),
+                    const SizedBox(height: 4),
+                    TextField(
+                      controller: _vsJoiningFeeCtrl,
+                      keyboardType:
+                          const TextInputType.numberWithOptions(decimal: true),
+                      decoration: _inputDeco('0.00'),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _label('Subscription Fee (optional)'),
+                    const SizedBox(height: 4),
+                    TextField(
+                      controller: _vsSubFeeCtrl,
+                      keyboardType:
+                          const TextInputType.numberWithOptions(decimal: true),
+                      decoration: _inputDeco('0.00'),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          const Text('Permissions',
+              style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.textSecondary)),
+          const SizedBox(height: 8),
+          _vsPermTile(
+            'Allow COD',
+            'Vendor can accept Cash on Delivery payments',
+            _vsAllowCod,
+            (v) => setState(() => _vsAllowCod = v),
+          ),
+          _vsPermTile(
+            'Allow Booking Assignment',
+            'Admin can manually assign bookings to this vendor',
+            _vsAllowAssignment,
+            (v) => setState(() => _vsAllowAssignment = v),
+          ),
+          _vsPermTile(
+            'Priority Listing',
+            'Vendor appears higher in search results',
+            _vsPriorityListing,
+            (v) => setState(() => _vsPriorityListing = v),
+          ),
+          const SizedBox(height: 10),
+          _label('Reduced Commission % (optional)'),
+          const SizedBox(height: 4),
+          TextField(
+            controller: _vsCommissionPctCtrl,
+            keyboardType:
+                const TextInputType.numberWithOptions(decimal: true),
+            decoration: _inputDeco('Leave empty for default rate'),
+          ),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              Switch(
+                value: _vsIsActive,
+                onChanged: (v) => setState(() => _vsIsActive = v),
+                activeColor: AppColors.success,
+              ),
+              const SizedBox(width: 6),
+              Text(
+                _vsIsActive ? 'Active' : 'Inactive',
+                style: TextStyle(
+                  color: _vsIsActive
+                      ? AppColors.success
+                      : AppColors.textSecondary,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _vsPermTile(
+      String title, String subtitle, bool value, ValueChanged<bool> onChanged) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 6),
+      decoration: BoxDecoration(
+        color: value
+            ? AppColors.primary.withValues(alpha: 0.04)
+            : null,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(
+          color: value
+              ? AppColors.primary.withValues(alpha: 0.3)
+              : AppColors.border,
+          width: 0.8,
+        ),
+      ),
+      child: SwitchListTile(
+        dense: true,
+        title: Text(title,
+            style: const TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: AppColors.textPrimary)),
+        subtitle: Text(subtitle,
+            style: const TextStyle(
+                fontSize: 11, color: AppColors.textSecondary)),
+        value: value,
+        onChanged: onChanged,
+        activeColor: AppColors.primary,
+      ),
     );
   }
 

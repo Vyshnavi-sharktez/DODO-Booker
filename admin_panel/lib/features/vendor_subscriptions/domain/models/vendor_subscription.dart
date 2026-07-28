@@ -1,7 +1,8 @@
 class VendorSubscription {
   final String id;
   final String vendorId;
-  final String planId;
+  /// Null for catalog-specific subscriptions.
+  final String? planId;
   final String status;
   final DateTime? startDate;
   final DateTime? expiryDate;
@@ -15,10 +16,14 @@ class VendorSubscription {
   final String? vendorBusinessName;
   final List<SubscriptionPayment> payments;
 
+  /// Non-null when this is a catalog subscription.
+  final String? catalogNodeId;
+  final String? catalogNodeName;
+
   const VendorSubscription({
     required this.id,
     required this.vendorId,
-    required this.planId,
+    this.planId,
     required this.status,
     this.startDate,
     this.expiryDate,
@@ -29,10 +34,20 @@ class VendorSubscription {
     this.planName,
     this.vendorBusinessName,
     this.payments = const [],
+    this.catalogNodeId,
+    this.catalogNodeName,
   });
 
   bool get isActive => status == 'active';
   bool get isExpired => status == 'expired';
+  bool get isCatalogSub => catalogNodeId != null;
+
+  /// Human-readable plan / scope label for display.
+  String get displayPlanName {
+    if (planName != null) return planName!;
+    if (catalogNodeName != null) return 'Catalog: $catalogNodeName';
+    return 'Catalog Subscription';
+  }
 
   int get remainingDays {
     if (expiryDate == null) return 0;
@@ -45,8 +60,10 @@ class VendorSubscription {
     // Guard against ambiguous-FK scenarios where the type may differ.
     final plansJoin = map['subscription_plans'];
     final vendorsJoin = map['vendors'];
+    final nodesJoin = map['catalog_nodes'];
     final planMap = plansJoin is Map<String, dynamic> ? plansJoin : null;
     final vendorMap = vendorsJoin is Map<String, dynamic> ? vendorsJoin : null;
+    final nodeMap = nodesJoin is Map<String, dynamic> ? nodesJoin : null;
 
     final paymentsRaw = map['vendor_subscription_payments'];
     final paymentsList = paymentsRaw is List ? paymentsRaw : null;
@@ -54,7 +71,7 @@ class VendorSubscription {
     return VendorSubscription(
       id: map['id'] as String,
       vendorId: map['vendor_id'] as String,
-      planId: map['plan_id'] as String,
+      planId: map['plan_id'] as String?,
       status: map['status'] as String? ?? 'pending',
       startDate: _parseDate(map['start_date']),
       expiryDate: _parseDate(map['expiry_date']),
@@ -64,6 +81,8 @@ class VendorSubscription {
       updatedAt: _parseDate(map['updated_at']),
       planName: planMap?['name'] as String?,
       vendorBusinessName: vendorMap?['business_name'] as String?,
+      catalogNodeId: map['catalog_node_id'] as String?,
+      catalogNodeName: nodeMap?['name'] as String?,
       payments: paymentsList == null
           ? []
           : paymentsList
