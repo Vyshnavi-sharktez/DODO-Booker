@@ -134,6 +134,18 @@ const _navItems = <_NavItem>[
     requiredPermission: 'settings.manage',
   ),
   _NavItem(
+    label: 'AMC Plans',
+    icon: Icons.auto_mode_rounded,
+    route: '/dashboard/amc-plans',
+    requiredPermission: 'category.view',
+  ),
+  _NavItem(
+    label: 'AMC Requests',
+    icon: Icons.schedule_send_rounded,
+    route: '/dashboard/amc-scheduling-requests',
+    requiredPermission: 'booking.view',
+  ),
+  _NavItem(
     label: 'Subscriptions',
     icon: Icons.workspace_premium_rounded,
     route: '/dashboard/vendor-subscriptions',

@@ -13,6 +13,7 @@ class BookingsRemoteDatasource {
     status, subtotal, discount_amount, total_amount,
     address, notes, created_at, rejection_reason, rejected_at,
     completion_otp, otp_verified_at,
+    is_amc, amc_plan_name, amc_recurrence_interval, amc_contract_id,
     booking_items(
       service_id,
       quantity,
@@ -206,3 +207,6 @@ class BookingsRemoteDatasource {
     });
   }
 }
+
+
+

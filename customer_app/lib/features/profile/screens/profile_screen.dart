@@ -137,6 +137,18 @@ class _ProfileBody extends ConsumerWidget {
                 ),
               ),
 
+              const SizedBox(height: 12),
+
+              _FloatingCard(
+                child: ProfileMenuTile(
+                  icon: Icons.autorenew_rounded,
+                  iconColor: AppColors.primary,
+                  title: 'AMC Plans',
+                  subtitle: 'Your Annual Maintenance Contracts',
+                  onTap: () => context.push(AppRoutes.amcPlans),
+                ),
+              ),
+
               // ── Preferences section ───────────────────────────────────
               const _SectionLabel('Preferences'),
               

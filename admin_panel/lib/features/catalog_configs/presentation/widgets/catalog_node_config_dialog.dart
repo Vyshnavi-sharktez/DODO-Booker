@@ -1997,6 +1997,8 @@ class _CatalogNodeConfigDialogState extends State<CatalogNodeConfigDialog>
       );
 }
 
+// ── AMC plan entry with per-plan TextEditingControllers ──────────────────────
+
 // ── Shared-mode option card used inside the mode-choice dialog ─────────────────
 
 class _SharedModeOption extends StatelessWidget {

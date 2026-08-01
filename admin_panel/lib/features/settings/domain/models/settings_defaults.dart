@@ -24,6 +24,7 @@ const Map<String, String> kSettingDefaults = {
   'booking_cancellation_window_hours': '24',
   'booking_reschedule_limit': '2',
   'advance_booking_days': '30',
+  'amc_scheduling_window_days': '5',
 
   // Notification
   'enable_email_notifications': 'true',

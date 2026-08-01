@@ -3,10 +3,25 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../models/my_booking_model.dart';
+import '../../amc/models/amc_contract_summary.dart';
 import '../services/bookings_providers.dart';
 import '../utils/booking_detail_launcher.dart';
+import 'amc_contract_card.dart';
 import 'booking_card.dart';
 import 'empty_bookings_widget.dart';
+
+// Union type for the merged booking list.
+sealed class _Entry {}
+
+class _RegularEntry extends _Entry {
+  final MyBookingModel booking;
+  _RegularEntry(this.booking);
+}
+
+class _AmcEntry extends _Entry {
+  final AmcContractSummary contract;
+  _AmcEntry(this.contract);
+}
 
 /// Reusable tab body used by both [MyBookingsScreen] and [MyBookingsModal].
 class BookingTabContent extends ConsumerWidget {
@@ -19,26 +34,55 @@ class BookingTabContent extends ConsumerWidget {
     required this.onRefresh,
   });
 
-  List<MyBookingModel> _filter(List<MyBookingModel> all) {
-    return switch (tab) {
-      BookingsTab.upcoming => all.where((b) => b.isUpcoming).toList(),
-      BookingsTab.ongoing => all.where((b) => b.isOngoing).toList(),
-      BookingsTab.completed => all.where((b) => b.isCompleted).toList(),
-      BookingsTab.cancelled => all.where((b) => b.isCancelled).toList(),
-    };
+  List<_Entry> _filter(ProcessedBookings data) {
+    final entries = <_Entry>[];
+
+    switch (tab) {
+      case BookingsTab.upcoming:
+        entries.addAll(
+          data.regular.where((b) => b.isUpcoming).map(_RegularEntry.new),
+        );
+        entries.addAll(
+          data.amcContracts.where((c) => c.isUpcoming).map(_AmcEntry.new),
+        );
+      case BookingsTab.ongoing:
+        entries.addAll(
+          data.regular.where((b) => b.isOngoing).map(_RegularEntry.new),
+        );
+        entries.addAll(
+          data.amcContracts.where((c) => c.isOngoing).map(_AmcEntry.new),
+        );
+      case BookingsTab.completed:
+        entries.addAll(
+          data.regular.where((b) => b.isCompleted).map(_RegularEntry.new),
+        );
+        entries.addAll(
+          data.amcContracts.where((c) => c.isCompleted).map(_AmcEntry.new),
+        );
+      case BookingsTab.cancelled:
+        entries.addAll(
+          data.regular.where((b) => b.isCancelled).map(_RegularEntry.new),
+        );
+        entries.addAll(
+          data.amcContracts.where((c) => c.isCancelled).map(_AmcEntry.new),
+        );
+    }
+
+    return entries;
   }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final asyncBookings = ref.watch(myBookingsProvider);
+    final asyncData = ref.watch(processedBookingsProvider);
 
-    return asyncBookings.when(
+    return asyncData.when(
       loading: () => const BookingsLoadingSkeleton(),
-      error: (e, _) =>
-          BookingsErrorState(onRetry: () => ref.invalidate(myBookingsProvider)),
-      data: (all) {
-        final bookings = _filter(all);
-        if (bookings.isEmpty) {
+      error: (e, _) => BookingsErrorState(
+        onRetry: () => ref.invalidate(processedBookingsProvider),
+      ),
+      data: (processed) {
+        final entries = _filter(processed);
+        if (entries.isEmpty) {
           return RefreshIndicator(
             onRefresh: onRefresh,
             child: SingleChildScrollView(
@@ -59,11 +103,17 @@ class BookingTabContent extends ConsumerWidget {
           onRefresh: onRefresh,
           child: ListView.builder(
             padding: const EdgeInsets.symmetric(vertical: 8),
-            itemCount: bookings.length,
-            itemBuilder: (_, i) => BookingCard(
-              booking: bookings[i],
-              onTap: () => openBookingDetail(context, bookings[i]),
-            ),
+            itemCount: entries.length,
+            itemBuilder: (_, i) {
+              final entry = entries[i];
+              return switch (entry) {
+                _RegularEntry(booking: final b) => BookingCard(
+                    booking: b,
+                    onTap: () => openBookingDetail(context, b),
+                  ),
+                _AmcEntry(contract: final c) => AmcContractCard(contract: c),
+              };
+            },
           ),
         );
       },

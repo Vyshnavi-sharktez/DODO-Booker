@@ -12,12 +12,13 @@ import '../widgets/service_info_section.dart';
 import '../widgets/faq_section.dart';
 import '../widgets/service_attribute_section.dart';
 import '../widgets/service_addon_section.dart';
-import '../../booking/utils/booking_gate.dart';
+import '../../cart/providers/cart_provider.dart';
+import '../../cart/utils/cart_launcher.dart';
 import '../../wishlist/widgets/heart_button.dart';
 import '../../reviews/widgets/service_reviews_section.dart';
-import '../../cart/providers/cart_provider.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../../auth/utils/auth_modal_gate.dart';
+import '../../amc/widgets/amc_section.dart';
 
 class ServiceDetailsScreen extends ConsumerStatefulWidget {
   final ServiceModel service;
@@ -33,9 +34,13 @@ class _ServiceDetailsScreenState extends ConsumerState<ServiceDetailsScreen> {
   final Map<String, String> _selections = {};
   double _priceAdjustment = 0.0;
   final Set<String> _selectedAddonIds = {};
+  AmcPlanModel? _selectedAmcPlan;
 
   void _onOptionSelected(
-      String attrId, String optId, List<ServiceAttributeModel> attrs) {
+    String attrId,
+    String optId,
+    List<ServiceAttributeModel> attrs,
+  ) {
     setState(() {
       _selections[attrId] = optId;
       _priceAdjustment = attrs.fold(0.0, (sum, attr) {
@@ -63,10 +68,13 @@ class _ServiceDetailsScreenState extends ConsumerState<ServiceDetailsScreen> {
     final tt = Theme.of(context).textTheme;
     final attrs =
         ref.watch(serviceAttributesProvider(service.id)).valueOrNull ?? [];
-    final addOns =
-        ref.watch(allActiveAddonsProvider).valueOrNull ?? [];
-    final addonsTotal = totalAddonsPrice(buildSelectedAddons(addOns, _selectedAddonIds));
-    final displayPrice = service.startingPrice + _priceAdjustment + addonsTotal;
+    final addOns = ref.watch(allActiveAddonsProvider).valueOrNull ?? [];
+    final addonsTotal = totalAddonsPrice(
+      buildSelectedAddons(addOns, _selectedAddonIds),
+    );
+    final displayPrice = _selectedAmcPlan != null
+        ? _selectedAmcPlan!.finalPrice
+        : service.startingPrice + _priceAdjustment + addonsTotal;
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -108,8 +116,9 @@ class _ServiceDetailsScreenState extends ConsumerState<ServiceDetailsScreen> {
                       children: [
                         Text(
                           'About this service',
-                          style: tt.titleMedium
-                              ?.copyWith(fontWeight: FontWeight.w700),
+                          style: tt.titleMedium?.copyWith(
+                            fontWeight: FontWeight.w700,
+                          ),
                         ),
                         const SizedBox(height: 8),
                         Text(
@@ -128,6 +137,16 @@ class _ServiceDetailsScreenState extends ConsumerState<ServiceDetailsScreen> {
                   addOns: addOns,
                   selectedIds: _selectedAddonIds,
                   onToggle: _onAddonToggled,
+                ),
+                AmcSection(
+                  serviceId: service.id,
+                  selectedPlan: _selectedAmcPlan,
+                  onPlanSelected: (plan) => setState(() {
+                    _selectedAmcPlan = plan;
+                  }),
+                  regularPrice: service.startingPrice > 0
+                      ? service.startingPrice
+                      : null,
                 ),
 
                 FaqSection(faqs: service.faqs),
@@ -148,6 +167,7 @@ class _ServiceDetailsScreenState extends ConsumerState<ServiceDetailsScreen> {
         displayPrice: displayPrice,
         priceAdjustment: _priceAdjustment,
         addonsTotal: addonsTotal,
+        amcPlan: _selectedAmcPlan,
       ),
     );
   }
@@ -164,6 +184,7 @@ class _BookingBar extends ConsumerWidget {
   final double displayPrice;
   final double priceAdjustment;
   final double addonsTotal;
+  final AmcPlanModel? amcPlan;
 
   const _BookingBar({
     required this.service,
@@ -174,23 +195,23 @@ class _BookingBar extends ConsumerWidget {
     required this.displayPrice,
     required this.priceAdjustment,
     required this.addonsTotal,
+    this.amcPlan,
   });
 
-  bool get _requiredFilled =>
-      attrs.where((a) => a.isRequired && a.hasOptions).every(
-            (a) => selections.containsKey(a.id),
-          );
+  bool get _requiredFilled => attrs
+      .where((a) => a.isRequired && a.hasOptions)
+      .every((a) => selections.containsKey(a.id));
 
-  bool get _hasRequiredAttrs =>
-      attrs.any((a) => a.isRequired && a.hasOptions);
+  bool get _hasRequiredAttrs => attrs.any((a) => a.isRequired && a.hasOptions);
 
   Future<void> _addToCart(BuildContext context, WidgetRef ref) async {
     if (!ref.read(isAuthenticatedProvider)) {
       final proceed = await showDialog<bool>(
         context: context,
         builder: (ctx) => AlertDialog(
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
           title: const Text('Login Required'),
           content: const Text('Please log in to add items to your cart.'),
           actions: [
@@ -210,10 +231,12 @@ class _BookingBar extends ConsumerWidget {
       if (!context.mounted || !authed) return;
     }
 
-    ref
-        .read(cartProvider.notifier)
-        .addToCart(CatalogNodeModel.fromServiceModel(service),
-            priceAdjustment: priceAdjustment + addonsTotal);
+    ref.read(cartProvider.notifier).addToCart(
+          CatalogNodeModel.fromServiceModel(service),
+          priceAdjustment: amcPlan != null ? 0.0 : priceAdjustment + addonsTotal,
+          amcPlan: amcPlan,
+          amcQuantity: 1,
+        );
 
     if (!context.mounted) return;
     final currentPath = GoRouterState.of(context).uri.path;
@@ -221,29 +244,20 @@ class _BookingBar extends ConsumerWidget {
 
     ScaffoldMessenger.of(context)
       ..clearSnackBars()
-      ..showSnackBar(const SnackBar(
-        content: Text('Added to cart'),
-        duration: Duration(seconds: 2),
-        behavior: SnackBarBehavior.floating,
-      ));
-  }
-
-  Future<void> _book(BuildContext context, WidgetRef ref) async {
-    final selectedAttrs = buildSelectedAttributes(attrs, selections);
-    final selectedAddons = buildSelectedAddons(addOns, selectedAddonIds);
-    await launchBookingFlow(
-      context,
-      ref,
-      CatalogNodeModel.fromServiceModel(service),
-      selectedAttributes: selectedAttrs,
-      selectedAddons: selectedAddons,
-    );
+      ..showSnackBar(
+        const SnackBar(
+          content: Text('Added to cart'),
+          duration: Duration(seconds: 2),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
   }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final tt = Theme.of(context).textTheme;
     final canBook = !_hasRequiredAttrs || _requiredFilled;
+    final inCart = ref.watch(cartProvider).any((item) => item.serviceId == service.id);
 
     return Container(
       padding: EdgeInsets.fromLTRB(
@@ -276,36 +290,42 @@ class _BookingBar extends ConsumerWidget {
                 ),
               ),
               Text(
-                (priceAdjustment > 0 || addonsTotal > 0) ? 'incl. adjustments' : 'onwards',
+                amcPlan != null
+                    ? 'AMC total · ${amcPlan!.numVisits} visits'
+                    : (priceAdjustment > 0 || addonsTotal > 0)
+                        ? 'incl. adjustments'
+                        : 'onwards',
                 style: tt.labelSmall?.copyWith(color: AppColors.textHint),
               ),
             ],
           ),
           const SizedBox(width: 12),
-          OutlinedButton.icon(
-            onPressed: () => _addToCart(context, ref),
-            icon: const Icon(Icons.shopping_cart_outlined, size: 16),
-            label: const Text('Add'),
-            style: OutlinedButton.styleFrom(
-              minimumSize: const Size(0, 48),
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-            ),
-          ),
-          const SizedBox(width: 8),
           Expanded(
-            child: FilledButton(
-              onPressed: canBook ? () => _book(context, ref) : null,
-              style: FilledButton.styleFrom(
-                minimumSize: const Size.fromHeight(48),
-              ),
-              child: Text(
-                canBook
-                    ? 'Book Now'
-                    : 'Select options',
-                style:
-                    const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
-              ),
-            ),
+            child: inCart
+                ? FilledButton.icon(
+                    onPressed: () => openCart(context),
+                    icon: const Icon(Icons.shopping_cart_rounded, size: 16),
+                    label: const Text(
+                      'View Cart',
+                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+                    ),
+                    style: FilledButton.styleFrom(
+                      minimumSize: const Size.fromHeight(48),
+                    ),
+                  )
+                : FilledButton(
+                    onPressed: canBook ? () => _addToCart(context, ref) : null,
+                    style: FilledButton.styleFrom(
+                      minimumSize: const Size.fromHeight(48),
+                    ),
+                    child: Text(
+                      canBook ? 'Book Now' : 'Select options',
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
           ),
         ],
       ),

@@ -16,6 +16,7 @@ import '../widgets/available_coupons_sheet.dart';
 import '../../../features/tax/providers/tax_provider.dart';
 import '../../../features/tax/models/tax_settings_model.dart';
 import '../../../features/preferred_vendor/widgets/preferred_vendor_section.dart';
+import '../../../features/amc/models/amc_plan_model.dart';
 
 /// Booking summary modal. Pops with `true` when the user confirms booking.
 class BookingSummaryModal extends ConsumerStatefulWidget {
@@ -27,6 +28,7 @@ class BookingSummaryModal extends ConsumerStatefulWidget {
   final List<SelectedAttributeOption> selectedAttributes;
   final List<SelectedAddon> selectedAddons;
   final String? parentNodeId;
+  final AmcPlanModel? amcPlan;
 
   const BookingSummaryModal({
     super.key,
@@ -38,6 +40,7 @@ class BookingSummaryModal extends ConsumerStatefulWidget {
     this.selectedAttributes = const [],
     this.selectedAddons = const [],
     this.parentNodeId,
+    this.amcPlan,
   });
 
   @override
@@ -65,6 +68,10 @@ class _BookingSummaryModalState extends ConsumerState<BookingSummaryModal> {
       TaxSettingsModel.defaults;
 
   double _computeSubtotal(TaxSettingsModel tax) {
+    if (widget.amcPlan != null) {
+      final base = widget.amcPlan!.pricePerVisit;
+      return base + tax.computeTax(base);
+    }
     final base = (widget.service.basePrice ?? 0.0) +
         widget.priceAdjustment +
         totalAddonsPrice(widget.selectedAddons);
@@ -154,7 +161,7 @@ class _BookingSummaryModalState extends ConsumerState<BookingSummaryModal> {
       parentNodeId: widget.parentNodeId,
     ))).valueOrNull ?? TaxSettingsModel.defaults;
     final subtotal = _computeSubtotal(taxSettings);
-    final discount = selectedCoupon?.calculateDiscount(subtotal) ?? 0.0;
+    final discount = widget.amcPlan != null ? 0.0 : (selectedCoupon?.calculateDiscount(subtotal) ?? 0.0);
 
     return AppModalDialog(
       title: 'Review Booking',
@@ -175,10 +182,11 @@ class _BookingSummaryModalState extends ConsumerState<BookingSummaryModal> {
             parentNodeId: widget.parentNodeId,
             preferredVendorFee: pvSelection.fee,
             preferredVendorName: pvSelection.name,
+            amcPlan: widget.amcPlan,
           ),
 
-          // ── Preferred Vendor ──────────────────────────────────────────────
-          if (widget.address.hasCoordinates)
+          // ── Preferred Vendor (hidden for AMC) ─────────────────────────────
+          if (widget.amcPlan == null && widget.address.hasCoordinates)
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
               child: PreferredVendorSection(
@@ -195,7 +203,8 @@ class _BookingSummaryModalState extends ConsumerState<BookingSummaryModal> {
               ),
             ),
 
-          // ── Coupon input / applied state ──────────────────────────────────
+          // ── Coupon input / applied state (hidden for AMC) ─────────────────
+          if (widget.amcPlan == null)
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
             child: selectedCoupon == null

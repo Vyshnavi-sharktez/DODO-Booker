@@ -22,6 +22,10 @@ class Booking {
     this.completionOtp,
     this.otpVerifiedAt,
     this.items = const [],
+    this.isAmc = false,
+    this.amcPlanName,
+    this.amcRecurrenceInterval,
+    this.amcContractId,
   });
 
   final String id;
@@ -45,6 +49,10 @@ class Booking {
   final String? completionOtp;
   final DateTime? otpVerifiedAt;
   final List<BookingItem> items;
+  final bool isAmc;
+  final String? amcPlanName;
+  final String? amcRecurrenceInterval;
+  final String? amcContractId;
 
   bool get isDodoTeam => assignmentType == 'DODO Team';
 
@@ -80,6 +88,10 @@ class Booking {
           ? DateTime.tryParse(map['otp_verified_at'] as String)
           : null,
       items: items,
+      isAmc: map['is_amc'] as bool? ?? false,
+      amcPlanName: map['amc_plan_name'] as String?,
+      amcRecurrenceInterval: map['amc_recurrence_interval'] as String?,
+      amcContractId: map['amc_contract_id'] as String?,
     );
   }
 
@@ -105,6 +117,10 @@ class Booking {
       completionOtp: completionOtp,
       otpVerifiedAt: otpVerifiedAt,
       items: items,
+      isAmc: isAmc,
+      amcPlanName: amcPlanName,
+      amcRecurrenceInterval: amcRecurrenceInterval,
+      amcContractId: amcContractId,
     );
   }
 }

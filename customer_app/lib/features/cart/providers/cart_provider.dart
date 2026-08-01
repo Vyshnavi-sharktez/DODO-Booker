@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/cart_item.dart';
 import '../../../features/catalog/models/catalog_node_model.dart';
+import '../../../features/amc/models/amc_plan_model.dart';
 import '../services/cart_sync_service.dart';
 
 class CartNotifier extends StateNotifier<List<CartItem>> {
@@ -55,8 +56,8 @@ class CartNotifier extends StateNotifier<List<CartItem>> {
       for (final item in state) item.serviceId: item,
     };
 
-    // Remote wins for business data; local parentNodeId is preserved because
-    // CartSyncService never stores or returns it.
+    // Remote wins for business data; local parentNodeId and AMC metadata are
+    // preserved because CartSyncService never stores or returns them.
     for (final remote in remoteItems) {
       final local = merged[remote.serviceId];
       debugPrint('[DODO][CartSync][loadFromRemote] merging serviceId=${remote.serviceId}  '
@@ -69,6 +70,22 @@ class CartNotifier extends StateNotifier<List<CartItem>> {
         quantity: remote.quantity,
         minimumOrderAmount: remote.minimumOrderAmount ?? local?.minimumOrderAmount,
         parentNodeId: local?.parentNodeId ?? remote.parentNodeId,
+        isAmc: local?.isAmc ?? false,
+        amcPlanName: local?.amcPlanName,
+        amcRecurrenceInterval: local?.amcRecurrenceInterval,
+        amcPlanId: local?.amcPlanId,
+        amcPricePerVisit: local?.amcPricePerVisit,
+        amcNumVisits: local?.amcNumVisits,
+        amcOriginalTotal: local?.amcOriginalTotal,
+        amcDiscountType: local?.amcDiscountType,
+        amcDiscountValue: local?.amcDiscountValue,
+        amcDiscountAmount: local?.amcDiscountAmount,
+        amcFinalPrice: local?.amcFinalPrice,
+        amcPackageDuration: local?.amcPackageDuration,
+        amcServiceInterval: local?.amcServiceInterval,
+        amcQuantity: local?.amcQuantity ?? 1,
+        amcIsRenewal: local?.amcIsRenewal ?? false,
+        amcPreviousContractId: local?.amcPreviousContractId,
       );
     }
 
@@ -90,12 +107,14 @@ class CartNotifier extends StateNotifier<List<CartItem>> {
     CatalogNodeModel service, {
     double priceAdjustment = 0.0,
     String? parentNodeId,
+    AmcPlanModel? amcPlan,
+    int amcQuantity = 1,
+    bool amcIsRenewal = false,
+    String? amcPreviousContractId,
   }) {
-    debugPrint('[DODO][CartSync][1] addToCart() entered — serviceId=${service.id} name=${service.name} parentNodeId=$parentNodeId');
+    debugPrint('[DODO][CartSync][1] addToCart() entered — serviceId=${service.id} name=${service.name} parentNodeId=$parentNodeId isAmc=${amcPlan != null}');
     final idx = state.indexWhere((item) => item.serviceId == service.id);
     if (idx >= 0) {
-      // Also update parentNodeId so the scoped-config path is refreshed when
-      // the customer re-adds the same service through a different catalog node.
       debugPrint('[DODO][CartSync][1a] existing item found at idx=$idx  '
           'old parentNodeId=${state[idx].parentNodeId}  new parentNodeId=$parentNodeId');
       state = [
@@ -104,21 +123,56 @@ class CartNotifier extends StateNotifier<List<CartItem>> {
             state[i].copyWith(
               quantity: state[i].quantity + 1,
               parentNodeId: parentNodeId,
+              isAmc: amcPlan != null,
+              amcPlanName: amcPlan?.planName,
+              amcRecurrenceInterval: amcPlan?.serviceIntervalLabel,
+              amcPlanId: amcPlan?.id,
+              amcPricePerVisit: amcPlan?.pricePerVisit,
+              amcNumVisits: amcPlan?.numVisits,
+              amcOriginalTotal: amcPlan?.originalTotal,
+              amcDiscountType: amcPlan?.discountType,
+              amcDiscountValue: amcPlan?.discountValue,
+              amcDiscountAmount: amcPlan?.discountAmount,
+              amcFinalPrice: amcPlan?.finalPrice,
+              amcPackageDuration: amcPlan?.packageDuration,
+              amcServiceInterval: amcPlan?.serviceInterval,
+              amcQuantity: amcPlan != null ? amcQuantity : 1,
+              amcIsRenewal: amcIsRenewal,
+              amcPreviousContractId: amcPreviousContractId,
             )
           else
             state[i],
       ];
     } else {
+      final unitPrice = amcPlan != null
+          ? amcPlan.finalPrice * amcQuantity
+          : (service.basePrice ?? 0.0) + priceAdjustment;
       state = [
         ...state,
         CartItem(
           serviceId: service.id,
           serviceName: service.name,
           imageUrl: service.imageUrl,
-          unitPrice: (service.basePrice ?? 0.0) + priceAdjustment,
+          unitPrice: unitPrice,
           quantity: 1,
-          minimumOrderAmount: service.minimumOrderAmount,
+          minimumOrderAmount: amcPlan != null ? null : service.minimumOrderAmount,
           parentNodeId: parentNodeId,
+          isAmc: amcPlan != null,
+          amcPlanName: amcPlan?.planName,
+          amcRecurrenceInterval: amcPlan?.serviceIntervalLabel,
+          amcPlanId: amcPlan?.id,
+          amcPricePerVisit: amcPlan?.pricePerVisit,
+          amcNumVisits: amcPlan?.numVisits,
+          amcOriginalTotal: amcPlan?.originalTotal,
+          amcDiscountType: amcPlan?.discountType,
+          amcDiscountValue: amcPlan?.discountValue,
+          amcDiscountAmount: amcPlan?.discountAmount,
+          amcFinalPrice: amcPlan?.finalPrice,
+          amcPackageDuration: amcPlan?.packageDuration,
+          amcServiceInterval: amcPlan?.serviceInterval,
+          amcQuantity: amcPlan != null ? amcQuantity : 1,
+          amcIsRenewal: amcIsRenewal,
+          amcPreviousContractId: amcPreviousContractId,
         ),
       ];
     }
@@ -151,6 +205,13 @@ class CartNotifier extends StateNotifier<List<CartItem>> {
     state = [];
     _save();
     unawaited(_sync.clearAll());
+  }
+
+  /// Replaces the entire cart with a single item. Used by "Schedule Next Visit"
+  /// from the AMC contract card to pre-populate checkout.
+  void replaceWithSingleItem(CartItem item) {
+    state = [item];
+    unawaited(_save());
   }
 }
 

@@ -136,6 +136,15 @@ class SettingsPage extends ConsumerWidget {
           min: 1,
           max: 365,
         ),
+        SettingFieldDef(
+          key: 'amc_scheduling_window_days',
+          label: 'AMC Scheduling Window',
+          hint: 'Days before due date to surface AMC visits in the admin queue',
+          type: SettingFieldType.integer,
+          unit: 'days',
+          min: 1,
+          max: 30,
+        ),
       ],
     ),
     SettingSectionDef(

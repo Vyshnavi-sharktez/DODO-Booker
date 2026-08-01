@@ -27,6 +27,55 @@ final _isoDateFmt = DateFormat('yyyy-MM-dd');
 // Must stay in sync with get_vendor_busy_status RPC (supabase/migrations).
 const _kBusyStatuses = ['accepted', 'in_progress', 'awaiting_verification'];
 
+// ── AMC planned-date helpers ───────────────────────────────────────────────────
+
+DateTime _addCalendarMonths(DateTime base, int months) {
+  final total = (base.month - 1) + months;
+  final targetYear = base.year + total ~/ 12;
+  final targetMonth = total % 12 + 1;
+  final daysInMonth = DateTime.utc(targetYear, targetMonth + 1, 0).day;
+  return DateTime.utc(targetYear, targetMonth, base.day.clamp(1, daysInMonth));
+}
+
+DateTime? _amcPlannedDate(DateTime createdAt, String? interval, int visitNumber) {
+  if (interval == null) return null;
+  final n = visitNumber - 1;
+  final base = DateTime.utc(createdAt.year, createdAt.month, createdAt.day);
+  return switch (interval) {
+    'monthly'     => _addCalendarMonths(base, n),
+    'quarterly'   => _addCalendarMonths(base, 3 * n),
+    'half_yearly' => _addCalendarMonths(base, 6 * n),
+    'yearly'      => _addCalendarMonths(base, 12 * n),
+    _ => null,
+  };
+}
+
+/// For AMC bookings: returns (vendorId, vendorName, completedDate) for the
+/// vendor who completed the most recent visit under the given contract.
+/// Returns null when there are no completed visits or the contract ID is null.
+final _amcLastVendorProvider = FutureProvider.autoDispose
+    .family<({String vendorId, DateTime? completedAt})?, String>((ref, contractId) async {
+  if (contractId.isEmpty) return null;
+  final rows = await Supabase.instance.client
+      .from('bookings')
+      .select('vendor_id, otp_verified_at')
+      .eq('amc_contract_id', contractId)
+      .eq('status', 'completed')
+      .not('vendor_id', 'is', null)
+      .order('otp_verified_at', ascending: false)
+      .limit(1);
+  if ((rows as List).isEmpty) return null;
+  final row = rows.first as Map<String, dynamic>;
+  final vid = row['vendor_id'] as String?;
+  if (vid == null || vid.isEmpty) return null;
+  return (
+    vendorId: vid,
+    completedAt: row['otp_verified_at'] != null
+        ? DateTime.tryParse(row['otp_verified_at'] as String)
+        : null,
+  );
+});
+
 /// Single-query busy check: returns the set of vendor IDs that already have a
 /// committed booking on the given service date.
 /// Keyed as '$dateISO|$excludeBookingId' so the family auto-refreshes when
@@ -74,11 +123,13 @@ class BookingAssignmentDialog extends ConsumerStatefulWidget {
     required DateTime serviceDate,
     String? notes,
   }) onSave;
+  final DateTime? preferredDate;
 
   const BookingAssignmentDialog({
     super.key,
     required this.booking,
     required this.onSave,
+    this.preferredDate,
   });
 
   @override
@@ -95,6 +146,8 @@ class _BookingAssignmentDialogState
   late String _vendorId;
   late String _dodoTeamId;
   late DateTime? _serviceDate;
+  bool _isDefaultDate = false;
+  DateTime? _preferredDate;
   bool _saving = false;
   bool _showAllVendors = false;
   bool _showAllTeams = false;
@@ -113,11 +166,47 @@ class _BookingAssignmentDialogState
     _vendorId = widget.booking.vendorId;
     _dodoTeamId = widget.booking.dodoTeamId;
     _serviceDate = widget.booking.serviceDate;
+    _preferredDate = widget.preferredDate;
     _assigneeType = switch (widget.booking.assignmentType) {
       'DODO Team' => _AssigneeType.team,
       'Unassigned' => _AssigneeType.unassigned,
       _ => _AssigneeType.vendor,
     };
+
+    // For AMC bookings with no service date, fetch the contract's schedule
+    // and pre-populate the date field with the visit's planned due date.
+    if (widget.booking.isAmc &&
+        widget.booking.serviceDate == null &&
+        widget.booking.amcContractId != null &&
+        widget.booking.amcVisitNumber != null) {
+      Future.microtask(_fetchAmcPlannedDate);
+    }
+  }
+
+  Future<void> _fetchAmcPlannedDate() async {
+    final row = await Supabase.instance.client
+        .from('amc_contracts')
+        .select('created_at, service_interval')
+        .eq('id', widget.booking.amcContractId!)
+        .maybeSingle();
+
+    if (!mounted || row == null) return;
+
+    final createdAt = DateTime.tryParse(row['created_at'] as String? ?? '');
+    if (createdAt == null) return;
+
+    final planned = _amcPlannedDate(
+      createdAt,
+      row['service_interval'] as String?,
+      widget.booking.amcVisitNumber!,
+    );
+
+    if (planned != null && mounted) {
+      setState(() {
+        _serviceDate = planned;
+        _isDefaultDate = true;
+      });
+    }
   }
 
   @override
@@ -133,7 +222,12 @@ class _BookingAssignmentDialogState
       firstDate: DateTime(2020),
       lastDate: DateTime(2030),
     );
-    if (picked != null) setState(() => _serviceDate = picked);
+    if (picked != null) {
+      setState(() {
+        _serviceDate = picked;
+        _isDefaultDate = false;
+      });
+    }
   }
 
   Future<void> _submit() async {
@@ -287,6 +381,9 @@ class _BookingAssignmentDialogState
                               assignmentsAsync.hasError,
                           allVendors: allVendors,
                           codEnforced: codEnforced,
+                          contractId: widget.booking.isAmc
+                              ? (widget.booking.amcContractId ?? '')
+                              : '',
                         ),
 
                       if (_assigneeType == _AssigneeType.team)
@@ -311,9 +408,22 @@ class _BookingAssignmentDialogState
                         onTap: _saving ? null : _pickDate,
                         borderRadius: BorderRadius.circular(8),
                         child: InputDecorator(
-                          decoration: const InputDecoration(
+                          decoration: InputDecoration(
                             labelText: 'Service Date *',
-                            prefixIcon: Icon(Icons.calendar_today_rounded),
+                            prefixIcon:
+                                const Icon(Icons.calendar_today_rounded),
+                            helperText: _isDefaultDate
+                                ? 'Default from AMC Schedule'
+                                : null,
+                            helperStyle: const TextStyle(
+                              color: AppColors.primary,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w500,
+                            ),
+                            suffixIcon: const Icon(
+                                Icons.edit_calendar_rounded,
+                                size: 18,
+                                color: AppColors.textSecondary),
                           ),
                           child: Text(
                             _serviceDate != null
@@ -328,6 +438,24 @@ class _BookingAssignmentDialogState
                           ),
                         ),
                       ),
+                      if (_preferredDate != null) ...[
+                        const SizedBox(height: 8),
+                        Row(
+                          children: [
+                            const Icon(Icons.event_available_rounded,
+                                size: 14,
+                                color: AppColors.textSecondary),
+                            const SizedBox(width: 6),
+                            Text(
+                              'Customer Preferred Date:  ${_dateFmt.format(_preferredDate!)}',
+                              style: const TextStyle(
+                                fontSize: 12,
+                                color: AppColors.textSecondary,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
                       const SizedBox(height: 16),
 
                       TextFormField(
@@ -441,6 +569,7 @@ class _BookingAssignmentDialogState
     required bool hasError,
     required List<Vendor> allVendors,
     bool codEnforced = false,
+    String contractId = '',
   }) {
     if (isLoading) {
       return const Center(
@@ -457,6 +586,31 @@ class _BookingAssignmentDialogState
         color: AppColors.error,
         message: 'Failed to load vendor data. Please try again.',
       );
+    }
+
+    // ── AMC recommended vendor ─────────────────────────────────────────────
+    Widget? amcRecommendedSection;
+    if (contractId.isNotEmpty) {
+      final lastVendorAsync = ref.watch(_amcLastVendorProvider(contractId));
+      final lastVendorData = lastVendorAsync.valueOrNull;
+      if (lastVendorData != null) {
+        final recVendor = allVendors
+            .where((v) => v.id == lastVendorData.vendorId)
+            .firstOrNull;
+        if (recVendor != null) {
+          final completedStr = lastVendorData.completedAt != null
+              ? _dateFmt.format(lastVendorData.completedAt!.toLocal())
+              : null;
+          amcRecommendedSection = _AmcRecommendedVendorCard(
+            vendor: recVendor,
+            completedAt: completedStr,
+            isSelected: _vendorId == recVendor.id,
+            onSelect: _saving
+                ? null
+                : () => setState(() => _vendorId = recVendor.id),
+          );
+        }
+      }
     }
 
     // COD enforcement banner — shown whenever enforcement is active so the
@@ -492,6 +646,8 @@ class _BookingAssignmentDialogState
           ?codBanner,
           if (codBanner != null) const SizedBox(height: 12),
           ?currentAssigneeNote,
+          ?amcRecommendedSection,
+          if (amcRecommendedSection != null) const SizedBox(height: 12),
           if (_bookingHasAddress)
             _AddressRow(
               address: widget.booking.address!,
@@ -545,6 +701,8 @@ class _BookingAssignmentDialogState
           ?codBanner,
           if (codBanner != null) const SizedBox(height: 12),
           ?currentAssigneeNote,
+          ?amcRecommendedSection,
+          if (amcRecommendedSection != null) const SizedBox(height: 12),
           _InfoBanner(
             icon: Icons.location_off_rounded,
             color: AppColors.textSecondary,
@@ -587,6 +745,8 @@ class _BookingAssignmentDialogState
           ?codBanner,
           if (codBanner != null) const SizedBox(height: 12),
           ?currentAssigneeNote,
+          ?amcRecommendedSection,
+          if (amcRecommendedSection != null) const SizedBox(height: 12),
           ?addressRow,
           if (addressRow != null) const SizedBox(height: 8),
           _InfoBanner(
@@ -606,6 +766,8 @@ class _BookingAssignmentDialogState
         ?codBanner,
         if (codBanner != null) const SizedBox(height: 12),
         ?currentAssigneeNote,
+        ?amcRecommendedSection,
+        if (amcRecommendedSection != null) const SizedBox(height: 12),
         ?addressRow,
         const SizedBox(height: 4),
         Text(
@@ -1149,6 +1311,113 @@ class _ModeTab extends StatelessWidget {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+// ── AMC recommended vendor card ────────────────────────────────────────────────
+
+class _AmcRecommendedVendorCard extends StatelessWidget {
+  final Vendor vendor;
+  final String? completedAt;
+  final bool isSelected;
+  final VoidCallback? onSelect;
+
+  const _AmcRecommendedVendorCard({
+    required this.vendor,
+    this.completedAt,
+    required this.isSelected,
+    this.onSelect,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF0FFF4),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: const Color(0xFF38A169).withValues(alpha: 0.4)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.history_rounded,
+                  size: 13, color: Color(0xFF276749)),
+              const SizedBox(width: 5),
+              const Text(
+                'RECOMMENDED VENDOR',
+                style: TextStyle(
+                  fontSize: 10,
+                  fontWeight: FontWeight.w700,
+                  color: Color(0xFF276749),
+                  letterSpacing: 0.5,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      vendor.businessName,
+                      style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.textPrimary,
+                      ),
+                    ),
+                    Text(
+                      'Handled previous AMC visit',
+                      style: TextStyle(
+                          fontSize: 11, color: AppColors.textSecondary),
+                    ),
+                    if (completedAt != null)
+                      Text(
+                        'Completed: $completedAt',
+                        style: const TextStyle(
+                            fontSize: 11, color: Color(0xFF276749)),
+                      ),
+                  ],
+                ),
+              ),
+              isSelected
+                  ? OutlinedButton.icon(
+                      onPressed: onSelect,
+                      icon: const Icon(Icons.check_circle_rounded, size: 14),
+                      label: const Text('Selected'),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: AppColors.primary,
+                        side: const BorderSide(color: AppColors.primary),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 6),
+                        minimumSize: Size.zero,
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        textStyle: const TextStyle(fontSize: 12),
+                      ),
+                    )
+                  : FilledButton(
+                      onPressed: onSelect,
+                      style: FilledButton.styleFrom(
+                        backgroundColor: const Color(0xFF38A169),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 6),
+                        minimumSize: Size.zero,
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        textStyle: const TextStyle(fontSize: 12),
+                      ),
+                      child: const Text('Select'),
+                    ),
+            ],
+          ),
+        ],
       ),
     );
   }

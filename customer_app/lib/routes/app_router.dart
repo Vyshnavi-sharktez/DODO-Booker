@@ -16,6 +16,7 @@ import '../features/booking/screens/booking_success_screen.dart';
 import '../features/bookings/screens/booking_details_screen.dart';
 import '../features/bookings/screens/my_bookings_screen.dart';
 import '../features/bookings/utils/my_bookings_launcher.dart';
+import '../features/amc/screens/amc_plans_page.dart';
 import '../features/profile/screens/profile_screen.dart';
 import '../features/profile/screens/edit_profile_screen.dart';
 import '../features/wishlist/screens/wishlist_screen.dart';
@@ -57,6 +58,7 @@ class AppRoutes {
   static const String checkout = '/cart/checkout';
   static const String search = '/search';
   static const String myBookings = '/my-bookings';
+  static const String amcPlans = '/amc-plans';
   static const String profile = '/profile';
   static const String categories = '/categories';
   static const String contact = '/contact';
@@ -178,6 +180,11 @@ final appRouter = GoRouter(
     GoRoute(
       path: AppRoutes.myBookings,
       builder: (context, state) => const MyBookingsScreen(),
+    ),
+
+    GoRoute(
+      path: AppRoutes.amcPlans,
+      builder: (context, state) => const AmcPlansPage(),
     ),
 
     GoRoute(

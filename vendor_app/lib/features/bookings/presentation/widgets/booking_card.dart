@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/utils/date_utils.dart';
 import '../../../../core/utils/format_utils.dart';
@@ -547,6 +548,11 @@ class _BookingCardState extends ConsumerState<BookingCard> {
               ),
             ],
 
+            if (_booking.isAmc) ...[
+              const SizedBox(height: 8),
+              _VendorAmcSection(booking: _booking),
+            ],
+
             const SizedBox(height: 10),
             const Divider(height: 1, color: AppColors.border),
             const SizedBox(height: 10),
@@ -882,6 +888,685 @@ class _ServicesBlock extends StatelessWidget {
     );
   }
 }
+
+// ── AMC contract data model (vendor-local) ────────────────────────────────────
+
+class _VAmcVisit {
+  final int number;
+  final String status;
+  final DateTime? serviceDate;
+  final String? vendorId;
+  final String? vendorName;
+  final DateTime? completedAt;
+
+  const _VAmcVisit({
+    required this.number,
+    required this.status,
+    this.serviceDate,
+    this.vendorId,
+    this.vendorName,
+    this.completedAt,
+  });
+}
+
+class _VAmcContract {
+  final String planName;
+  final String status;
+  final String? packageDuration;
+  final String? discountType;
+  final double? discountValue;
+  final double? discountAmount;
+  final double? finalPrice;
+  final int effectiveTotal;
+  final int completedCount;
+  final int quantity;
+  final DateTime createdAt;
+  final List<_VAmcVisit> visits;
+
+  const _VAmcContract({
+    required this.planName,
+    required this.status,
+    this.packageDuration,
+    this.discountType,
+    this.discountValue,
+    this.discountAmount,
+    this.finalPrice,
+    required this.effectiveTotal,
+    required this.completedCount,
+    this.quantity = 1,
+    required this.createdAt,
+    this.visits = const [],
+  });
+
+  int get remainingCount => (effectiveTotal - completedCount).clamp(0, 9999);
+
+  DateTime? get endDate {
+    final days = switch (packageDuration) {
+      'monthly' => 30,
+      'quarterly' => 91,
+      'half_yearly' => 182,
+      'yearly' => 365,
+      _ => null,
+    };
+    return days != null ? createdAt.add(Duration(days: days)) : null;
+  }
+}
+
+// Provider: fetches AMC contract + visits (with vendor names) for a contract ID.
+final _vendorAmcContractProvider = FutureProvider.autoDispose
+    .family<_VAmcContract?, String>((ref, contractId) async {
+  if (contractId.isEmpty) return null;
+  final client = Supabase.instance.client;
+
+  final raw = await client
+      .from('amc_contracts')
+      .select(
+        'plan_name, status, package_duration, '
+        'num_visits, total_visits, quantity, '
+        'discount_type, discount_value, discount_amount, final_price, '
+        'created_at',
+      )
+      .eq('id', contractId)
+      .maybeSingle();
+
+  if (raw == null) return null;
+
+  final visitsRaw = await client
+      .from('bookings')
+      .select('id, status, service_date, vendor_id, otp_verified_at')
+      .eq('amc_contract_id', contractId)
+      .order('created_at', ascending: true);
+
+  final rawVisits = visitsRaw as List<dynamic>;
+
+  // Resolve vendor names in one round-trip
+  final vendorIds = rawVisits
+      .map((v) => (v as Map)['vendor_id'] as String?)
+      .whereType<String>()
+      .toSet()
+      .toList();
+
+  Map<String, String> vendorNames = {};
+  if (vendorIds.isNotEmpty) {
+    final vendorRows = await client
+        .from('vendors')
+        .select('id, business_name')
+        .inFilter('id', vendorIds);
+    for (final row in vendorRows as List) {
+      final m = row as Map<String, dynamic>;
+      final vid = m['id'] as String?;
+      final name = m['business_name'] as String?;
+      if (vid != null && name != null) vendorNames[vid] = name;
+    }
+  }
+
+  final completedCount = rawVisits
+      .where((v) => (v as Map)['status'] == 'completed')
+      .length;
+
+  final visits = rawVisits.asMap().entries.map((e) {
+    final v = e.value as Map<String, dynamic>;
+    final vid = v['vendor_id'] as String?;
+    return _VAmcVisit(
+      number: e.key + 1,
+      status: v['status'] as String? ?? 'pending',
+      serviceDate: v['service_date'] != null
+          ? DateTime.tryParse(v['service_date'] as String)
+          : null,
+      vendorId: vid,
+      vendorName: vid != null ? vendorNames[vid] : null,
+      completedAt: v['otp_verified_at'] != null
+          ? DateTime.tryParse(v['otp_verified_at'] as String)
+          : null,
+    );
+  }).toList();
+
+  final numVisits = (raw['num_visits'] as num?)?.toInt();
+  final totalVisits = (raw['total_visits'] as num?)?.toInt() ?? 0;
+
+  return _VAmcContract(
+    planName: raw['plan_name'] as String? ?? '',
+    status: raw['status'] as String? ?? 'active',
+    packageDuration: raw['package_duration'] as String?,
+    discountType: raw['discount_type'] as String?,
+    discountValue: (raw['discount_value'] as num?)?.toDouble(),
+    discountAmount: (raw['discount_amount'] as num?)?.toDouble(),
+    finalPrice: (raw['final_price'] as num?)?.toDouble(),
+    effectiveTotal: numVisits ?? totalVisits,
+    completedCount: completedCount,
+    quantity: (raw['quantity'] as num?)?.toInt() ?? 1,
+    createdAt: DateTime.parse(raw['created_at'] as String),
+    visits: visits,
+  );
+});
+
+// ── Vendor AMC section widget ─────────────────────────────────────────────────
+
+class _VendorAmcSection extends ConsumerWidget {
+  final Booking booking;
+
+  const _VendorAmcSection({required this.booking});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final contractId = booking.amcContractId ?? '';
+    final contractAsync = contractId.isNotEmpty
+        ? ref.watch(_vendorAmcContractProvider(contractId))
+        : null;
+
+    return Card(
+      elevation: 0,
+      color: const Color(0xFFF0F8FF),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(
+            color: const Color(0xFF3182CE).withValues(alpha: 0.25)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // ── Header ───────────────────────────────────────────────────
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF3182CE).withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Icon(Icons.autorenew_rounded,
+                      size: 18, color: Color(0xFF3182CE)),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'AMC CONTRACT',
+                        style: Theme.of(context)
+                            .textTheme
+                            .labelSmall
+                            ?.copyWith(
+                              color: const Color(0xFF3182CE),
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: 0.6,
+                            ),
+                      ),
+                      if (booking.amcPlanName != null &&
+                          booking.amcPlanName!.isNotEmpty)
+                        Text(
+                          booking.amcPlanName!,
+                          style: Theme.of(context)
+                              .textTheme
+                              .titleSmall
+                              ?.copyWith(
+                                fontWeight: FontWeight.w700,
+                                color: const Color(0xFF1A365D),
+                              ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          if (contractAsync == null)
+            _AmcBasicRows(booking: booking)
+          else
+            contractAsync.when(
+              loading: () => const Padding(
+                padding: EdgeInsets.fromLTRB(16, 0, 16, 16),
+                child: SizedBox(
+                  height: 20,
+                  width: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+              ),
+              error: (_, __) => _AmcBasicRows(booking: booking),
+              data: (contract) => contract != null
+                  ? _AmcDetailRows(contract: contract)
+                  : _AmcBasicRows(booking: booking),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AmcBasicRows extends StatelessWidget {
+  final Booking booking;
+  const _AmcBasicRows({required this.booking});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (booking.amcRecurrenceInterval != null &&
+              booking.amcRecurrenceInterval!.isNotEmpty)
+            _VRow(
+              icon: Icons.repeat_rounded,
+              label: booking.amcRecurrenceInterval!,
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AmcDetailRows extends StatelessWidget {
+  final _VAmcContract contract;
+  const _AmcDetailRows({required this.contract});
+
+  static const _months = [
+    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+  ];
+
+  String _fmtDate(DateTime d) =>
+      '${d.day} ${_months[d.month - 1]} ${d.year}';
+
+  String _discountLabel() {
+    final amt = contract.discountAmount ?? 0;
+    if (contract.discountType == 'percentage' &&
+        contract.discountValue != null) {
+      return '${contract.discountValue!.toStringAsFixed(0)}% off  (−₹${amt.toStringAsFixed(0)})';
+    }
+    if (amt > 0) return '−₹${amt.toStringAsFixed(0)}';
+    return 'None';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final endDate = contract.endDate;
+    final tt = Theme.of(context).textTheme;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // ── Progress ─────────────────────────────────────────────────
+        const Divider(height: 1, indent: 16, endIndent: 16,
+            color: Color(0xFFBEE3F8)),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  _StatusBadge(status: contract.status),
+                  const Spacer(),
+                  Text(
+                    '${contract.completedCount} of ${contract.effectiveTotal} visits',
+                    style: tt.labelSmall?.copyWith(
+                      color: const Color(0xFF2B6CB0),
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  _VisitStat(
+                    value: '${contract.effectiveTotal}',
+                    label: 'Total',
+                    color: const Color(0xFF3182CE),
+                  ),
+                  const SizedBox(width: 24),
+                  _VisitStat(
+                    value: '${contract.completedCount}',
+                    label: 'Done',
+                    color: const Color(0xFF276749),
+                  ),
+                  const SizedBox(width: 24),
+                  _VisitStat(
+                    value: '${contract.remainingCount}',
+                    label: 'Left',
+                    color: contract.remainingCount > 0
+                        ? const Color(0xFFDD6B20)
+                        : const Color(0xFF718096),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(4),
+                child: LinearProgressIndicator(
+                  value: contract.effectiveTotal > 0
+                      ? (contract.completedCount / contract.effectiveTotal)
+                          .clamp(0.0, 1.0)
+                      : 0.0,
+                  minHeight: 7,
+                  backgroundColor: const Color(0xFFBEE3F8),
+                  color: const Color(0xFF3182CE),
+                ),
+              ),
+            ],
+          ),
+        ),
+
+        // ── Contract Info ─────────────────────────────────────────────
+        const Divider(height: 1, indent: 16, endIndent: 16,
+            color: Color(0xFFBEE3F8)),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _AmcInfoRow(
+                icon: Icons.local_offer_outlined,
+                label: 'Discount',
+                value: _discountLabel(),
+              ),
+              const SizedBox(height: 8),
+              _AmcInfoRow(
+                icon: Icons.calendar_today_rounded,
+                label: 'Started',
+                value: _fmtDate(contract.createdAt.toLocal()),
+              ),
+              if (contract.quantity > 1) ...[
+                const SizedBox(height: 8),
+                _AmcInfoRow(
+                  icon: Icons.devices_rounded,
+                  label: 'Units',
+                  value: '${contract.quantity}',
+                ),
+              ],
+              if (endDate != null) ...[
+                const SizedBox(height: 8),
+                _AmcInfoRow(
+                  icon: Icons.event_rounded,
+                  label: 'Valid till',
+                  value: _fmtDate(endDate.toLocal()),
+                ),
+              ],
+            ],
+          ),
+        ),
+
+        // ── Visit History ─────────────────────────────────────────────
+        if (contract.visits.isNotEmpty) ...[
+          const Divider(height: 1, indent: 16, endIndent: 16,
+              color: Color(0xFFBEE3F8)),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+            child: Text(
+              'VISIT HISTORY',
+              style: tt.labelSmall?.copyWith(
+                color: const Color(0xFF3182CE),
+                fontWeight: FontWeight.w700,
+                letterSpacing: 0.6,
+              ),
+            ),
+          ),
+          ...contract.visits.map((v) => _VVisitRow(visit: v)),
+          const SizedBox(height: 8),
+        ] else
+          const SizedBox(height: 4),
+      ],
+    );
+  }
+}
+
+class _VisitStat extends StatelessWidget {
+  final String value;
+  final String label;
+  final Color color;
+
+  const _VisitStat({
+    required this.value,
+    required this.label,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          value,
+          style: TextStyle(
+            fontSize: 22,
+            fontWeight: FontWeight.w800,
+            color: color,
+            height: 1.1,
+          ),
+        ),
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: 11,
+            color: Color(0xFF718096),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _AmcInfoRow extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String value;
+
+  const _AmcInfoRow({
+    required this.icon,
+    required this.label,
+    required this.value,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(icon, size: 14, color: const Color(0xFF3182CE)),
+        const SizedBox(width: 8),
+        Text(
+          '$label: ',
+          style: const TextStyle(fontSize: 12, color: Color(0xFF718096)),
+        ),
+        Flexible(
+          child: Text(
+            value,
+            style: const TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: Color(0xFF2D3748),
+            ),
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _StatusBadge extends StatelessWidget {
+  final String status;
+  const _StatusBadge({required this.status});
+
+  @override
+  Widget build(BuildContext context) {
+    final (label, color, bg) = switch (status) {
+      'active' => ('Active', const Color(0xFF276749), const Color(0xFFF0FFF4)),
+      'completed' =>
+        ('Completed', const Color(0xFF2B6CB0), const Color(0xFFEBF8FF)),
+      'paused' =>
+        ('Paused', const Color(0xFF744210), const Color(0xFFFEFCBF)),
+      'cancelled' =>
+        ('Cancelled', const Color(0xFFC53030), const Color(0xFFFFF5F5)),
+      _ => ('Unknown', const Color(0xFF718096), const Color(0xFFF7FAFC)),
+    };
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration:
+          BoxDecoration(color: bg, borderRadius: BorderRadius.circular(20)),
+      child: Text(
+        label,
+        style: TextStyle(
+          fontSize: 11,
+          fontWeight: FontWeight.w700,
+          color: color,
+          letterSpacing: 0.2,
+        ),
+      ),
+    );
+  }
+}
+
+class _VRow extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  const _VRow({required this.icon, required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 4),
+      child: Row(
+        children: [
+          Icon(icon, size: 13, color: AppColors.textSecondary),
+          const SizedBox(width: 6),
+          Flexible(
+            child: Text(
+              label,
+              style: const TextStyle(
+                  fontSize: 12, color: AppColors.textSecondary),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _VVisitRow extends StatelessWidget {
+  final _VAmcVisit visit;
+  const _VVisitRow({required this.visit});
+
+  static const _months = [
+    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+  ];
+
+  String? _fmtDate(DateTime? d) {
+    if (d == null) return null;
+    return '${d.day} ${_months[d.month - 1]} ${d.year}';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final tt = Theme.of(context).textTheme;
+    final (statusLabel, statusColor, statusBg) = switch (visit.status) {
+      'completed' =>
+        ('Done', const Color(0xFF276749), const Color(0xFFF0FFF4)),
+      'cancelled' =>
+        ('Cancelled', const Color(0xFFC53030), const Color(0xFFFFF5F5)),
+      'in_progress' || 'started' =>
+        ('In Progress', const Color(0xFF805AD5), const Color(0xFFFAF5FF)),
+      'assigned' || 'accepted' =>
+        ('Assigned', const Color(0xFF2C7A7B), const Color(0xFFE6FFFA)),
+      _ => ('Pending', const Color(0xFFDD6B20), const Color(0xFFFEEBC8)),
+    };
+    final dateStr = _fmtDate(visit.serviceDate?.toLocal());
+    final completedStr = _fmtDate(visit.completedAt?.toLocal());
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 6, 16, 6),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Visit number
+          Container(
+            width: 28,
+            height: 28,
+            decoration: BoxDecoration(
+              color: const Color(0xFFBEE3F8),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Center(
+              child: Text(
+                '${visit.number}',
+                style: const TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w800,
+                  color: Color(0xFF2B6CB0),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 12),
+          // Info
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (visit.vendorName != null &&
+                    visit.vendorName!.isNotEmpty)
+                  Text(
+                    visit.vendorName!,
+                    style: tt.bodySmall?.copyWith(
+                      fontWeight: FontWeight.w600,
+                      color: const Color(0xFF1A365D),
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                if (dateStr != null)
+                  Text(
+                    dateStr,
+                    style: const TextStyle(
+                      fontSize: 12,
+                      color: Color(0xFF4A5568),
+                    ),
+                  ),
+                if (completedStr != null)
+                  Text(
+                    'Completed $completedStr',
+                    style: const TextStyle(
+                      fontSize: 11,
+                      color: Color(0xFF276749),
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          // Status badge
+          Container(
+            padding:
+                const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+            decoration: BoxDecoration(
+                color: statusBg,
+                borderRadius: BorderRadius.circular(20)),
+            child: Text(
+              statusLabel,
+              style: TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.w700,
+                color: statusColor,
+                letterSpacing: 0.2,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Confirm dialog ─────────────────────────────────────────────────────────────
 
 class _ConfirmDialog extends StatelessWidget {
   const _ConfirmDialog({

@@ -35,6 +35,8 @@ import '../../features/service_availability_areas/presentation/pages/service_ava
 import '../../features/surge_fees/presentation/pages/surge_fee_settings_page.dart';
 import '../../features/seo/presentation/pages/seo_management_page.dart';
 import '../../features/vendor_subscriptions/presentation/pages/vendor_subscriptions_page.dart';
+import '../../features/amc_plans/presentation/pages/amc_plans_page.dart';
+import '../../features/amc_plans/presentation/pages/amc_scheduling_requests_page.dart';
 import '../../shared/pages/unauthorized_page.dart';
 import '../rbac/permission_guard.dart';
 
@@ -357,6 +359,20 @@ final routerProvider = Provider<GoRouter>((ref) {
             name: 'vendorSubscriptions',
             pageBuilder: (context, state) => const NoTransitionPage(
               child: VendorSubscriptionsPage(),
+            ),
+          ),
+          GoRoute(
+            path: '/dashboard/amc-plans',
+            name: 'amcPlans',
+            pageBuilder: (context, state) => const NoTransitionPage(
+              child: AmcPlansPage(),
+            ),
+          ),
+          GoRoute(
+            path: '/dashboard/amc-scheduling-requests',
+            name: 'amcSchedulingRequests',
+            pageBuilder: (context, state) => const NoTransitionPage(
+              child: AmcSchedulingRequestsPage(),
             ),
           ),
         ],

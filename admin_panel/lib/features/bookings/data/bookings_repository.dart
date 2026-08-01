@@ -18,7 +18,8 @@ const _reviewSelect = '''
     unit_price,
     total_price,
     catalog_nodes!booking_items_service_id_catalog_fkey(id, name)
-  )
+  ),
+  amc_contracts!amc_contract_id(visits_completed, num_visits, total_visits, created_at, service_interval, status, cancellation_reason, cancellation_remarks, cancellation_requested_at, quantity)
 ''';
 
 // Valid assignment_type values that match the DB schema.

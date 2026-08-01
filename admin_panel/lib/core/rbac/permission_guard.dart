@@ -45,6 +45,8 @@ const Map<String, String> routePermissions = {
   '/surge-fees': 'settings.manage',
   '/seo': 'settings.manage',
   '/vendor-subscriptions': 'vendor.view',
+  '/amc-plans': 'category.view',
+  '/amc-scheduling-requests': 'booking.view',
 };
 
 // ── Permission guard widget ────────────────────────────────────────────────────

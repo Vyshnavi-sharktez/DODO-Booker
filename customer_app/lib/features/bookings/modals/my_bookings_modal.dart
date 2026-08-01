@@ -40,7 +40,7 @@ class _MyBookingsModalState extends ConsumerState<MyBookingsModal>
   Future<void> _refresh() async {
     ref.invalidate(myBookingsProvider);
     try {
-      await ref.read(myBookingsProvider.future);
+      await ref.read(processedBookingsProvider.future);
     } catch (_) {}
   }
 

@@ -10,7 +10,10 @@ import '../../../features/catalog/models/catalog_node_model.dart';
 import '../../../models/address_model.dart';
 import '../../../models/addon_model.dart';
 import '../../../features/tax/services/tax_service.dart';
+import '../../../features/amc/models/amc_plan_model.dart';
+import '../../../features/amc/services/amc_visit_number_service.dart';
 import 'coupon_service.dart';
+
 
 class BookingService {
   static const _phoneKey = 'dodo_auth_phone';
@@ -325,18 +328,22 @@ class BookingService {
     String? parentNodeId,
     String? preferredVendorId,
     double? preferredVendorFeeAmount,
+    AmcPlanModel? amcPlan,
   }) async {
     debugPrint('[DODO][Booking] createBooking started');
     debugPrint('[DODO][Booking] Service: ${service.name} (id=${service.id})');
     debugPrint('[DODO][Booking] Address object — id=${address.id}  lat=${address.latitude}  lng=${address.longitude}  full="${address.fullAddress}"');
     debugPrint('[DODO][Booking] Date: ${date.toIso8601String().substring(0, 10)}');
     debugPrint('[DODO][Booking] Slot: ${slot.label}');
+    if (amcPlan != null) debugPrint('[DODO][Booking] AMC plan: ${amcPlan.name} (${amcPlan.recurrenceInterval}) ₹${amcPlan.pricePerVisit}/visit');
 
     final customerId = await _getCustomerId();
     debugPrint('[DODO][Booking] customer_id=$customerId');
 
-    final addonsTotal = totalAddonsPrice(selectedAddons);
-    final subtotal = (service.basePrice ?? 0.0) + priceAdjustment + addonsTotal;
+    final addonsTotal = amcPlan != null ? 0.0 : totalAddonsPrice(selectedAddons);
+    final subtotal = amcPlan != null
+        ? amcPlan.pricePerVisit
+        : (service.basePrice ?? 0.0) + priceAdjustment + addonsTotal;
     final tax = await _resolveTaxAmount(subtotal, service.id, parentNodeId);
     final pvFee = preferredVendorFeeAmount ?? 0.0;
     final grossAmount = subtotal + tax + pvFee;
@@ -352,66 +359,163 @@ class BookingService {
     debugPrint('[OTP][Create] ══════════ OTP GENERATION ══════════');
     debugPrint('[OTP][Create] Generated OTP: $completionOtp  (len=${completionOtp.length})');
 
-    // ── INSERT into bookings ─────────────────────────────────────────────────
-    debugPrint('[DODO][Booking] Booking payload — lat=${address.latitude}  lng=${address.longitude}');
-    debugPrint('[DODO][Booking] Inserting into bookings table');
-    final payload = {
-      'customer_id': customerId,
-      'service_date': serviceDate,
-      'status': 'pending',
-      'subtotal': subtotal,
-      'discount_amount': discountAmount,
-      'total_amount': totalAmount,
-      'address': address.fullAddress,
-      'notes': '${service.name} · ${slot.label}',
-      'latitude': ?address.latitude,
-      'longitude': ?address.longitude,
-      'completion_otp': completionOtp,
-      'scheduled_time': slot.label,
-      'service_id': service.id,
-      'preferred_vendor_id': ?preferredVendorId,
-      if (pvFee > 0) 'preferred_vendor_fee_amount': pvFee,
-      // Auto-assign: when customer picks a preferred vendor, write vendor_id
-      // immediately so admin dispatch is bypassed for this booking.
-      'vendor_id': ?preferredVendorId,
-    };
-    debugPrint('[OTP][Create] Payload keys    : ${payload.keys.toList()}');
-    debugPrint('[OTP][Create] Payload otp val : ${payload['completion_otp']}');
-    debugPrint('BOOKING LAT=${address.latitude}');
-    debugPrint('BOOKING LNG=${address.longitude}');
-    debugPrint('BOOKING PAYLOAD=$payload');
+    // ── Look up existing active contract or create a new one ────────────────
+    // Reuse an active contract so every visit belongs to the same contract.
+    // Only create a new contract when none exists (first purchase) or the
+    // existing one is already completed/cancelled.
+    String? amcContractId;
+    int amcVisitNumber = 1;
+    if (amcPlan != null) {
+      if (amcPlan.id.isNotEmpty) {
+        final existing = await _client
+            .from('amc_contracts')
+            .select('id, visits_completed, num_visits')
+            .eq('customer_id', customerId)
+            .eq('service_id', service.id)
+            .eq('amc_plan_id', amcPlan.id)
+            .eq('status', 'active')
+            .limit(1);
+        final list = existing as List;
+        if (list.isNotEmpty) {
+          final row = list.first as Map<String, dynamic>;
+          final completed = (row['visits_completed'] as num?)?.toInt() ?? 0;
+          final total = (row['num_visits'] as num?)?.toInt() ?? 0;
+          if (total == 0 || completed < total) {
+            amcContractId = row['id'] as String;
+            amcVisitNumber = await resolveNextAmcVisitNumber(_client, amcContractId);
+            debugPrint('[AMC] Reusing contract id=$amcContractId  visits=$completed/$total → booking visit #$amcVisitNumber');
+          }
+        }
+      }
 
-    final bookingData = await _client
-        .from('bookings')
-        .insert(payload)
-        .select()
-        .single();
+      if (amcContractId == null) {
+        debugPrint('[AMC][Insert] plan: id=${amcPlan.id}  planName=${amcPlan.planName}  packageDuration=${amcPlan.packageDuration}  serviceInterval=${amcPlan.serviceInterval}');
+        debugPrint('[AMC][Insert] computed: packageDays=${amcPlan.packageDays}  intervalDays=${amcPlan.intervalDays}  numVisits=${amcPlan.numVisits}');
+        debugPrint('[AMC][Insert] pricing: pricePerVisit=${amcPlan.pricePerVisit}  originalTotal=${amcPlan.originalTotal}  discountType=${amcPlan.discountType}  discountValue=${amcPlan.discountValue}  discountAmount=${amcPlan.discountAmount}  finalPrice=${amcPlan.finalPrice}');
+        final contractRow = await _client.from('amc_contracts').insert({
+          'customer_id': customerId,
+          'service_id': service.id,
+          'service_name': service.name,
+          'plan_name': amcPlan.name,
+          'recurrence_interval': amcPlan.recurrenceInterval,
+          'price_per_visit': amcPlan.pricePerVisit,
+          'status': 'active',
+          'total_visits': amcPlan.numVisits,
+          'amc_plan_id': amcPlan.id.isNotEmpty ? amcPlan.id : null,
+          'package_duration': amcPlan.packageDuration,
+          'service_interval': amcPlan.serviceInterval,
+          'num_visits': amcPlan.numVisits,
+          'original_total': amcPlan.originalTotal,
+          'discount_type': amcPlan.discountType,
+          'discount_value': amcPlan.discountValue,
+          'discount_amount': amcPlan.discountAmount,
+          'final_price': amcPlan.finalPrice,
+        }).select('id').single();
+        amcContractId = contractRow['id'] as String;
+        debugPrint('[AMC][Insert] Contract created id=$amcContractId');
+      }
+    }
+
+    // ── Check for existing unscheduled AMC visit (Option B lifecycle) ────────
+    // When the DB trigger creates a next-visit placeholder (status=pending,
+    // service_date=NULL), UPDATE that row instead of INSERTing a new booking.
+    String? pendingVisitId;
+    if (amcContractId != null) {
+      pendingVisitId = await findUnscheduledAmcVisit(_client, amcContractId);
+      if (pendingVisitId != null) {
+        debugPrint('[DODO][Booking][AMC] Found unscheduled visit id=$pendingVisitId — scheduling instead of INSERT');
+      }
+    }
+
+    // ── INSERT into bookings (or UPDATE existing pending AMC visit) ──────────
+    debugPrint('[DODO][Booking] Booking payload — lat=${address.latitude}  lng=${address.longitude}');
+    final Map<String, dynamic> bookingData;
+    if (pendingVisitId != null) {
+      await _client.from('bookings').update({
+        'service_date': serviceDate,
+        'scheduled_time': slot.label,
+        'address': address.fullAddress,
+        'notes': '${service.name} · ${slot.label}',
+        'latitude': ?address.latitude,
+        'longitude': ?address.longitude,
+        'subtotal': subtotal,
+        'discount_amount': discountAmount,
+        'total_amount': totalAmount,
+        'preferred_vendor_id': ?preferredVendorId,
+        'vendor_id': ?preferredVendorId,
+        if (pvFee > 0) 'preferred_vendor_fee_amount': pvFee,
+      }).eq('id', pendingVisitId);
+      bookingData = Map<String, dynamic>.from(
+        await _client.from('bookings').select().eq('id', pendingVisitId).single(),
+      );
+      debugPrint('[DODO][Booking][AMC] Scheduled existing pending visit id=$pendingVisitId');
+    } else {
+      debugPrint('[DODO][Booking] Inserting into bookings table');
+      final payload = {
+        'customer_id': customerId,
+        'service_date': serviceDate,
+        'status': 'pending',
+        'subtotal': subtotal,
+        'discount_amount': discountAmount,
+        'total_amount': totalAmount,
+        'address': address.fullAddress,
+        'notes': '${service.name} · ${slot.label}',
+        'latitude': ?address.latitude,
+        'longitude': ?address.longitude,
+        'completion_otp': completionOtp,
+        'scheduled_time': slot.label,
+        'service_id': service.id,
+        'preferred_vendor_id': ?preferredVendorId,
+        if (pvFee > 0) 'preferred_vendor_fee_amount': pvFee,
+        // Auto-assign: when customer picks a preferred vendor, write vendor_id
+        // immediately so admin dispatch is bypassed for this booking.
+        'vendor_id': ?preferredVendorId,
+        if (amcPlan != null) ...{
+          'is_amc': true,
+          'amc_plan_name': amcPlan.name,
+          'amc_recurrence_interval': amcPlan.recurrenceInterval,
+          if (amcContractId != null) 'amc_contract_id': amcContractId,
+          'amc_visit_number': amcVisitNumber,
+        },
+      };
+      debugPrint('[OTP][Create] Payload keys    : ${payload.keys.toList()}');
+      debugPrint('[OTP][Create] Payload otp val : ${payload['completion_otp']}');
+      debugPrint('BOOKING LAT=${address.latitude}');
+      debugPrint('BOOKING LNG=${address.longitude}');
+      debugPrint('BOOKING PAYLOAD=$payload');
+      bookingData = Map<String, dynamic>.from(
+        await _client.from('bookings').insert(payload).select().single(),
+      );
+      debugPrint('[DODO][Booking] Booking created: id=${bookingData['id']}');
+    }
 
     final bookingId = bookingData['id'] as String;
-    debugPrint('[DODO][Booking] Booking created: id=$bookingId');
 
-    // ── Verify OTP was written ────────────────────────────────────────────────
-    final returnedOtp = bookingData['completion_otp'] as String?;
-    debugPrint('[OTP][Create] Returned row keys: ${(bookingData as Map).keys.toList()}');
-    debugPrint('[OTP][Create] Returned otp val : $returnedOtp');
-    if (returnedOtp == null) {
-      // The INSERT ignored completion_otp — almost always a column-level
-      // permission issue (column added after the RLS policy was created).
-      // Fall back to an explicit UPDATE using the same session.
-      debugPrint('[OTP][Create] ⚠ OTP missing from INSERT result — attempting UPDATE fallback');
-      try {
-        await _client
-            .from('bookings')
-            .update({'completion_otp': completionOtp})
-            .eq('id', bookingId);
-        debugPrint('[OTP][Create] ✓ UPDATE fallback succeeded — OTP=$completionOtp');
-      } catch (e) {
-        debugPrint('[OTP][Create] ✗ UPDATE fallback failed: $e');
-        debugPrint('[OTP][Create]   ACTION REQUIRED: grant the customer role '
-            'INSERT/UPDATE on bookings.completion_otp in Supabase dashboard');
+    // ── Verify OTP was written (INSERT path only) ────────────────────────────
+    // The trigger-created placeholder already has an OTP; skip for UPDATE path.
+    if (pendingVisitId == null) {
+      final returnedOtp = bookingData['completion_otp'] as String?;
+      debugPrint('[OTP][Create] Returned row keys: ${(bookingData).keys.toList()}');
+      debugPrint('[OTP][Create] Returned otp val : $returnedOtp');
+      if (returnedOtp == null) {
+        // The INSERT ignored completion_otp — almost always a column-level
+        // permission issue (column added after the RLS policy was created).
+        // Fall back to an explicit UPDATE using the same session.
+        debugPrint('[OTP][Create] ⚠ OTP missing from INSERT result — attempting UPDATE fallback');
+        try {
+          await _client
+              .from('bookings')
+              .update({'completion_otp': completionOtp})
+              .eq('id', bookingId);
+          debugPrint('[OTP][Create] ✓ UPDATE fallback succeeded — OTP=$completionOtp');
+        } catch (e) {
+          debugPrint('[OTP][Create] ✗ UPDATE fallback failed: $e');
+          debugPrint('[OTP][Create]   ACTION REQUIRED: grant the customer role '
+              'INSERT/UPDATE on bookings.completion_otp in Supabase dashboard');
+        }
+      } else {
+        debugPrint('[OTP][Create] ✓ OTP written via INSERT: $returnedOtp');
       }
-    } else {
-      debugPrint('[OTP][Create] ✓ OTP written via INSERT: $returnedOtp');
     }
 
     // ── INSERT into booking_items ─────────────────────────────────────────────
@@ -509,6 +613,9 @@ class BookingService {
       createdAt: bookingData['created_at'] != null
           ? DateTime.parse(bookingData['created_at'] as String)
           : DateTime.now(),
+      isAmc: amcPlan != null,
+      amcPlanName: amcPlan?.name,
+      amcRecurrenceInterval: amcPlan?.recurrenceInterval,
     );
   }
 
