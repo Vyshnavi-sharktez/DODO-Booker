@@ -409,6 +409,25 @@ class _BookingAssignmentDialogState
                           ],
                         ),
                       ],
+                      if (widget.booking.isAmc &&
+                          widget.booking.amcQuantity > 1) ...[
+                        const SizedBox(height: 8),
+                        Row(
+                          children: [
+                            Icon(Icons.devices_rounded,
+                                size: 14, color: AppColors.primary),
+                            const SizedBox(width: 6),
+                            Text(
+                              'AMC covers ${widget.booking.amcQuantity} units',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: AppColors.primary,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
                       const SizedBox(height: 16),
 
                       TextFormField(

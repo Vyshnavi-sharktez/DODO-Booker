@@ -193,7 +193,11 @@ class CartNotifier extends StateNotifier<List<CartItem>> {
     }
     state = [
       for (final item in state)
-        if (item.serviceId == serviceId) item.copyWith(quantity: quantity)
+        if (item.serviceId == serviceId)
+          item.copyWith(
+            quantity: quantity,
+            amcQuantity: item.isAmc && item.amcIsRenewal ? quantity : null,
+          )
         else item,
     ];
     _save();
