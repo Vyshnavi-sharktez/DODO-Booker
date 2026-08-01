@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:intl/intl.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/admin_search_bar.dart';
@@ -11,9 +12,11 @@ import '../../../vendor_assignment/domain/models/assignment_entry.dart';
 import '../../../vendor_assignment/presentation/widgets/assignment_history_dialog.dart';
 import '../../../vendors/application/providers/vendors_providers.dart';
 import '../../../vendors/domain/models/vendor.dart';
+import '../../../settings/application/providers/settings_providers.dart';
 import '../../application/providers/bookings_providers.dart';
 import '../../domain/models/booking.dart';
 import '../../domain/models/booking_item.dart';
+import '../../../amc_plans/presentation/widgets/amc_contract_details_dialog.dart';
 import '../widgets/booking_details_dialog.dart';
 import '../widgets/booking_assignment_dialog.dart';
 import '../widgets/create_booking_dialog.dart';
@@ -67,6 +70,75 @@ const _cancellableStatuses = {
 // Sentinel for the "Unassigned" option in the Assigned To filter.
 const String _kUnassigned = '__unassigned__';
 
+// ── AMC contract aggregate ────────────────────────────────────────────────────
+// Groups all visit bookings for one AMC contract and computes display values.
+// No DB changes needed — purely derived from existing Booking fields.
+
+class _AmcContractAggregate {
+  final String contractId;
+  final String planName;
+  final List<Booking> visits; // sorted by amc_visit_number ascending
+
+  const _AmcContractAggregate({
+    required this.contractId,
+    required this.planName,
+    required this.visits,
+  });
+
+  int get completedCount =>
+      visits.where((v) => v.status == 'completed').length;
+
+  int get totalVisits {
+    for (final v in visits) {
+      if (v.amcTotalVisits != null && v.amcTotalVisits! > 0) {
+        return v.amcTotalVisits!;
+      }
+    }
+    return visits.length;
+  }
+
+  Booking? get nextPendingVisit => visits
+      .where((v) => v.status != 'completed' && v.status != 'cancelled')
+      .firstOrNull;
+
+  DateTime? get nextDueDate => nextPendingVisit?.plannedDueDate;
+
+  String get serviceName {
+    if (visits.isEmpty) return '';
+    final first = visits.first;
+    if (first.items.isNotEmpty) return first.items.first.serviceName;
+    final notes = first.notes;
+    if (notes == null) return '';
+    final idx = notes.indexOf(' · ');
+    return idx > 0 ? notes.substring(0, idx) : '';
+  }
+
+  int get quantity => visits.firstOrNull?.amcQuantity ?? 1;
+
+  // Cancellation request data (from contract join)
+  String? get amcContractStatus => visits.firstOrNull?.amcContractStatus;
+  String? get cancellationReason => visits.firstOrNull?.cancellationReason;
+  String? get cancellationRemarks => visits.firstOrNull?.cancellationRemarks;
+  DateTime? get cancellationRequestedAt =>
+      visits.firstOrNull?.cancellationRequestedAt;
+  String get customerId => visits.firstOrNull?.customerId ?? '';
+
+  // Upcoming / Assigned / Completed / Overdue / Cancellation Pending / Cancelled
+  String get contractStatus {
+    final cSt = amcContractStatus;
+    if (cSt == 'cancellation_requested') return 'cancellation_requested';
+    if (cSt == 'cancelled') return 'cancelled';
+    final total = totalVisits;
+    if (total > 0 && completedCount >= total) return 'completed';
+    final next = nextPendingVisit;
+    if (next == null) return 'completed';
+    if (!next.isUnassigned) return 'assigned';
+    final due = nextDueDate;
+    if (due != null && due.isBefore(DateTime.now())) return 'overdue';
+    return 'upcoming';
+  }
+}
+
 final _currency = NumberFormat.currency(symbol: '₹', decimalDigits: 0);
 final _dateFmt = DateFormat('dd MMM yyyy');
 
@@ -80,6 +152,7 @@ class BookingsPage extends ConsumerStatefulWidget {
 }
 
 class _BookingsPageState extends ConsumerState<BookingsPage> {
+  int _tab = 0; // 0 = All Bookings, 1 = AMC Bookings
   String _searchQuery = '';
   String? _statusFilter;
   String? _assignedToFilter; // null = All, _kUnassigned = Unassigned, vendorId = specific vendor
@@ -134,6 +207,56 @@ class _BookingsPageState extends ConsumerState<BookingsPage> {
       _statusFilter != null ||
       _assignedToFilter != null ||
       _dateFilter != null;
+
+  // Groups all AMC bookings by contract and returns contracts whose next visit
+  // is within the scheduling window (or has completed visits for history).
+  List<_AmcContractAggregate> _groupAmcContracts(List<Booking> all, int windowDays) {
+    final today = DateTime.now();
+    final windowEnd = DateTime(today.year, today.month, today.day)
+        .add(Duration(days: windowDays));
+
+    final contractMap = <String, List<Booking>>{};
+    for (final b in all) {
+      if (!b.isAmc || b.amcContractId == null) continue;
+      contractMap.putIfAbsent(b.amcContractId!, () => []).add(b);
+    }
+
+    final aggregates = <_AmcContractAggregate>[];
+    for (final entry in contractMap.entries) {
+      final visits = List<Booking>.from(entry.value)
+        ..sort((a, b) =>
+            (a.amcVisitNumber ?? 999).compareTo(b.amcVisitNumber ?? 999));
+      final planName = visits.firstOrNull?.amcPlanName ?? 'AMC Contract';
+      final agg = _AmcContractAggregate(
+        contractId: entry.key,
+        planName: planName,
+        visits: visits,
+      );
+
+      final hasCompleted = agg.completedCount > 0;
+      final next = agg.nextPendingVisit;
+      final inWindow = next != null &&
+          (next.serviceDate != null ||
+              (agg.nextDueDate != null &&
+                  !agg.nextDueDate!.isAfter(windowEnd)));
+
+      final isCancellationPending =
+          agg.contractStatus == 'cancellation_requested';
+
+      if (hasCompleted || inWindow || isCancellationPending ||
+          agg.contractStatus == 'cancelled') {
+        aggregates.add(agg);
+      }
+    }
+
+    aggregates.sort((a, b) {
+      final aDate = a.nextDueDate ?? DateTime(9999);
+      final bDate = b.nextDueDate ?? DateTime(9999);
+      return aDate.compareTo(bDate);
+    });
+
+    return aggregates;
+  }
 
   Future<void> _pickDateFilter() async {
     final picked = await showDatePicker(
@@ -321,6 +444,204 @@ class _BookingsPageState extends ConsumerState<BookingsPage> {
     );
   }
 
+  void _openAmcHistory(String contractId, String planName) {
+    showDialog(
+      context: context,
+      builder: (_) => AmcContractDetailsDialog(
+        contractId: contractId,
+        planName: planName,
+      ),
+    );
+  }
+
+  /// Updates the pending amc_cancellation_requests record for [contractId]
+  /// to [newStatus] ('approved' or 'rejected') and sets resolved_at.
+  Future<void> _resolveAmcCancellationRequest(
+    dynamic client,
+    String contractId,
+    String newStatus,
+  ) async {
+    try {
+      final rows = await client
+          .from('amc_cancellation_requests')
+          .select('id')
+          .eq('contract_id', contractId)
+          .eq('status', 'pending')
+          .limit(1);
+      if ((rows as List).isNotEmpty) {
+        await client.from('amc_cancellation_requests').update({
+          'status': newStatus,
+          'resolved_at': DateTime.now().toUtc().toIso8601String(),
+        }).eq('id', rows.first['id'] as String);
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _approveAmcCancellation(_AmcContractAggregate agg) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        title: const Text('Approve Cancellation'),
+        content: Text(
+          'Approve cancellation of "${agg.planName}"?\n\n'
+          'All pending and scheduled visits will be cancelled. '
+          'This cannot be undone.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Keep'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            style: FilledButton.styleFrom(backgroundColor: AppColors.error),
+            child: const Text('Approve Cancellation'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    try {
+      final client = Supabase.instance.client;
+      // Resolve the cancellation request record (created by customer at submit time)
+      await _resolveAmcCancellationRequest(client, agg.contractId, 'approved');
+      final updated = await client
+          .from('amc_contracts')
+          .update({
+            'status': 'cancelled',
+            if (agg.cancellationReason != null)
+              'cancellation_reason': agg.cancellationReason,
+            if (agg.cancellationRemarks != null)
+              'cancellation_remarks': agg.cancellationRemarks,
+            if (agg.cancellationRequestedAt != null)
+              'cancellation_requested_at':
+                  agg.cancellationRequestedAt!.toUtc().toIso8601String(),
+          })
+          .eq('id', agg.contractId)
+          .select('id');
+      if ((updated as List).isEmpty) {
+        throw Exception(
+            'Contract update failed — apply pending database migrations.');
+      }
+      await client
+          .from('bookings')
+          .update({'status': 'cancelled'})
+          .eq('amc_contract_id', agg.contractId)
+          .inFilter('status', [
+            'pending', 'assigned', 'assigned_to_dodo_team', 'accepted',
+          ]);
+      await client
+          .from('amc_scheduling_requests')
+          .update({'status': 'cancelled'})
+          .eq('amc_contract_id', agg.contractId)
+          .eq('status', 'pending');
+      if (agg.customerId.isNotEmpty) {
+        try {
+          await client.from('notifications').insert({
+            'user_type': 'customer',
+            'user_id': agg.customerId,
+            'title': 'AMC Cancellation Approved',
+            'message':
+                'Your request to cancel the "${agg.planName}" AMC contract has been approved. Your membership is now cancelled.',
+            'notification_type': 'amc_cancellation_approved',
+            'is_read': false,
+            'entity_type': 'amc_contract',
+            'entity_id': agg.contractId,
+          });
+        } catch (_) {}
+      }
+      ref.read(bookingsNotifierProvider.notifier).refresh();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('AMC contract "${agg.planName}" cancelled.'),
+            backgroundColor: AppColors.success,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to approve cancellation: $e'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _rejectAmcCancellation(_AmcContractAggregate agg) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        title: const Text('Reject Cancellation'),
+        content: Text(
+          'Reject the cancellation request for "${agg.planName}"?\n\n'
+          'The contract will be restored to Active status.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Reject Request'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    try {
+      final client = Supabase.instance.client;
+      // Resolve the cancellation request record
+      await _resolveAmcCancellationRequest(client, agg.contractId, 'rejected');
+      await client.from('amc_contracts').update({
+        'status': 'active',
+        'cancellation_reason': null,
+        'cancellation_remarks': null,
+        'cancellation_requested_at': null,
+      }).eq('id', agg.contractId);
+      if (agg.customerId.isNotEmpty) {
+        try {
+          await client.from('notifications').insert({
+            'user_type': 'customer',
+            'user_id': agg.customerId,
+            'title': 'AMC Cancellation Rejected',
+            'message':
+                'Your request to cancel the "${agg.planName}" AMC contract has been rejected. Your membership remains active.',
+            'notification_type': 'amc_cancellation_rejected',
+            'is_read': false,
+            'entity_type': 'amc_contract',
+            'entity_id': agg.contractId,
+          });
+        } catch (_) {}
+      }
+      ref.read(bookingsNotifierProvider.notifier).refresh();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+              content: Text(
+                  'Cancellation rejected — membership restored to Active.')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to reject: $e'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+    }
+  }
+
   Future<void> _confirmCancel(Booking booking) async {
     final confirmed = await showDialog<bool>(
       context: context,
@@ -492,6 +813,13 @@ class _BookingsPageState extends ConsumerState<BookingsPage> {
   Widget build(BuildContext context) {
     final state = ref.watch(bookingsNotifierProvider);
     final vendors = ref.watch(vendorsNotifierProvider).valueOrNull ?? [];
+    final settings = ref.watch(settingsNotifierProvider).valueOrNull ?? {};
+    final windowDays = int.tryParse(
+          SettingsNotifier.effectiveValue(settings, 'amc_scheduling_window_days'),
+        ) ?? 5;
+    final amcWindowCount = state.valueOrNull != null
+        ? _groupAmcContracts(state.valueOrNull!, windowDays).length
+        : 0;
 
     return Padding(
       padding: const EdgeInsets.all(24),
@@ -560,7 +888,29 @@ class _BookingsPageState extends ConsumerState<BookingsPage> {
               );
             },
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: 16),
+
+          // ── Tab switcher ─────────────────────────────────────────────────
+          Row(
+            children: [
+              _TabButton(
+                label: 'All Bookings',
+                icon: Icons.list_alt_rounded,
+                selected: _tab == 0,
+                onTap: () => setState(() => _tab = 0),
+              ),
+              const SizedBox(width: 8),
+              _TabButton(
+                label: amcWindowCount > 0
+                    ? 'AMC Bookings ($amcWindowCount)'
+                    : 'AMC Bookings',
+                icon: Icons.autorenew_rounded,
+                selected: _tab == 1,
+                onTap: () => setState(() => _tab = 1),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
 
           // ── Filters ──────────────────────────────────────────────────────
           Wrap(
@@ -744,33 +1094,71 @@ class _BookingsPageState extends ConsumerState<BookingsPage> {
                 ),
               ),
               data: (all) {
-                final filtered = _applyFilters(all);
-                if (all.isEmpty) {
-                  return _EmptyState(
-                    message: 'No bookings yet',
-                    sub: 'Create a booking or wait for customers to place orders.',
-                    onAction: _openCreate,
-                    actionLabel: 'New Booking',
+                if (_tab == 0) {
+                  // ── All Bookings (non-AMC only) ───────────────────────────
+                  final regular = all.where((b) => !b.isAmc).toList();
+                  final filtered = _applyFilters(regular);
+                  if (regular.isEmpty) {
+                    return _EmptyState(
+                      message: 'No bookings yet',
+                      sub: 'Create a booking or wait for customers to place orders.',
+                      onAction: _openCreate,
+                      actionLabel: 'New Booking',
+                    );
+                  }
+                  if (filtered.isEmpty) {
+                    return _EmptyState(
+                      message: 'No bookings match your filters',
+                      sub: 'Try adjusting your search or filters.',
+                    );
+                  }
+                  return _BookingsTable(
+                    bookings: filtered,
+                    totalCount: regular.length,
+                    vendors: vendors,
+                    onView: _openDetails,
+                    onAssign: _openAssignDialog,
+                    onHistory: _openHistoryDialog,
+                    onStartDodoService: _startDodoService,
+                    onCancel: _confirmCancel,
+                    onDelete: _confirmDelete,
+                    searchQuery: _searchQuery,
+                  );
+                } else {
+                  // ── AMC Bookings (contract-level) ─────────────────────────
+                  final contracts = _groupAmcContracts(all, windowDays);
+                  if (contracts.isEmpty) {
+                    return _EmptyState(
+                      message: 'No AMC contracts in the scheduling queue',
+                      sub: 'AMC contracts appear here $windowDays days before the next visit due date.',
+                    );
+                  }
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      _AmcQueueBanner(
+                        windowDays: windowDays,
+                        totalInWindow: contracts.length,
+                        unit: 'contract',
+                      ),
+                      const SizedBox(height: 12),
+                      Expanded(
+                        child: _AmcContractTable(
+                          contracts: contracts,
+                          vendors: vendors,
+                          onAssign: (agg) {
+                            final next = agg.nextPendingVisit;
+                            if (next != null) _openAssignDialog(next);
+                          },
+                          onViewHistory: (agg) =>
+                              _openAmcHistory(agg.contractId, agg.planName),
+                          onApproveCancellation: _approveAmcCancellation,
+                          onRejectCancellation: _rejectAmcCancellation,
+                        ),
+                      ),
+                    ],
                   );
                 }
-                if (filtered.isEmpty) {
-                  return _EmptyState(
-                    message: 'No bookings match your filters',
-                    sub: 'Try adjusting your search or filters.',
-                  );
-                }
-                return _BookingsTable(
-                  bookings: filtered,
-                  totalCount: all.length,
-                  vendors: vendors,
-                  onView: _openDetails,
-                  onAssign: _openAssignDialog,
-                  onHistory: _openHistoryDialog,
-                  onStartDodoService: _startDodoService,
-                  onCancel: _confirmCancel,
-                  onDelete: _confirmDelete,
-                  searchQuery: _searchQuery,
-                );
               },
             ),
           ),
@@ -936,6 +1324,9 @@ class _BookingRow extends StatelessWidget {
     final serviceDateStr = booking.serviceDate != null
         ? _dateFmt.format(booking.serviceDate!)
         : '—';
+    final plannedDueDate = booking.serviceDate == null
+        ? booking.plannedDueDate
+        : null;
 
     return Container(
       padding:
@@ -945,17 +1336,23 @@ class _BookingRow extends StatelessWidget {
           // Booking ID
           SizedBox(
             width: _wId,
-            child: HighlightedText(
-              text: booking.bookingNumber.isNotEmpty
-                  ? booking.bookingNumber
-                  : booking.id.substring(0, 8),
-              query: searchQuery,
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w700,
-                color: AppColors.accent,
-              ),
-              overflow: TextOverflow.ellipsis,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                HighlightedText(
+                  text: booking.bookingNumber.isNotEmpty
+                      ? booking.bookingNumber
+                      : booking.id.substring(0, 8),
+                  query: searchQuery,
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.accent,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
             ),
           ),
 
@@ -976,8 +1373,41 @@ class _BookingRow extends StatelessWidget {
             child: _ServiceCell(items: booking.items, notes: booking.notes),
           ),
 
-          // Service Date
-          _Cell(serviceDateStr, width: _wDate),
+          // Service Date / Planned Due Date
+          SizedBox(
+            width: _wDate,
+            child: plannedDueDate != null
+                ? Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        _dateFmt.format(plannedDueDate),
+                        style: const TextStyle(
+                            fontSize: 13, color: AppColors.textPrimary),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const Text(
+                        'Planned',
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFF3182CE),
+                        ),
+                      ),
+                    ],
+                  )
+                : Text(
+                    serviceDateStr,
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: booking.serviceDate != null
+                          ? AppColors.textPrimary
+                          : AppColors.textSecondary,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+          ),
 
           // Status
           SizedBox(
@@ -1182,7 +1612,7 @@ class _ServiceCell extends StatelessWidget {
   static String _nameFromNotes(String? notes) {
     if (notes == null || notes.isEmpty) return '';
     final idx = notes.indexOf(' · ');
-    return idx > 0 ? notes.substring(0, idx) : notes;
+    return idx > 0 ? notes.substring(0, idx) : '';
   }
 
   @override
@@ -1409,6 +1839,562 @@ class _EmptyState extends StatelessWidget {
             ),
           ],
         ],
+      ),
+    );
+  }
+}
+
+// ── Tab button ────────────────────────────────────────────────────────────────
+
+class _TabButton extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _TabButton({
+    required this.label,
+    required this.icon,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
+        decoration: BoxDecoration(
+          color: selected ? AppColors.primary : AppColors.surface,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(
+            color: selected ? AppColors.primary : AppColors.border,
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              icon,
+              size: 14,
+              color: selected ? Colors.white : AppColors.textSecondary,
+            ),
+            const SizedBox(width: 7),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: selected ? Colors.white : AppColors.textPrimary,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ── AMC queue info banner ─────────────────────────────────────────────────────
+
+class _AmcQueueBanner extends StatelessWidget {
+  final int windowDays;
+  final int totalInWindow;
+  final String unit;
+
+  const _AmcQueueBanner({
+    required this.windowDays,
+    required this.totalInWindow,
+    this.unit = 'visit',
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final plural = totalInWindow == 1 ? unit : '${unit}s';
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        color: const Color(0xFFEBF8FF),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(
+            color: const Color(0xFF3182CE).withValues(alpha: 0.3)),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.autorenew_rounded,
+              size: 15, color: Color(0xFF3182CE)),
+          const SizedBox(width: 8),
+          Text(
+            'AMC ${unit}s due within $windowDays days · '
+            '$totalInWindow $plural in queue',
+            style: const TextStyle(
+              fontSize: 13,
+              color: Color(0xFF2B6CB0),
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── AMC contract table ────────────────────────────────────────────────────────
+
+const double _wcContract = 220;
+const double _wcProgress = 130;
+const double _wcDue = 130;
+const double _wcStatus = 140;
+const double _amcTableMinWidth = _wcContract + _wcProgress + _wcDue + _wcStatus + 200;
+
+class _AmcContractTable extends StatelessWidget {
+  final List<_AmcContractAggregate> contracts;
+  final List<Vendor> vendors;
+  final void Function(_AmcContractAggregate) onAssign;
+  final void Function(_AmcContractAggregate) onViewHistory;
+  final void Function(_AmcContractAggregate) onApproveCancellation;
+  final void Function(_AmcContractAggregate) onRejectCancellation;
+
+  const _AmcContractTable({
+    required this.contracts,
+    required this.vendors,
+    required this.onAssign,
+    required this.onViewHistory,
+    required this.onApproveCancellation,
+    required this.onRejectCancellation,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Expanded(
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final tableWidth = constraints.maxWidth < _amcTableMinWidth
+                      ? _amcTableMinWidth
+                      : constraints.maxWidth;
+                  return SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: SizedBox(
+                      width: tableWidth,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          _AmcContractTableHeader(),
+                          const Divider(height: 1),
+                          Expanded(
+                            child: ListView.separated(
+                              itemCount: contracts.length,
+                              separatorBuilder: (_, _) =>
+                                  const Divider(height: 1),
+                              itemBuilder: (ctx, i) {
+                                final c = contracts[i];
+                                return _AmcContractRow(
+                                  aggregate: c,
+                                  onAssign: () => onAssign(c),
+                                  onViewHistory: () => onViewHistory(c),
+                                  onApproveCancellation: () =>
+                                      onApproveCancellation(c),
+                                  onRejectCancellation: () =>
+                                      onRejectCancellation(c),
+                                );
+                              },
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+            Container(
+              color: AppColors.background,
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              child: Text(
+                '${contracts.length} AMC contract${contracts.length == 1 ? '' : 's'}',
+                style: TextStyle(
+                    fontSize: 12, color: AppColors.textSecondary),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _AmcContractTableHeader extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    const style = TextStyle(
+      fontSize: 11,
+      fontWeight: FontWeight.w700,
+      color: AppColors.textSecondary,
+      letterSpacing: 0.5,
+    );
+    return Container(
+      color: AppColors.background,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      child: Row(
+        children: [
+          SizedBox(width: _wcContract, child: const Text('CONTRACT', style: style)),
+          SizedBox(width: _wcProgress, child: const Text('PROGRESS', style: style)),
+          SizedBox(width: _wcDue, child: const Text('NEXT DUE DATE', style: style)),
+          SizedBox(width: _wcStatus, child: const Text('STATUS', style: style)),
+          const Expanded(
+              child: Text('ACTIONS', style: style, textAlign: TextAlign.center)),
+        ],
+      ),
+    );
+  }
+}
+
+class _AmcContractRow extends StatelessWidget {
+  final _AmcContractAggregate aggregate;
+  final VoidCallback onAssign;
+  final VoidCallback onViewHistory;
+  final VoidCallback onApproveCancellation;
+  final VoidCallback onRejectCancellation;
+
+  const _AmcContractRow({
+    required this.aggregate,
+    required this.onAssign,
+    required this.onViewHistory,
+    required this.onApproveCancellation,
+    required this.onRejectCancellation,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final agg = aggregate;
+    final today = DateTime.now();
+    final nextDue = agg.nextDueDate;
+    final total = agg.totalVisits;
+    final completed = agg.completedCount;
+    final progress = total > 0 ? completed / total : 0.0;
+    final contractStatus = agg.contractStatus;
+    final isCancellationPending = contractStatus == 'cancellation_requested';
+    final isCompleted =
+        contractStatus == 'completed' || contractStatus == 'cancelled';
+    final canAssign =
+        !isCompleted && !isCancellationPending && agg.nextPendingVisit != null;
+    final isOverdue = nextDue != null && nextDue.isBefore(today);
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      child: Row(
+        children: [
+          // Contract
+          SizedBox(
+            width: _wcContract,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Row(
+                  children: [
+                    Icon(
+                      isCancellationPending
+                          ? Icons.cancel_schedule_send_rounded
+                          : Icons.autorenew_rounded,
+                      size: 13,
+                      color: isCancellationPending
+                          ? const Color(0xFFC05621)
+                          : const Color(0xFF3182CE),
+                    ),
+                    const SizedBox(width: 5),
+                    Expanded(
+                      child: Text(
+                        agg.planName,
+                        style: const TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.textPrimary,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
+                if (agg.serviceName.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 2, left: 18),
+                    child: Text(
+                      agg.serviceName,
+                      style: const TextStyle(
+                          fontSize: 11, color: AppColors.textSecondary),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                if (agg.quantity > 1)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 2, left: 18),
+                    child: Text(
+                      '×${agg.quantity} units',
+                      style: const TextStyle(
+                          fontSize: 10,
+                          color: Color(0xFF805AD5),
+                          fontWeight: FontWeight.w600),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                if (isCancellationPending && agg.cancellationReason != null)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 4, left: 18),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          'Reason: ${agg.cancellationReason}',
+                          style: const TextStyle(
+                            fontSize: 10,
+                            color: Color(0xFFC05621),
+                            fontWeight: FontWeight.w600,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        if (agg.cancellationRemarks != null &&
+                            agg.cancellationRemarks!.isNotEmpty)
+                          Text(
+                            agg.cancellationRemarks!,
+                            style: const TextStyle(
+                                fontSize: 10,
+                                color: AppColors.textSecondary,
+                                fontStyle: FontStyle.italic),
+                            overflow: TextOverflow.ellipsis,
+                            maxLines: 2,
+                          ),
+                        if (agg.cancellationRequestedAt != null)
+                          Text(
+                            'Requested: ${_dateFmt.format(agg.cancellationRequestedAt!.toLocal())}',
+                            style: const TextStyle(
+                                fontSize: 10,
+                                color: AppColors.textSecondary),
+                          ),
+                      ],
+                    ),
+                  ),
+              ],
+            ),
+          ),
+
+          // Progress
+          SizedBox(
+            width: _wcProgress,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  '$completed / $total Visits',
+                  style: const TextStyle(
+                      fontSize: 12, fontWeight: FontWeight.w600),
+                ),
+                const SizedBox(height: 5),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(3),
+                  child: LinearProgressIndicator(
+                    value: progress.clamp(0.0, 1.0),
+                    minHeight: 5,
+                    backgroundColor: AppColors.border,
+                    color: isCompleted
+                        ? const Color(0xFF38A169)
+                        : const Color(0xFF3182CE),
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          // Next Due Date
+          SizedBox(
+            width: _wcDue,
+            child: nextDue != null
+                ? Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        _dateFmt.format(nextDue),
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: isOverdue
+                              ? const Color(0xFFC53030)
+                              : AppColors.textPrimary,
+                          fontWeight: isOverdue
+                              ? FontWeight.w600
+                              : FontWeight.w400,
+                        ),
+                      ),
+                      if (isOverdue)
+                        const Text(
+                          'Overdue',
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w600,
+                            color: Color(0xFFC53030),
+                          ),
+                        ),
+                    ],
+                  )
+                : Text(
+                    isCompleted ? 'All Complete' : '—',
+                    style: TextStyle(
+                        fontSize: 13, color: AppColors.textSecondary),
+                  ),
+          ),
+
+          // Status
+          SizedBox(
+            width: _wcStatus,
+            child: _AmcContractStatusBadge(status: agg.contractStatus),
+          ),
+
+          // Actions
+          Expanded(
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                OutlinedButton.icon(
+                  onPressed: onViewHistory,
+                  icon: const Icon(Icons.history_rounded, size: 14),
+                  label: const Text('History'),
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 12, vertical: 8),
+                    textStyle: const TextStyle(fontSize: 12),
+                  ),
+                ),
+                if (isCancellationPending) ...[
+                  const SizedBox(width: 8),
+                  OutlinedButton.icon(
+                    onPressed: onRejectCancellation,
+                    icon: const Icon(Icons.undo_rounded, size: 14),
+                    label: const Text('Reject'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppColors.textSecondary,
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 8),
+                      textStyle: const TextStyle(fontSize: 12),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  FilledButton.icon(
+                    onPressed: onApproveCancellation,
+                    icon: const Icon(Icons.check_rounded, size: 14),
+                    label: const Text('Approve'),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: AppColors.error,
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 8),
+                      textStyle: const TextStyle(fontSize: 12),
+                    ),
+                  ),
+                ] else if (canAssign) ...[
+                  const SizedBox(width: 8),
+                  FilledButton.icon(
+                    onPressed: onAssign,
+                    icon: const Icon(Icons.assignment_ind_rounded, size: 14),
+                    label: const Text('Assign Next'),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: AppColors.primary,
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 8),
+                      textStyle: const TextStyle(fontSize: 12),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AmcContractStatusBadge extends StatelessWidget {
+  final String status;
+  const _AmcContractStatusBadge({required this.status});
+
+  @override
+  Widget build(BuildContext context) {
+    final (label, color, bg) = switch (status) {
+      'completed' => (
+        'Completed',
+        const Color(0xFF276749),
+        const Color(0xFFF0FFF4)
+      ),
+      'cancelled' => (
+        'Cancelled',
+        const Color(0xFFE53E3E),
+        const Color(0xFFFFF5F5)
+      ),
+      'cancellation_requested' => (
+        'Cancel Pending',
+        const Color(0xFFC05621),
+        const Color(0xFFFFF3E0)
+      ),
+      'overdue' => (
+        'Overdue',
+        const Color(0xFFC53030),
+        const Color(0xFFFFF5F5)
+      ),
+      'assigned' => (
+        'Assigned',
+        const Color(0xFF3182CE),
+        const Color(0xFFEBF8FF)
+      ),
+      _ => (
+        'Upcoming',
+        const Color(0xFFDD6B20),
+        const Color(0xFFFEEBC8)
+      ),
+    };
+    return FittedBox(
+      fit: BoxFit.scaleDown,
+      alignment: Alignment.centerLeft,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
+        decoration: BoxDecoration(
+          color: bg,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: color.withValues(alpha: 0.3)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 6,
+              height: 6,
+              decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+            ),
+            const SizedBox(width: 5),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 11,
+                color: color,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

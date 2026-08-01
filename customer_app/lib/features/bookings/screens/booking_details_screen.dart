@@ -14,6 +14,9 @@ import '../../profile/services/profile_providers.dart';
 import '../../reviews/services/review_providers.dart';
 import '../../reviews/widgets/review_modal.dart';
 import '../services/invoice_service.dart';
+import '../../amc/screens/amc_contract_details_screen.dart';
+import '../../amc/providers/amc_contract_provider.dart';
+import 'package:customer_app/features/amc/models/amc_contract_model.dart';
 
 class BookingDetailsScreen extends ConsumerStatefulWidget {
   final MyBookingModel booking;
@@ -97,6 +100,7 @@ class _BookingDetailsScreenState extends ConsumerState<BookingDetailsScreen> {
                 if (booking.completionOtp != null &&
                     _otpVisibleForStatus(booking.status))
                   _OtpDisplayCard(otp: booking.completionOtp!),
+                if (booking.isAmc) _AmcContractCard(booking: booking),
                 _BookingInfoCard(booking: booking),
                 _ServiceInfoCard(booking: booking),
                 _AddonsCard(booking: booking),
@@ -259,7 +263,9 @@ class _StatusBanner extends StatelessWidget {
               borderRadius: BorderRadius.circular(20),
             ),
             child: Text(
-              BookingStatus.labelFor(booking.status, assignmentType: booking.assignmentType),
+              booking.isAmc && booking.status == BookingStatus.completed
+                  ? 'AMC Visit Done'
+                  : BookingStatus.labelFor(booking.status, assignmentType: booking.assignmentType),
               style: TextStyle(
                 color: color,
                 fontSize: 11,
@@ -274,6 +280,14 @@ class _StatusBanner extends StatelessWidget {
   }
 
   (Color, String, IconData) _bannerMeta(String status) {
+    // AMC bookings: a completed visit means the visit is done, not the contract
+    if (booking.isAmc && status == BookingStatus.completed) {
+      return (
+        AppColors.success,
+        'AMC visit completed — contract still active',
+        Icons.task_alt_rounded,
+      );
+    }
     switch (status) {
       case BookingStatus.pending:
         return (AppColors.warning, 'Waiting for provider assignment', Icons.hourglass_top_rounded);
@@ -946,6 +960,299 @@ class _PaymentRow extends StatelessWidget {
       ),
     );
   }
+}
+
+// ── AMC Contract Card ─────────────────────────────────────────────────────────
+
+class _AmcContractCard extends ConsumerWidget {
+  final MyBookingModel booking;
+
+  const _AmcContractCard({required this.booking});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final tt = Theme.of(context).textTheme;
+    final contractId = booking.amcContractId;
+
+    final contractAsync =
+        contractId != null ? ref.watch(amcContractProvider(contractId)) : null;
+
+    return Card(
+      margin: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Header row
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: AppColors.primaryLight,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Icon(Icons.repeat_rounded,
+                      color: AppColors.primary, size: 18),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'AMC CONTRACT',
+                        style: tt.labelMedium?.copyWith(
+                          color: AppColors.textSecondary,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: 0.5,
+                        ),
+                      ),
+                      if (booking.amcPlanName != null)
+                        Text(
+                          booking.amcPlanName!,
+                          style: tt.titleSmall?.copyWith(
+                            color: AppColors.primary,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: AppColors.primaryLight,
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: const Text(
+                    'AMC',
+                    style: TextStyle(
+                      fontSize: 10,
+                      color: AppColors.primary,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+
+            // Contract data rows
+            if (contractAsync == null)
+              // No contract ID — show booking-level fallback
+              ...[
+              if (booking.amcRecurrenceInterval != null)
+                _DetailRow(
+                  icon: Icons.schedule_rounded,
+                  label: 'Recurrence',
+                  value: booking.amcRecurrenceInterval!,
+                ),
+            ] else
+              contractAsync.when(
+                loading: () => const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 6),
+                  child: SizedBox(
+                    height: 18,
+                    width: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                ),
+                error: (_, __) => _fallbackRows(),
+                data: (contract) =>
+                    contract != null ? _contractRows(contract) : _fallbackRows(),
+              ),
+
+            // View AMC Contract button
+            if (contractId != null) ...[
+              const SizedBox(height: 4),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: () => Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => AmcContractDetailsScreen(
+                        contractId: contractId,
+                        initialPlanName:
+                            booking.amcPlanName ?? 'AMC Contract',
+                      ),
+                    ),
+                  ),
+                  icon: const Icon(Icons.open_in_new_rounded, size: 16),
+                  label: const Text('View AMC Contract'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: AppColors.primary,
+                    side: const BorderSide(color: AppColors.primary),
+                    padding: const EdgeInsets.symmetric(vertical: 10),
+                  ),
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _fallbackRows() => Column(
+        children: [
+          if (booking.amcRecurrenceInterval != null)
+            _DetailRow(
+              icon: Icons.schedule_rounded,
+              label: 'Recurrence',
+              value: booking.amcRecurrenceInterval!,
+            ),
+          if (booking.amcContractId != null)
+            _DetailRow(
+              icon: Icons.article_outlined,
+              label: 'Contract ID',
+              value: booking.amcContractId!,
+              valueColor: AppColors.primary,
+            ),
+        ],
+      );
+
+  Widget _contractRows(AmcContractModel c) {
+    final fmt = _DateFmt();
+    final endDate = c.packageDuration != null
+        ? _endDate(c.createdAt, c.packageDuration!)
+        : null;
+    return Column(
+      children: [
+        _DetailRow(
+          icon: Icons.badge_outlined,
+          label: 'Plan Name',
+          value: c.planName.isNotEmpty
+              ? c.planName
+              : (booking.amcPlanName ?? '—'),
+        ),
+        _DetailRow(
+          icon: Icons.circle_outlined,
+          label: 'Status',
+          value: _statusLabel(c.status),
+          valueColor: _statusColor(c.status),
+        ),
+        if (c.packageDuration != null)
+          _DetailRow(
+            icon: Icons.date_range_rounded,
+            label: 'Package Duration',
+            value: _durationLabel(c.packageDuration!),
+          ),
+        _DetailRow(
+          icon: Icons.repeat_rounded,
+          label: 'Service Interval',
+          value: c.recurrenceInterval.isNotEmpty
+              ? c.recurrenceInterval
+              : _intervalLabel(c.serviceInterval),
+        ),
+        _DetailRow(
+          icon: Icons.currency_rupee_rounded,
+          label: 'Price Per Visit',
+          value: '₹${c.pricePerVisit.toStringAsFixed(2)}',
+        ),
+        _DetailRow(
+          icon: Icons.format_list_numbered_rounded,
+          label: 'Total Visits',
+          value: '${c.effectiveTotalVisits}',
+        ),
+        _DetailRow(
+          icon: Icons.check_circle_outline_rounded,
+          label: 'Completed Visits',
+          value: '${c.completedVisits}',
+        ),
+        _DetailRow(
+          icon: Icons.pending_outlined,
+          label: 'Remaining Visits',
+          value: '${c.remainingVisits}',
+        ),
+        if (c.originalTotal != null && c.originalTotal! > 0)
+          _DetailRow(
+            icon: Icons.receipt_outlined,
+            label: 'Original Total',
+            value: '₹${c.originalTotal!.toStringAsFixed(2)}',
+          ),
+        if (c.discountAmount != null && c.discountAmount! > 0)
+          _DetailRow(
+            icon: Icons.local_offer_outlined,
+            label: 'Discount',
+            value: '−₹${c.discountAmount!.toStringAsFixed(2)}',
+          ),
+        if (c.finalPrice != null && c.finalPrice! > 0)
+          _DetailRow(
+            icon: Icons.currency_rupee_rounded,
+            label: 'Final AMC Price',
+            value: '₹${c.finalPrice!.toStringAsFixed(2)}',
+            valueColor: AppColors.primary,
+          ),
+        _DetailRow(
+          icon: Icons.calendar_today_rounded,
+          label: 'Start Date',
+          value: fmt.format(c.createdAt.toLocal()),
+        ),
+        if (endDate != null)
+          _DetailRow(
+            icon: Icons.event_rounded,
+            label: 'End Date',
+            value: fmt.format(endDate.toLocal()),
+          ),
+      ],
+    );
+  }
+
+  static DateTime? _endDate(DateTime start, String packageDuration) {
+    final days = switch (packageDuration) {
+      'monthly' => 30,
+      'quarterly' => 91,
+      'half_yearly' => 182,
+      'yearly' => 365,
+      _ => null,
+    };
+    return days != null ? start.add(Duration(days: days)) : null;
+  }
+
+  static String _statusLabel(String s) => switch (s) {
+        'active' => 'Active',
+        'paused' => 'Paused',
+        'completed' => 'Completed',
+        'cancelled' => 'Cancelled',
+        _ => s,
+      };
+
+  static Color _statusColor(String s) => switch (s) {
+        'active' => AppColors.success,
+        'paused' => AppColors.warning,
+        'completed' => AppColors.primary,
+        'cancelled' => AppColors.error,
+        _ => AppColors.textSecondary,
+      };
+
+  static String _durationLabel(String d) => switch (d) {
+        'monthly' => 'Monthly',
+        'quarterly' => 'Quarterly',
+        'half_yearly' => 'Half-Yearly',
+        'yearly' => 'Yearly',
+        _ => d,
+      };
+
+  static String _intervalLabel(String? i) => switch (i) {
+        'weekly' => 'Weekly',
+        'bi_weekly' => 'Bi-Weekly',
+        'monthly' => 'Monthly',
+        _ => i ?? '—',
+      };
+}
+
+class _DateFmt {
+  static const _months = [
+    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+  ];
+
+  String format(DateTime d) =>
+      '${d.day.toString().padLeft(2, '0')} ${_months[d.month - 1]} ${d.year}';
 }
 
 // ── Action buttons ─────────────────────────────────────────────────────────────

@@ -10,6 +10,7 @@ class NotificationsRepository {
     final data = await _supabase
         .from('notifications')
         .select()
+        .eq('user_type', 'admin')
         .order('created_at', ascending: false);
     return (data as List<dynamic>)
         .map((r) => AppNotification.fromMap(r as Map<String, dynamic>))

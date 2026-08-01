@@ -267,11 +267,66 @@ class _CartItemCard extends ConsumerWidget {
                         ],
                       ),
                       const SizedBox(height: 6),
-                      Text(
-                        '₹${item.unitPrice.toInt()} per unit',
-                        style: tt.labelSmall
-                            ?.copyWith(color: AppColors.textSecondary),
-                      ),
+                      if (item.isAmc) ...[
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFEBF8FF),
+                            borderRadius: BorderRadius.circular(4),
+                            border: Border.all(
+                              color: const Color(0xFF3182CE).withValues(alpha: 0.4),
+                            ),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(Icons.autorenew_rounded, size: 11, color: Color(0xFF3182CE)),
+                              const SizedBox(width: 3),
+                              Text(
+                                'AMC',
+                                style: tt.labelSmall?.copyWith(
+                                  color: const Color(0xFF3182CE),
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 10,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        if (item.amcPlanName != null && item.amcPlanName!.isNotEmpty)
+                          Text(
+                            item.amcPlanName!,
+                            style: tt.labelSmall?.copyWith(color: AppColors.textSecondary),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        if (item.amcRecurrenceInterval != null && item.amcRecurrenceInterval!.isNotEmpty)
+                          Text(
+                            '${item.amcRecurrenceInterval!} · ${item.amcNumVisits ?? 12} visits',
+                            style: tt.labelSmall?.copyWith(color: AppColors.textHint),
+                          ),
+                        if (item.amcQuantity > 1)
+                          Text(
+                            '₹${(item.amcFinalPrice ?? 0).toInt()} × ${item.amcQuantity} units',
+                            style: tt.labelSmall?.copyWith(color: AppColors.textSecondary),
+                          )
+                        else if (item.amcIsRenewal)
+                          Text(
+                            'Renewal',
+                            style: tt.labelSmall?.copyWith(
+                              color: AppColors.primary,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        const SizedBox(height: 2),
+                      ],
+                      if (!item.isAmc)
+                        Text(
+                          '₹${item.unitPrice.toInt()} per unit',
+                          style: tt.labelSmall
+                              ?.copyWith(color: AppColors.textSecondary),
+                        ),
                     ],
                   ),
                 ),

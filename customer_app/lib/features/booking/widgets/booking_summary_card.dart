@@ -8,6 +8,7 @@ import '../../../models/address_model.dart';
 import '../../../models/time_slot_model.dart';
 import '../../../models/service_attribute_model.dart';
 import '../../../models/addon_model.dart';
+import '../../../features/amc/models/amc_plan_model.dart';
 
 class BookingSummaryCard extends ConsumerWidget {
   final CatalogNodeModel service;
@@ -22,6 +23,7 @@ class BookingSummaryCard extends ConsumerWidget {
   final String? parentNodeId;
   final double preferredVendorFee;
   final String? preferredVendorName;
+  final AmcPlanModel? amcPlan;
 
   const BookingSummaryCard({
     super.key,
@@ -37,6 +39,7 @@ class BookingSummaryCard extends ConsumerWidget {
     this.parentNodeId,
     this.preferredVendorFee = 0.0,
     this.preferredVendorName,
+    this.amcPlan,
   });
 
   static const _monthNames = [
@@ -63,11 +66,14 @@ class BookingSummaryCard extends ConsumerWidget {
         )))
         .valueOrNull ??
         TaxSettingsModel.defaults;
-    final tax = taxSettings.computeTax(_adjustedBase);
-    final originalTotal = _adjustedBase + tax + preferredVendorFee;
+
+    final isAmc = amcPlan != null;
+    final effectiveBase = isAmc ? amcPlan!.pricePerVisit : _adjustedBase;
+    final tax = taxSettings.computeTax(effectiveBase);
+    final originalTotal = effectiveBase + tax + (isAmc ? 0.0 : preferredVendorFee);
     final finalTotal = (originalTotal - discountAmount).clamp(0.0, double.infinity);
     final tt = Theme.of(context).textTheme;
-    final hasDiscount = discountAmount > 0;
+    final hasDiscount = !isAmc && discountAmount > 0;
 
     return Card(
       margin: const EdgeInsets.all(16),
@@ -176,32 +182,72 @@ class BookingSummaryCard extends ConsumerWidget {
             // ── Price breakdown ───────────────────────────────────────────────
             Text('Price Details', style: tt.labelMedium?.copyWith(color: AppColors.textSecondary, fontWeight: FontWeight.w600)),
             const SizedBox(height: 10),
-            _PriceRow(label: 'Base Price', amount: service.basePrice ?? 0.0),
-            for (final sel in selectedAttributes)
-              if (sel.priceAdjustment > 0) ...[
+            if (isAmc) ...[
+              // AMC plan badge
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                margin: const EdgeInsets.only(bottom: 8),
+                decoration: BoxDecoration(
+                  color: AppColors.primaryLight,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: AppColors.primary.withAlpha(60)),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.repeat_rounded, size: 14, color: AppColors.primary),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        'AMC Plan: ${amcPlan!.name}',
+                        style: tt.labelSmall?.copyWith(
+                          color: AppColors.primary,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              _PriceRow(label: 'Price per Visit', amount: amcPlan!.pricePerVisit),
+              const SizedBox(height: 6),
+              Row(
+                children: [
+                  const Icon(Icons.schedule_rounded, size: 12, color: AppColors.textHint),
+                  const SizedBox(width: 4),
+                  Text(
+                    'Recurrence: ${amcPlan!.recurrenceInterval}  ·  12 visits total',
+                    style: tt.labelSmall?.copyWith(color: AppColors.textHint),
+                  ),
+                ],
+              ),
+            ] else ...[
+              _PriceRow(label: 'Base Price', amount: service.basePrice ?? 0.0),
+              for (final sel in selectedAttributes)
+                if (sel.priceAdjustment > 0) ...[
+                  const SizedBox(height: 6),
+                  _PriceRow(
+                    label: '${sel.attributeName}: ${sel.optionName}',
+                    amount: sel.priceAdjustment,
+                    prefix: '+',
+                  ),
+                ],
+              for (final addon in selectedAddons) ...[
+                const SizedBox(height: 6),
+                _PriceRow(label: addon.addonName, amount: addon.addonPrice, prefix: '+'),
+              ],
+              if (preferredVendorFee > 0) ...[
                 const SizedBox(height: 6),
                 _PriceRow(
-                  label: '${sel.attributeName}: ${sel.optionName}',
-                  amount: sel.priceAdjustment,
+                  label: preferredVendorName != null
+                      ? 'Vendor: $preferredVendorName'
+                      : 'Preferred Vendor Fee',
+                  amount: preferredVendorFee,
                   prefix: '+',
                 ),
               ],
-            for (final addon in selectedAddons) ...[
-              const SizedBox(height: 6),
-              _PriceRow(label: addon.addonName, amount: addon.addonPrice, prefix: '+'),
             ],
             const SizedBox(height: 6),
             _PriceRow(label: taxSettings.displayLabel, amount: tax),
-            if (preferredVendorFee > 0) ...[
-              const SizedBox(height: 6),
-              _PriceRow(
-                label: preferredVendorName != null
-                    ? 'Vendor: $preferredVendorName'
-                    : 'Preferred Vendor Fee',
-                amount: preferredVendorFee,
-                prefix: '+',
-              ),
-            ],
             if (hasDiscount) ...[
               const SizedBox(height: 6),
               _DiscountRow(

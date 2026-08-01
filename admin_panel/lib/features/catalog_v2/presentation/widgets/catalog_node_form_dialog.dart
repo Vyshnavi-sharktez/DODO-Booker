@@ -372,6 +372,8 @@ class _CatalogNodeFormDialogState extends State<CatalogNodeFormDialog> {
                         RegExp(r'^\d+\.?\d{0,2}')),
                   ],
                 ),
+
+                // AMC plans are managed from the catalog tile (AMC Plans button).
               ],
             ],
           ],
@@ -476,3 +478,4 @@ class _CatalogNodeFormDialogState extends State<CatalogNodeFormDialog> {
     );
   }
 }
+

@@ -176,8 +176,9 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       return;
     }
 
-    // ── Minimum order amount ─────────────────────────────────────────────────
+    // ── Minimum order amount (AMC items are exempt) ──────────────────────────
     for (final item in items) {
+      if (item.isAmc) continue;
       final minAmt = item.minimumOrderAmount;
       if (minAmt != null && item.totalPrice < minAmt) {
         _showError(

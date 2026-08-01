@@ -302,6 +302,7 @@ class _SummaryRow extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         SizedBox(
+          
           width: 100,
           child: Text(
             label,

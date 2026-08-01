@@ -30,6 +30,14 @@ class CatalogNode {
   final double? rating;
   final int reviewCount;
 
+  // AMC (Annual Maintenance Contract) — service-level config
+  final bool amcEnabled;
+  final String? amcPlanName;
+  final String? amcRecurrenceInterval;
+  final int? amcContractDuration;
+  final int? amcMaxVisits;
+  final double? amcPricePerVisit;
+
   /// Count of active children from the DB view.
   final int childrenCount;
 
@@ -56,6 +64,12 @@ class CatalogNode {
     this.minimumOrderAmount,
     this.rating,
     required this.reviewCount,
+    this.amcEnabled = false,
+    this.amcPlanName,
+    this.amcRecurrenceInterval,
+    this.amcContractDuration,
+    this.amcMaxVisits,
+    this.amcPricePerVisit,
     required this.childrenCount,
     this.createdAt,
     this.updatedAt,
@@ -98,6 +112,12 @@ class CatalogNode {
       minimumOrderAmount: (map['minimum_order_amount'] as num?)?.toDouble(),
       rating: (map['rating'] as num?)?.toDouble(),
       reviewCount: map['review_count'] as int? ?? 0,
+      amcEnabled: map['amc_enabled'] as bool? ?? false,
+      amcPlanName: map['amc_plan_name'] as String?,
+      amcRecurrenceInterval: map['amc_recurrence_interval'] as String?,
+      amcContractDuration: map['amc_contract_duration'] as int?,
+      amcMaxVisits: map['amc_max_visits'] as int?,
+      amcPricePerVisit: (map['amc_price_per_visit'] as num?)?.toDouble(),
       childrenCount: map['children_count'] as int? ?? 0,
       createdAt: map['created_at'] != null
           ? DateTime.tryParse(map['created_at'] as String)

@@ -7,14 +7,18 @@ import '../../../core/utils/service_image_registry.dart';
 import '../../../models/faq_model.dart';
 import '../../../models/service_attribute_model.dart';
 import '../../../models/addon_model.dart';
+import 'package:go_router/go_router.dart';
 import '../../cart/providers/cart_provider.dart';
+import '../../cart/services/checkout_service.dart';
 import '../../cart/utils/cart_launcher.dart';
+import '../../../routes/app_router.dart';
 import '../../category/services/category_providers.dart';
 import '../../reviews/widgets/service_reviews_section.dart';
 import '../../service/widgets/faq_section.dart';
 import '../../service/widgets/service_addon_section.dart';
 import '../../service/widgets/service_attribute_section.dart';
 import '../../address/services/address_providers.dart';
+import '../../amc/widgets/amc_section.dart';
 import '../../loyalty/providers/loyalty_providers.dart';
 import '../../loyalty/utils/loyalty_utils.dart';
 import '../../wishlist/widgets/heart_button.dart';
@@ -83,6 +87,7 @@ class _CatalogNodeModalState extends ConsumerState<CatalogNodeModal> {
   final Map<String, String> _selections = {};
   double _priceAdjustment = 0.0;
   final Set<String> _selectedAddonIds = {};
+  AmcPlanModel? _selectedAmcPlan;
 
   CatalogNodeModel get node => widget.node;
 
@@ -153,8 +158,9 @@ class _CatalogNodeModalState extends ConsumerState<CatalogNodeModal> {
 
     final addonsTotal =
         totalAddonsPrice(buildSelectedAddons(addOns, _selectedAddonIds));
-    final displayPrice =
-        (node.basePrice ?? 0.0) + _priceAdjustment + addonsTotal;
+    final displayPrice = _selectedAmcPlan != null
+        ? _selectedAmcPlan!.finalPrice
+        : (node.basePrice ?? 0.0) + _priceAdjustment + addonsTotal;
     final hasAdjustment = _priceAdjustment > 0 || addonsTotal > 0;
 
     final heroUrl = node.hasChildren
@@ -330,6 +336,20 @@ class _CatalogNodeModalState extends ConsumerState<CatalogNodeModal> {
                                         onToggle: _onAddonToggled,
                                       ),
 
+                                    // AMC
+                                    if (node.isLeafBookable)
+                                      AmcSection(
+                                        serviceId: node.id,
+                                        selectedPlan: _selectedAmcPlan,
+                                        onPlanSelected: (plan) => setState(() {
+                                          _selectedAmcPlan = plan;
+                                        }),
+                                        regularPrice: node.basePrice != null &&
+                                                node.basePrice! > 0
+                                            ? node.basePrice
+                                            : null,
+                                      ),
+
                                     // FAQs
                                     if (node.isLeafBookable && faqs.isNotEmpty)
                                       FaqSection(faqs: faqs),
@@ -362,6 +382,12 @@ class _CatalogNodeModalState extends ConsumerState<CatalogNodeModal> {
                                     priceAdjustment: _priceAdjustment,
                                     addonsTotal: addonsTotal,
                                     parentNodeId: widget.parentNodeId,
+                                    attrs: attrs,
+                                    selections: _selections,
+                                    addOns: addOns,
+                                    selectedAddonIds: _selectedAddonIds,
+                                    amcPlan: _selectedAmcPlan,
+                                    amcQuantity: 1,
                                   ),
                         ],
                       ),
@@ -1110,6 +1136,12 @@ class _ModalBookingBar extends ConsumerWidget {
     required this.priceAdjustment,
     required this.addonsTotal,
     this.parentNodeId,
+    required this.attrs,
+    required this.selections,
+    required this.addOns,
+    required this.selectedAddonIds,
+    this.amcPlan,
+    this.amcQuantity = 1,
   });
 
   final CatalogNodeModel node;
@@ -1117,6 +1149,58 @@ class _ModalBookingBar extends ConsumerWidget {
   final double priceAdjustment;
   final double addonsTotal;
   final String? parentNodeId;
+  final List<ServiceAttributeModel> attrs;
+  final Map<String, String> selections;
+  final List<AddOnModel> addOns;
+  final Set<String> selectedAddonIds;
+  final AmcPlanModel? amcPlan;
+  final int amcQuantity;
+
+  Future<void> _addToCart(BuildContext context, WidgetRef ref) async {
+    if (amcPlan != null) {
+      final activeContract = await CheckoutService().findActiveAmcContract(
+        serviceId: node.id,
+        planId: amcPlan!.id,
+      );
+      if (!context.mounted) return;
+      if (activeContract != null) {
+        await showDialog<void>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16)),
+            title: const Text('Active AMC Found'),
+            content: const Text(
+              'You already have an active AMC subscription for this service.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(ctx).pop(),
+                child: const Text('Close'),
+              ),
+              FilledButton(
+                onPressed: () {
+                  Navigator.of(ctx).pop();
+                  Navigator.of(context).pop();
+                  context.push(AppRoutes.amcPlans);
+                },
+                child: const Text('View AMC Plans'),
+              ),
+            ],
+          ),
+        );
+        return;
+      }
+    }
+    ref.read(cartProvider.notifier).addToCart(
+          node,
+          priceAdjustment:
+              amcPlan != null ? 0.0 : priceAdjustment + addonsTotal,
+          parentNodeId: parentNodeId,
+          amcPlan: amcPlan,
+          amcQuantity: amcQuantity,
+        );
+  }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -1155,9 +1239,11 @@ class _ModalBookingBar extends ConsumerWidget {
                   ),
                 ),
                 Text(
-                  (priceAdjustment > 0 || addonsTotal > 0)
-                      ? 'incl. adjustments'
-                      : 'onwards',
+                  amcPlan != null
+                      ? 'AMC total · ${amcPlan!.numVisits} visits'
+                      : (priceAdjustment > 0 || addonsTotal > 0)
+                          ? 'incl. adjustments'
+                          : 'onwards',
                   style: const TextStyle(
                       fontSize: 10, color: AppColors.textHint),
                 ),
@@ -1181,18 +1267,12 @@ class _ModalBookingBar extends ConsumerWidget {
                       ),
                     )
                   : FilledButton.icon(
-                      onPressed: () => ref
-                          .read(cartProvider.notifier)
-                          .addToCart(
-                            node,
-                            priceAdjustment: priceAdjustment + addonsTotal,
-                            parentNodeId: parentNodeId,
-                          ),
+                      onPressed: () => _addToCart(context, ref),
                       icon: const Icon(Icons.add_shopping_cart_rounded,
                           size: 16),
-                      label: const Text(
-                        'Add to Cart',
-                        style: TextStyle(
+                      label: Text(
+                        amcPlan != null ? 'Book Now' : 'Add to Cart',
+                        style: const TextStyle(
                             fontSize: 15, fontWeight: FontWeight.w700),
                       ),
                       style: FilledButton.styleFrom(

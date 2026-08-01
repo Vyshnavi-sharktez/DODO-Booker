@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/widgets/app_modal_dialog.dart';
-import '../../../core/widgets/page_sheet.dart';
 import '../../../features/auth/providers/auth_provider.dart';
 import '../../../features/auth/widgets/otp_login_modal.dart';
 import '../../../features/auth/widgets/otp_verification_modal.dart';
@@ -15,12 +14,12 @@ import '../modals/datetime_modal.dart';
 import '../../service_availability/services/serviceability_service.dart';
 import '../../service_availability/widgets/service_area_unavailable_dialog.dart';
 import '../modals/booking_summary_modal.dart';
-import '../modals/booking_flow_modal.dart';
 import '../modals/payment_modal.dart';
 import '../services/booking_providers.dart';
 import '../services/coupon_providers.dart';
 import '../../../features/tax/providers/tax_provider.dart';
 import '../../../features/tax/models/tax_settings_model.dart';
+import '../../../features/amc/models/amc_plan_model.dart';
 
 /// Launches the full modal-based booking flow:
 /// Auth → Profile → Address → DateTime → Summary → Payment → Success.
@@ -33,14 +32,18 @@ Future<void> launchBookingFlow(
   List<SelectedAttributeOption> selectedAttributes = const [],
   List<SelectedAddon> selectedAddons = const [],
   String? parentNodeId,
+  AmcPlanModel? amcPlan,
 }) async {
   // ── Step 0: Minimum order amount (safety net — UI disables Book Now first) ─
-  final minAmt = service.minimumOrderAmount;
-  if (minAmt != null && minAmt > 0) {
-    final serviceTotal = (service.basePrice ?? 0.0) +
-        totalPriceAdjustment(selectedAttributes) +
-        totalAddonsPrice(selectedAddons);
-    if (serviceTotal < minAmt) return;
+  // AMC plan bypasses minimum order check (the plan price is the committed price).
+  if (amcPlan == null) {
+    final minAmt = service.minimumOrderAmount;
+    if (minAmt != null && minAmt > 0) {
+      final serviceTotal = (service.basePrice ?? 0.0) +
+          totalPriceAdjustment(selectedAttributes) +
+          totalAddonsPrice(selectedAddons);
+      if (serviceTotal < minAmt) return;
+    }
   }
 
   // ── Step 1: Authentication ────────────────────────────────────────────────
@@ -75,22 +78,7 @@ Future<void> launchBookingFlow(
     if (!context.mounted || saved != true) return;
   }
 
-  // ── Desktop: booking modal — matches Profile dialog design system ────────────
-  if (MediaQuery.of(context).size.width >= 768) {
-    await PageSheet.show(
-      context,
-      title: service.name,
-      child: BookingFlowModal(
-        service: service,
-        selectedAttributes: selectedAttributes,
-        selectedAddons: selectedAddons,
-        parentNodeId: parentNodeId,
-      ),
-    );
-    return;
-  }
-
-  // ── Mobile: sequential AppModalDialog flow ────────────────────────────────────
+  // ── Sequential AppModalDialog flow (all platforms) ───────────────────────────
 
   // ── Step 3: Address ───────────────────────────────────────────────────────
   final addressFuture = AppModalDialog.show(
@@ -125,8 +113,8 @@ Future<void> launchBookingFlow(
   ref.read(selectedPreferredVendorProvider.notifier).state =
       (id: null, name: null, fee: 0.0);
 
-  final priceAdjustment = totalPriceAdjustment(selectedAttributes);
-  final addonsTotal = totalAddonsPrice(selectedAddons);
+  final priceAdjustment = amcPlan != null ? 0.0 : totalPriceAdjustment(selectedAttributes);
+  final addonsTotal = amcPlan != null ? 0.0 : totalAddonsPrice(selectedAddons);
   final summaryFuture = AppModalDialog.show<bool>(
     context: context,
     child: BookingSummaryModal(
@@ -135,9 +123,10 @@ Future<void> launchBookingFlow(
       date: date,
       slot: slot,
       priceAdjustment: priceAdjustment,
-      selectedAttributes: selectedAttributes,
-      selectedAddons: selectedAddons,
+      selectedAttributes: amcPlan != null ? const [] : selectedAttributes,
+      selectedAddons: amcPlan != null ? const [] : selectedAddons,
       parentNodeId: parentNodeId,
+      amcPlan: amcPlan,
     ),
   );
   final confirmed = await summaryFuture;
@@ -152,9 +141,11 @@ Future<void> launchBookingFlow(
         parentNodeId: parentNodeId,
       )))
       .valueOrNull ?? TaxSettingsModel.defaults;
-  final baseSubtotal = (service.basePrice ?? 0.0) + priceAdjustment + addonsTotal;
+  final baseSubtotal = amcPlan != null
+      ? amcPlan.pricePerVisit
+      : (service.basePrice ?? 0.0) + priceAdjustment + addonsTotal;
   final subtotal = baseSubtotal + taxSettings.computeTax(baseSubtotal);
-  final discountAmount = selectedCoupon?.calculateDiscount(subtotal) ?? 0.0;
+  final discountAmount = amcPlan != null ? 0.0 : (selectedCoupon?.calculateDiscount(subtotal) ?? 0.0);
   final finalTotal = (subtotal + pvSelection.fee - discountAmount).clamp(0.0, double.infinity);
 
   // ── Step 6: Payment ───────────────────────────────────────────────────────
@@ -176,13 +167,14 @@ Future<void> launchBookingFlow(
           address: address,
           date: date,
           slot: slot,
-          couponId: selectedCoupon?.id,
+          couponId: amcPlan != null ? null : selectedCoupon?.id,
           discountAmount: discountAmount,
           priceAdjustment: priceAdjustment,
           selectedAddons: selectedAddons,
           parentNodeId: parentNodeId,
-          preferredVendorId: pvSelection.id,
-          preferredVendorFeeAmount: pvSelection.fee > 0 ? pvSelection.fee : null,
+          preferredVendorId: amcPlan != null ? null : pvSelection.id,
+          preferredVendorFeeAmount: amcPlan != null ? null : (pvSelection.fee > 0 ? pvSelection.fee : null),
+          amcPlan: amcPlan,
         );
     ref.read(selectedCouponProvider.notifier).state = null;
     if (!context.mounted) return;

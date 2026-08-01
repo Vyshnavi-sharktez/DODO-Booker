@@ -18,6 +18,7 @@ import '../../wishlist/widgets/heart_button.dart';
 import '../../loyalty/providers/loyalty_providers.dart';
 import '../../loyalty/utils/loyalty_utils.dart';
 import '../../address/services/address_providers.dart';
+import '../../amc/widgets/amc_section.dart';
 import '../models/catalog_node_model.dart';
 import '../providers/catalog_providers.dart';
 import '../utils/catalog_launcher.dart';
@@ -33,11 +34,7 @@ import '../widgets/catalog_unavailability_widgets.dart';
 // ═══════════════════════════════════════════════════════════════════════════════
 
 class CatalogNodeScreen extends ConsumerStatefulWidget {
-  const CatalogNodeScreen({
-    super.key,
-    required this.node,
-    this.parentNodeId,
-  });
+  const CatalogNodeScreen({super.key, required this.node, this.parentNodeId});
 
   final CatalogNodeModel node;
 
@@ -53,11 +50,15 @@ class _CatalogNodeScreenState extends ConsumerState<CatalogNodeScreen> {
   final Map<String, String> _selections = {};
   double _priceAdjustment = 0.0;
   final Set<String> _selectedAddonIds = {};
+  AmcPlanModel? _selectedAmcPlan;
 
   CatalogNodeModel get node => widget.node;
 
-  void _onOptionSelected(String attrId, String optId,
-      List<ServiceAttributeModel> attrs) {
+  void _onOptionSelected(
+    String attrId,
+    String optId,
+    List<ServiceAttributeModel> attrs,
+  ) {
     setState(() {
       _selections[attrId] = optId;
       _priceAdjustment = attrs.fold(0.0, (sum, attr) {
@@ -83,40 +84,41 @@ class _CatalogNodeScreenState extends ConsumerState<CatalogNodeScreen> {
   Widget build(BuildContext context) {
     final children =
         ref.watch(catalogNodeChildrenProvider(node.id)).valueOrNull ?? [];
-    final attrs =
-        node.isLeafBookable
-            ? (ref.watch(serviceAttributesProvider(node.id)).valueOrNull ?? [])
-            : <ServiceAttributeModel>[];
-    final addOns =
-        node.isLeafBookable
-            ? (ref.watch(allActiveAddonsProvider).valueOrNull ?? [])
-            : <AddOnModel>[];
-    final faqs =
-        node.isLeafBookable
-            ? (ref.watch(catalogNodeFaqsProvider(node.id)).valueOrNull ?? [])
-            : <FaqModel>[];
+    final attrs = node.isLeafBookable
+        ? (ref.watch(serviceAttributesProvider(node.id)).valueOrNull ?? [])
+        : <ServiceAttributeModel>[];
+    final addOns = node.isLeafBookable
+        ? (ref.watch(allActiveAddonsProvider).valueOrNull ?? [])
+        : <AddOnModel>[];
+    final faqs = node.isLeafBookable
+        ? (ref.watch(catalogNodeFaqsProvider(node.id)).valueOrNull ?? [])
+        : <FaqModel>[];
 
     // Use the customer's default address coordinates for location restriction checks.
-    final addresses =
-        ref.watch(addressNotifierProvider).valueOrNull ?? [];
-    final defaultAddress = addresses.where((a) => a.isDefault).firstOrNull ??
+    final addresses = ref.watch(addressNotifierProvider).valueOrNull ?? [];
+    final defaultAddress =
+        addresses.where((a) => a.isDefault).firstOrNull ??
         (addresses.isNotEmpty ? addresses.first : null);
 
     // Availability check — uses canonical parent as fallback for deep-link entry
-    final availAsync = ref.watch(nodeAvailabilityProvider((
-      nodeId: node.id,
-      parentId: widget.parentNodeId ?? node.parentId,
-      lat: defaultAddress?.latitude,
-      lng: defaultAddress?.longitude,
-    )));
+    final availAsync = ref.watch(
+      nodeAvailabilityProvider((
+        nodeId: node.id,
+        parentId: widget.parentNodeId ?? node.parentId,
+        lat: defaultAddress?.latitude,
+        lng: defaultAddress?.longitude,
+      )),
+    );
     final avail = availAsync.valueOrNull;
     final isUnavailable = avail?.status == 'unavailable';
     final isEffectivelyHidden = avail?.status == 'hidden';
 
-    final addonsTotal =
-        totalAddonsPrice(buildSelectedAddons(addOns, _selectedAddonIds));
-    final displayPrice =
-        (node.basePrice ?? 0.0) + _priceAdjustment + addonsTotal;
+    final addonsTotal = totalAddonsPrice(
+      buildSelectedAddons(addOns, _selectedAddonIds),
+    );
+    final displayPrice = _selectedAmcPlan != null
+        ? _selectedAmcPlan!.finalPrice
+        : (node.basePrice ?? 0.0) + _priceAdjustment + addonsTotal;
     final hasAdjustment = _priceAdjustment > 0 || addonsTotal > 0;
 
     // Category/navigation nodes always show a hero using the image registry
@@ -240,14 +242,10 @@ class _CatalogNodeScreenState extends ConsumerState<CatalogNodeScreen> {
                 if (node.hasChildren)
                   (isUnavailable || isEffectivelyHidden)
                       ? CatalogUnavailabilityBanner(
-                          message:
-                              isUnavailable ? avail?.message : null,
+                          message: isUnavailable ? avail?.message : null,
                           isHidden: isEffectivelyHidden,
                         )
-                      : _ChildrenSection(
-                          node: node,
-                          children: children,
-                        ),
+                      : _ChildrenSection(node: node, children: children),
 
                 // ── Add-ons ────────────────────────────────────────────────
                 if (node.isLeafBookable && addOns.isNotEmpty)
@@ -255,6 +253,19 @@ class _CatalogNodeScreenState extends ConsumerState<CatalogNodeScreen> {
                     addOns: addOns,
                     selectedIds: _selectedAddonIds,
                     onToggle: _onAddonToggled,
+                  ),
+
+                // ── AMC ────────────────────────────────────────────────────
+                if (node.isLeafBookable)
+                  AmcSection(
+                    serviceId: node.id,
+                    selectedPlan: _selectedAmcPlan,
+                    onPlanSelected: (plan) => setState(() {
+                      _selectedAmcPlan = plan;
+                    }),
+                    regularPrice: node.basePrice != null && node.basePrice! > 0
+                        ? node.basePrice
+                        : null,
                   ),
 
                 // ── FAQs ───────────────────────────────────────────────────
@@ -279,16 +290,22 @@ class _CatalogNodeScreenState extends ConsumerState<CatalogNodeScreen> {
       // ── Sticky cart bar / unavailability bar ────────────────────────────
       bottomNavigationBar: node.isLeafBookable
           ? (isUnavailable || isEffectivelyHidden)
-              ? CatalogUnavailabilityBar(
-                  message: isUnavailable ? avail?.message : null,
-                )
-              : _NodeBookingBar(
-                  node: node,
-                  displayPrice: displayPrice,
-                  priceAdjustment: _priceAdjustment,
-                  addonsTotal: addonsTotal,
-                  parentNodeId: widget.parentNodeId,
-                )
+                ? CatalogUnavailabilityBar(
+                    message: isUnavailable ? avail?.message : null,
+                  )
+                : _NodeBookingBar(
+                    node: node,
+                    displayPrice: displayPrice,
+                    priceAdjustment: _priceAdjustment,
+                    addonsTotal: addonsTotal,
+                    parentNodeId: widget.parentNodeId,
+                    attrs: attrs,
+                    selections: _selections,
+                    addOns: addOns,
+                    selectedAddonIds: _selectedAddonIds,
+                    amcPlan: _selectedAmcPlan,
+                    amcQuantity: 1,
+                  )
           : null,
     );
   }
@@ -306,9 +323,8 @@ class CatalogNodeFetchScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final async = ref.watch(catalogNodeProvider(nodeId));
     return async.when(
-      loading: () => const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
-      ),
+      loading: () =>
+          const Scaffold(body: Center(child: CircularProgressIndicator())),
       error: (_, _) => Scaffold(
         appBar: AppBar(),
         body: const Center(child: Text('Service not found.')),
@@ -345,8 +361,7 @@ class _HeroWithCard extends StatelessWidget {
   Widget build(BuildContext context) {
     // Include status bar + AppBar height so the image fills behind the
     // transparent AppBar when extendBodyBehindAppBar is true.
-    final topInset =
-        MediaQuery.of(context).padding.top + kToolbarHeight;
+    final topInset = MediaQuery.of(context).padding.top + kToolbarHeight;
     final heroHeight = topInset + 200.0;
 
     return Stack(
@@ -413,10 +428,7 @@ class _HeroImage extends StatelessWidget {
               gradient: LinearGradient(
                 begin: Alignment.topCenter,
                 end: Alignment.bottomCenter,
-                colors: [
-                  Colors.transparent,
-                  Colors.black.withAlpha(100),
-                ],
+                colors: [Colors.transparent, Colors.black.withAlpha(100)],
               ),
             ),
           ),
@@ -463,8 +475,11 @@ class _FloatingInfoCard extends StatelessWidget {
             if (!node.isRoot && node.parentName != null) ...[
               Row(
                 children: [
-                  const Icon(Icons.chevron_left_rounded,
-                      size: 14, color: AppColors.textHint),
+                  const Icon(
+                    Icons.chevron_left_rounded,
+                    size: 14,
+                    color: AppColors.textHint,
+                  ),
                   const SizedBox(width: 2),
                   Text(
                     node.parentName!,
@@ -497,8 +512,11 @@ class _FloatingInfoCard extends StatelessWidget {
               Row(
                 children: [
                   if (node.rating > 0) ...[
-                    const Icon(Icons.star_rounded,
-                        size: 14, color: AppColors.gold),
+                    const Icon(
+                      Icons.star_rounded,
+                      size: 14,
+                      color: AppColors.gold,
+                    ),
                     const SizedBox(width: 3),
                     Text(
                       node.rating.toStringAsFixed(1),
@@ -521,8 +539,11 @@ class _FloatingInfoCard extends StatelessWidget {
                     const SizedBox(width: 12),
                   ],
                   if (node.estimatedDuration != null) ...[
-                    const Icon(Icons.schedule_rounded,
-                        size: 14, color: AppColors.textSecondary),
+                    const Icon(
+                      Icons.schedule_rounded,
+                      size: 14,
+                      color: AppColors.textSecondary,
+                    ),
                     const SizedBox(width: 4),
                     Text(
                       '${node.estimatedDuration} min',
@@ -570,7 +591,9 @@ class _FloatingInfoCard extends StatelessWidget {
                 children: [
                   Container(
                     padding: const EdgeInsets.symmetric(
-                        horizontal: 10, vertical: 4),
+                      horizontal: 10,
+                      vertical: 4,
+                    ),
                     decoration: BoxDecoration(
                       color: AppColors.surfaceVariant,
                       borderRadius: BorderRadius.circular(20),
@@ -625,8 +648,11 @@ class _Breadcrumb extends StatelessWidget {
           ),
           const Padding(
             padding: EdgeInsets.symmetric(horizontal: 6),
-            child: Icon(Icons.chevron_right_rounded,
-                size: 14, color: AppColors.textHint),
+            child: Icon(
+              Icons.chevron_right_rounded,
+              size: 14,
+              color: AppColors.textHint,
+            ),
           ),
           Expanded(
             child: Text(
@@ -678,8 +704,7 @@ class _NodeInfoHeader extends StatelessWidget {
           Row(
             children: [
               if (node.rating > 0) ...[
-                const Icon(Icons.star_rounded,
-                    size: 15, color: AppColors.gold),
+                const Icon(Icons.star_rounded, size: 15, color: AppColors.gold),
                 const SizedBox(width: 3),
                 Text(
                   node.rating.toStringAsFixed(1),
@@ -702,8 +727,11 @@ class _NodeInfoHeader extends StatelessWidget {
                 const SizedBox(width: 12),
               ],
               if (node.estimatedDuration != null) ...[
-                const Icon(Icons.schedule_rounded,
-                    size: 14, color: AppColors.textSecondary),
+                const Icon(
+                  Icons.schedule_rounded,
+                  size: 14,
+                  color: AppColors.textSecondary,
+                ),
                 const SizedBox(width: 4),
                 Text(
                   '${node.estimatedDuration} min',
@@ -750,10 +778,7 @@ class _NodeInfoHeader extends StatelessWidget {
 // ── Children list section ─────────────────────────────────────────────────────
 
 class _ChildrenSection extends StatelessWidget {
-  const _ChildrenSection({
-    required this.node,
-    required this.children,
-  });
+  const _ChildrenSection({required this.node, required this.children});
   final CatalogNodeModel node;
   final List<CatalogNodeModel> children;
 
@@ -812,6 +837,7 @@ class _ChildListItem extends StatefulWidget {
   });
   final CatalogNodeModel node;
   final VoidCallback onTap;
+
   /// The node.id of the parent through which this item is being displayed.
   /// Drives path-scoped loyalty resolution for shared services.
   final String? parentNodeId;
@@ -871,10 +897,9 @@ class _ChildListItemState extends State<_ChildListItem> {
                 child: Image.network(
                   imageUrl,
                   fit: BoxFit.cover,
-                  loadingBuilder: (_, child, p) =>
-                      p == null
-                          ? child
-                          : const ColoredBox(color: Color(0xFFEEEEEE)),
+                  loadingBuilder: (_, child, p) => p == null
+                      ? child
+                      : const ColoredBox(color: Color(0xFFEEEEEE)),
                   errorBuilder: (_, _, _) => Container(
                     color: AppColors.goldLight,
                     alignment: Alignment.center,
@@ -890,8 +915,10 @@ class _ChildListItemState extends State<_ChildListItem> {
               // Info
               Expanded(
                 child: Padding(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 14,
+                  ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     mainAxisAlignment: MainAxisAlignment.center,
@@ -912,8 +939,11 @@ class _ChildListItemState extends State<_ChildListItem> {
                         Row(
                           mainAxisSize: MainAxisSize.min,
                           children: const [
-                            Icon(Icons.pause_circle_outline_rounded,
-                                size: 11, color: Color(0xFFF59E0B)),
+                            Icon(
+                              Icons.pause_circle_outline_rounded,
+                              size: 11,
+                              color: Color(0xFFF59E0B),
+                            ),
                             SizedBox(width: 3),
                             Text(
                               'Temporarily unavailable',
@@ -943,7 +973,8 @@ class _ChildListItemState extends State<_ChildListItem> {
                       // Bottom row: price/options + duration
                       Row(
                         children: [
-                          if (node.isLeafBookable && node.basePrice != null) ...[
+                          if (node.isLeafBookable &&
+                              node.basePrice != null) ...[
                             Text(
                               '₹${node.basePrice!.toInt()}',
                               style: const TextStyle(
@@ -971,8 +1002,11 @@ class _ChildListItemState extends State<_ChildListItem> {
                             ),
                           if (node.estimatedDuration != null) ...[
                             const SizedBox(width: 8),
-                            const Icon(Icons.schedule_rounded,
-                                size: 12, color: AppColors.textHint),
+                            const Icon(
+                              Icons.schedule_rounded,
+                              size: 12,
+                              color: AppColors.textHint,
+                            ),
                             const SizedBox(width: 2),
                             Text(
                               '${node.estimatedDuration} min',
@@ -1001,7 +1035,8 @@ class _ChildListItemState extends State<_ChildListItem> {
                             final cfgAsync = ref.watch(
                               resolvedLoyaltyConfigProvider((
                                 serviceId: node.id,
-                                parentNodeId: widget.parentNodeId ?? node.parentId,
+                                parentNodeId:
+                                    widget.parentNodeId ?? node.parentId,
                               )),
                             );
                             if (!cfgAsync.hasValue) {
@@ -1067,8 +1102,11 @@ class _LoyaltyEarnBadge extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(Icons.workspace_premium_rounded,
-              size: 10, color: AppColors.gold),
+          const Icon(
+            Icons.workspace_premium_rounded,
+            size: 10,
+            color: AppColors.gold,
+          ),
           const SizedBox(width: 3),
           Text(
             'Earn $points Loyalty Points',
@@ -1141,6 +1179,12 @@ class _NodeBookingBar extends ConsumerWidget {
     required this.priceAdjustment,
     required this.addonsTotal,
     this.parentNodeId,
+    required this.attrs,
+    required this.selections,
+    required this.addOns,
+    required this.selectedAddonIds,
+    this.amcPlan,
+    this.amcQuantity = 1,
   });
 
   final CatalogNodeModel node;
@@ -1148,6 +1192,26 @@ class _NodeBookingBar extends ConsumerWidget {
   final double priceAdjustment;
   final double addonsTotal;
   final String? parentNodeId;
+  final List<ServiceAttributeModel> attrs;
+  final Map<String, String> selections;
+  final List<AddOnModel> addOns;
+  final Set<String> selectedAddonIds;
+  final AmcPlanModel? amcPlan;
+  final int amcQuantity;
+
+  void _addToCart(WidgetRef ref) {
+    ref
+        .read(cartProvider.notifier)
+        .addToCart(
+          node,
+          priceAdjustment: amcPlan != null
+              ? 0.0
+              : priceAdjustment + addonsTotal,
+          parentNodeId: parentNodeId,
+          amcPlan: amcPlan,
+          amcQuantity: amcQuantity,
+        );
+  }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -1190,11 +1254,12 @@ class _NodeBookingBar extends ConsumerWidget {
                 ),
               ),
               Text(
-                (priceAdjustment > 0 || addonsTotal > 0)
+                amcPlan != null
+                    ? 'AMC total · ${amcPlan!.numVisits} visits'
+                    : (priceAdjustment > 0 || addonsTotal > 0)
                     ? 'incl. adjustments'
                     : 'onwards',
-                style: const TextStyle(
-                    fontSize: 11, color: AppColors.textHint),
+                style: const TextStyle(fontSize: 11, color: AppColors.textHint),
               ),
             ],
           ),
@@ -1207,7 +1272,9 @@ class _NodeBookingBar extends ConsumerWidget {
                     label: const Text(
                       'View Cart',
                       style: TextStyle(
-                          fontSize: 16, fontWeight: FontWeight.w700),
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
                     style: FilledButton.styleFrom(
                       minimumSize: const Size.fromHeight(48),
@@ -1217,16 +1284,14 @@ class _NodeBookingBar extends ConsumerWidget {
                     ),
                   )
                 : FilledButton.icon(
-                    onPressed: () => ref
-                        .read(cartProvider.notifier)
-                        .addToCart(node,
-                            priceAdjustment: priceAdjustment + addonsTotal,
-                            parentNodeId: parentNodeId),
+                    onPressed: () => _addToCart(ref),
                     icon: const Icon(Icons.add_shopping_cart_rounded, size: 18),
-                    label: const Text(
-                      'Add to Cart',
-                      style: TextStyle(
-                          fontSize: 16, fontWeight: FontWeight.w700),
+                    label: Text(
+                      amcPlan != null ? 'Book Now' : 'Add to Cart',
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
                     style: FilledButton.styleFrom(
                       minimumSize: const Size.fromHeight(48),

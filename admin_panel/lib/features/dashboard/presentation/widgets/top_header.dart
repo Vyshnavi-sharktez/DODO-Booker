@@ -115,6 +115,19 @@ class _NotificationsPanelDialog extends ConsumerStatefulWidget {
 
 class _NotificationsPanelDialogState
     extends ConsumerState<_NotificationsPanelDialog> {
+  void _handleTap(AppNotification n) {
+    if (!n.isRead) {
+      ref
+          .read(notificationsNotifierProvider.notifier)
+          .toggleRead(n.id, currentIsRead: n.isRead);
+    }
+    if (n.entityType == 'amc_scheduling_request') {
+      final router = GoRouter.of(context);
+      Navigator.of(context).pop();
+      router.go('/dashboard/amc-scheduling-requests');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(notificationsNotifierProvider);
@@ -245,6 +258,9 @@ class _NotificationsPanelDialogState
                             final n = sorted[i];
                             return _NotificationTile(
                               notification: n,
+                              onTap: n.entityType != null
+                                  ? () => _handleTap(n)
+                                  : null,
                               onToggleRead: () => ref
                                   .read(notificationsNotifierProvider
                                       .notifier)
@@ -274,110 +290,117 @@ class _NotificationTile extends StatelessWidget {
   final AppNotification notification;
   final VoidCallback onToggleRead;
   final VoidCallback onDelete;
+  final VoidCallback? onTap;
 
   const _NotificationTile({
     required this.notification,
     required this.onToggleRead,
     required this.onDelete,
+    this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
     final n = notification;
-    final timeStr =
-        n.createdAt != null ? _timeFmt.format(n.createdAt!) : '';
+    final timeStr = n.createdAt != null ? _timeFmt.format(n.createdAt!.toLocal()) : '';
 
-    return Container(
-      color: n.isRead
-          ? null
-          : const Color(0xFF3182CE).withValues(alpha: 0.04),
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Unread dot / spacer
-          Padding(
-            padding: const EdgeInsets.only(top: 5, right: 10),
-            child: n.isRead
-                ? const SizedBox(width: 7)
-                : Container(
-                    width: 7,
-                    height: 7,
-                    decoration: const BoxDecoration(
-                      color: Color(0xFF3182CE),
-                      shape: BoxShape.circle,
+    return MouseRegion(
+      cursor: onTap != null ? SystemMouseCursors.click : MouseCursor.defer,
+      child: GestureDetector(
+        onTap: onTap,
+        child: Container(
+          color: n.isRead
+              ? null
+              : const Color(0xFF3182CE).withValues(alpha: 0.04),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Unread dot / spacer
+              Padding(
+                padding: const EdgeInsets.only(top: 5, right: 10),
+                child: n.isRead
+                    ? const SizedBox(width: 7)
+                    : Container(
+                        width: 7,
+                        height: 7,
+                        decoration: const BoxDecoration(
+                          color: Color(0xFF3182CE),
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+              ),
+
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      n.title,
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight:
+                            n.isRead ? FontWeight.w400 : FontWeight.w600,
+                        color: AppColors.textPrimary,
+                      ),
+                      overflow: TextOverflow.ellipsis,
                     ),
-                  ),
-          ),
+                    const SizedBox(height: 2),
+                    Text(
+                      n.message,
+                      style: const TextStyle(
+                          fontSize: 12, color: AppColors.textSecondary),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    if (timeStr.isNotEmpty) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        timeStr,
+                        style: const TextStyle(
+                            fontSize: 11, color: AppColors.textSecondary),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
 
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  n.title,
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight:
-                        n.isRead ? FontWeight.w400 : FontWeight.w600,
-                    color: AppColors.textPrimary,
+              const SizedBox(width: 4),
+              Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  IconButton(
+                    onPressed: onToggleRead,
+                    icon: Icon(
+                      n.isRead
+                          ? Icons.mark_email_unread_rounded
+                          : Icons.mark_email_read_rounded,
+                      size: 15,
+                      color: n.isRead
+                          ? AppColors.textSecondary
+                          : const Color(0xFF3182CE),
+                    ),
+                    tooltip: n.isRead ? 'Mark unread' : 'Mark read',
+                    visualDensity: VisualDensity.compact,
+                    padding: EdgeInsets.zero,
+                    constraints:
+                        const BoxConstraints(minWidth: 28, minHeight: 28),
                   ),
-                  overflow: TextOverflow.ellipsis,
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  n.message,
-                  style: const TextStyle(
-                      fontSize: 12, color: AppColors.textSecondary),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                if (timeStr.isNotEmpty) ...[
-                  const SizedBox(height: 4),
-                  Text(
-                    timeStr,
-                    style: const TextStyle(
-                        fontSize: 11, color: AppColors.textSecondary),
+                  IconButton(
+                    onPressed: onDelete,
+                    icon: Icon(Icons.delete_outline_rounded,
+                        size: 15, color: AppColors.error),
+                    tooltip: 'Delete',
+                    visualDensity: VisualDensity.compact,
+                    padding: EdgeInsets.zero,
+                    constraints:
+                        const BoxConstraints(minWidth: 28, minHeight: 28),
                   ),
                 ],
-              ],
-            ),
-          ),
-
-          const SizedBox(width: 4),
-          Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              IconButton(
-                onPressed: onToggleRead,
-                icon: Icon(
-                  n.isRead
-                      ? Icons.mark_email_unread_rounded
-                      : Icons.mark_email_read_rounded,
-                  size: 15,
-                  color: n.isRead
-                      ? AppColors.textSecondary
-                      : const Color(0xFF3182CE),
-                ),
-                tooltip: n.isRead ? 'Mark unread' : 'Mark read',
-                visualDensity: VisualDensity.compact,
-                padding: EdgeInsets.zero,
-                constraints:
-                    const BoxConstraints(minWidth: 28, minHeight: 28),
-              ),
-              IconButton(
-                onPressed: onDelete,
-                icon: Icon(Icons.delete_outline_rounded,
-                    size: 15, color: AppColors.error),
-                tooltip: 'Delete',
-                visualDensity: VisualDensity.compact,
-                padding: EdgeInsets.zero,
-                constraints:
-                    const BoxConstraints(minWidth: 28, minHeight: 28),
               ),
             ],
           ),
-        ],
+        ),
       ),
     );
   }

@@ -124,6 +124,14 @@ class MyBookingModel {
   final String? completionOtp;
   final List<BookingStatusEvent> timeline;
   final bool hasReview;
+  final bool isAmc;
+  final String? amcContractId;
+  final String? amcPlanName;
+  final String? amcRecurrenceInterval;
+  final int? amcVisitNumber;
+  // Raw service_date from DB; null when the booking is a trigger-created
+  // unscheduled placeholder (service_date = NULL in the bookings table).
+  final DateTime? serviceDate;
 
   const MyBookingModel({
     required this.id,
@@ -148,6 +156,12 @@ class MyBookingModel {
     this.completionOtp,
     this.timeline = const [],
     this.hasReview = false,
+    this.isAmc = false,
+    this.amcContractId,
+    this.amcPlanName,
+    this.amcRecurrenceInterval,
+    this.amcVisitNumber,
+    this.serviceDate,
   });
 
   bool get isDodoTeam => assignmentType == 'DODO Team';
@@ -269,6 +283,14 @@ class MyBookingModel {
             assignmentType: assignmentType,
           ),
       hasReview: json['has_review'] as bool? ?? false,
+      isAmc: json['is_amc'] as bool? ?? false,
+      amcContractId: json['amc_contract_id'] as String?,
+      amcPlanName: json['amc_plan_name'] as String?,
+      amcRecurrenceInterval: json['amc_recurrence_interval'] as String?,
+      amcVisitNumber: (json['amc_visit_number'] as num?)?.toInt(),
+      serviceDate: json['service_date'] != null
+          ? DateTime.tryParse(json['service_date'] as String)
+          : null,
     );
   }
 

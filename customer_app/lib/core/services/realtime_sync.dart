@@ -3,6 +3,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../features/amc/providers/amc_contract_provider.dart';
+import '../../features/amc/providers/amc_plans_provider.dart';
 import '../../features/booking/services/coupon_providers.dart';
 import '../../features/bookings/services/bookings_providers.dart';
 import '../../features/notifications/services/notification_providers.dart';
@@ -47,6 +49,7 @@ import '../../features/tax/providers/tax_provider.dart';
 ///   notifications (broadcast, user_type=customer) → notificationsProvider
 ///   notifications (personal,  user_id=cust)  → notificationsProvider
 ///   bookings                                 → myBookingsProvider
+///   amc_contracts                            → processedBookingsProvider + amcContractProvider + allAmcContractsProvider
 class CustomerRealtimeSync {
   final Ref _ref;
   final SupabaseClient _client;
@@ -145,6 +148,21 @@ class CustomerRealtimeSync {
           table: 'bookings',
           callback: (_) => _ref.invalidate(myBookingsProvider),
         )
+        // ── AMC contract status changes (admin approves/rejects cancellation) ─
+        // Invalidate both the bookings list (which shows AMC contract cards) and
+        // any open contract detail screen so the customer sees the new status
+        // immediately when the admin acts on a cancellation request.
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'amc_contracts',
+          callback: (_) {
+            _ref.invalidate(processedBookingsProvider);
+            _ref.invalidate(myBookingsProvider);
+            _ref.invalidate(amcContractProvider);
+            _ref.invalidate(allAmcContractsProvider);
+          },
+        )
         .subscribe((status, error) {
           debugPrint('[DODO][CustomerSync] shared channel status=$status error=$error');
         });
@@ -171,8 +189,16 @@ class CustomerRealtimeSync {
             value: customerId,
           ),
           callback: (_) {
-            debugPrint('[DODO][CustomerSync] personal notification INSERT → invalidating notificationsProvider');
+            debugPrint('[DODO][CustomerSync] personal notification INSERT → invalidating notificationsProvider + AMC providers');
             _ref.invalidate(notificationsProvider);
+            // Re-fetch AMC state on every personal notification so that
+            // admin actions (approve/reject cancellation, schedule visit)
+            // are reflected immediately even if the amc_contracts Realtime
+            // event was silently dropped by RLS evaluation.
+            _ref.invalidate(amcContractProvider);
+            _ref.invalidate(allAmcContractsProvider);
+            _ref.invalidate(processedBookingsProvider);
+            _ref.invalidate(myBookingsProvider);
           },
         )
         .subscribe((status, error) {
@@ -224,6 +250,9 @@ class CustomerRealtimeSync {
     _invalidateCatalog();
     _invalidateConfig();
     _ref.invalidate(myBookingsProvider);
+    _ref.invalidate(processedBookingsProvider);
+    _ref.invalidate(amcContractProvider);
+    _ref.invalidate(allAmcContractsProvider);
     _ref.invalidate(homeBannersProvider);
     _ref.invalidate(activeCouponsProvider);
     _ref.invalidate(notificationsProvider);

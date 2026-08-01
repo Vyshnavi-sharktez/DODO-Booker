@@ -2,6 +2,31 @@ import 'package:flutter/foundation.dart';
 import 'booking_addon.dart';
 import 'booking_item.dart';
 
+// ── AMC planned-date helpers ───────────────────────────────────────────────────
+
+DateTime _addCalMonths(DateTime base, int months) {
+  final total = (base.month - 1) + months;
+  final targetYear = base.year + total ~/ 12;
+  final targetMonth = total % 12 + 1;
+  final daysInMonth = DateTime.utc(targetYear, targetMonth + 1, 0).day;
+  return DateTime.utc(targetYear, targetMonth, base.day.clamp(1, daysInMonth));
+}
+
+DateTime? _amcVisitPlannedDate(
+    DateTime contractCreatedAt, String? interval, int visitNumber) {
+  if (interval == null) return null;
+  final n = visitNumber - 1;
+  final base = DateTime.utc(
+      contractCreatedAt.year, contractCreatedAt.month, contractCreatedAt.day);
+  return switch (interval) {
+    'monthly'     => _addCalMonths(base, n),
+    'quarterly'   => _addCalMonths(base, 3 * n),
+    'half_yearly' => _addCalMonths(base, 6 * n),
+    'yearly'      => _addCalMonths(base, 12 * n),
+    _ => null,
+  };
+}
+
 class BookingReview {
   final String id;
   final int rating;
@@ -52,6 +77,28 @@ class Booking {
   final double? longitude;
   final String? completionOtp;
   final String paymentMethod; // 'cash' | 'cod' | 'online' — mirrors DB default 'cash'
+  final bool isAmc;
+  final String? amcPlanName;
+  final String? amcRecurrenceInterval;
+  final String? amcContractId;
+  final int? amcVisitNumber;
+  final int? amcVisitsCompleted;
+  final int? amcTotalVisits; // effective: num_visits ?? total_visits
+  final DateTime? amcContractCreatedAt;
+  final String? amcServiceInterval;
+  final String? amcContractStatus;
+  final String? cancellationReason;
+  final String? cancellationRemarks;
+  final DateTime? cancellationRequestedAt;
+  final int amcQuantity;
+
+  DateTime? get plannedDueDate {
+    if (!isAmc || amcVisitNumber == null || amcContractCreatedAt == null) {
+      return null;
+    }
+    return _amcVisitPlannedDate(
+        amcContractCreatedAt!, amcServiceInterval, amcVisitNumber!);
+  }
 
   const Booking({
     required this.id,
@@ -78,6 +125,20 @@ class Booking {
     this.longitude,
     this.completionOtp,
     this.paymentMethod = 'cash',
+    this.isAmc = false,
+    this.amcPlanName,
+    this.amcRecurrenceInterval,
+    this.amcContractId,
+    this.amcVisitNumber,
+    this.amcVisitsCompleted,
+    this.amcTotalVisits,
+    this.amcContractCreatedAt,
+    this.amcServiceInterval,
+    this.amcContractStatus,
+    this.cancellationReason,
+    this.cancellationRemarks,
+    this.cancellationRequestedAt,
+    this.amcQuantity = 1,
   });
 
   bool get isUnassigned => assignmentType == 'Unassigned';
@@ -143,6 +204,58 @@ class Booking {
       longitude: (map['longitude'] as num?)?.toDouble(),
       completionOtp: map['completion_otp'] as String?,
       paymentMethod: map['payment_method'] as String? ?? 'cash',
+      isAmc: map['is_amc'] as bool? ?? false,
+      amcPlanName: map['amc_plan_name'] as String?,
+      amcRecurrenceInterval: map['amc_recurrence_interval'] as String?,
+      amcContractId: map['amc_contract_id'] as String?,
+      amcVisitNumber: (map['amc_visit_number'] as num?)?.toInt(),
+      amcVisitsCompleted: () {
+        final c = map['amc_contracts'];
+        if (c is! Map) return null;
+        return (c['visits_completed'] as num?)?.toInt();
+      }(),
+      amcTotalVisits: () {
+        final c = map['amc_contracts'];
+        if (c is! Map) return null;
+        return ((c['num_visits'] as num?)?.toInt()) ??
+            (c['total_visits'] as num?)?.toInt();
+      }(),
+      amcContractCreatedAt: () {
+        final c = map['amc_contracts'];
+        if (c is! Map) return null;
+        return DateTime.tryParse(c['created_at'] as String? ?? '');
+      }(),
+      amcServiceInterval: () {
+        final c = map['amc_contracts'];
+        if (c is! Map) return null;
+        return c['service_interval'] as String?;
+      }(),
+      amcContractStatus: () {
+        final c = map['amc_contracts'];
+        if (c is! Map) return null;
+        return c['status'] as String?;
+      }(),
+      cancellationReason: () {
+        final c = map['amc_contracts'];
+        if (c is! Map) return null;
+        return c['cancellation_reason'] as String?;
+      }(),
+      cancellationRemarks: () {
+        final c = map['amc_contracts'];
+        if (c is! Map) return null;
+        return c['cancellation_remarks'] as String?;
+      }(),
+      cancellationRequestedAt: () {
+        final c = map['amc_contracts'];
+        if (c is! Map) return null;
+        final s = c['cancellation_requested_at'] as String?;
+        return s != null ? DateTime.tryParse(s) : null;
+      }(),
+      amcQuantity: () {
+        final c = map['amc_contracts'];
+        if (c is! Map) return 1;
+        return (c['quantity'] as num?)?.toInt() ?? 1;
+      }(),
     );
   }
 
@@ -181,6 +294,13 @@ class Booking {
       longitude: longitude,
       completionOtp: completionOtp ?? this.completionOtp,
       paymentMethod: paymentMethod,
+      isAmc: isAmc,
+      amcPlanName: amcPlanName,
+      amcRecurrenceInterval: amcRecurrenceInterval,
+      amcContractId: amcContractId,
+      amcVisitsCompleted: amcVisitsCompleted,
+      amcTotalVisits: amcTotalVisits,
+      amcQuantity: amcQuantity,
     );
   }
 }

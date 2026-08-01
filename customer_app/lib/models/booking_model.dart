@@ -11,6 +11,9 @@ class BookingModel {
   final double totalAmount;
   final String status;
   final DateTime createdAt;
+  final bool isAmc;
+  final String? amcPlanName;
+  final String? amcRecurrenceInterval;
 
   const BookingModel({
     required this.id,
@@ -25,6 +28,9 @@ class BookingModel {
     required this.totalAmount,
     required this.status,
     required this.createdAt,
+    this.isAmc = false,
+    this.amcPlanName,
+    this.amcRecurrenceInterval,
   });
 
   factory BookingModel.fromJson(Map<String, dynamic> json) {
@@ -53,6 +59,9 @@ class BookingModel {
       totalAmount: (json['total_amount'] as num?)?.toDouble() ?? 0.0,
       status: json['status'] as String,
       createdAt: DateTime.parse(json['created_at'] as String),
+      isAmc: json['is_amc'] as bool? ?? false,
+      amcPlanName: json['amc_plan_name'] as String?,
+      amcRecurrenceInterval: json['amc_recurrence_interval'] as String?,
     );
   }
 }

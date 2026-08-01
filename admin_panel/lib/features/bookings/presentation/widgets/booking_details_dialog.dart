@@ -11,6 +11,8 @@ import '../../application/providers/bookings_providers.dart';
 import '../../domain/models/booking.dart';
 import '../../domain/models/booking_addon.dart';
 import '../../domain/models/booking_item.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../../amc_plans/presentation/widgets/amc_contract_details_dialog.dart';
 
 const _statusConfig = <String, (String, Color, Color)>{
   'pending': ('Pending', Color(0xFFDD6B20), Color(0xFFFEEBC8)),
@@ -41,6 +43,54 @@ const _cancellableStatuses = {
 
 final _currency = NumberFormat.currency(symbol: '₹', decimalDigits: 2);
 final _dateFmt = DateFormat('dd MMM yyyy');
+
+// ── AMC contract snapshot model (inline, booking details only) ────────────────
+
+class _AmcData {
+  final String planName;
+  final String status;
+  final String? packageDuration;
+  final String? serviceInterval;
+  final double pricePerVisit;
+  final int effectiveTotal;
+  final int completedCount;
+  final double? originalTotal;
+  final String? discountType;
+  final double? discountValue;
+  final double? discountAmount;
+  final double? finalPrice;
+  final DateTime createdAt;
+
+  const _AmcData({
+    required this.planName,
+    required this.status,
+    this.packageDuration,
+    this.serviceInterval,
+    required this.pricePerVisit,
+    required this.effectiveTotal,
+    required this.completedCount,
+    this.originalTotal,
+    this.discountType,
+    this.discountValue,
+    this.discountAmount,
+    this.finalPrice,
+    required this.createdAt,
+  });
+
+  int get remainingCount => (effectiveTotal - completedCount).clamp(0, 9999);
+
+  DateTime? get endDate {
+    final days = switch (packageDuration) {
+      'monthly' => 30,
+      'quarterly' => 91,
+      'half_yearly' => 182,
+      'yearly' => 365,
+      _ => null,
+    };
+    return days != null ? createdAt.add(Duration(days: days)) : null;
+  }
+}
+
 
 class BookingDetailsDialog extends ConsumerStatefulWidget {
   final Booking booking;
@@ -190,6 +240,31 @@ class _BookingDetailsDialogState extends ConsumerState<BookingDetailsDialog> {
                       ),
                     ),
                   ),
+                  if (booking.isAmc) ...[
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFEBF8FF),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: const Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.autorenew_rounded, size: 11, color: Color(0xFF3182CE)),
+                          SizedBox(width: 3),
+                          Text(
+                            'AMC',
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: Color(0xFF3182CE),
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                  ],
                   Container(
                     padding: const EdgeInsets.symmetric(
                       horizontal: 10,
@@ -251,6 +326,14 @@ class _BookingDetailsDialogState extends ConsumerState<BookingDetailsDialog> {
                       _InfoRow('Notes', booking.notes!),
                     const SizedBox(height: 20),
 
+                    if (booking.isAmc) ...[
+                      const SizedBox(height: 20),
+                      _SectionLabel('AMC Contract'),
+                      const SizedBox(height: 12),
+                      _AmcContractExpandedSection(booking: booking),
+                      const SizedBox(height: 4),
+                    ],
+
                     if (booking.items.isNotEmpty) ...[
                       _SectionLabel('Services (${booking.items.length})'),
                       const SizedBox(height: 12),
@@ -293,7 +376,7 @@ class _BookingDetailsDialogState extends ConsumerState<BookingDetailsDialog> {
                       booking.createdAt != null
                           ? DateFormat(
                               'dd MMM yyyy, hh:mm a',
-                            ).format(booking.createdAt!)
+                            ).format(booking.createdAt!.toLocal())
                           : '—',
                     ),
                     _InfoRow(
@@ -301,7 +384,7 @@ class _BookingDetailsDialogState extends ConsumerState<BookingDetailsDialog> {
                       booking.updatedAt != null
                           ? DateFormat(
                               'dd MMM yyyy, hh:mm a',
-                            ).format(booking.updatedAt!)
+                            ).format(booking.updatedAt!.toLocal())
                           : '—',
                     ),
                     const SizedBox(height: 20),
@@ -339,7 +422,7 @@ class _BookingDetailsDialogState extends ConsumerState<BookingDetailsDialog> {
                         booking.review!.createdAt != null
                             ? DateFormat(
                                 'dd MMM yyyy, hh:mm a',
-                              ).format(booking.review!.createdAt!)
+                              ).format(booking.review!.createdAt!.toLocal())
                             : '—',
                       ),
                     ] else
@@ -884,4 +967,254 @@ class _InfoRow extends StatelessWidget {
       ),
     );
   }
+}
+
+// ── AMC Contract expanded section ─────────────────────────────────────────────
+
+class _AmcContractExpandedSection extends StatefulWidget {
+  final Booking booking;
+
+  const _AmcContractExpandedSection({required this.booking});
+
+  @override
+  State<_AmcContractExpandedSection> createState() =>
+      _AmcContractExpandedSectionState();
+}
+
+class _AmcContractExpandedSectionState
+    extends State<_AmcContractExpandedSection> {
+  _AmcData? _data;
+  bool _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetch();
+  }
+
+  Future<void> _fetch() async {
+    final contractId = widget.booking.amcContractId;
+    if (contractId == null) {
+      if (mounted) setState(() => _loading = false);
+      return;
+    }
+    try {
+      final client = Supabase.instance.client;
+      final raw = await client
+          .from('amc_contracts')
+          .select(
+            'plan_name, status, package_duration, service_interval, '
+            'price_per_visit, total_visits, num_visits, '
+            'original_total, discount_type, discount_value, discount_amount, final_price, created_at',
+          )
+          .eq('id', contractId)
+          .maybeSingle();
+
+      if (!mounted) return;
+      if (raw == null) {
+        setState(() => _loading = false);
+        return;
+      }
+
+      final visitsRaw = await client
+          .from('bookings')
+          .select('status')
+          .eq('amc_contract_id', contractId);
+
+      if (!mounted) return;
+
+      final completedCount = (visitsRaw as List)
+          .where((v) => (v as Map)['status'] == 'completed')
+          .length;
+      final numVisits = (raw['num_visits'] as num?)?.toInt();
+      final totalVisits = (raw['total_visits'] as num?)?.toInt() ?? 0;
+
+      setState(() {
+        _data = _AmcData(
+          planName: raw['plan_name'] as String? ?? '',
+          status: raw['status'] as String? ?? 'active',
+          packageDuration: raw['package_duration'] as String?,
+          serviceInterval: raw['service_interval'] as String?,
+          pricePerVisit: (raw['price_per_visit'] as num?)?.toDouble() ?? 0.0,
+          effectiveTotal: numVisits ?? totalVisits,
+          completedCount: completedCount,
+          originalTotal: (raw['original_total'] as num?)?.toDouble(),
+          discountType: raw['discount_type'] as String?,
+          discountValue: (raw['discount_value'] as num?)?.toDouble(),
+          discountAmount: (raw['discount_amount'] as num?)?.toDouble(),
+          finalPrice: (raw['final_price'] as num?)?.toDouble(),
+          createdAt: DateTime.parse(raw['created_at'] as String),
+        );
+        _loading = false;
+      });
+    } catch (_) {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final contractId = widget.booking.amcContractId;
+    final booking = widget.booking;
+
+    return Column(
+      children: [
+        Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: const Color(0xFFEBF8FF),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(
+                color: const Color(0xFF3182CE).withValues(alpha: 0.3)),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Row(
+                children: [
+                  Icon(Icons.autorenew_rounded,
+                      size: 14, color: Color(0xFF3182CE)),
+                  SizedBox(width: 6),
+                  Text(
+                    'Annual Maintenance Contract',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      color: Color(0xFF3182CE),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              if (_loading)
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 6),
+                  child: SizedBox(
+                    height: 18,
+                    width: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                )
+              else if (_data != null)
+                _dataRows(_data!, booking)
+              else
+                _basicRows(booking),
+            ],
+          ),
+        ),
+        if (contractId != null) ...[
+          const SizedBox(height: 8),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: () => showDialog(
+                context: context,
+                builder: (_) => AmcContractDetailsDialog(
+                  contractId: contractId,
+                  planName: booking.amcPlanName ?? 'AMC Contract',
+                ),
+              ),
+              icon: const Icon(Icons.open_in_new_rounded, size: 15),
+              label: const Text('View AMC Contract'),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: const Color(0xFF3182CE),
+                side: const BorderSide(color: Color(0xFF3182CE)),
+                visualDensity: VisualDensity.compact,
+                padding: const EdgeInsets.symmetric(vertical: 8),
+              ),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _basicRows(Booking booking) => Column(
+        children: [
+          if (booking.amcPlanName != null && booking.amcPlanName!.isNotEmpty)
+            _InfoRow('Plan', booking.amcPlanName!),
+          if (booking.amcRecurrenceInterval != null &&
+              booking.amcRecurrenceInterval!.isNotEmpty)
+            _InfoRow('Recurrence', booking.amcRecurrenceInterval!),
+          if (booking.amcContractId != null)
+            _InfoRow(
+              'Contract ID',
+              _truncateId(booking.amcContractId!),
+              tooltip: booking.amcContractId,
+            ),
+        ],
+      );
+
+  Widget _dataRows(_AmcData data, Booking booking) {
+    final fmt = DateFormat('dd MMM yyyy');
+    final contractId = booking.amcContractId;
+    return Column(
+      children: [
+        _InfoRow(
+          'Plan',
+          data.planName.isNotEmpty
+              ? data.planName
+              : (booking.amcPlanName ?? '—'),
+        ),
+        _InfoRow('Status', _statusLabel(data.status)),
+        if (data.packageDuration != null)
+          _InfoRow('Package Duration', _durationLabel(data.packageDuration!)),
+        if (data.serviceInterval != null)
+          _InfoRow('Service Interval', _intervalLabel(data.serviceInterval!)),
+        _InfoRow(
+            'Price Per Visit', '₹${data.pricePerVisit.toStringAsFixed(2)}'),
+        _InfoRow('Total Visits', '${data.effectiveTotal}'),
+        _InfoRow('Completed Visits', '${data.completedCount}'),
+        _InfoRow('Remaining Visits', '${data.remainingCount}'),
+        if (data.originalTotal != null && data.originalTotal! > 0)
+          _InfoRow(
+              'Original Total', '₹${data.originalTotal!.toStringAsFixed(2)}'),
+        if (data.discountAmount != null && data.discountAmount! > 0)
+          _InfoRow(
+            'Discount',
+            data.discountType == 'percentage' && data.discountValue != null
+                ? '${data.discountValue!.toStringAsFixed(0)}% (−₹${data.discountAmount!.toStringAsFixed(2)})'
+                : '−₹${data.discountAmount!.toStringAsFixed(2)}',
+          ),
+        if (data.finalPrice != null && data.finalPrice! > 0)
+          _InfoRow(
+            'Final AMC Price',
+            '₹${data.finalPrice!.toStringAsFixed(2)}',
+            bold: true,
+          ),
+        _InfoRow('Start Date', fmt.format(data.createdAt.toLocal())),
+        if (data.endDate != null)
+          _InfoRow('End Date', fmt.format(data.endDate!.toLocal())),
+        if (contractId != null)
+          _InfoRow(
+            'Contract ID',
+            _truncateId(contractId),
+            tooltip: contractId,
+          ),
+      ],
+    );
+  }
+
+  static String _statusLabel(String s) => switch (s) {
+        'active' => 'Active',
+        'paused' => 'Paused',
+        'completed' => 'Completed',
+        'cancelled' => 'Cancelled',
+        _ => s,
+      };
+
+  static String _durationLabel(String d) => switch (d) {
+        'monthly' => 'Monthly',
+        'quarterly' => 'Quarterly',
+        'half_yearly' => 'Half-Yearly',
+        'yearly' => 'Yearly',
+        _ => d,
+      };
+
+  static String _intervalLabel(String i) => switch (i) {
+        'weekly' => 'Weekly',
+        'bi_weekly' => 'Bi-Weekly',
+        'monthly' => 'Monthly',
+        _ => i,
+      };
 }

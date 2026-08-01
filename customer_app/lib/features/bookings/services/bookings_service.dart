@@ -21,6 +21,7 @@ class BookingsService {
     subtotal, discount_amount, total_amount,
     address, notes, created_at,
     completion_otp, otp_verified_at,
+    is_amc, amc_contract_id, amc_plan_name, amc_recurrence_interval, amc_visit_number,
     booking_items(
       service_id,
       quantity,
