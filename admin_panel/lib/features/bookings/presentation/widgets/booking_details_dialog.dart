@@ -60,6 +60,7 @@ class _AmcData {
   final double? discountAmount;
   final double? finalPrice;
   final DateTime createdAt;
+  final int quantity;
 
   const _AmcData({
     required this.planName,
@@ -75,6 +76,7 @@ class _AmcData {
     this.discountAmount,
     this.finalPrice,
     required this.createdAt,
+    this.quantity = 1,
   });
 
   int get remainingCount => (effectiveTotal - completedCount).clamp(0, 9999);
@@ -1005,7 +1007,7 @@ class _AmcContractExpandedSectionState
           .select(
             'plan_name, status, package_duration, service_interval, '
             'price_per_visit, total_visits, num_visits, '
-            'original_total, discount_type, discount_value, discount_amount, final_price, created_at',
+            'original_total, discount_type, discount_value, discount_amount, final_price, created_at, quantity',
           )
           .eq('id', contractId)
           .maybeSingle();
@@ -1044,6 +1046,7 @@ class _AmcContractExpandedSectionState
           discountAmount: (raw['discount_amount'] as num?)?.toDouble(),
           finalPrice: (raw['final_price'] as num?)?.toDouble(),
           createdAt: DateTime.parse(raw['created_at'] as String),
+          quantity: (raw['quantity'] as num?)?.toInt() ?? 1,
         );
         _loading = false;
       });
@@ -1166,6 +1169,8 @@ class _AmcContractExpandedSectionState
         _InfoRow('Total Visits', '${data.effectiveTotal}'),
         _InfoRow('Completed Visits', '${data.completedCount}'),
         _InfoRow('Remaining Visits', '${data.remainingCount}'),
+        if (data.quantity > 1)
+          _InfoRow('Units Covered', '${data.quantity} units'),
         if (data.originalTotal != null && data.originalTotal! > 0)
           _InfoRow(
               'Original Total', '₹${data.originalTotal!.toStringAsFixed(2)}'),

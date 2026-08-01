@@ -635,11 +635,13 @@ class _AmcContractDetailsScreenState
       );
       if (selection == null || !mounted) return;
 
+      // Prefill quantity from the previous contract; customer adjusts in cart.
+      final prefillQty = contract.quantity;
       final cartItem = CartItem(
         serviceId: contract.serviceId,
         serviceName: contract.serviceName,
         unitPrice: selection.plan.finalPrice,
-        quantity: 1,
+        quantity: prefillQty,
         isAmc: true,
         amcPlanName: selection.plan.planName,
         amcRecurrenceInterval: selection.plan.serviceIntervalLabel,
@@ -653,7 +655,7 @@ class _AmcContractDetailsScreenState
         amcFinalPrice: selection.plan.finalPrice,
         amcPackageDuration: selection.plan.packageDuration,
         amcServiceInterval: selection.plan.serviceInterval,
-        amcQuantity: 1,
+        amcQuantity: prefillQty,
         amcIsRenewal: true,
         amcPreviousContractId: contract.id,
       );
