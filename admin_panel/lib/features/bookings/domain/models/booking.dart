@@ -19,6 +19,8 @@ DateTime? _amcVisitPlannedDate(
   final base = DateTime.utc(
       contractCreatedAt.year, contractCreatedAt.month, contractCreatedAt.day);
   return switch (interval) {
+    'weekly'      => base.add(Duration(days: 7 * n)),
+    'bi_weekly'   => base.add(Duration(days: 14 * n)),
     'monthly'     => _addCalMonths(base, n),
     'quarterly'   => _addCalMonths(base, 3 * n),
     'half_yearly' => _addCalMonths(base, 6 * n),

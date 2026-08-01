@@ -34,6 +34,8 @@ DateTime? _adminPlannedDate(
   final n = visitNumber - 1; // 0-based month/year offset
   final base = DateTime.utc(createdAt.year, createdAt.month, createdAt.day);
   return switch (interval) {
+    'weekly'      => base.add(Duration(days: 7 * n)),
+    'bi_weekly'   => base.add(Duration(days: 14 * n)),
     'monthly'     => _addCalendarMonths(base, n),
     'quarterly'   => _addCalendarMonths(base, 3 * n),
     'half_yearly' => _addCalendarMonths(base, 6 * n),
@@ -50,6 +52,8 @@ DateTime? _contractEndDate(_AmcContract c) {
 }
 
 String _intervalLabel(String? s) => switch (s) {
+      'weekly'      => 'Weekly',
+      'bi_weekly'   => 'Bi-Weekly',
       'monthly'     => 'Monthly',
       'quarterly'   => 'Quarterly',
       'half_yearly' => 'Half Yearly',
