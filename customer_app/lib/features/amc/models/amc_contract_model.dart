@@ -3,6 +3,7 @@ class AmcVisitModel {
   final int? visitNumber;
   final String status;
   final DateTime? serviceDate;
+  final DateTime? plannedDueDate;
   final String timeSlot;
   final double totalAmount;
   final DateTime createdAt;
@@ -14,6 +15,7 @@ class AmcVisitModel {
     this.visitNumber,
     required this.status,
     this.serviceDate,
+    this.plannedDueDate,
     required this.timeSlot,
     required this.totalAmount,
     required this.createdAt,
@@ -31,6 +33,9 @@ class AmcVisitModel {
         status: m['status'] as String? ?? 'pending',
         serviceDate: m['service_date'] != null
             ? DateTime.tryParse(m['service_date'] as String)
+            : null,
+        plannedDueDate: m['planned_due_date'] != null
+            ? DateTime.tryParse(m['planned_due_date'] as String)
             : null,
         timeSlot: m['scheduled_time'] as String? ?? '',
         totalAmount: (m['total_amount'] as num?)?.toDouble() ?? 0.0,

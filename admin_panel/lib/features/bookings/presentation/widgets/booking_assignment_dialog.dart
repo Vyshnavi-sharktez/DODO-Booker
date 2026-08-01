@@ -27,28 +27,6 @@ final _isoDateFmt = DateFormat('yyyy-MM-dd');
 // Must stay in sync with get_vendor_busy_status RPC (supabase/migrations).
 const _kBusyStatuses = ['accepted', 'in_progress', 'awaiting_verification'];
 
-// ── AMC planned-date helpers ───────────────────────────────────────────────────
-
-DateTime _addCalendarMonths(DateTime base, int months) {
-  final total = (base.month - 1) + months;
-  final targetYear = base.year + total ~/ 12;
-  final targetMonth = total % 12 + 1;
-  final daysInMonth = DateTime.utc(targetYear, targetMonth + 1, 0).day;
-  return DateTime.utc(targetYear, targetMonth, base.day.clamp(1, daysInMonth));
-}
-
-DateTime? _amcPlannedDate(DateTime createdAt, String? interval, int visitNumber) {
-  if (interval == null) return null;
-  final n = visitNumber - 1;
-  final base = DateTime.utc(createdAt.year, createdAt.month, createdAt.day);
-  return switch (interval) {
-    'monthly'     => _addCalendarMonths(base, n),
-    'quarterly'   => _addCalendarMonths(base, 3 * n),
-    'half_yearly' => _addCalendarMonths(base, 6 * n),
-    'yearly'      => _addCalendarMonths(base, 12 * n),
-    _ => null,
-  };
-}
 
 /// For AMC bookings: returns (vendorId, vendorName, completedDate) for the
 /// vendor who completed the most recent visit under the given contract.
@@ -173,39 +151,14 @@ class _BookingAssignmentDialogState
       _ => _AssigneeType.vendor,
     };
 
-    // For AMC bookings with no service date, fetch the contract's schedule
-    // and pre-populate the date field with the visit's planned due date.
-    if (widget.booking.isAmc &&
-        widget.booking.serviceDate == null &&
-        widget.booking.amcContractId != null &&
-        widget.booking.amcVisitNumber != null) {
-      Future.microtask(_fetchAmcPlannedDate);
-    }
-  }
-
-  Future<void> _fetchAmcPlannedDate() async {
-    final row = await Supabase.instance.client
-        .from('amc_contracts')
-        .select('created_at, service_interval')
-        .eq('id', widget.booking.amcContractId!)
-        .maybeSingle();
-
-    if (!mounted || row == null) return;
-
-    final createdAt = DateTime.tryParse(row['created_at'] as String? ?? '');
-    if (createdAt == null) return;
-
-    final planned = _amcPlannedDate(
-      createdAt,
-      row['service_interval'] as String?,
-      widget.booking.amcVisitNumber!,
-    );
-
-    if (planned != null && mounted) {
-      setState(() {
+    // For AMC bookings with no service date, pre-populate from the booking's
+    // planned_due_date (computed from contract start + service interval).
+    if (widget.booking.isAmc && widget.booking.serviceDate == null) {
+      final planned = widget.booking.plannedDueDate;
+      if (planned != null) {
         _serviceDate = planned;
         _isDefaultDate = true;
-      });
+      }
     }
   }
 

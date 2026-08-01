@@ -32,8 +32,6 @@ class _AmcContractDetailsScreenState
   bool _requesting = false;
   bool _cancellingRequest = false;
   bool _renewing = false;
-  bool _hasPendingRequest = false;
-  String? _pendingRequestId;
 
   @override
   void initState() {
@@ -41,27 +39,17 @@ class _AmcContractDetailsScreenState
     Future.microtask(() {
       if (mounted) {
         ref.invalidate(amcContractProvider(widget.contractId));
-        _loadPendingRequestStatus();
+        ref.invalidate(pendingAmcRequestProvider(widget.contractId));
       }
     });
-  }
-
-  Future<void> _loadPendingRequestStatus() async {
-    try {
-      final id =
-          await CheckoutService().getActivePendingRequest(widget.contractId);
-      if (mounted) {
-        setState(() {
-          _hasPendingRequest = id != null;
-          _pendingRequestId = id;
-        });
-      }
-    } catch (_) {}
   }
 
   @override
   Widget build(BuildContext context) {
     final contractAsync = ref.watch(amcContractProvider(widget.contractId));
+    final pendingRequestId =
+        ref.watch(pendingAmcRequestProvider(widget.contractId)).valueOrNull;
+    final hasPendingRequest = pendingRequestId != null;
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -104,11 +92,19 @@ class _AmcContractDetailsScreenState
             cancelling: _cancelling,
             requesting: _requesting,
             cancellingRequest: _cancellingRequest,
-            hasPendingRequest: _hasPendingRequest,
-            onRequest: _hasPendingRequest
+            hasPendingRequest: hasPendingRequest,
+            onRequest: hasPendingRequest
                 ? null
-                : () => _showRequestDialog(context),
-            onCancelRequest: _pendingRequestId != null
+                : () {
+                    final nextPending = contract.visits
+                        .where((v) =>
+                            v.status != 'completed' &&
+                            v.status != 'cancelled')
+                        .firstOrNull;
+                    _showRequestDialog(context,
+                        plannedDueDate: nextPending?.plannedDueDate);
+                  },
+            onCancelRequest: pendingRequestId != null
                 ? () => _confirmCancelRequest(context)
                 : null,
             onCancel: () => _showCancelChoiceDialog(contract),
@@ -119,11 +115,22 @@ class _AmcContractDetailsScreenState
     );
   }
 
-  Future<void> _showRequestDialog(BuildContext context) async {
+  Future<void> _showRequestDialog(BuildContext context,
+      {DateTime? plannedDueDate}) async {
     final messenger = ScaffoldMessenger.of(context);
     final now = DateTime.now();
-    final maxDate = now.add(const Duration(days: 4));
-    DateTime? selectedDate;
+    // Expand the window to include the planned date when it lies beyond now+4.
+    final maxDate = plannedDueDate != null &&
+            plannedDueDate.isAfter(now.add(const Duration(days: 4)))
+        ? plannedDueDate.add(const Duration(days: 2))
+        : now.add(const Duration(days: 4));
+    // Start on the planned date; clamp to [now, maxDate] to satisfy the picker.
+    final initialDate = plannedDueDate != null &&
+            !plannedDueDate.isBefore(now) &&
+            !plannedDueDate.isAfter(maxDate)
+        ? plannedDueDate
+        : now;
+    DateTime? selectedDate = initialDate != now ? initialDate : null;
     final notesCtrl = TextEditingController();
 
     final confirmed = await showDialog<bool>(
@@ -148,7 +155,7 @@ class _AmcContractDetailsScreenState
                 onTap: () async {
                   final picked = await showDatePicker(
                     context: ctx,
-                    initialDate: selectedDate ?? now,
+                    initialDate: selectedDate ?? initialDate,
                     firstDate: now,
                     lastDate: maxDate,
                     builder: (c, child) => Theme(
@@ -247,7 +254,7 @@ class _AmcContractDetailsScreenState
       );
       if (!mounted) return;
       if (result == 'requested') {
-        await _loadPendingRequestStatus();
+        ref.invalidate(pendingAmcRequestProvider(widget.contractId));
         if (!mounted) return;
         messenger.showSnackBar(
           const SnackBar(
@@ -282,7 +289,8 @@ class _AmcContractDetailsScreenState
 
   Future<void> _confirmCancelRequest(BuildContext context) async {
     final messenger = ScaffoldMessenger.of(context);
-    final requestId = _pendingRequestId;
+    final requestId =
+        ref.read(pendingAmcRequestProvider(widget.contractId)).valueOrNull;
     if (requestId == null) return;
 
     final confirmed = await showDialog<bool>(
@@ -315,10 +323,7 @@ class _AmcContractDetailsScreenState
     try {
       await CheckoutService().cancelPendingRequest(requestId);
       if (mounted) {
-        setState(() {
-          _hasPendingRequest = false;
-          _pendingRequestId = null;
-        });
+        ref.invalidate(pendingAmcRequestProvider(widget.contractId));
         messenger.showSnackBar(
           const SnackBar(content: Text('Request cancelled.')),
         );
@@ -1493,6 +1498,8 @@ DateTime? _computePlannedDate(
   final n = visitNumber - 1;
   final base = DateTime.utc(createdAt.year, createdAt.month, createdAt.day);
   return switch (serviceInterval) {
+    'weekly'      => base.add(Duration(days: 7 * n)),
+    'bi_weekly'   => base.add(Duration(days: 14 * n)),
     'monthly'     => _addCalendarMonths(base, n),
     'quarterly'   => _addCalendarMonths(base, 3 * n),
     'half_yearly' => _addCalendarMonths(base, 6 * n),
@@ -1594,11 +1601,12 @@ class _VisitsList extends StatelessWidget {
                   return _VisitRow(
                     visit: visitMap[n],
                     visitNumber: n,
-                    plannedDueDate: _computePlannedDate(
-                      contract.createdAt,
-                      contract.serviceInterval,
-                      n,
-                    ),
+                    plannedDueDate: visitMap[n]?.plannedDueDate ??
+                        _computePlannedDate(
+                          contract.createdAt,
+                          contract.serviceInterval,
+                          n,
+                        ),
                   );
                 },
               ),

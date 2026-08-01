@@ -146,7 +146,22 @@ class CustomerRealtimeSync {
           event: PostgresChangeEvent.all,
           schema: 'public',
           table: 'bookings',
-          callback: (_) => _ref.invalidate(myBookingsProvider),
+          callback: (_) {
+            _ref.invalidate(myBookingsProvider);
+            // Refresh contract detail screens — admin approval sets service_date
+            // on the booking row, so the visits timeline must re-render.
+            _ref.invalidate(amcContractProvider);
+          },
+        )
+        // ── AMC scheduling request resolved (admin approves or rejects) ───────
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'amc_scheduling_requests',
+          callback: (_) {
+            _ref.invalidate(pendingAmcRequestProvider);
+            _ref.invalidate(amcContractProvider);
+          },
         )
         // ── AMC contract status changes (admin approves/rejects cancellation) ─
         // Invalidate both the bookings list (which shows AMC contract cards) and
@@ -199,6 +214,7 @@ class CustomerRealtimeSync {
             _ref.invalidate(allAmcContractsProvider);
             _ref.invalidate(processedBookingsProvider);
             _ref.invalidate(myBookingsProvider);
+            _ref.invalidate(pendingAmcRequestProvider);
           },
         )
         .subscribe((status, error) {
@@ -256,6 +272,7 @@ class CustomerRealtimeSync {
     _ref.invalidate(homeBannersProvider);
     _ref.invalidate(activeCouponsProvider);
     _ref.invalidate(notificationsProvider);
+    _ref.invalidate(pendingAmcRequestProvider);
   }
 
   void dispose() {

@@ -3,6 +3,22 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/amc_contract_model.dart';
 
+/// Returns the ID of the active (status='pending') scheduling request for
+/// [contractId], or null when none exists.  Exposed as a provider so it can
+/// be invalidated by realtime events when the admin approves or rejects.
+final pendingAmcRequestProvider = FutureProvider.autoDispose
+    .family<String?, String>((ref, contractId) async {
+  final rows = await Supabase.instance.client
+      .from('amc_scheduling_requests')
+      .select('id')
+      .eq('amc_contract_id', contractId)
+      .eq('status', 'pending')
+      .limit(1);
+  final list = rows as List;
+  if (list.isEmpty) return null;
+  return list.first['id'] as String?;
+});
+
 final amcContractProvider = FutureProvider.autoDispose
     .family<AmcContractModel?, String>((ref, contractId) async {
   final client = Supabase.instance.client;
@@ -30,7 +46,7 @@ final amcContractProvider = FutureProvider.autoDispose
 
   final visitsRaw = await client
       .from('bookings')
-      .select('id, amc_visit_number, status, service_date, scheduled_time, total_amount, created_at, otp_verified_at, vendor_id')
+      .select('id, amc_visit_number, status, service_date, planned_due_date, scheduled_time, total_amount, created_at, otp_verified_at, vendor_id')
       .eq('amc_contract_id', contractId)
       .order('amc_visit_number', ascending: true, nullsFirst: false)
       .order('created_at', ascending: true);
