@@ -163,6 +163,30 @@ class CustomerRealtimeSync {
             _ref.invalidate(amcContractProvider);
           },
         )
+        // ── AMC pause request resolved (admin approves/rejects pause) ─────────
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'amc_pause_requests',
+          callback: (_) {
+            _ref.invalidate(pendingAmcPauseRequestProvider);
+            _ref.invalidate(amcPauseRequestsForContractProvider);
+            _ref.invalidate(allAmcPauseRequestsProvider);
+            _ref.invalidate(amcContractProvider);
+          },
+        )
+        // ── AMC resume request resolved (admin approves/rejects resume) ───────
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'amc_resume_requests',
+          callback: (_) {
+            _ref.invalidate(pendingAmcResumeRequestProvider);
+            _ref.invalidate(amcResumeRequestsForContractProvider);
+            _ref.invalidate(allAmcResumeRequestsProvider);
+            _ref.invalidate(amcContractProvider);
+          },
+        )
         // ── AMC contract status changes (admin approves/rejects cancellation) ─
         // Invalidate both the bookings list (which shows AMC contract cards) and
         // any open contract detail screen so the customer sees the new status
@@ -215,6 +239,12 @@ class CustomerRealtimeSync {
             _ref.invalidate(processedBookingsProvider);
             _ref.invalidate(myBookingsProvider);
             _ref.invalidate(pendingAmcRequestProvider);
+            _ref.invalidate(pendingAmcPauseRequestProvider);
+            _ref.invalidate(pendingAmcResumeRequestProvider);
+            _ref.invalidate(amcPauseRequestsForContractProvider);
+            _ref.invalidate(amcResumeRequestsForContractProvider);
+            _ref.invalidate(allAmcPauseRequestsProvider);
+            _ref.invalidate(allAmcResumeRequestsProvider);
           },
         )
         .subscribe((status, error) {
@@ -273,6 +303,12 @@ class CustomerRealtimeSync {
     _ref.invalidate(activeCouponsProvider);
     _ref.invalidate(notificationsProvider);
     _ref.invalidate(pendingAmcRequestProvider);
+    _ref.invalidate(pendingAmcPauseRequestProvider);
+    _ref.invalidate(pendingAmcResumeRequestProvider);
+    _ref.invalidate(amcPauseRequestsForContractProvider);
+    _ref.invalidate(amcResumeRequestsForContractProvider);
+    _ref.invalidate(allAmcPauseRequestsProvider);
+    _ref.invalidate(allAmcResumeRequestsProvider);
   }
 
   void dispose() {

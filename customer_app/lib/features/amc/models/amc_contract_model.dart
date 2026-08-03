@@ -78,6 +78,13 @@ class AmcContractModel {
   final String? previousContractId;
   final bool isRenewal;
 
+  // Pause lifecycle timestamps added in 20260801000003_amc_pause.sql
+  final DateTime? pauseRequestedAt;
+  final DateTime? pauseStartedAt;
+  final DateTime? resumedAt;
+
+  final String? customerId;
+
   final List<AmcVisitModel> visits;
 
   bool get isCancellationRequested => status == 'cancellation_requested';
@@ -108,6 +115,10 @@ class AmcContractModel {
     this.quantity = 1,
     this.previousContractId,
     this.isRenewal = false,
+    this.pauseRequestedAt,
+    this.pauseStartedAt,
+    this.resumedAt,
+    this.customerId,
     this.visits = const [],
   });
 
@@ -150,6 +161,16 @@ class AmcContractModel {
         quantity: (m['quantity'] as num?)?.toInt() ?? 1,
         previousContractId: m['previous_contract_id'] as String?,
         isRenewal: m['is_renewal'] as bool? ?? false,
+        pauseRequestedAt: m['pause_requested_at'] != null
+            ? DateTime.tryParse(m['pause_requested_at'] as String)
+            : null,
+        pauseStartedAt: m['pause_started_at'] != null
+            ? DateTime.tryParse(m['pause_started_at'] as String)
+            : null,
+        resumedAt: m['resumed_at'] != null
+            ? DateTime.tryParse(m['resumed_at'] as String)
+            : null,
+        customerId: m['customer_id'] as String?,
         visits: visits,
       );
 }

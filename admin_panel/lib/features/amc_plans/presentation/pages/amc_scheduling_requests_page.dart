@@ -9,8 +9,18 @@ import '../../../bookings/presentation/widgets/booking_assignment_dialog.dart';
 // ── Date helpers ──────────────────────────────────────────────────────────────
 
 const _kMonths = [
-  'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-  'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+  'Jan',
+  'Feb',
+  'Mar',
+  'Apr',
+  'May',
+  'Jun',
+  'Jul',
+  'Aug',
+  'Sep',
+  'Oct',
+  'Nov',
+  'Dec',
 ];
 
 String _fmtDate(DateTime d) => '${d.day} ${_kMonths[d.month - 1]} ${d.year}';
@@ -72,20 +82,20 @@ class _AmcSchedulingRequest {
 }
 
 String _requestStatusLabel(String s) => switch (s) {
-      'pending'   => 'Pending',
-      'scheduled' => 'Scheduled',
-      'rejected'  => 'Rejected',
-      'cancelled' => 'Cancelled',
-      _           => s,
-    };
+  'pending' => 'Pending',
+  'scheduled' => 'Scheduled',
+  'rejected' => 'Rejected',
+  'cancelled' => 'Cancelled',
+  _ => s,
+};
 
 (Color, Color) _requestStatusColors(String s) => switch (s) {
-      'pending'   => (AppColors.warning,           AppColors.warning.withAlpha(20)),
-      'scheduled' => (const Color(0xFF2C7A7B),     const Color(0xFFE6FFFA)),
-      'rejected'  => (AppColors.error,             AppColors.error.withAlpha(18)),
-      'cancelled' => (AppColors.textSecondary,     AppColors.border),
-      _           => (AppColors.textSecondary,     AppColors.border),
-    };
+  'pending' => (AppColors.warning, AppColors.warning.withAlpha(20)),
+  'scheduled' => (const Color(0xFF2C7A7B), const Color(0xFFE6FFFA)),
+  'rejected' => (AppColors.error, AppColors.error.withAlpha(18)),
+  'cancelled' => (AppColors.textSecondary, AppColors.border),
+  _ => (AppColors.textSecondary, AppColors.border),
+};
 
 // ── Contract detail models (detail dialog) ────────────────────────────────────
 
@@ -109,18 +119,18 @@ class _AmcVisitDetail {
   });
 
   factory _AmcVisitDetail.fromMap(Map<String, dynamic> m) => _AmcVisitDetail(
-        id: m['id'] as String,
-        visitNumber: (m['amc_visit_number'] as num?)?.toInt(),
-        status: m['status'] as String? ?? 'pending',
-        serviceDate: m['service_date'] != null
-            ? DateTime.tryParse(m['service_date'] as String)
-            : null,
-        timeSlot: m['scheduled_time'] as String? ?? '',
-        vendorId: m['vendor_id'] as String?,
-        completedAt: m['otp_verified_at'] != null
-            ? DateTime.tryParse(m['otp_verified_at'] as String)
-            : null,
-      );
+    id: m['id'] as String,
+    visitNumber: (m['amc_visit_number'] as num?)?.toInt(),
+    status: m['status'] as String? ?? 'pending',
+    serviceDate: m['service_date'] != null
+        ? DateTime.tryParse(m['service_date'] as String)
+        : null,
+    timeSlot: m['scheduled_time'] as String? ?? '',
+    vendorId: m['vendor_id'] as String?,
+    completedAt: m['otp_verified_at'] != null
+        ? DateTime.tryParse(m['otp_verified_at'] as String)
+        : null,
+  );
 }
 
 class _AmcContractFull {
@@ -169,60 +179,64 @@ class _AmcContractFull {
   });
 
   int get effectiveTotal => numVisits ?? totalVisits;
-  int get completedCount =>
-      visits.where((v) => v.status == 'completed').length;
-  int get remainingCount =>
-      (effectiveTotal - completedCount).clamp(0, 9999);
+  int get completedCount => visits.where((v) => v.status == 'completed').length;
+  int get remainingCount => (effectiveTotal - completedCount).clamp(0, 9999);
 
   DateTime? get lastServiceDate => visits
       .where((v) => v.status == 'completed' && v.completedAt != null)
       .map((v) => v.completedAt!)
       .fold<DateTime?>(
-          null, (acc, d) => acc == null || d.isAfter(acc) ? d : acc);
+        null,
+        (acc, d) => acc == null || d.isAfter(acc) ? d : acc,
+      );
 
   DateTime? get nextScheduledDate {
     if (nextVisitDate != null) return nextVisitDate;
-    final upcoming = visits
-        .where((v) =>
-            v.serviceDate != null &&
-            v.status != 'completed' &&
-            v.status != 'cancelled')
-        .map((v) => v.serviceDate!)
-        .where((d) =>
-            !d.isBefore(DateTime.now().subtract(const Duration(days: 1))))
-        .toList()
-      ..sort();
+    final upcoming =
+        visits
+            .where(
+              (v) =>
+                  v.serviceDate != null &&
+                  v.status != 'completed' &&
+                  v.status != 'cancelled',
+            )
+            .map((v) => v.serviceDate!)
+            .where(
+              (d) =>
+                  !d.isBefore(DateTime.now().subtract(const Duration(days: 1))),
+            )
+            .toList()
+          ..sort();
     return upcoming.isEmpty ? null : upcoming.first;
   }
 
   factory _AmcContractFull.fromMap(
     Map<String, dynamic> m, {
     List<_AmcVisitDetail> visits = const [],
-  }) =>
-      _AmcContractFull(
-        id: m['id'] as String,
-        serviceName: m['service_name'] as String? ?? '',
-        planName: m['plan_name'] as String? ?? '',
-        recurrenceInterval: m['recurrence_interval'] as String? ?? '',
-        pricePerVisit: (m['price_per_visit'] as num?)?.toDouble() ?? 0.0,
-        status: m['status'] as String? ?? 'active',
-        totalVisits: (m['total_visits'] as num?)?.toInt() ?? 0,
-        numVisits: (m['num_visits'] as num?)?.toInt(),
-        originalTotal: (m['original_total'] as num?)?.toDouble(),
-        discountType: m['discount_type'] as String?,
-        discountValue: (m['discount_value'] as num?)?.toDouble(),
-        discountAmount: (m['discount_amount'] as num?)?.toDouble(),
-        finalPrice: (m['final_price'] as num?)?.toDouble(),
-        quantity: (m['quantity'] as num?)?.toInt() ?? 1,
-        createdAt: DateTime.parse(m['created_at'] as String),
-        serviceInterval: m['service_interval'] as String?,
-        serviceAddress: m['address'] as String?,
-        nextVisitDate: m['next_visit_date'] != null
-            ? DateTime.tryParse(m['next_visit_date'] as String)
-            : null,
-        paymentType: m['payment_type'] as String?,
-        visits: visits,
-      );
+  }) => _AmcContractFull(
+    id: m['id'] as String,
+    serviceName: m['service_name'] as String? ?? '',
+    planName: m['plan_name'] as String? ?? '',
+    recurrenceInterval: m['recurrence_interval'] as String? ?? '',
+    pricePerVisit: (m['price_per_visit'] as num?)?.toDouble() ?? 0.0,
+    status: m['status'] as String? ?? 'active',
+    totalVisits: (m['total_visits'] as num?)?.toInt() ?? 0,
+    numVisits: (m['num_visits'] as num?)?.toInt(),
+    originalTotal: (m['original_total'] as num?)?.toDouble(),
+    discountType: m['discount_type'] as String?,
+    discountValue: (m['discount_value'] as num?)?.toDouble(),
+    discountAmount: (m['discount_amount'] as num?)?.toDouble(),
+    finalPrice: (m['final_price'] as num?)?.toDouble(),
+    quantity: (m['quantity'] as num?)?.toInt() ?? 1,
+    createdAt: DateTime.parse(m['created_at'] as String),
+    serviceInterval: m['service_interval'] as String?,
+    serviceAddress: m['address'] as String?,
+    nextVisitDate: m['next_visit_date'] != null
+        ? DateTime.tryParse(m['next_visit_date'] as String)
+        : null,
+    paymentType: m['payment_type'] as String?,
+    visits: visits,
+  );
 }
 
 // ── Cancellation request model ────────────────────────────────────────────────
@@ -292,101 +306,346 @@ class _AmcCancellationRequest {
 }
 
 String _cancellationStatusLabel(String s) => switch (s) {
-      'pending'  => 'Pending',
-      'approved' => 'Approved',
-      'rejected' => 'Rejected',
-      _          => s,
-    };
+  'pending' => 'Pending',
+  'approved' => 'Approved',
+  'rejected' => 'Rejected',
+  _ => s,
+};
 
 (Color, Color) _cancellationStatusColors(String s) => switch (s) {
-      'pending'  => (AppColors.warning, AppColors.warning.withAlpha(20)),
-      'approved' => (AppColors.error, AppColors.error.withAlpha(18)),
-      'rejected' => (AppColors.textSecondary, AppColors.border),
-      _          => (AppColors.textSecondary, AppColors.border),
-    };
+  'pending' => (AppColors.warning, AppColors.warning.withAlpha(20)),
+  'approved' => (AppColors.error, AppColors.error.withAlpha(18)),
+  'rejected' => (AppColors.textSecondary, AppColors.border),
+  _ => (AppColors.textSecondary, AppColors.border),
+};
+
+// ── Pause request model ───────────────────────────────────────────────────────
+
+class _AmcPauseRequest {
+  final String id;
+  final String contractId;
+  final String customerId;
+  final String serviceName;
+  final String planName;
+  final String customerName;
+  final String customerPhone;
+  final String reason;
+  final String status;
+  final DateTime createdAt;
+  final DateTime? resolvedAt;
+
+  const _AmcPauseRequest({
+    required this.id,
+    required this.contractId,
+    required this.customerId,
+    required this.serviceName,
+    required this.planName,
+    required this.customerName,
+    required this.customerPhone,
+    required this.reason,
+    required this.status,
+    required this.createdAt,
+    this.resolvedAt,
+  });
+
+  bool get isPending => status == 'pending';
+
+  factory _AmcPauseRequest.fromMap(
+    Map<String, dynamic> m, [
+    Map<String, Map<String, dynamic>> customerMap = const {},
+  ]) {
+    final contract = m['amc_contracts'] as Map<String, dynamic>? ?? {};
+    final customerId = m['customer_id'] as String? ?? '';
+    final customer = customerMap[customerId] ?? <String, dynamic>{};
+    return _AmcPauseRequest(
+      id: m['id'] as String,
+      contractId: m['amc_contract_id'] as String? ?? '',
+      customerId: customerId,
+      serviceName: contract['service_name'] as String? ?? '—',
+      planName: contract['plan_name'] as String? ?? '—',
+      customerName: customer['full_name'] as String? ?? '—',
+      customerPhone: customer['phone'] as String? ?? '—',
+      reason: m['reason'] as String? ?? '',
+      status: m['status'] as String? ?? 'pending',
+      createdAt: DateTime.parse(m['created_at'] as String),
+      resolvedAt: m['resolved_at'] != null
+          ? DateTime.tryParse(m['resolved_at'] as String)
+          : null,
+    );
+  }
+}
+
+String _pauseStatusLabel(String s) => switch (s) {
+  'pending' => 'Pending',
+  'approved' => 'Approved',
+  'rejected' => 'Rejected',
+  'cancelled' => 'Cancelled',
+  _ => s,
+};
+
+(Color, Color) _pauseStatusColors(String s) => switch (s) {
+  'pending' => (AppColors.warning, AppColors.warning.withAlpha(20)),
+  'approved' => (const Color(0xFF2C7A7B), const Color(0xFFE6FFFA)),
+  'rejected' => (AppColors.textSecondary, AppColors.border),
+  'cancelled' => (AppColors.textSecondary, AppColors.border),
+  _ => (AppColors.textSecondary, AppColors.border),
+};
 
 // ── Providers ──────────────────────────────────────────────────────────────────
 
 // statusFilter: 'pending' | 'scheduled' | 'rejected' | 'cancelled' | null (all)
 final _amcRequestsProvider = FutureProvider.autoDispose
     .family<List<_AmcSchedulingRequest>, String?>((ref, statusFilter) async {
-  final client = Supabase.instance.client;
-  final base = client
-      .from('amc_scheduling_requests')
-      .select(
-        'id, amc_contract_id, requested_at, preferred_date, notes, status, '
-        'amc_contracts(service_name, plan_name), '
-        'customers(full_name, phone)',
-      );
-  // Pending: oldest first (FIFO). Everything else: newest first.
-  final rows = statusFilter != null
-      ? await base
-          .eq('status', statusFilter)
-          .order('requested_at', ascending: statusFilter == 'pending')
-      : await base.order('requested_at', ascending: false);
-  return (rows as List)
-      .map((r) =>
-          _AmcSchedulingRequest.fromMap(Map<String, dynamic>.from(r as Map)))
-      .toList();
-});
+      final client = Supabase.instance.client;
+      final base = client
+          .from('amc_scheduling_requests')
+          .select(
+            'id, amc_contract_id, requested_at, preferred_date, notes, status, '
+            'amc_contracts(service_name, plan_name), '
+            'customers(full_name, phone)',
+          );
+      // Pending: oldest first (FIFO). Everything else: newest first.
+      final rows = statusFilter != null
+          ? await base
+                .eq('status', statusFilter)
+                .order('requested_at', ascending: statusFilter == 'pending')
+          : await base.order('requested_at', ascending: false);
+      return (rows as List)
+          .map(
+            (r) => _AmcSchedulingRequest.fromMap(
+              Map<String, dynamic>.from(r as Map),
+            ),
+          )
+          .toList();
+    });
 
 final _amcContractDetailProvider = FutureProvider.autoDispose
     .family<_AmcContractFull?, String>((ref, contractId) async {
-  final client = Supabase.instance.client;
+      final client = Supabase.instance.client;
 
-  final raw = await client
-      .from('amc_contracts')
-      .select(
-        'id, service_name, plan_name, recurrence_interval, price_per_visit, '
-        'status, total_visits, num_visits, original_total, discount_type, '
-        'discount_value, discount_amount, final_price, quantity, created_at, address, '
-        'service_interval, next_visit_date, payment_type',
-      )
-      .eq('id', contractId)
-      .maybeSingle();
+      final raw = await client
+          .from('amc_contracts')
+          .select(
+            'id, service_name, plan_name, recurrence_interval, price_per_visit, '
+            'status, total_visits, num_visits, original_total, discount_type, '
+            'discount_value, discount_amount, final_price, quantity, created_at, address, '
+            'service_interval, next_visit_date, payment_type',
+          )
+          .eq('id', contractId)
+          .maybeSingle();
 
-  if (raw == null) return null;
+      if (raw == null) return null;
 
-  final visitsRaw = await client
-      .from('bookings')
-      .select(
-          'id, amc_visit_number, status, service_date, scheduled_time, vendor_id, otp_verified_at')
-      .eq('amc_contract_id', contractId)
-      .order('amc_visit_number', ascending: true, nullsFirst: false)
-      .order('created_at', ascending: true);
+      final visitsRaw = await client
+          .from('bookings')
+          .select(
+            'id, amc_visit_number, status, service_date, scheduled_time, vendor_id, otp_verified_at',
+          )
+          .eq('amc_contract_id', contractId)
+          .order('amc_visit_number', ascending: true, nullsFirst: false)
+          .order('created_at', ascending: true);
 
-  final visits = (visitsRaw as List)
-      .map((v) =>
-          _AmcVisitDetail.fromMap(Map<String, dynamic>.from(v as Map)))
-      .toList();
+      final visits = (visitsRaw as List)
+          .map(
+            (v) => _AmcVisitDetail.fromMap(Map<String, dynamic>.from(v as Map)),
+          )
+          .toList();
 
-  return _AmcContractFull.fromMap(Map<String, dynamic>.from(raw as Map),
-      visits: visits);
-});
+      return _AmcContractFull.fromMap(
+        Map<String, dynamic>.from(raw as Map),
+        visits: visits,
+      );
+    });
 
 // statusFilter: 'pending' | 'approved' | 'rejected' | null (all)
 final _amcCancellationRequestsProvider = FutureProvider.autoDispose
     .family<List<_AmcCancellationRequest>, String?>((ref, statusFilter) async {
-  final client = Supabase.instance.client;
-  final base = client
-      .from('amc_cancellation_requests')
-      .select(
-        'id, contract_id, customer_id, reason, remarks, status, type, booking_id, '
-        'created_at, resolved_at, '
-        'amc_contracts(service_name, plan_name), '
-        'customers(full_name, phone), '
-        'bookings!booking_id(amc_visit_number)',
+      final client = Supabase.instance.client;
+      final base = client
+          .from('amc_cancellation_requests')
+          .select(
+            'id, contract_id, customer_id, reason, remarks, status, type, booking_id, '
+            'created_at, resolved_at, '
+            'amc_contracts(service_name, plan_name), '
+            'customers(full_name, phone), '
+            'bookings!booking_id(amc_visit_number)',
+          );
+      final rows = statusFilter != null
+          ? await base
+                .eq('status', statusFilter)
+                .order('created_at', ascending: statusFilter == 'pending')
+          : await base.order('created_at', ascending: false);
+      return (rows as List)
+          .map(
+            (r) => _AmcCancellationRequest.fromMap(
+              Map<String, dynamic>.from(r as Map),
+            ),
+          )
+          .toList();
+    });
+
+// statusFilter: 'pending' | 'approved' | 'rejected' | 'cancelled' | null (all)
+final _amcPauseRequestsProvider = FutureProvider.autoDispose
+    .family<List<_AmcPauseRequest>, String?>((ref, statusFilter) async {
+      final client = Supabase.instance.client;
+
+      final base = client.from('amc_pause_requests').select(
+        'id, amc_contract_id, customer_id, reason, status, created_at, '
+        'resolved_at, amc_contracts(service_name, plan_name)',
       );
-  final rows = statusFilter != null
-      ? await base
-          .eq('status', statusFilter)
-          .order('created_at', ascending: statusFilter == 'pending')
-      : await base.order('created_at', ascending: false);
-  return (rows as List)
-      .map((r) =>
-          _AmcCancellationRequest.fromMap(Map<String, dynamic>.from(r as Map)))
-      .toList();
-});
+      final raw = statusFilter != null
+          ? await base
+                .eq('status', statusFilter)
+                .order('created_at', ascending: statusFilter == 'pending')
+          : await base.order('created_at', ascending: false);
+
+      final rows = raw as List;
+      if (rows.isEmpty) return [];
+
+      // customer_id is TEXT with no FK → batch-fetch customer rows separately.
+      final ids = rows
+          .map((r) => (r as Map)['customer_id'] as String? ?? '')
+          .where((s) => s.isNotEmpty)
+          .toSet()
+          .toList();
+      final Map<String, Map<String, dynamic>> customerMap;
+      if (ids.isNotEmpty) {
+        final cRows = await client
+            .from('customers')
+            .select('id, full_name, phone')
+            .inFilter('id', ids);
+        customerMap = {
+          for (final c in cRows as List)
+            (c as Map<String, dynamic>)['id'] as String:
+                Map<String, dynamic>.from(c as Map),
+        };
+      } else {
+        customerMap = {};
+      }
+
+      final result = rows
+          .map(
+            (r) => _AmcPauseRequest.fromMap(
+              Map<String, dynamic>.from(r as Map),
+              customerMap,
+            ),
+          )
+          .toList();
+      return result;
+    });
+
+// ── Resume request model ──────────────────────────────────────────────────────
+
+class _AmcResumeRequest {
+  final String id;
+  final String contractId;
+  final String customerId;
+  final String serviceName;
+  final String planName;
+  final String customerName;
+  final String customerPhone;
+  final String? reason;
+  final String status;
+  final DateTime?
+  pauseStartDate; // from amc_contracts join — used to calc duration
+  final int? pauseDurationDays;
+  final DateTime createdAt;
+  final DateTime? resolvedAt;
+
+  const _AmcResumeRequest({
+    required this.id,
+    required this.contractId,
+    required this.customerId,
+    required this.serviceName,
+    required this.planName,
+    required this.customerName,
+    required this.customerPhone,
+    this.reason,
+    required this.status,
+    this.pauseStartDate,
+    this.pauseDurationDays,
+    required this.createdAt,
+    this.resolvedAt,
+  });
+
+  bool get isPending => status == 'pending';
+
+  factory _AmcResumeRequest.fromMap(
+    Map<String, dynamic> m, [
+    Map<String, Map<String, dynamic>> customerMap = const {},
+  ]) {
+    final contract = m['amc_contracts'] as Map<String, dynamic>? ?? {};
+    final customerId = m['customer_id'] as String? ?? '';
+    final customer = customerMap[customerId] ?? <String, dynamic>{};
+    return _AmcResumeRequest(
+      id: m['id'] as String,
+      contractId: m['amc_contract_id'] as String? ?? '',
+      customerId: customerId,
+      serviceName: contract['service_name'] as String? ?? '—',
+      planName: contract['plan_name'] as String? ?? '—',
+      customerName: customer['full_name'] as String? ?? '—',
+      customerPhone: customer['phone'] as String? ?? '—',
+      reason: m['reason'] as String?,
+      status: m['status'] as String? ?? 'pending',
+      pauseStartDate: contract['pause_started_at'] != null
+          ? DateTime.tryParse(contract['pause_started_at'] as String)
+          : null,
+      pauseDurationDays: (m['pause_duration_days'] as num?)?.toInt(),
+      createdAt: DateTime.parse(m['created_at'] as String),
+      resolvedAt: m['resolved_at'] != null
+          ? DateTime.tryParse(m['resolved_at'] as String)
+          : null,
+    );
+  }
+}
+
+// statusFilter: 'pending' | 'approved' | 'rejected' | 'cancelled' | null (all)
+final _amcResumeRequestsProvider = FutureProvider.autoDispose
+    .family<List<_AmcResumeRequest>, String?>((ref, statusFilter) async {
+      final client = Supabase.instance.client;
+      final base = client.from('amc_resume_requests').select(
+        'id, amc_contract_id, customer_id, reason, status, pause_duration_days, '
+        'created_at, resolved_at, '
+        'amc_contracts(service_name, plan_name, pause_started_at)',
+      );
+      final raw = statusFilter != null
+          ? await base
+                .eq('status', statusFilter)
+                .order('created_at', ascending: statusFilter == 'pending')
+          : await base.order('created_at', ascending: false);
+
+      final rows = raw as List;
+      if (rows.isEmpty) return [];
+
+      final ids = rows
+          .map((r) => (r as Map)['customer_id'] as String? ?? '')
+          .where((s) => s.isNotEmpty)
+          .toSet()
+          .toList();
+      final Map<String, Map<String, dynamic>> customerMap;
+      if (ids.isNotEmpty) {
+        final cRows = await client
+            .from('customers')
+            .select('id, full_name, phone')
+            .inFilter('id', ids);
+        customerMap = {
+          for (final c in cRows as List)
+            (c as Map<String, dynamic>)['id'] as String:
+                Map<String, dynamic>.from(c as Map),
+        };
+      } else {
+        customerMap = {};
+      }
+
+      return rows
+          .map(
+            (r) => _AmcResumeRequest.fromMap(
+              Map<String, dynamic>.from(r as Map),
+              customerMap,
+            ),
+          )
+          .toList();
+    });
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 
@@ -402,20 +661,28 @@ class _AmcSchedulingRequestsPageState
     extends ConsumerState<AmcSchedulingRequestsPage> {
   String? _schedulingFilter = 'pending';
   String? _cancellationFilter = 'pending';
+  String? _pauseFilter = 'pending';
+  String? _resumeFilter = 'pending';
+  String _pauseTabType = 'pause'; // 'pause' | 'resume'
 
   void _refreshAll() {
     ref.invalidate(_amcRequestsProvider);
     ref.invalidate(_amcCancellationRequestsProvider);
+    ref.invalidate(_amcPauseRequestsProvider);
+    ref.invalidate(_amcResumeRequestsProvider);
   }
 
   @override
   Widget build(BuildContext context) {
     final schedulingAsync = ref.watch(_amcRequestsProvider(_schedulingFilter));
-    final cancellationAsync =
-        ref.watch(_amcCancellationRequestsProvider(_cancellationFilter));
+    final cancellationAsync = ref.watch(
+      _amcCancellationRequestsProvider(_cancellationFilter),
+    );
+    final pauseAsync = ref.watch(_amcPauseRequestsProvider(_pauseFilter));
+    final resumeAsync = ref.watch(_amcResumeRequestsProvider(_resumeFilter));
 
     return DefaultTabController(
-      length: 2,
+      length: 3,
       child: Scaffold(
         backgroundColor: AppColors.background,
         body: Column(
@@ -432,17 +699,13 @@ class _AmcSchedulingRequestsPageState
                       children: [
                         Text(
                           'AMC Requests',
-                          style: Theme.of(context)
-                              .textTheme
-                              .headlineSmall
+                          style: Theme.of(context).textTheme.headlineSmall
                               ?.copyWith(fontWeight: FontWeight.w700),
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          'Visit scheduling and membership cancellation requests.',
-                          style: Theme.of(context)
-                              .textTheme
-                              .bodySmall
+                          'Visit scheduling, cancellation, and pause requests.',
+                          style: Theme.of(context).textTheme.bodySmall
                               ?.copyWith(color: AppColors.textSecondary),
                         ),
                       ],
@@ -467,6 +730,7 @@ class _AmcSchedulingRequestsPageState
               tabs: [
                 Tab(text: 'Scheduling Requests'),
                 Tab(text: 'Cancellation Requests'),
+                Tab(text: 'Pause Requests'),
               ],
             ),
 
@@ -482,16 +746,15 @@ class _AmcSchedulingRequestsPageState
                       const SizedBox(height: 12),
                       SingleChildScrollView(
                         scrollDirection: Axis.horizontal,
-                        padding:
-                            const EdgeInsets.symmetric(horizontal: 24),
+                        padding: const EdgeInsets.symmetric(horizontal: 24),
                         child: Row(
                           children: [
                             _StatusFilterChip(
                               label: 'Pending',
                               selected: _schedulingFilter == 'pending',
                               color: AppColors.warning,
-                              onTap: () => setState(
-                                  () => _schedulingFilter = 'pending'),
+                              onTap: () =>
+                                  setState(() => _schedulingFilter = 'pending'),
                             ),
                             const SizedBox(width: 8),
                             _StatusFilterChip(
@@ -499,7 +762,8 @@ class _AmcSchedulingRequestsPageState
                               selected: _schedulingFilter == 'scheduled',
                               color: const Color(0xFF2C7A7B),
                               onTap: () => setState(
-                                  () => _schedulingFilter = 'scheduled'),
+                                () => _schedulingFilter = 'scheduled',
+                              ),
                             ),
                             const SizedBox(width: 8),
                             _StatusFilterChip(
@@ -507,7 +771,8 @@ class _AmcSchedulingRequestsPageState
                               selected: _schedulingFilter == 'rejected',
                               color: AppColors.error,
                               onTap: () => setState(
-                                  () => _schedulingFilter = 'rejected'),
+                                () => _schedulingFilter = 'rejected',
+                              ),
                             ),
                             const SizedBox(width: 8),
                             _StatusFilterChip(
@@ -515,7 +780,8 @@ class _AmcSchedulingRequestsPageState
                               selected: _schedulingFilter == 'cancelled',
                               color: AppColors.textSecondary,
                               onTap: () => setState(
-                                  () => _schedulingFilter = 'cancelled'),
+                                () => _schedulingFilter = 'cancelled',
+                              ),
                             ),
                             const SizedBox(width: 8),
                             _StatusFilterChip(
@@ -531,14 +797,17 @@ class _AmcSchedulingRequestsPageState
                       const SizedBox(height: 12),
                       Expanded(
                         child: schedulingAsync.when(
-                          loading: () => const Center(
-                              child: CircularProgressIndicator()),
+                          loading: () =>
+                              const Center(child: CircularProgressIndicator()),
                           error: (e, _) => Center(
                             child: Column(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                const Icon(Icons.error_outline_rounded,
-                                    size: 48, color: Colors.grey),
+                                const Icon(
+                                  Icons.error_outline_rounded,
+                                  size: 48,
+                                  color: Colors.grey,
+                                ),
                                 const SizedBox(height: 12),
                                 Text('Failed to load: $e'),
                                 const SizedBox(height: 16),
@@ -553,18 +822,18 @@ class _AmcSchedulingRequestsPageState
                           data: (requests) {
                             if (requests.isEmpty) {
                               return _EmptyState(
-                                  statusFilter: _schedulingFilter);
+                                statusFilter: _schedulingFilter,
+                              );
                             }
                             return ListView.separated(
-                              padding:
-                                  const EdgeInsets.fromLTRB(24, 8, 24, 32),
+                              padding: const EdgeInsets.fromLTRB(24, 8, 24, 32),
                               itemCount: requests.length,
                               separatorBuilder: (_, _) =>
                                   const SizedBox(height: 10),
                               itemBuilder: (_, i) => _RequestCard(
                                 request: requests[i],
-                                onRefresh: () => ref
-                                    .invalidate(_amcRequestsProvider),
+                                onRefresh: () =>
+                                    ref.invalidate(_amcRequestsProvider),
                               ),
                             );
                           },
@@ -579,8 +848,7 @@ class _AmcSchedulingRequestsPageState
                       const SizedBox(height: 12),
                       SingleChildScrollView(
                         scrollDirection: Axis.horizontal,
-                        padding:
-                            const EdgeInsets.symmetric(horizontal: 24),
+                        padding: const EdgeInsets.symmetric(horizontal: 24),
                         child: Row(
                           children: [
                             _StatusFilterChip(
@@ -588,7 +856,8 @@ class _AmcSchedulingRequestsPageState
                               selected: _cancellationFilter == 'pending',
                               color: AppColors.warning,
                               onTap: () => setState(
-                                  () => _cancellationFilter = 'pending'),
+                                () => _cancellationFilter = 'pending',
+                              ),
                             ),
                             const SizedBox(width: 8),
                             _StatusFilterChip(
@@ -596,7 +865,8 @@ class _AmcSchedulingRequestsPageState
                               selected: _cancellationFilter == 'approved',
                               color: AppColors.error,
                               onTap: () => setState(
-                                  () => _cancellationFilter = 'approved'),
+                                () => _cancellationFilter = 'approved',
+                              ),
                             ),
                             const SizedBox(width: 8),
                             _StatusFilterChip(
@@ -604,15 +874,16 @@ class _AmcSchedulingRequestsPageState
                               selected: _cancellationFilter == 'rejected',
                               color: AppColors.textSecondary,
                               onTap: () => setState(
-                                  () => _cancellationFilter = 'rejected'),
+                                () => _cancellationFilter = 'rejected',
+                              ),
                             ),
                             const SizedBox(width: 8),
                             _StatusFilterChip(
                               label: 'All',
                               selected: _cancellationFilter == null,
                               color: AppColors.primary,
-                              onTap: () => setState(
-                                  () => _cancellationFilter = null),
+                              onTap: () =>
+                                  setState(() => _cancellationFilter = null),
                             ),
                           ],
                         ),
@@ -620,20 +891,24 @@ class _AmcSchedulingRequestsPageState
                       const SizedBox(height: 12),
                       Expanded(
                         child: cancellationAsync.when(
-                          loading: () => const Center(
-                              child: CircularProgressIndicator()),
+                          loading: () =>
+                              const Center(child: CircularProgressIndicator()),
                           error: (e, _) => Center(
                             child: Column(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                const Icon(Icons.error_outline_rounded,
-                                    size: 48, color: Colors.grey),
+                                const Icon(
+                                  Icons.error_outline_rounded,
+                                  size: 48,
+                                  color: Colors.grey,
+                                ),
                                 const SizedBox(height: 12),
                                 Text('Failed to load: $e'),
                                 const SizedBox(height: 16),
                                 FilledButton(
                                   onPressed: () => ref.invalidate(
-                                      _amcCancellationRequestsProvider),
+                                    _amcCancellationRequestsProvider,
+                                  ),
                                   child: const Text('Retry'),
                                 ),
                               ],
@@ -642,27 +917,268 @@ class _AmcSchedulingRequestsPageState
                           data: (requests) {
                             if (requests.isEmpty) {
                               return _CancellationEmptyState(
-                                  filter: _cancellationFilter);
+                                filter: _cancellationFilter,
+                              );
                             }
                             return ListView.separated(
-                              padding:
-                                  const EdgeInsets.fromLTRB(24, 8, 24, 32),
+                              padding: const EdgeInsets.fromLTRB(24, 8, 24, 32),
                               itemCount: requests.length,
                               separatorBuilder: (_, _) =>
                                   const SizedBox(height: 10),
-                              itemBuilder: (_, i) =>
-                                  _CancellationRequestCard(
+                              itemBuilder: (_, i) => _CancellationRequestCard(
                                 request: requests[i],
                                 onRefresh: () {
                                   ref.invalidate(
-                                      _amcCancellationRequestsProvider);
-                                  ref.read(bookingsNotifierProvider.notifier)
+                                    _amcCancellationRequestsProvider,
+                                  );
+                                  ref
+                                      .read(bookingsNotifierProvider.notifier)
                                       .refresh();
                                 },
                               ),
                             );
                           },
                         ),
+                      ),
+                    ],
+                  ),
+
+                  // ── Tab 3: Pause / Resume ─────────────────────────────────
+                  Column(
+                    children: [
+                      const SizedBox(height: 12),
+                      // ── Sub-type toggle ───────────────────────────────────
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 24),
+                        child: Row(
+                          children: [
+                            _TypeToggleButton(
+                              label: 'Pause Requests',
+                              icon: Icons.pause_circle_outline_rounded,
+                              selected: _pauseTabType == 'pause',
+                              onTap: () =>
+                                  setState(() => _pauseTabType = 'pause'),
+                            ),
+                            const SizedBox(width: 8),
+                            _TypeToggleButton(
+                              label: 'Resume Requests',
+                              icon: Icons.play_circle_outline_rounded,
+                              selected: _pauseTabType == 'resume',
+                              onTap: () =>
+                                  setState(() => _pauseTabType = 'resume'),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      // ── Status filter chips ───────────────────────────────
+                      if (_pauseTabType == 'pause')
+                        SingleChildScrollView(
+                          scrollDirection: Axis.horizontal,
+                          padding: const EdgeInsets.symmetric(horizontal: 24),
+                          child: Row(
+                            children: [
+                              _StatusFilterChip(
+                                label: 'Pending',
+                                selected: _pauseFilter == 'pending',
+                                color: AppColors.warning,
+                                onTap: () =>
+                                    setState(() => _pauseFilter = 'pending'),
+                              ),
+                              const SizedBox(width: 8),
+                              _StatusFilterChip(
+                                label: 'Approved',
+                                selected: _pauseFilter == 'approved',
+                                color: const Color(0xFF2C7A7B),
+                                onTap: () =>
+                                    setState(() => _pauseFilter = 'approved'),
+                              ),
+                              const SizedBox(width: 8),
+                              _StatusFilterChip(
+                                label: 'Rejected',
+                                selected: _pauseFilter == 'rejected',
+                                color: AppColors.textSecondary,
+                                onTap: () =>
+                                    setState(() => _pauseFilter = 'rejected'),
+                              ),
+                              const SizedBox(width: 8),
+                              _StatusFilterChip(
+                                label: 'Cancelled',
+                                selected: _pauseFilter == 'cancelled',
+                                color: AppColors.textSecondary,
+                                onTap: () =>
+                                    setState(() => _pauseFilter = 'cancelled'),
+                              ),
+                              const SizedBox(width: 8),
+                              _StatusFilterChip(
+                                label: 'All',
+                                selected: _pauseFilter == null,
+                                color: AppColors.primary,
+                                onTap: () =>
+                                    setState(() => _pauseFilter = null),
+                              ),
+                            ],
+                          ),
+                        )
+                      else
+                        SingleChildScrollView(
+                          scrollDirection: Axis.horizontal,
+                          padding: const EdgeInsets.symmetric(horizontal: 24),
+                          child: Row(
+                            children: [
+                              _StatusFilterChip(
+                                label: 'Pending',
+                                selected: _resumeFilter == 'pending',
+                                color: AppColors.warning,
+                                onTap: () =>
+                                    setState(() => _resumeFilter = 'pending'),
+                              ),
+                              const SizedBox(width: 8),
+                              _StatusFilterChip(
+                                label: 'Approved',
+                                selected: _resumeFilter == 'approved',
+                                color: AppColors.success,
+                                onTap: () =>
+                                    setState(() => _resumeFilter = 'approved'),
+                              ),
+                              const SizedBox(width: 8),
+                              _StatusFilterChip(
+                                label: 'Rejected',
+                                selected: _resumeFilter == 'rejected',
+                                color: AppColors.textSecondary,
+                                onTap: () =>
+                                    setState(() => _resumeFilter = 'rejected'),
+                              ),
+                              const SizedBox(width: 8),
+                              _StatusFilterChip(
+                                label: 'Cancelled',
+                                selected: _resumeFilter == 'cancelled',
+                                color: AppColors.textSecondary,
+                                onTap: () =>
+                                    setState(() => _resumeFilter = 'cancelled'),
+                              ),
+                              const SizedBox(width: 8),
+                              _StatusFilterChip(
+                                label: 'All',
+                                selected: _resumeFilter == null,
+                                color: AppColors.primary,
+                                onTap: () =>
+                                    setState(() => _resumeFilter = null),
+                              ),
+                            ],
+                          ),
+                        ),
+                      const SizedBox(height: 12),
+                      // ── Cards ─────────────────────────────────────────────
+                      Expanded(
+                        child: _pauseTabType == 'pause'
+                            ? pauseAsync.when(
+                                loading: () => const Center(
+                                  child: CircularProgressIndicator(),
+                                ),
+                                error: (e, _) => Center(
+                                  child: Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      const Icon(
+                                        Icons.error_outline_rounded,
+                                        size: 48,
+                                        color: Colors.grey,
+                                      ),
+                                      const SizedBox(height: 12),
+                                      Text('Failed to load: $e'),
+                                      const SizedBox(height: 16),
+                                      FilledButton(
+                                        onPressed: () => ref.invalidate(
+                                          _amcPauseRequestsProvider,
+                                        ),
+                                        child: const Text('Retry'),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                data: (requests) {
+                                  if (requests.isEmpty) {
+                                    return _PauseEmptyState(
+                                      filter: _pauseFilter,
+                                      label: 'pause',
+                                    );
+                                  }
+                                  return ListView.separated(
+                                    padding: const EdgeInsets.fromLTRB(
+                                      24,
+                                      8,
+                                      24,
+                                      32,
+                                    ),
+                                    itemCount: requests.length,
+                                    separatorBuilder: (_, _) =>
+                                        const SizedBox(height: 10),
+                                    itemBuilder: (_, i) => _PauseRequestCard(
+                                      request: requests[i],
+                                      onRefresh: () => ref.invalidate(
+                                        _amcPauseRequestsProvider,
+                                      ),
+                                    ),
+                                  );
+                                },
+                              )
+                            : resumeAsync.when(
+                                loading: () => const Center(
+                                  child: CircularProgressIndicator(),
+                                ),
+                                error: (e, _) => Center(
+                                  child: Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      const Icon(
+                                        Icons.error_outline_rounded,
+                                        size: 48,
+                                        color: Colors.grey,
+                                      ),
+                                      const SizedBox(height: 12),
+                                      Text('Failed to load: $e'),
+                                      const SizedBox(height: 16),
+                                      FilledButton(
+                                        onPressed: () => ref.invalidate(
+                                          _amcResumeRequestsProvider,
+                                        ),
+                                        child: const Text('Retry'),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                data: (requests) {
+                                  if (requests.isEmpty) {
+                                    return _PauseEmptyState(
+                                      filter: _resumeFilter,
+                                      label: 'resume',
+                                    );
+                                  }
+                                  return ListView.separated(
+                                    padding: const EdgeInsets.fromLTRB(
+                                      24,
+                                      8,
+                                      24,
+                                      32,
+                                    ),
+                                    itemCount: requests.length,
+                                    separatorBuilder: (_, _) =>
+                                        const SizedBox(height: 10),
+                                    itemBuilder: (_, i) => _ResumeRequestCard(
+                                      request: requests[i],
+                                      onRefresh: () {
+                                        ref.invalidate(
+                                          _amcResumeRequestsProvider,
+                                        );
+                                        ref.invalidate(
+                                          _amcPauseRequestsProvider,
+                                        );
+                                      },
+                                    ),
+                                  );
+                                },
+                              ),
                       ),
                     ],
                   ),
@@ -700,21 +1216,26 @@ class _CancellationEmptyState extends StatelessWidget {
               color: Colors.green.withAlpha(20),
               shape: BoxShape.circle,
             ),
-            child: const Icon(Icons.check_circle_outline_rounded,
-                size: 36, color: Colors.green),
+            child: const Icon(
+              Icons.check_circle_outline_rounded,
+              size: 36,
+              color: Colors.green,
+            ),
           ),
           const SizedBox(height: 16),
-          Text(title,
-              style: Theme.of(context)
-                  .textTheme
-                  .titleMedium
-                  ?.copyWith(fontWeight: FontWeight.w700)),
+          Text(
+            title,
+            style: Theme.of(
+              context,
+            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+          ),
           const SizedBox(height: 8),
-          Text(sub,
-              style: Theme.of(context)
-                  .textTheme
-                  .bodySmall
-                  ?.copyWith(color: AppColors.textSecondary)),
+          Text(
+            sub,
+            style: Theme.of(
+              context,
+            ).textTheme.bodySmall?.copyWith(color: AppColors.textSecondary),
+          ),
         ],
       ),
     );
@@ -727,8 +1248,10 @@ class _CancellationRequestCard extends ConsumerStatefulWidget {
   final _AmcCancellationRequest request;
   final VoidCallback onRefresh;
 
-  const _CancellationRequestCard(
-      {required this.request, required this.onRefresh});
+  const _CancellationRequestCard({
+    required this.request,
+    required this.onRefresh,
+  });
 
   @override
   ConsumerState<_CancellationRequestCard> createState() =>
@@ -746,11 +1269,11 @@ class _CancellationRequestCardState
     final tt = Theme.of(context).textTheme;
     final (statusColor, statusBg) = _cancellationStatusColors(r.status);
 
-    final typeColor =
-        r.isVisit ? const Color(0xFF3182CE) : AppColors.error;
+    final typeColor = r.isVisit ? const Color(0xFF3182CE) : AppColors.error;
     final typeLabel = r.isVisit ? 'Visit Cancel' : 'Membership Cancel';
-    final typeIcon =
-        r.isVisit ? Icons.event_busy_rounded : Icons.cancel_outlined;
+    final typeIcon = r.isVisit
+        ? Icons.event_busy_rounded
+        : Icons.cancel_outlined;
 
     return Card(
       margin: EdgeInsets.zero,
@@ -777,12 +1300,18 @@ class _CancellationRequestCardState
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(r.serviceName,
-                          style: tt.titleSmall
-                              ?.copyWith(fontWeight: FontWeight.w700)),
-                      Text(r.planName,
-                          style: tt.labelSmall
-                              ?.copyWith(color: AppColors.textSecondary)),
+                      Text(
+                        r.serviceName,
+                        style: tt.titleSmall?.copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      Text(
+                        r.planName,
+                        style: tt.labelSmall?.copyWith(
+                          color: AppColors.textSecondary,
+                        ),
+                      ),
                     ],
                   ),
                 ),
@@ -792,39 +1321,47 @@ class _CancellationRequestCardState
                   children: [
                     Container(
                       padding: const EdgeInsets.symmetric(
-                          horizontal: 9, vertical: 4),
+                        horizontal: 9,
+                        vertical: 4,
+                      ),
                       decoration: BoxDecoration(
                         color: statusBg,
                         borderRadius: BorderRadius.circular(20),
                         border: Border.all(
-                            color: statusColor.withValues(alpha: 0.4),
-                            width: 0.8),
+                          color: statusColor.withValues(alpha: 0.4),
+                          width: 0.8,
+                        ),
                       ),
                       child: Text(
                         _cancellationStatusLabel(r.status),
                         style: TextStyle(
-                            fontSize: 10,
-                            fontWeight: FontWeight.w700,
-                            color: statusColor),
+                          fontSize: 10,
+                          fontWeight: FontWeight.w700,
+                          color: statusColor,
+                        ),
                       ),
                     ),
                     const SizedBox(height: 4),
                     Container(
                       padding: const EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 3),
+                        horizontal: 8,
+                        vertical: 3,
+                      ),
                       decoration: BoxDecoration(
                         color: typeColor.withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(20),
                         border: Border.all(
-                            color: typeColor.withValues(alpha: 0.3),
-                            width: 0.8),
+                          color: typeColor.withValues(alpha: 0.3),
+                          width: 0.8,
+                        ),
                       ),
                       child: Text(
                         typeLabel,
                         style: TextStyle(
-                            fontSize: 10,
-                            fontWeight: FontWeight.w700,
-                            color: typeColor),
+                          fontSize: 10,
+                          fontWeight: FontWeight.w700,
+                          color: typeColor,
+                        ),
                       ),
                     ),
                   ],
@@ -875,7 +1412,8 @@ class _CancellationRequestCardState
                         ? const SizedBox(
                             width: 12,
                             height: 12,
-                            child: CircularProgressIndicator(strokeWidth: 1.5))
+                            child: CircularProgressIndicator(strokeWidth: 1.5),
+                          )
                         : const Icon(Icons.close_rounded, size: 15),
                     label: const Text('Reject'),
                     style: OutlinedButton.styleFrom(
@@ -892,7 +1430,10 @@ class _CancellationRequestCardState
                             width: 12,
                             height: 12,
                             child: CircularProgressIndicator(
-                                strokeWidth: 1.5, color: Colors.white))
+                              strokeWidth: 1.5,
+                              color: Colors.white,
+                            ),
+                          )
                         : const Icon(Icons.check_rounded, size: 15),
                     label: Text(r.isVisit ? 'Approve' : 'Approve Cancel'),
                     style: FilledButton.styleFrom(
@@ -920,19 +1461,19 @@ class _CancellationRequestCardState
         : 'Approve Membership Cancellation';
     final dialogBody = r.isVisit
         ? 'Approve cancellation of ${r.visitNumber != null ? "Visit #${r.visitNumber}" : "this visit"} '
-          'for "${r.planName}"?\n\n'
-          'Only this visit will be cancelled. The AMC membership stays active.'
+              'for "${r.planName}"?\n\n'
+              'Only this visit will be cancelled. The AMC membership stays active.'
         : 'Approve full cancellation of "${r.planName}"?\n\n'
-          'All pending and scheduled visits will be cancelled. '
-          'This cannot be undone.';
-    final confirmLabel =
-        r.isVisit ? 'Approve Visit Cancel' : 'Approve Cancellation';
+              'All pending and scheduled visits will be cancelled. '
+              'This cannot be undone.';
+    final confirmLabel = r.isVisit
+        ? 'Approve Visit Cancel'
+        : 'Approve Cancellation';
 
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        shape:
-            RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         title: Text(dialogTitle),
         content: Text(dialogBody),
         actions: [
@@ -943,8 +1484,9 @@ class _CancellationRequestCardState
           FilledButton(
             onPressed: () => Navigator.of(ctx).pop(true),
             style: FilledButton.styleFrom(
-              backgroundColor:
-                  r.isVisit ? const Color(0xFF3182CE) : AppColors.error,
+              backgroundColor: r.isVisit
+                  ? const Color(0xFF3182CE)
+                  : AppColors.error,
             ),
             child: Text(confirmLabel),
           ),
@@ -955,10 +1497,13 @@ class _CancellationRequestCardState
     setState(() => _approving = true);
     try {
       final client = Supabase.instance.client;
-      await client.from('amc_cancellation_requests').update({
-        'status': 'approved',
-        'resolved_at': DateTime.now().toUtc().toIso8601String(),
-      }).eq('id', r.id);
+      await client
+          .from('amc_cancellation_requests')
+          .update({
+            'status': 'approved',
+            'resolved_at': DateTime.now().toUtc().toIso8601String(),
+          })
+          .eq('id', r.id);
 
       if (r.isVisit) {
         // Cancel only the specific visit booking
@@ -1008,21 +1553,26 @@ class _CancellationRequestCardState
               'status': 'cancelled',
               if (r.reason != null) 'cancellation_reason': r.reason,
               if (r.remarks != null) 'cancellation_remarks': r.remarks,
-              'cancellation_requested_at':
-                  r.createdAt.toUtc().toIso8601String(),
+              'cancellation_requested_at': r.createdAt
+                  .toUtc()
+                  .toIso8601String(),
             })
             .eq('id', r.contractId)
             .select('id');
         if ((updated as List).isEmpty) {
           throw Exception(
-              'Contract update failed — apply pending database migrations.');
+            'Contract update failed — apply pending database migrations.',
+          );
         }
         await client
             .from('bookings')
             .update({'status': 'cancelled'})
             .eq('amc_contract_id', r.contractId)
             .inFilter('status', [
-              'pending', 'assigned', 'assigned_to_dodo_team', 'accepted',
+              'pending',
+              'assigned',
+              'assigned_to_dodo_team',
+              'accepted',
             ]);
         await client
             .from('amc_scheduling_requests')
@@ -1077,15 +1627,14 @@ class _CancellationRequestCardState
         : 'Reject Membership Cancellation';
     final dialogBody = r.isVisit
         ? 'Reject the visit cancellation request for "${r.planName}"?\n\n'
-          'The visit remains as scheduled.'
+              'The visit remains as scheduled.'
         : 'Reject the cancellation request for "${r.planName}"?\n\n'
-          'The contract will be restored to Active status.';
+              'The contract will be restored to Active status.';
 
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        shape:
-            RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         title: Text(dialogTitle),
         content: Text(dialogBody),
         actions: [
@@ -1104,19 +1653,25 @@ class _CancellationRequestCardState
     setState(() => _rejecting = true);
     try {
       final client = Supabase.instance.client;
-      await client.from('amc_cancellation_requests').update({
-        'status': 'rejected',
-        'resolved_at': DateTime.now().toUtc().toIso8601String(),
-      }).eq('id', r.id);
+      await client
+          .from('amc_cancellation_requests')
+          .update({
+            'status': 'rejected',
+            'resolved_at': DateTime.now().toUtc().toIso8601String(),
+          })
+          .eq('id', r.id);
 
       if (!r.isVisit) {
         // Restore membership contract to active
-        await client.from('amc_contracts').update({
-          'status': 'active',
-          'cancellation_reason': null,
-          'cancellation_remarks': null,
-          'cancellation_requested_at': null,
-        }).eq('id', r.contractId);
+        await client
+            .from('amc_contracts')
+            .update({
+              'status': 'active',
+              'cancellation_reason': null,
+              'cancellation_remarks': null,
+              'cancellation_requested_at': null,
+            })
+            .eq('id', r.contractId);
       }
 
       if (r.customerId.isNotEmpty) {
@@ -1150,9 +1705,11 @@ class _CancellationRequestCardState
       if (mounted) {
         messenger.showSnackBar(
           SnackBar(
-            content: Text(r.isVisit
-                ? 'Visit cancellation rejected — visit remains scheduled.'
-                : 'Cancellation rejected — membership restored to Active.'),
+            content: Text(
+              r.isVisit
+                  ? 'Visit cancellation rejected — visit remains scheduled.'
+                  : 'Cancellation rejected — membership restored to Active.',
+            ),
           ),
         );
       }
@@ -1194,26 +1751,784 @@ class _EmptyState extends StatelessWidget {
               color: Colors.green.withAlpha(20),
               shape: BoxShape.circle,
             ),
-            child: const Icon(Icons.check_circle_outline_rounded,
-                size: 36, color: Colors.green),
+            child: const Icon(
+              Icons.check_circle_outline_rounded,
+              size: 36,
+              color: Colors.green,
+            ),
           ),
           const SizedBox(height: 16),
-          Text(title,
-              style: Theme.of(context)
-                  .textTheme
-                  .titleMedium
-                  ?.copyWith(fontWeight: FontWeight.w700)),
+          Text(
+            title,
+            style: Theme.of(
+              context,
+            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+          ),
           const SizedBox(height: 8),
           Text(
             sub,
-            style: Theme.of(context)
-                .textTheme
-                .bodySmall
-                ?.copyWith(color: AppColors.textSecondary),
+            style: Theme.of(
+              context,
+            ).textTheme.bodySmall?.copyWith(color: AppColors.textSecondary),
           ),
         ],
       ),
     );
+  }
+}
+
+// ── Pause empty state ─────────────────────────────────────────────────────────
+
+class _PauseEmptyState extends StatelessWidget {
+  final String? filter;
+  final String label; // 'pause' | 'resume'
+  const _PauseEmptyState({this.filter, this.label = 'pause'});
+
+  @override
+  Widget build(BuildContext context) {
+    final isPending = filter == 'pending';
+    final title = isPending ? 'No pending requests' : 'No requests found';
+    final sub = filter == null
+        ? 'No AMC $label requests yet.'
+        : 'No ${_pauseStatusLabel(filter!).toLowerCase()} $label requests.';
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 72,
+            height: 72,
+            decoration: BoxDecoration(
+              color: Colors.green.withAlpha(20),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(
+              Icons.check_circle_outline_rounded,
+              size: 36,
+              color: Colors.green,
+            ),
+          ),
+          const SizedBox(height: 16),
+          Text(
+            title,
+            style: Theme.of(
+              context,
+            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            sub,
+            style: Theme.of(
+              context,
+            ).textTheme.bodySmall?.copyWith(color: AppColors.textSecondary),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Pause request card ────────────────────────────────────────────────────────
+
+class _PauseRequestCard extends ConsumerStatefulWidget {
+  final _AmcPauseRequest request;
+  final VoidCallback onRefresh;
+
+  const _PauseRequestCard({required this.request, required this.onRefresh});
+
+  @override
+  ConsumerState<_PauseRequestCard> createState() => _PauseRequestCardState();
+}
+
+class _PauseRequestCardState extends ConsumerState<_PauseRequestCard> {
+  bool _approving = false;
+  bool _rejecting = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final r = widget.request;
+    final tt = Theme.of(context).textTheme;
+    final (statusColor, statusBg) = _pauseStatusColors(r.status);
+
+    return Card(
+      margin: EdgeInsets.zero,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // ── Header ──────────────────────────────────────────────────────
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: AppColors.warning.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Icon(
+                    Icons.pause_circle_rounded,
+                    size: 20,
+                    color: AppColors.warning,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        r.serviceName,
+                        style: tt.titleSmall?.copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      Text(
+                        r.planName,
+                        style: tt.labelSmall?.copyWith(
+                          color: AppColors.textSecondary,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 9,
+                    vertical: 4,
+                  ),
+                  decoration: BoxDecoration(
+                    color: statusBg,
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(
+                      color: statusColor.withValues(alpha: 0.4),
+                      width: 0.8,
+                    ),
+                  ),
+                  child: Text(
+                    _pauseStatusLabel(r.status),
+                    style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w700,
+                      color: statusColor,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+
+            const SizedBox(height: 10),
+            const Divider(height: 1),
+            const SizedBox(height: 8),
+
+            _InfoRow(Icons.person_rounded, 'Customer', r.customerName),
+            _InfoRow(Icons.phone_rounded, 'Phone', r.customerPhone),
+            if (r.reason.isNotEmpty)
+              _InfoRow(Icons.notes_rounded, 'Reason', r.reason),
+            _InfoRow(
+              Icons.schedule_rounded,
+              'Requested',
+              _fmtDateTime(r.createdAt.toLocal()),
+            ),
+            if (r.resolvedAt != null)
+              _InfoRow(
+                Icons.check_circle_rounded,
+                'Resolved',
+                _fmtDateTime(r.resolvedAt!.toLocal()),
+              ),
+
+            if (r.isPending) ...[
+              const SizedBox(height: 10),
+              const Divider(height: 1),
+              const SizedBox(height: 8),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  OutlinedButton.icon(
+                    onPressed: (_rejecting || _approving) ? null : _reject,
+                    icon: _rejecting
+                        ? const SizedBox(
+                            width: 12,
+                            height: 12,
+                            child: CircularProgressIndicator(strokeWidth: 1.5),
+                          )
+                        : const Icon(Icons.close_rounded, size: 15),
+                    label: const Text('Reject'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppColors.textSecondary,
+                      side: const BorderSide(color: AppColors.border),
+                      visualDensity: VisualDensity.compact,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  FilledButton.icon(
+                    onPressed: (_approving || _rejecting) ? null : _approve,
+                    icon: _approving
+                        ? const SizedBox(
+                            width: 12,
+                            height: 12,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 1.5,
+                              color: Colors.white,
+                            ),
+                          )
+                        : const Icon(Icons.pause_rounded, size: 15),
+                    label: const Text('Approve Pause'),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: AppColors.warning,
+                      visualDensity: VisualDensity.compact,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _approve() async {
+    final r = widget.request;
+    final messenger = ScaffoldMessenger.of(context);
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        title: const Text('Approve Pause Request'),
+        content: Text(
+          'Approve pausing "${r.planName}"?\n\n'
+          'Scheduling will be disabled until the customer submits a '
+          'resume request and admin approves it.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            style: FilledButton.styleFrom(backgroundColor: AppColors.warning),
+            child: const Text('Approve Pause'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    setState(() => _approving = true);
+    try {
+      final client = Supabase.instance.client;
+      final now = DateTime.now().toUtc().toIso8601String();
+
+      await client
+          .from('amc_pause_requests')
+          .update({'status': 'approved', 'resolved_at': now})
+          .eq('id', r.id);
+
+      await client
+          .from('amc_contracts')
+          .update({'status': 'paused', 'pause_started_at': now})
+          .eq('id', r.contractId);
+
+      if (r.customerId.isNotEmpty) {
+        try {
+          await client.from('notifications').insert({
+            'user_type': 'customer',
+            'user_id': r.customerId,
+            'title': 'AMC Pause Approved',
+            'message':
+                'Your pause request for "${r.planName}" has been approved. '
+                'Your membership is now paused. '
+                'Request a resume when you are ready to continue.',
+            'notification_type': 'amc_pause_approved',
+            'is_read': false,
+            'entity_type': 'amc_contract',
+            'entity_id': r.contractId,
+          });
+        } catch (_) {}
+      }
+      widget.onRefresh();
+      if (mounted) {
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text('"${r.planName}" paused successfully.'),
+            backgroundColor: AppColors.success,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _approving = false);
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text('Failed to approve: $e'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _reject() async {
+    final r = widget.request;
+    final messenger = ScaffoldMessenger.of(context);
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        title: const Text('Reject Pause Request'),
+        content: Text(
+          'Reject the pause request for "${r.planName}"?\n\n'
+          'The membership will remain active.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Reject Request'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    setState(() => _rejecting = true);
+    try {
+      final client = Supabase.instance.client;
+      await client
+          .from('amc_pause_requests')
+          .update({
+            'status': 'rejected',
+            'resolved_at': DateTime.now().toUtc().toIso8601String(),
+          })
+          .eq('id', r.id);
+
+      if (r.customerId.isNotEmpty) {
+        try {
+          await client.from('notifications').insert({
+            'user_type': 'customer',
+            'user_id': r.customerId,
+            'title': 'AMC Pause Request Rejected',
+            'message':
+                'Your pause request for "${r.planName}" has been rejected. '
+                'Your membership remains active.',
+            'notification_type': 'amc_pause_rejected',
+            'is_read': false,
+            'entity_type': 'amc_contract',
+            'entity_id': r.contractId,
+          });
+        } catch (_) {}
+      }
+      widget.onRefresh();
+      if (mounted) {
+        messenger.showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Pause request rejected — membership remains active.',
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _rejecting = false);
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text('Failed to reject: $e'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+    }
+  }
+}
+
+// ── Resume request card ───────────────────────────────────────────────────────
+
+class _ResumeRequestCard extends ConsumerStatefulWidget {
+  final _AmcResumeRequest request;
+  final VoidCallback onRefresh;
+
+  const _ResumeRequestCard({required this.request, required this.onRefresh});
+
+  @override
+  ConsumerState<_ResumeRequestCard> createState() => _ResumeRequestCardState();
+}
+
+class _ResumeRequestCardState extends ConsumerState<_ResumeRequestCard> {
+  bool _approving = false;
+  bool _rejecting = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final r = widget.request;
+    final tt = Theme.of(context).textTheme;
+    final (statusColor, statusBg) = _pauseStatusColors(r.status);
+
+    return Card(
+      margin: EdgeInsets.zero,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // ── Header ──────────────────────────────────────────────────────
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: AppColors.success.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Icon(
+                    Icons.play_circle_rounded,
+                    size: 20,
+                    color: AppColors.success,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        r.serviceName,
+                        style: tt.titleSmall?.copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      Text(
+                        r.planName,
+                        style: tt.labelSmall?.copyWith(
+                          color: AppColors.textSecondary,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 9,
+                    vertical: 4,
+                  ),
+                  decoration: BoxDecoration(
+                    color: statusBg,
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(
+                      color: statusColor.withValues(alpha: 0.4),
+                      width: 0.8,
+                    ),
+                  ),
+                  child: Text(
+                    _pauseStatusLabel(r.status),
+                    style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w700,
+                      color: statusColor,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+
+            const SizedBox(height: 10),
+            const Divider(height: 1),
+            const SizedBox(height: 8),
+
+            _InfoRow(Icons.person_rounded, 'Customer', r.customerName),
+            _InfoRow(Icons.phone_rounded, 'Phone', r.customerPhone),
+            if (r.pauseStartDate != null)
+              _InfoRow(
+                Icons.pause_rounded,
+                'Paused Since',
+                _fmtDate(r.pauseStartDate!.toLocal()),
+              ),
+            if (r.pauseDurationDays != null && r.pauseDurationDays! > 0)
+              _InfoRow(
+                Icons.timer_rounded,
+                'Pause Duration',
+                '${r.pauseDurationDays} day${r.pauseDurationDays == 1 ? '' : 's'}',
+              ),
+            if (r.reason != null && r.reason!.isNotEmpty)
+              _InfoRow(Icons.notes_rounded, 'Reason', r.reason!),
+            _InfoRow(
+              Icons.schedule_rounded,
+              'Requested',
+              _fmtDateTime(r.createdAt.toLocal()),
+            ),
+            if (r.resolvedAt != null)
+              _InfoRow(
+                Icons.check_circle_rounded,
+                'Resolved',
+                _fmtDateTime(r.resolvedAt!.toLocal()),
+              ),
+
+            if (r.isPending) ...[
+              const SizedBox(height: 10),
+              const Divider(height: 1),
+              const SizedBox(height: 8),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  OutlinedButton.icon(
+                    onPressed: (_rejecting || _approving) ? null : _reject,
+                    icon: _rejecting
+                        ? const SizedBox(
+                            width: 12,
+                            height: 12,
+                            child: CircularProgressIndicator(strokeWidth: 1.5),
+                          )
+                        : const Icon(Icons.close_rounded, size: 15),
+                    label: const Text('Reject'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppColors.textSecondary,
+                      side: const BorderSide(color: AppColors.border),
+                      visualDensity: VisualDensity.compact,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  FilledButton.icon(
+                    onPressed: (_approving || _rejecting) ? null : _approve,
+                    icon: _approving
+                        ? const SizedBox(
+                            width: 12,
+                            height: 12,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 1.5,
+                              color: Colors.white,
+                            ),
+                          )
+                        : const Icon(Icons.play_arrow_rounded, size: 15),
+                    label: const Text('Approve Resume'),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: AppColors.success,
+                      visualDensity: VisualDensity.compact,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _approve() async {
+    final r = widget.request;
+    final messenger = ScaffoldMessenger.of(context);
+
+    final pausedSince = r.pauseStartDate != null
+        ? ' (paused since ${_fmtDate(r.pauseStartDate!.toLocal())})'
+        : '';
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        title: const Text('Approve Resume Request'),
+        content: Text(
+          'Resume "${r.planName}"$pausedSince?\n\n'
+          'The membership will be set to Active and all upcoming visit '
+          'due dates will be shifted forward by the pause duration.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            style: FilledButton.styleFrom(backgroundColor: AppColors.success),
+            child: const Text('Approve Resume'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    setState(() => _approving = true);
+    try {
+      final client = Supabase.instance.client;
+      final today = DateTime.now();
+      final nowUtc = today.toUtc().toIso8601String();
+
+      // Compute pause duration and shift planned_due_dates
+      int pauseDays = 0;
+      final pauseStart = r.pauseStartDate;
+      if (pauseStart != null) {
+        pauseDays = today.difference(pauseStart).inDays;
+        if (pauseDays > 0) {
+          final futureBookings = await client
+              .from('bookings')
+              .select('id, planned_due_date')
+              .eq('amc_contract_id', r.contractId)
+              .inFilter('status', [
+                'pending',
+                'assigned',
+                'assigned_to_dodo_team',
+                'accepted',
+              ]);
+          for (final b in futureBookings as List) {
+            final pdRaw = b['planned_due_date'] as String?;
+            if (pdRaw == null) continue;
+            final pd = DateTime.tryParse(pdRaw);
+            if (pd == null) continue;
+            final shifted = pd.add(Duration(days: pauseDays));
+            await client
+                .from('bookings')
+                .update({
+                  'planned_due_date':
+                      '${shifted.year.toString().padLeft(4, '0')}-'
+                      '${shifted.month.toString().padLeft(2, '0')}-'
+                      '${shifted.day.toString().padLeft(2, '0')}',
+                })
+                .eq('id', b['id'] as String);
+          }
+        }
+      }
+
+      await client
+          .from('amc_resume_requests')
+          .update({
+            'status': 'approved',
+            'pause_duration_days': pauseDays,
+            'resolved_at': nowUtc,
+          })
+          .eq('id', r.id);
+
+      await client
+          .from('amc_contracts')
+          .update({
+            'status': 'active',
+            'pause_started_at': null,
+            'resumed_at': nowUtc,
+          })
+          .eq('id', r.contractId);
+
+      if (r.customerId.isNotEmpty) {
+        try {
+          await client.from('notifications').insert({
+            'user_type': 'customer',
+            'user_id': r.customerId,
+            'title': 'AMC Membership Resumed',
+            'message':
+                'Your "${r.planName}" AMC membership has been resumed. '
+                'You can now request your next visit.',
+            'notification_type': 'amc_resumed',
+            'is_read': false,
+            'entity_type': 'amc_contract',
+            'entity_id': r.contractId,
+          });
+        } catch (_) {}
+      }
+      widget.onRefresh();
+      if (mounted) {
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text(
+              '"${r.planName}" resumed. '
+              '${pauseDays > 0 ? 'Visit dates shifted by $pauseDays day${pauseDays == 1 ? '' : 's'}.' : ''}',
+            ),
+            backgroundColor: AppColors.success,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _approving = false);
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text('Failed to approve: $e'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _reject() async {
+    final r = widget.request;
+    final messenger = ScaffoldMessenger.of(context);
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        title: const Text('Reject Resume Request'),
+        content: Text(
+          'Reject the resume request for "${r.planName}"?\n\n'
+          'The membership will remain paused.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Reject Request'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    setState(() => _rejecting = true);
+    try {
+      final client = Supabase.instance.client;
+      await client
+          .from('amc_resume_requests')
+          .update({
+            'status': 'rejected',
+            'resolved_at': DateTime.now().toUtc().toIso8601String(),
+          })
+          .eq('id', r.id);
+
+      if (r.customerId.isNotEmpty) {
+        try {
+          await client.from('notifications').insert({
+            'user_type': 'customer',
+            'user_id': r.customerId,
+            'title': 'AMC Resume Request Rejected',
+            'message':
+                'Your resume request for "${r.planName}" has been rejected. '
+                'Your membership remains paused.',
+            'notification_type': 'amc_resume_rejected',
+            'is_read': false,
+            'entity_type': 'amc_contract',
+            'entity_id': r.contractId,
+          });
+        } catch (_) {}
+      }
+      widget.onRefresh();
+      if (mounted) {
+        messenger.showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Resume request rejected — membership remains paused.',
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _rejecting = false);
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text('Failed to reject: $e'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+    }
   }
 }
 
@@ -1256,20 +2571,29 @@ class _RequestCardState extends ConsumerState<_RequestCard> {
                     color: Colors.blue.withAlpha(20),
                     borderRadius: BorderRadius.circular(10),
                   ),
-                  child: const Icon(Icons.autorenew_rounded,
-                      size: 20, color: Colors.blue),
+                  child: const Icon(
+                    Icons.autorenew_rounded,
+                    size: 20,
+                    color: Colors.blue,
+                  ),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(r.serviceName,
-                          style: tt.titleSmall
-                              ?.copyWith(fontWeight: FontWeight.w700)),
-                      Text(r.planName,
-                          style: tt.labelSmall
-                              ?.copyWith(color: AppColors.textSecondary)),
+                      Text(
+                        r.serviceName,
+                        style: tt.titleSmall?.copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      Text(
+                        r.planName,
+                        style: tt.labelSmall?.copyWith(
+                          color: AppColors.textSecondary,
+                        ),
+                      ),
                     ],
                   ),
                 ),
@@ -1313,7 +2637,9 @@ class _RequestCardState extends ConsumerState<_RequestCard> {
                     foregroundColor: AppColors.primary,
                     visualDensity: VisualDensity.compact,
                     padding: const EdgeInsets.symmetric(
-                        horizontal: 8, vertical: 4),
+                      horizontal: 8,
+                      vertical: 4,
+                    ),
                   ),
                 ),
                 if (r.isPending) ...[
@@ -1324,7 +2650,8 @@ class _RequestCardState extends ConsumerState<_RequestCard> {
                         ? const SizedBox(
                             width: 12,
                             height: 12,
-                            child: CircularProgressIndicator(strokeWidth: 1.5))
+                            child: CircularProgressIndicator(strokeWidth: 1.5),
+                          )
                         : const Icon(Icons.close_rounded, size: 15),
                     label: const Text('Reject'),
                     style: OutlinedButton.styleFrom(
@@ -1341,7 +2668,10 @@ class _RequestCardState extends ConsumerState<_RequestCard> {
                             width: 12,
                             height: 12,
                             child: CircularProgressIndicator(
-                                strokeWidth: 1.5, color: Colors.white))
+                              strokeWidth: 1.5,
+                              color: Colors.white,
+                            ),
+                          )
                         : const Icon(Icons.calendar_month_rounded, size: 15),
                     label: const Text('Approve & Schedule'),
                     style: FilledButton.styleFrom(
@@ -1371,12 +2701,12 @@ class _RequestCardState extends ConsumerState<_RequestCard> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        shape:
-            RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         title: const Text('Reject Request'),
         content: const Text(
-            'Reject this scheduling request? '
-            'The customer will be able to submit a new request.'),
+          'Reject this scheduling request? '
+          'The customer will be able to submit a new request.',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(false),
@@ -1384,8 +2714,7 @@ class _RequestCardState extends ConsumerState<_RequestCard> {
           ),
           FilledButton(
             onPressed: () => Navigator.of(ctx).pop(true),
-            style:
-                FilledButton.styleFrom(backgroundColor: AppColors.error),
+            style: FilledButton.styleFrom(backgroundColor: AppColors.error),
             child: const Text('Reject'),
           ),
         ],
@@ -1402,9 +2731,12 @@ class _RequestCardState extends ConsumerState<_RequestCard> {
       if (mounted) widget.onRefresh();
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
             content: Text('Failed to reject: $e'),
-            backgroundColor: AppColors.error));
+            backgroundColor: AppColors.error,
+          ),
+        );
         setState(() => _rejecting = false);
       }
     }
@@ -1437,8 +2769,9 @@ class _RequestCardState extends ConsumerState<_RequestCard> {
         return;
       }
 
-      final booking =
-          Booking.fromMap(Map<String, dynamic>.from(rows.first as Map));
+      final booking = Booking.fromMap(
+        Map<String, dynamic>.from(rows.first as Map),
+      );
       final requestId = widget.request.id;
 
       if (!mounted) return;
@@ -1448,36 +2781,41 @@ class _RequestCardState extends ConsumerState<_RequestCard> {
         builder: (_) => BookingAssignmentDialog(
           booking: booking,
           preferredDate: widget.request.preferredDate,
-          onSave: ({
-            required assignmentType,
-            vendorId,
-            dodoTeamId,
-            required serviceDate,
-            notes,
-          }) async {
-            await ref
-                .read(bookingsNotifierProvider.notifier)
-                .updateBookingAssignment(
-                  booking.id,
-                  assignmentType: assignmentType,
-                  vendorId: vendorId,
-                  dodoTeamId: dodoTeamId,
-                  serviceDate: serviceDate,
-                  notes: notes,
-                );
-            await Supabase.instance.client
-                .from('amc_scheduling_requests')
-                .update({'status': 'scheduled'})
-                .eq('id', requestId);
-            widget.onRefresh();
-          },
+          onSave:
+              ({
+                required assignmentType,
+                vendorId,
+                dodoTeamId,
+                required serviceDate,
+                notes,
+              }) async {
+                await ref
+                    .read(bookingsNotifierProvider.notifier)
+                    .updateBookingAssignment(
+                      booking.id,
+                      assignmentType: assignmentType,
+                      vendorId: vendorId,
+                      dodoTeamId: dodoTeamId,
+                      serviceDate: serviceDate,
+                      notes: notes,
+                    );
+                await Supabase.instance.client
+                    .from('amc_scheduling_requests')
+                    .update({'status': 'scheduled'})
+                    .eq('id', requestId);
+                widget.onRefresh();
+              },
         ),
       );
     } catch (e) {
       if (mounted) {
         setState(() => _approving = false);
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text('Error: $e'), backgroundColor: AppColors.error));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: $e'),
+            backgroundColor: AppColors.error,
+          ),
+        );
       }
     }
   }
@@ -1509,8 +2847,7 @@ class _AmcRequestDetailDialogState
     super.initState();
     Future.microtask(() {
       if (mounted) {
-        ref.invalidate(
-            _amcContractDetailProvider(widget.request.contractId));
+        ref.invalidate(_amcContractDetailProvider(widget.request.contractId));
       }
     });
   }
@@ -1518,14 +2855,11 @@ class _AmcRequestDetailDialogState
   @override
   Widget build(BuildContext context) {
     final r = widget.request;
-    final contractAsync =
-        ref.watch(_amcContractDetailProvider(r.contractId));
+    final contractAsync = ref.watch(_amcContractDetailProvider(r.contractId));
 
     return Dialog(
-      insetPadding:
-          const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
-      shape:
-          RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 660, maxHeight: 780),
         child: Column(
@@ -1537,13 +2871,15 @@ class _AmcRequestDetailDialogState
               padding: const EdgeInsets.fromLTRB(20, 16, 12, 16),
               decoration: const BoxDecoration(
                 color: AppColors.primary,
-                borderRadius:
-                    BorderRadius.vertical(top: Radius.circular(16)),
+                borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
               ),
               child: Row(
                 children: [
-                  const Icon(Icons.schedule_send_rounded,
-                      color: Colors.white, size: 20),
+                  const Icon(
+                    Icons.schedule_send_rounded,
+                    color: Colors.white,
+                    size: 20,
+                  ),
                   const SizedBox(width: 10),
                   Expanded(
                     child: Column(
@@ -1552,14 +2888,17 @@ class _AmcRequestDetailDialogState
                         const Text(
                           'AMC Scheduling Request',
                           style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 15,
-                              fontWeight: FontWeight.w700),
+                            color: Colors.white,
+                            fontSize: 15,
+                            fontWeight: FontWeight.w700,
+                          ),
                         ),
                         Text(
                           '${r.serviceName} · ${r.planName}',
                           style: const TextStyle(
-                              color: Colors.white70, fontSize: 12),
+                            color: Colors.white70,
+                            fontSize: 12,
+                          ),
                           overflow: TextOverflow.ellipsis,
                         ),
                       ],
@@ -1567,7 +2906,9 @@ class _AmcRequestDetailDialogState
                   ),
                   Container(
                     padding: const EdgeInsets.symmetric(
-                        horizontal: 10, vertical: 4),
+                      horizontal: 10,
+                      vertical: 4,
+                    ),
                     decoration: BoxDecoration(
                       color: Colors.white.withAlpha(30),
                       borderRadius: BorderRadius.circular(20),
@@ -1584,8 +2925,10 @@ class _AmcRequestDetailDialogState
                   const SizedBox(width: 6),
                   IconButton(
                     onPressed: () => Navigator.of(context).pop(),
-                    icon: const Icon(Icons.close_rounded,
-                        color: Colors.white70),
+                    icon: const Icon(
+                      Icons.close_rounded,
+                      color: Colors.white70,
+                    ),
                     visualDensity: VisualDensity.compact,
                   ),
                 ],
@@ -1595,8 +2938,7 @@ class _AmcRequestDetailDialogState
             // ── Body ──────────────────────────────────────────────────────
             Flexible(
               child: contractAsync.when(
-                loading: () =>
-                    const Center(child: CircularProgressIndicator()),
+                loading: () => const Center(child: CircularProgressIndicator()),
                 error: (e, _) => Center(
                   child: Padding(
                     padding: const EdgeInsets.all(24),
@@ -1680,8 +3022,7 @@ class _AmcRequestDetailDialogState
                               icon: Icons.circle_rounded,
                               label: 'Status',
                               value: _contractStatusLabel(contract.status),
-                              valueColor:
-                                  _contractStatusColor(contract.status),
+                              valueColor: _contractStatusColor(contract.status),
                             ),
                             _DetailRow(
                               icon: Icons.calendar_today_rounded,
@@ -1707,14 +3048,16 @@ class _AmcRequestDetailDialogState
                                 icon: Icons.history_rounded,
                                 label: 'Last Service Date',
                                 value: _fmtDate(
-                                    contract.lastServiceDate!.toLocal()),
+                                  contract.lastServiceDate!.toLocal(),
+                                ),
                               ),
                             if (contract.nextScheduledDate != null)
                               _DetailRow(
                                 icon: Icons.event_rounded,
                                 label: 'Next Scheduled Visit',
                                 value: _fmtDate(
-                                    contract.nextScheduledDate!.toLocal()),
+                                  contract.nextScheduledDate!.toLocal(),
+                                ),
                                 highlight: true,
                               ),
                           ],
@@ -1810,7 +3153,9 @@ class _AmcRequestDetailDialogState
                                   width: 12,
                                   height: 12,
                                   child: CircularProgressIndicator(
-                                      strokeWidth: 1.5))
+                                    strokeWidth: 1.5,
+                                  ),
+                                )
                               : const Icon(Icons.close_rounded, size: 15),
                           label: const Text('Reject'),
                           style: OutlinedButton.styleFrom(
@@ -1829,9 +3174,14 @@ class _AmcRequestDetailDialogState
                                   width: 12,
                                   height: 12,
                                   child: CircularProgressIndicator(
-                                      strokeWidth: 1.5, color: Colors.white))
+                                    strokeWidth: 1.5,
+                                    color: Colors.white,
+                                  ),
+                                )
                               : const Icon(
-                                  Icons.calendar_month_rounded, size: 15),
+                                  Icons.calendar_month_rounded,
+                                  size: 15,
+                                ),
                           label: const Text('Approve & Schedule'),
                           style: FilledButton.styleFrom(
                             visualDensity: VisualDensity.compact,
@@ -1853,20 +3203,20 @@ class _AmcRequestDetailDialogState
   }
 
   String _contractStatusLabel(String s) => switch (s) {
-        'active' => 'Active',
-        'paused' => 'Paused',
-        'completed' => 'Completed',
-        'cancelled' => 'Cancelled',
-        _ => s,
-      };
+    'active' => 'Active',
+    'paused' => 'Paused',
+    'completed' => 'Completed',
+    'cancelled' => 'Cancelled',
+    _ => s,
+  };
 
   Color _contractStatusColor(String s) => switch (s) {
-        'active' => const Color(0xFF276749),
-        'paused' => const Color(0xFF744210),
-        'completed' => AppColors.primary,
-        'cancelled' => AppColors.error,
-        _ => AppColors.textSecondary,
-      };
+    'active' => const Color(0xFF276749),
+    'paused' => const Color(0xFF744210),
+    'completed' => AppColors.primary,
+    'cancelled' => AppColors.error,
+    _ => AppColors.textSecondary,
+  };
 
   String _discountLabel(_AmcContractFull c) {
     final amt = c.discountAmount ?? 0;
@@ -1880,12 +3230,12 @@ class _AmcRequestDetailDialogState
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        shape:
-            RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         title: const Text('Reject Request'),
         content: const Text(
-            'Reject this scheduling request? '
-            'The customer will be able to submit a new request.'),
+          'Reject this scheduling request? '
+          'The customer will be able to submit a new request.',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(false),
@@ -1893,8 +3243,7 @@ class _AmcRequestDetailDialogState
           ),
           FilledButton(
             onPressed: () => Navigator.of(ctx).pop(true),
-            style:
-                FilledButton.styleFrom(backgroundColor: AppColors.error),
+            style: FilledButton.styleFrom(backgroundColor: AppColors.error),
             child: const Text('Reject'),
           ),
         ],
@@ -1914,9 +3263,12 @@ class _AmcRequestDetailDialogState
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
             content: Text('Failed to reject: $e'),
-            backgroundColor: AppColors.error));
+            backgroundColor: AppColors.error,
+          ),
+        );
         setState(() => _rejecting = false);
       }
     }
@@ -1949,8 +3301,9 @@ class _AmcRequestDetailDialogState
         return;
       }
 
-      final booking =
-          Booking.fromMap(Map<String, dynamic>.from(rows.first as Map));
+      final booking = Booking.fromMap(
+        Map<String, dynamic>.from(rows.first as Map),
+      );
       final requestId = widget.request.id;
 
       if (!mounted) return;
@@ -1960,37 +3313,41 @@ class _AmcRequestDetailDialogState
         builder: (_) => BookingAssignmentDialog(
           booking: booking,
           preferredDate: widget.request.preferredDate,
-          onSave: ({
-            required assignmentType,
-            vendorId,
-            dodoTeamId,
-            required serviceDate,
-            notes,
-          }) async {
-            await ref
-                .read(bookingsNotifierProvider.notifier)
-                .updateBookingAssignment(
-                  booking.id,
-                  assignmentType: assignmentType,
-                  vendorId: vendorId,
-                  dodoTeamId: dodoTeamId,
-                  serviceDate: serviceDate,
-                  notes: notes,
-                );
-            await Supabase.instance.client
-                .from('amc_scheduling_requests')
-                .update({'status': 'scheduled'})
-                .eq('id', requestId);
-            widget.onRefresh();
-          },
+          onSave:
+              ({
+                required assignmentType,
+                vendorId,
+                dodoTeamId,
+                required serviceDate,
+                notes,
+              }) async {
+                await ref
+                    .read(bookingsNotifierProvider.notifier)
+                    .updateBookingAssignment(
+                      booking.id,
+                      assignmentType: assignmentType,
+                      vendorId: vendorId,
+                      dodoTeamId: dodoTeamId,
+                      serviceDate: serviceDate,
+                      notes: notes,
+                    );
+                await Supabase.instance.client
+                    .from('amc_scheduling_requests')
+                    .update({'status': 'scheduled'})
+                    .eq('id', requestId);
+                widget.onRefresh();
+              },
         ),
       );
     } catch (e) {
       if (mounted) {
         setState(() => _approving = false);
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
             content: Text('Error: $e'),
-            backgroundColor: AppColors.error));
+            backgroundColor: AppColors.error,
+          ),
+        );
       }
     }
   }
@@ -2007,15 +3364,18 @@ DateTime _addCalendarMonths(DateTime base, int months) {
 }
 
 DateTime? _visitPlannedDate(
-    DateTime createdAt, String? interval, int visitNumber) {
+  DateTime createdAt,
+  String? interval,
+  int visitNumber,
+) {
   if (interval == null) return null;
   final n = visitNumber - 1;
   final base = DateTime.utc(createdAt.year, createdAt.month, createdAt.day);
   return switch (interval) {
-    'monthly'     => _addCalendarMonths(base, n),
-    'quarterly'   => _addCalendarMonths(base, 3 * n),
+    'monthly' => _addCalendarMonths(base, n),
+    'quarterly' => _addCalendarMonths(base, 3 * n),
     'half_yearly' => _addCalendarMonths(base, 6 * n),
-    'yearly'      => _addCalendarMonths(base, 12 * n),
+    'yearly' => _addCalendarMonths(base, 12 * n),
     _ => null,
   };
 }
@@ -2043,11 +3403,12 @@ class _VisitHistorySection extends StatelessWidget {
                 child: Text(
                   'No visits linked to this contract yet.',
                   style: TextStyle(
-                      fontSize: 12,
-                      color: AppColors.textSecondary,
-                      fontStyle: FontStyle.italic),
+                    fontSize: 12,
+                    color: AppColors.textSecondary,
+                    fontStyle: FontStyle.italic,
+                  ),
                 ),
-              )
+              ),
             ]
           : List.generate(displayCount, (i) {
               final n = i + 1;
@@ -2065,14 +3426,14 @@ class _VisitHistorySection extends StatelessWidget {
   }
 
   static Map<int, _AmcVisitDetail> _buildVisitMap(
-      List<_AmcVisitDetail> visits) {
+    List<_AmcVisitDetail> visits,
+  ) {
     final map = <int, _AmcVisitDetail>{};
     for (final v in visits) {
       final n = v.visitNumber;
       if (n != null && n >= 1) {
         final existing = map[n];
-        if (existing == null ||
-            _rank(v.status) > _rank(existing.status)) {
+        if (existing == null || _rank(v.status) > _rank(existing.status)) {
           map[n] = v;
         }
       }
@@ -2081,13 +3442,13 @@ class _VisitHistorySection extends StatelessWidget {
   }
 
   static int _rank(String s) => switch (s) {
-        'completed' => 5,
-        'awaiting_verification' => 4,
-        'in_progress' || 'started' => 3,
-        'assigned' || 'accepted' || 'en_route' => 2,
-        'pending' => 1,
-        _ => 0,
-      };
+    'completed' => 5,
+    'awaiting_verification' => 4,
+    'in_progress' || 'started' => 3,
+    'assigned' || 'accepted' || 'en_route' => 2,
+    'pending' => 1,
+    _ => 0,
+  };
 }
 
 class _VisitRow extends StatelessWidget {
@@ -2118,8 +3479,7 @@ class _VisitRow extends StatelessWidget {
           style: TextStyle(
             fontSize: 11,
             fontWeight: FontWeight.w700,
-            color:
-                visit != null ? AppColors.primary : AppColors.textSecondary,
+            color: visit != null ? AppColors.primary : AppColors.textSecondary,
           ),
         ),
       ),
@@ -2139,9 +3499,10 @@ class _VisitRow extends StatelessWidget {
               child: Text(
                 'Visit #$visitNumber$dueSuffix',
                 style: const TextStyle(
-                    fontSize: 12,
-                    color: AppColors.textSecondary,
-                    fontStyle: FontStyle.italic),
+                  fontSize: 12,
+                  color: AppColors.textSecondary,
+                  fontStyle: FontStyle.italic,
+                ),
               ),
             ),
             _StatusChip('Remaining', AppColors.textSecondary, AppColors.border),
@@ -2152,8 +3513,9 @@ class _VisitRow extends StatelessWidget {
 
     final v = visit!;
     final (statusLabel, statusColor, statusBg) = _statusMeta(v.status);
-    final scheduledStr =
-        v.serviceDate != null ? _fmtDate(v.serviceDate!.toLocal()) : null;
+    final scheduledStr = v.serviceDate != null
+        ? _fmtDate(v.serviceDate!.toLocal())
+        : null;
     final timeStr = v.timeSlot.isNotEmpty ? ' · ${v.timeSlot}' : '';
 
     return Padding(
@@ -2170,25 +3532,33 @@ class _VisitRow extends StatelessWidget {
                 Text(
                   'Visit #$visitNumber',
                   style: const TextStyle(
-                      fontSize: 12, fontWeight: FontWeight.w600),
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
                 if (plannedDueDate != null)
                   Text(
                     'Due: ${_fmtDate(plannedDueDate!)}',
                     style: const TextStyle(
-                        fontSize: 11, color: AppColors.textSecondary),
+                      fontSize: 11,
+                      color: AppColors.textSecondary,
+                    ),
                   ),
                 if (scheduledStr != null)
                   Text(
                     'Scheduled: $scheduledStr$timeStr',
                     style: const TextStyle(
-                        fontSize: 11, color: AppColors.textSecondary),
+                      fontSize: 11,
+                      color: AppColors.textSecondary,
+                    ),
                   ),
                 if (v.completedAt != null)
                   Text(
                     'Completed: ${_fmtDate(v.completedAt!.toLocal())}',
                     style: const TextStyle(
-                        fontSize: 11, color: Color(0xFF276749)),
+                      fontSize: 11,
+                      color: Color(0xFF276749),
+                    ),
                   ),
               ],
             ),
@@ -2200,19 +3570,33 @@ class _VisitRow extends StatelessWidget {
   }
 
   (String, Color, Color) _statusMeta(String status) => switch (status) {
-        'completed' => ('Completed', const Color(0xFF276749),
-            const Color(0xFFF0FFF4)),
-        'cancelled' =>
-          ('Cancelled', AppColors.error, AppColors.error.withAlpha(15)),
-        'in_progress' || 'started' => ('In Progress',
-            const Color(0xFF805AD5), const Color(0xFFFAF5FF)),
-        'awaiting_verification' => ('Awaiting OTP',
-            const Color(0xFFDD6B20), const Color(0xFFFEEBC8)),
-        'assigned' || 'accepted' || 'en_route' => ('Scheduled',
-            const Color(0xFF2C7A7B), const Color(0xFFE6FFFA)),
-        _ => ('Pending', const Color(0xFFDD6B20),
-            const Color(0xFFFEEBC8)),
-      };
+    'completed' => (
+      'Completed',
+      const Color(0xFF276749),
+      const Color(0xFFF0FFF4),
+    ),
+    'cancelled' => (
+      'Cancelled',
+      AppColors.error,
+      AppColors.error.withAlpha(15),
+    ),
+    'in_progress' || 'started' => (
+      'In Progress',
+      const Color(0xFF805AD5),
+      const Color(0xFFFAF5FF),
+    ),
+    'awaiting_verification' => (
+      'Awaiting OTP',
+      const Color(0xFFDD6B20),
+      const Color(0xFFFEEBC8),
+    ),
+    'assigned' || 'accepted' || 'en_route' => (
+      'Scheduled',
+      const Color(0xFF2C7A7B),
+      const Color(0xFFE6FFFA),
+    ),
+    _ => ('Pending', const Color(0xFFDD6B20), const Color(0xFFFEEBC8)),
+  };
 }
 
 class _StatusChip extends StatelessWidget {
@@ -2270,6 +3654,61 @@ class _RequestStatusBadge extends StatelessWidget {
   }
 }
 
+// ── Type toggle button (Pause / Resume sub-tab) ───────────────────────────────
+
+class _TypeToggleButton extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _TypeToggleButton({
+    required this.label,
+    required this.icon,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        decoration: BoxDecoration(
+          color: selected
+              ? AppColors.primary.withValues(alpha: 0.12)
+              : Colors.transparent,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(
+            color: selected ? AppColors.primary : AppColors.border,
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              icon,
+              size: 14,
+              color: selected ? AppColors.primary : AppColors.textSecondary,
+            ),
+            const SizedBox(width: 6),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                color: selected ? AppColors.primary : AppColors.textSecondary,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 // ── Status filter chip ────────────────────────────────────────────────────────
 
 class _StatusFilterChip extends StatelessWidget {
@@ -2295,9 +3734,7 @@ class _StatusFilterChip extends StatelessWidget {
         decoration: BoxDecoration(
           color: selected ? color : Colors.transparent,
           borderRadius: BorderRadius.circular(20),
-          border: Border.all(
-            color: selected ? color : AppColors.border,
-          ),
+          border: Border.all(color: selected ? color : AppColors.border),
         ),
         child: Text(
           label,
@@ -2393,7 +3830,9 @@ class _DetailRow extends StatelessWidget {
             child: Text(
               label,
               style: const TextStyle(
-                  fontSize: 12, color: AppColors.textSecondary),
+                fontSize: 12,
+                color: AppColors.textSecondary,
+              ),
             ),
           ),
           Expanded(
@@ -2401,12 +3840,10 @@ class _DetailRow extends StatelessWidget {
               value,
               style: TextStyle(
                 fontSize: 12,
-                fontWeight:
-                    highlight ? FontWeight.w700 : FontWeight.w600,
-                color: valueColor ??
-                    (highlight
-                        ? AppColors.primary
-                        : AppColors.textPrimary),
+                fontWeight: highlight ? FontWeight.w700 : FontWeight.w600,
+                color:
+                    valueColor ??
+                    (highlight ? AppColors.primary : AppColors.textPrimary),
               ),
             ),
           ),
@@ -2435,9 +3872,10 @@ class _InfoRow extends StatelessWidget {
         children: [
           Icon(icon, size: 13, color: AppColors.textSecondary),
           const SizedBox(width: 6),
-          Text('$label: ',
-              style:
-                  tt.labelSmall?.copyWith(color: AppColors.textSecondary)),
+          Text(
+            '$label: ',
+            style: tt.labelSmall?.copyWith(color: AppColors.textSecondary),
+          ),
           Expanded(
             child: Text(
               value,

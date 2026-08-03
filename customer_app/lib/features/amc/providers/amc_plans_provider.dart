@@ -186,3 +186,129 @@ final allAmcContractsProvider =
     rethrow;
   }
 });
+
+// ── Pause / Resume request summaries (all contracts for customer) ─────────────
+
+class AmcPauseRequestSummary {
+  final String id;
+  final String contractId;
+  final String serviceName;
+  final String planName;
+  final String contractStatus;
+  final String status; // pending | approved | rejected | cancelled
+  final String reason;
+  final DateTime createdAt;
+  final DateTime? resolvedAt;
+
+  const AmcPauseRequestSummary({
+    required this.id,
+    required this.contractId,
+    required this.serviceName,
+    required this.planName,
+    required this.contractStatus,
+    required this.status,
+    required this.reason,
+    required this.createdAt,
+    this.resolvedAt,
+  });
+}
+
+class AmcResumeRequestSummary {
+  final String id;
+  final String contractId;
+  final String serviceName;
+  final String planName;
+  final String contractStatus;
+  final String status; // pending | approved | rejected | cancelled
+  final String? reason;
+  final int? pauseDurationDays;
+  final DateTime createdAt;
+  final DateTime? resolvedAt;
+
+  const AmcResumeRequestSummary({
+    required this.id,
+    required this.contractId,
+    required this.serviceName,
+    required this.planName,
+    required this.contractStatus,
+    required this.status,
+    this.reason,
+    this.pauseDurationDays,
+    required this.createdAt,
+    this.resolvedAt,
+  });
+}
+
+/// All pause requests across every AMC contract for the current customer.
+final allAmcPauseRequestsProvider =
+    FutureProvider.autoDispose<List<AmcPauseRequestSummary>>((ref) async {
+  final contracts = await ref.watch(allAmcContractsProvider.future);
+  if (contracts.isEmpty) return [];
+
+  final contractIds = contracts.map((c) => c.contractId).toList();
+  final serviceNameById = {for (final c in contracts) c.contractId: c.serviceName};
+  final planNameById = {for (final c in contracts) c.contractId: c.planName};
+  final statusById = {for (final c in contracts) c.contractId: c.status};
+
+  final rows = await Supabase.instance.client
+      .from('amc_pause_requests')
+      .select('id, amc_contract_id, status, reason, created_at, resolved_at')
+      .inFilter('amc_contract_id', contractIds)
+      .order('created_at', ascending: false);
+
+  return (rows as List).map((r) {
+    final m = Map<String, dynamic>.from(r as Map);
+    final cid = m['amc_contract_id'] as String? ?? '';
+    return AmcPauseRequestSummary(
+      id: m['id'] as String,
+      contractId: cid,
+      serviceName: serviceNameById[cid] ?? '',
+      planName: planNameById[cid] ?? '',
+      contractStatus: statusById[cid] ?? '',
+      status: m['status'] as String? ?? 'pending',
+      reason: m['reason'] as String? ?? '',
+      createdAt: DateTime.parse(m['created_at'] as String),
+      resolvedAt: m['resolved_at'] != null
+          ? DateTime.tryParse(m['resolved_at'] as String)
+          : null,
+    );
+  }).toList();
+});
+
+/// All resume requests across every AMC contract for the current customer.
+final allAmcResumeRequestsProvider =
+    FutureProvider.autoDispose<List<AmcResumeRequestSummary>>((ref) async {
+  final contracts = await ref.watch(allAmcContractsProvider.future);
+  if (contracts.isEmpty) return [];
+
+  final contractIds = contracts.map((c) => c.contractId).toList();
+  final serviceNameById = {for (final c in contracts) c.contractId: c.serviceName};
+  final planNameById = {for (final c in contracts) c.contractId: c.planName};
+  final statusById = {for (final c in contracts) c.contractId: c.status};
+
+  final rows = await Supabase.instance.client
+      .from('amc_resume_requests')
+      .select(
+          'id, amc_contract_id, status, reason, pause_duration_days, created_at, resolved_at')
+      .inFilter('amc_contract_id', contractIds)
+      .order('created_at', ascending: false);
+
+  return (rows as List).map((r) {
+    final m = Map<String, dynamic>.from(r as Map);
+    final cid = m['amc_contract_id'] as String? ?? '';
+    return AmcResumeRequestSummary(
+      id: m['id'] as String,
+      contractId: cid,
+      serviceName: serviceNameById[cid] ?? '',
+      planName: planNameById[cid] ?? '',
+      contractStatus: statusById[cid] ?? '',
+      status: m['status'] as String? ?? 'pending',
+      reason: m['reason'] as String?,
+      pauseDurationDays: (m['pause_duration_days'] as num?)?.toInt(),
+      createdAt: DateTime.parse(m['created_at'] as String),
+      resolvedAt: m['resolved_at'] != null
+          ? DateTime.tryParse(m['resolved_at'] as String)
+          : null,
+    );
+  }).toList();
+});
