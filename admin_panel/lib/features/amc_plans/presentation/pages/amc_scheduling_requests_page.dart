@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../../core/theme/app_theme.dart' show AppColors;
@@ -2745,6 +2745,26 @@ class _RequestCardState extends ConsumerState<_RequestCard> {
   Future<void> _approve() async {
     setState(() => _approving = true);
     try {
+      // Guard: block scheduling while contract is paused
+      final contractRow = await Supabase.instance.client
+          .from('amc_contracts')
+          .select('status')
+          .eq('id', widget.request.contractId)
+          .single();
+      if ((contractRow['status'] as String?) == 'paused') {
+        if (mounted) {
+          setState(() => _approving = false);
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'Cannot schedule: this AMC membership is currently paused.',
+              ),
+              backgroundColor: AppColors.error,
+            ),
+          );
+        }
+        return;
+      }
       final rows = await Supabase.instance.client
           .from('bookings')
           .select()
@@ -3277,6 +3297,26 @@ class _AmcRequestDetailDialogState
   Future<void> _approve() async {
     setState(() => _approving = true);
     try {
+      // Guard: block scheduling while contract is paused
+      final contractRow = await Supabase.instance.client
+          .from('amc_contracts')
+          .select('status')
+          .eq('id', widget.request.contractId)
+          .single();
+      if ((contractRow['status'] as String?) == 'paused') {
+        if (mounted) {
+          setState(() => _approving = false);
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'Cannot schedule: this AMC membership is currently paused.',
+              ),
+              backgroundColor: AppColors.error,
+            ),
+          );
+        }
+        return;
+      }
       final rows = await Supabase.instance.client
           .from('bookings')
           .select()

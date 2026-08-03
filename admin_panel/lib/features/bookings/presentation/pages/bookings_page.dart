@@ -123,11 +123,12 @@ class _AmcContractAggregate {
       visits.firstOrNull?.cancellationRequestedAt;
   String get customerId => visits.firstOrNull?.customerId ?? '';
 
-  // Upcoming / Assigned / Completed / Overdue / Cancellation Pending / Cancelled
+  // Upcoming / Assigned / Completed / Overdue / Cancellation Pending / Cancelled / Paused
   String get contractStatus {
     final cSt = amcContractStatus;
     if (cSt == 'cancellation_requested') return 'cancellation_requested';
     if (cSt == 'cancelled') return 'cancelled';
+    if (cSt == 'paused') return 'paused';
     final total = totalVisits;
     if (total > 0 && completedCount >= total) return 'completed';
     final next = nextPendingVisit;
@@ -2090,8 +2091,9 @@ class _AmcContractRow extends StatelessWidget {
     final isCancellationPending = contractStatus == 'cancellation_requested';
     final isCompleted =
         contractStatus == 'completed' || contractStatus == 'cancelled';
+    final isPaused = contractStatus == 'paused';
     final canAssign =
-        !isCompleted && !isCancellationPending && agg.nextPendingVisit != null;
+        !isCompleted && !isCancellationPending && !isPaused && agg.nextPendingVisit != null;
     final isOverdue = nextDue != null && nextDue.isBefore(today);
 
     return Container(
@@ -2110,11 +2112,15 @@ class _AmcContractRow extends StatelessWidget {
                     Icon(
                       isCancellationPending
                           ? Icons.cancel_schedule_send_rounded
-                          : Icons.autorenew_rounded,
+                          : isPaused
+                              ? Icons.pause_circle_rounded
+                              : Icons.autorenew_rounded,
                       size: 13,
                       color: isCancellationPending
                           ? const Color(0xFFC05621)
-                          : const Color(0xFF3182CE),
+                          : isPaused
+                              ? const Color(0xFF6B46C1)
+                              : const Color(0xFF3182CE),
                     ),
                     const SizedBox(width: 5),
                     Expanded(
@@ -2349,6 +2355,11 @@ class _AmcContractStatusBadge extends StatelessWidget {
         'Cancel Pending',
         const Color(0xFFC05621),
         const Color(0xFFFFF3E0)
+      ),
+      'paused' => (
+        'Paused',
+        const Color(0xFF6B46C1),
+        const Color(0xFFF3E8FF)
       ),
       'overdue' => (
         'Overdue',
