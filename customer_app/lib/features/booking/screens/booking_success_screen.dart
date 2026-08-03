@@ -223,7 +223,10 @@ class _BookingSuccessScreenState extends State<BookingSuccessScreen>
               FilledButton(
                 onPressed: widget.onViewBookings,
                 style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(52)),
-                child: const Text('View My Bookings', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+                child: Text(
+                  widget.booking.isAmc ? 'View My AMC Plans' : 'View My Bookings',
+                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+                ),
               ),
               const SizedBox(height: 12),
               OutlinedButton(

@@ -302,8 +302,12 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
           onViewBookings: () {
             debugPrint('[DODO][SuccessDialog] onViewBookings → popUntil(isFirst)');
             navigator.popUntil((route) => route.isFirst);
-            debugPrint('[DODO][SuccessDialog] onViewBookings popUntil done — openMyBookings');
-            openMyBookings(navigator.context);
+            if (booking.isAmc) {
+              navigator.context.push('/amc-plans');
+            } else {
+              debugPrint('[DODO][SuccessDialog] onViewBookings popUntil done — openMyBookings');
+              openMyBookings(navigator.context);
+            }
           },
         );
         debugPrint('[DODO][Checkout] ✓ showBookingSuccessDialog awaited/returned');
@@ -440,7 +444,8 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         parentNodeId: item.parentNodeId,
       )));
       final surgeSettings = surgeAsync.valueOrNull ?? SurgeFeeModel.defaults;
-      newSurgeTotal += surgeSettings.computeSurge(item.totalPrice);
+      final surgeAmount = surgeSettings.computeSurge(item.totalPrice);
+      newSurgeTotal += surgeAmount;
       if (surgeAsync.hasValue) firstSurge ??= surgeSettings;
     }
     if (items.isEmpty) {

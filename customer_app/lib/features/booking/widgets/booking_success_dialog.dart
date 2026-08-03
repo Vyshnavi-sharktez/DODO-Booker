@@ -181,7 +181,10 @@ class _BookingSuccessDialog extends StatelessWidget {
                         spacing: 8,
                         children: [
                           TextButton(onPressed: onClose, child: const Text('Continue Browsing')),
-                          FilledButton(onPressed: onViewBookings, child: const Text('View My Bookings')),
+                          FilledButton(
+                            onPressed: onViewBookings,
+                            child: Text(booking.isAmc ? 'View My AMC Plans' : 'View My Bookings'),
+                          ),
                         ],
                       ),
                     ],

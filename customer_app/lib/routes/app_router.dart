@@ -144,7 +144,9 @@ final appRouter = GoRouter(
         if (booking is BookingModel) {
           return BookingSuccessScreen(
             booking: booking,
-            onViewBookings: () => openMyBookings(context),
+            onViewBookings: booking.isAmc
+                ? () => context.push(AppRoutes.amcPlans)
+                : () => openMyBookings(context),
             onBackToHome: () => context.go(AppRoutes.home),
           );
         }
