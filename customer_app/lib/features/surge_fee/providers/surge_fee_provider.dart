@@ -15,6 +15,7 @@ final resolvedSurgeFeeProvider = FutureProvider.family<SurgeFeeModel,
   (ref, key) async {
     final global = await ref.watch(surgeFeeSettingsProvider.future);
     if (!global.isEnabled) return global;
-    return SurgeFeeService().getResolvedSurgeFeeForService(key.serviceId, key.parentNodeId);
+    return SurgeFeeService()
+        .getResolvedSurgeFeeForService(key.serviceId, key.parentNodeId);
   },
 );

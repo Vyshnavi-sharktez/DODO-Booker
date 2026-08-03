@@ -1,5 +1,6 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/constants/app_colors.dart';
 import '../models/amc_contract_model.dart';
 import '../providers/amc_contract_provider.dart';
@@ -32,6 +33,10 @@ class _AmcContractDetailsScreenState
   bool _requesting = false;
   bool _cancellingRequest = false;
   bool _renewing = false;
+  bool _pausing = false;
+  bool _cancellingPauseRequest = false;
+  bool _resuming = false;
+  bool _cancellingResumeRequest = false;
 
   @override
   void initState() {
@@ -40,6 +45,8 @@ class _AmcContractDetailsScreenState
       if (mounted) {
         ref.invalidate(amcContractProvider(widget.contractId));
         ref.invalidate(pendingAmcRequestProvider(widget.contractId));
+        ref.invalidate(pendingAmcPauseRequestProvider(widget.contractId));
+        ref.invalidate(pendingAmcResumeRequestProvider(widget.contractId));
       }
     });
   }
@@ -50,6 +57,12 @@ class _AmcContractDetailsScreenState
     final pendingRequestId =
         ref.watch(pendingAmcRequestProvider(widget.contractId)).valueOrNull;
     final hasPendingRequest = pendingRequestId != null;
+    final pendingPauseRequestId =
+        ref.watch(pendingAmcPauseRequestProvider(widget.contractId)).valueOrNull;
+    final hasPendingPauseRequest = pendingPauseRequestId != null;
+    final pendingResumeRequestId =
+        ref.watch(pendingAmcResumeRequestProvider(widget.contractId)).valueOrNull;
+    final hasPendingResumeRequest = pendingResumeRequestId != null;
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -87,12 +100,33 @@ class _AmcContractDetailsScreenState
               onRenew: () => _startRenewalFlow(contract),
             );
           }
+          if (contract.status == 'paused') {
+            if (hasPendingResumeRequest) {
+              return _ResumeRequestPendingBar(
+                cancellingResumeRequest: _cancellingResumeRequest,
+                onCancelResumeRequest: () =>
+                    _confirmCancelResumeRequest(context),
+              );
+            }
+            return _MembershipPausedBar(
+              contract: contract,
+              resuming: _resuming,
+              onRequestResume: () => _showResumeDialog(context, contract),
+            );
+          }
+          if (hasPendingPauseRequest) {
+            return _PauseRequestPendingBar(
+              cancellingPauseRequest: _cancellingPauseRequest,
+              onCancelPauseRequest: () => _confirmCancelPauseRequest(context),
+            );
+          }
           if (contract.status != 'active') return null;
           return _ActionBar(
             cancelling: _cancelling,
             requesting: _requesting,
             cancellingRequest: _cancellingRequest,
             hasPendingRequest: hasPendingRequest,
+            pausing: _pausing,
             onRequest: hasPendingRequest
                 ? null
                 : () {
@@ -108,6 +142,7 @@ class _AmcContractDetailsScreenState
                 ? () => _confirmCancelRequest(context)
                 : null,
             onCancel: () => _showCancelChoiceDialog(contract),
+            onPause: () => _showPauseDialog(context, contract),
           );
         },
         orElse: () => null,
@@ -342,7 +377,7 @@ class _AmcContractDetailsScreenState
     }
   }
 
-  // ── Step 1: ask what to cancel ────────────────────────────────────────────
+  // â”€â”€ Step 1: ask what to cancel â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   Future<void> _showCancelChoiceDialog(AmcContractModel contract) async {
     final nextVisit = contract.visits
@@ -403,7 +438,7 @@ class _AmcContractDetailsScreenState
     }
   }
 
-  // ── Step 2a: confirm visit cancellation ────────────────────────────────────
+  // â”€â”€ Step 2a: confirm visit cancellation â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   Future<void> _showVisitCancellationDialog(
       AmcContractModel contract, AmcVisitModel visit) async {
@@ -485,7 +520,7 @@ class _AmcContractDetailsScreenState
     }
   }
 
-  // ── Step 2b: membership cancellation reason ────────────────────────────────
+  // â”€â”€ Step 2b: membership cancellation reason â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   Future<void> _showMembershipCancellationDialog(
       AmcContractModel contract) async {
@@ -606,7 +641,316 @@ class _AmcContractDetailsScreenState
     }
   }
 
-  // ── AMC Renewal ─────────────────────────────────────────────────────────────
+  // â”€â”€ AMC Pause â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+
+  Future<void> _showPauseDialog(
+      BuildContext context, AmcContractModel contract) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final reasonCtrl = TextEditingController();
+    String? errorText;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16)),
+          title: const Text('Pause Membership'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Your pause request will be reviewed by our team. '
+                'Scheduling will be disabled once approved.',
+                style: Theme.of(ctx)
+                    .textTheme
+                    .bodySmall
+                    ?.copyWith(color: AppColors.textSecondary),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: reasonCtrl,
+                maxLines: 3,
+                maxLength: 300,
+                textCapitalization: TextCapitalization.sentences,
+                onChanged: (_) {
+                  if (errorText != null) {
+                    setDialogState(() => errorText = null);
+                  }
+                },
+                decoration: InputDecoration(
+                  labelText: 'Reason for pausing *',
+                  hintText: 'e.g. Travelling for a month',
+                  border: const OutlineInputBorder(),
+                  contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 12, vertical: 10),
+                  counterText: '',
+                  errorText: errorText,
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () {
+                if (reasonCtrl.text.trim().isEmpty) {
+                  setDialogState(
+                      () => errorText = 'Reason is required');
+                  return;
+                }
+                Navigator.of(ctx).pop(true);
+              },
+              style: FilledButton.styleFrom(
+                  backgroundColor: AppColors.warning),
+              child: const Text('Submit Request'),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    final reason = reasonCtrl.text.trim();
+    reasonCtrl.dispose();
+
+    if (confirmed != true || reason.isEmpty || !mounted) return;
+
+    setState(() => _pausing = true);
+    try {
+      await Supabase.instance.client.from('amc_pause_requests').insert({
+        'amc_contract_id': contract.id,
+        'customer_id': contract.customerId,
+        'reason': reason,
+        'status': 'pending',
+      });
+      if (!mounted) return;
+      ref.invalidate(pendingAmcPauseRequestProvider(widget.contractId));
+      messenger.showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Pause request submitted. Admin will review and confirm.',
+          ),
+        ),
+      );
+    } catch (e) {
+      if (mounted) {
+        messenger.showSnackBar(SnackBar(
+          content: Text('Failed to submit pause request: $e'),
+          backgroundColor: AppColors.error,
+        ));
+      }
+    } finally {
+      if (mounted) setState(() => _pausing = false);
+    }
+  }
+
+  Future<void> _confirmCancelPauseRequest(BuildContext context) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final pauseRequestId =
+        ref.read(pendingAmcPauseRequestProvider(widget.contractId)).valueOrNull;
+    if (pauseRequestId == null) return;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape:
+            RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Cancel Pause Request'),
+        content: const Text(
+          'Cancel your pause request?\n\n'
+          'Your membership will remain active.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Keep Request'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            style: FilledButton.styleFrom(
+                backgroundColor: AppColors.error),
+            child: const Text('Cancel Request'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    setState(() => _cancellingPauseRequest = true);
+    try {
+      await Supabase.instance.client
+          .from('amc_pause_requests')
+          .update({'status': 'cancelled'})
+          .eq('id', pauseRequestId);
+      if (mounted) {
+        ref.invalidate(pendingAmcPauseRequestProvider(widget.contractId));
+        messenger.showSnackBar(
+          const SnackBar(content: Text('Pause request cancelled.')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        messenger.showSnackBar(SnackBar(
+          content: Text('Failed to cancel pause request: $e'),
+          backgroundColor: AppColors.error,
+        ));
+      }
+    } finally {
+      if (mounted) setState(() => _cancellingPauseRequest = false);
+    }
+  }
+
+  // â”€â”€ AMC Resume â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+
+  Future<void> _showResumeDialog(
+      BuildContext context, AmcContractModel contract) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final reasonCtrl = TextEditingController();
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape:
+            RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Request Membership Resume'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Submit a request to resume your paused AMC membership. '
+              'Admin will review and activate it on approval.',
+              style: Theme.of(ctx)
+                  .textTheme
+                  .bodySmall
+                  ?.copyWith(color: AppColors.textSecondary),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: reasonCtrl,
+              maxLines: 2,
+              maxLength: 200,
+              textCapitalization: TextCapitalization.sentences,
+              decoration: const InputDecoration(
+                hintText: 'Reason for resuming (optional)',
+                border: OutlineInputBorder(),
+                contentPadding:
+                    EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                counterText: '',
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            style: FilledButton.styleFrom(
+                backgroundColor: AppColors.success),
+            child: const Text('Submit Request'),
+          ),
+        ],
+      ),
+    );
+
+    final reason = reasonCtrl.text.trim();
+    reasonCtrl.dispose();
+
+    if (confirmed != true || !mounted) return;
+
+    setState(() => _resuming = true);
+    try {
+      await Supabase.instance.client.from('amc_resume_requests').insert({
+        'amc_contract_id': contract.id,
+        'customer_id': contract.customerId,
+        if (reason.isNotEmpty) 'reason': reason,
+        'status': 'pending',
+      });
+      if (!mounted) return;
+      ref.invalidate(pendingAmcResumeRequestProvider(widget.contractId));
+      messenger.showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Resume request submitted. Admin will review and activate your membership.',
+          ),
+        ),
+      );
+    } catch (e) {
+      if (mounted) {
+        messenger.showSnackBar(SnackBar(
+          content: Text('Failed to submit resume request: $e'),
+          backgroundColor: AppColors.error,
+        ));
+      }
+    } finally {
+      if (mounted) setState(() => _resuming = false);
+    }
+  }
+
+  Future<void> _confirmCancelResumeRequest(BuildContext context) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final resumeRequestId =
+        ref.read(pendingAmcResumeRequestProvider(widget.contractId)).valueOrNull;
+    if (resumeRequestId == null) return;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape:
+            RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Cancel Resume Request'),
+        content: const Text(
+          'Cancel your resume request?\n\n'
+          'Your membership will remain paused.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Keep Request'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            style: FilledButton.styleFrom(
+                backgroundColor: AppColors.error),
+            child: const Text('Cancel Request'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    setState(() => _cancellingResumeRequest = true);
+    try {
+      await Supabase.instance.client
+          .from('amc_resume_requests')
+          .update({'status': 'cancelled'})
+          .eq('id', resumeRequestId);
+      if (mounted) {
+        ref.invalidate(pendingAmcResumeRequestProvider(widget.contractId));
+        messenger.showSnackBar(
+          const SnackBar(content: Text('Resume request cancelled.')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        messenger.showSnackBar(SnackBar(
+          content: Text('Failed to cancel resume request: $e'),
+          backgroundColor: AppColors.error,
+        ));
+      }
+    } finally {
+      if (mounted) setState(() => _cancellingResumeRequest = false);
+    }
+  }
+
+  // â”€â”€ AMC Renewal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   Future<void> _startRenewalFlow(AmcContractModel contract) async {
     final messenger = ScaffoldMessenger.of(context);
@@ -673,18 +1017,22 @@ class _ActionBar extends StatelessWidget {
   final bool requesting;
   final bool cancellingRequest;
   final bool hasPendingRequest;
+  final bool pausing;
   final VoidCallback? onRequest;
   final VoidCallback? onCancelRequest;
   final VoidCallback onCancel;
+  final VoidCallback onPause;
 
   const _ActionBar({
     required this.cancelling,
     required this.requesting,
     required this.cancellingRequest,
     required this.hasPendingRequest,
+    required this.pausing,
     required this.onRequest,
     required this.onCancelRequest,
     required this.onCancel,
+    required this.onPause,
   });
 
   @override
@@ -692,81 +1040,112 @@ class _ActionBar extends StatelessWidget {
     return SafeArea(
       child: Padding(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            Expanded(
+            // Pause button row â€” only shown when membership is active
+            SizedBox(
+              width: double.infinity,
               child: OutlinedButton.icon(
-                onPressed: cancelling ? null : onCancel,
-                icon: cancelling
+                onPressed: pausing ? null : onPause,
+                icon: pausing
                     ? const SizedBox(
                         width: 14,
                         height: 14,
                         child: CircularProgressIndicator(strokeWidth: 1.5),
                       )
-                    : const Icon(Icons.cancel_outlined, size: 16),
-                label: const Text('Cancel Membership'),
+                    : const Icon(Icons.pause_circle_outline_rounded,
+                        size: 16),
+                label: const Text('Pause Membership'),
                 style: OutlinedButton.styleFrom(
-                  foregroundColor: AppColors.error,
-                  side: const BorderSide(color: AppColors.error),
-                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  foregroundColor: AppColors.warning,
+                  side: const BorderSide(color: AppColors.warning),
+                  padding: const EdgeInsets.symmetric(vertical: 10),
+                  textStyle: const TextStyle(fontSize: 13),
                 ),
               ),
             ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: hasPendingRequest
-                  ? Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        _PendingBadge(),
-                        const SizedBox(height: 6),
-                        SizedBox(
-                          width: double.infinity,
-                          child: OutlinedButton.icon(
-                            onPressed: cancellingRequest
-                                ? null
-                                : onCancelRequest,
-                            icon: cancellingRequest
-                                ? const SizedBox(
-                                    width: 13,
-                                    height: 13,
-                                    child: CircularProgressIndicator(
-                                        strokeWidth: 1.5),
-                                  )
-                                : const Icon(Icons.close_rounded,
-                                    size: 14),
-                            label: const Text('Cancel Request'),
-                            style: OutlinedButton.styleFrom(
-                              foregroundColor: AppColors.error,
-                              side:
-                                  const BorderSide(color: AppColors.error),
-                              padding: const EdgeInsets.symmetric(
-                                  vertical: 10),
-                              textStyle:
-                                  const TextStyle(fontSize: 13),
+            const SizedBox(height: 8),
+            // Cancel + Request row
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: cancelling ? null : onCancel,
+                    icon: cancelling
+                        ? const SizedBox(
+                            width: 14,
+                            height: 14,
+                            child:
+                                CircularProgressIndicator(strokeWidth: 1.5),
+                          )
+                        : const Icon(Icons.cancel_outlined, size: 16),
+                    label: const Text('Cancel Membership'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppColors.error,
+                      side: const BorderSide(color: AppColors.error),
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: hasPendingRequest
+                      ? Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            _PendingBadge(),
+                            const SizedBox(height: 6),
+                            SizedBox(
+                              width: double.infinity,
+                              child: OutlinedButton.icon(
+                                onPressed: cancellingRequest
+                                    ? null
+                                    : onCancelRequest,
+                                icon: cancellingRequest
+                                    ? const SizedBox(
+                                        width: 13,
+                                        height: 13,
+                                        child: CircularProgressIndicator(
+                                            strokeWidth: 1.5),
+                                      )
+                                    : const Icon(Icons.close_rounded,
+                                        size: 14),
+                                label: const Text('Cancel Request'),
+                                style: OutlinedButton.styleFrom(
+                                  foregroundColor: AppColors.error,
+                                  side: const BorderSide(
+                                      color: AppColors.error),
+                                  padding: const EdgeInsets.symmetric(
+                                      vertical: 10),
+                                  textStyle:
+                                      const TextStyle(fontSize: 13),
+                                ),
+                              ),
                             ),
+                          ],
+                        )
+                      : FilledButton.icon(
+                          onPressed: requesting ? null : onRequest,
+                          icon: requesting
+                              ? const SizedBox(
+                                  width: 14,
+                                  height: 14,
+                                  child: CircularProgressIndicator(
+                                      strokeWidth: 1.5,
+                                      color: Colors.white),
+                                )
+                              : const Icon(Icons.schedule_send_rounded,
+                                  size: 16),
+                          label: const Text('Request Next Visit'),
+                          style: FilledButton.styleFrom(
+                            padding:
+                                const EdgeInsets.symmetric(vertical: 14),
                           ),
                         ),
-                      ],
-                    )
-                  : FilledButton.icon(
-                      onPressed: requesting ? null : onRequest,
-                      icon: requesting
-                          ? const SizedBox(
-                              width: 14,
-                              height: 14,
-                              child: CircularProgressIndicator(
-                                  strokeWidth: 1.5, color: Colors.white),
-                            )
-                          : const Icon(Icons.schedule_send_rounded,
-                              size: 16),
-                      label: const Text('Request Next Visit'),
-                      style: FilledButton.styleFrom(
-                        padding:
-                            const EdgeInsets.symmetric(vertical: 14),
-                      ),
-                    ),
+                ),
+              ],
             ),
           ],
         ),
@@ -804,7 +1183,266 @@ class _PendingBadge extends StatelessWidget {
   }
 }
 
-// ── Cancel option tile (used inside the choice dialog) ────────────────────────
+// â”€â”€ Pause request pending bar â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+
+class _PauseRequestPendingBar extends StatelessWidget {
+  final bool cancellingPauseRequest;
+  final VoidCallback onCancelPauseRequest;
+
+  const _PauseRequestPendingBar({
+    required this.cancellingPauseRequest,
+    required this.onCancelPauseRequest,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              decoration: BoxDecoration(
+                color: AppColors.warning.withAlpha(18),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(
+                    color: AppColors.warning.withAlpha(80)),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.hourglass_top_rounded,
+                      size: 16, color: AppColors.warning),
+                  const SizedBox(width: 8),
+                  const Expanded(
+                    child: Text(
+                      'Pause Request Pending Approval',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.warning,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 8),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: cancellingPauseRequest
+                    ? null
+                    : onCancelPauseRequest,
+                icon: cancellingPauseRequest
+                    ? const SizedBox(
+                        width: 13,
+                        height: 13,
+                        child:
+                            CircularProgressIndicator(strokeWidth: 1.5),
+                      )
+                    : const Icon(Icons.close_rounded, size: 14),
+                label: const Text('Cancel Pause Request'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: AppColors.error,
+                  side: const BorderSide(color: AppColors.error),
+                  padding: const EdgeInsets.symmetric(vertical: 10),
+                  textStyle: const TextStyle(fontSize: 13),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// â”€â”€ Resume request pending bar â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+
+class _ResumeRequestPendingBar extends StatelessWidget {
+  final bool cancellingResumeRequest;
+  final VoidCallback onCancelResumeRequest;
+
+  const _ResumeRequestPendingBar({
+    required this.cancellingResumeRequest,
+    required this.onCancelResumeRequest,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              decoration: BoxDecoration(
+                color: AppColors.success.withAlpha(18),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(
+                    color: AppColors.success.withAlpha(80)),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.hourglass_top_rounded,
+                      size: 16, color: AppColors.success),
+                  const SizedBox(width: 8),
+                  const Expanded(
+                    child: Text(
+                      'Resume Request Pending Approval',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.success,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 8),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: cancellingResumeRequest
+                    ? null
+                    : onCancelResumeRequest,
+                icon: cancellingResumeRequest
+                    ? const SizedBox(
+                        width: 13,
+                        height: 13,
+                        child: CircularProgressIndicator(strokeWidth: 1.5),
+                      )
+                    : const Icon(Icons.close_rounded, size: 14),
+                label: const Text('Cancel Resume Request'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: AppColors.error,
+                  side: const BorderSide(color: AppColors.error),
+                  padding: const EdgeInsets.symmetric(vertical: 10),
+                  textStyle: const TextStyle(fontSize: 13),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// â”€â”€ Membership paused bar â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+
+class _MembershipPausedBar extends StatelessWidget {
+  final AmcContractModel contract;
+  final bool resuming;
+  final VoidCallback onRequestResume;
+
+  const _MembershipPausedBar({
+    required this.contract,
+    required this.resuming,
+    required this.onRequestResume,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(
+                  horizontal: 16, vertical: 12),
+              decoration: BoxDecoration(
+                color: AppColors.warning.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(
+                    color: AppColors.warning.withValues(alpha: 0.4)),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Padding(
+                    padding: EdgeInsets.only(top: 1),
+                    child: Icon(Icons.pause_circle_rounded,
+                        size: 18, color: AppColors.warning),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Text(
+                          'Membership Paused',
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.warning,
+                          ),
+                        ),
+                        if (contract.pauseStartedAt != null)
+                          Text(
+                            'Paused since: ${_fmt(contract.pauseStartedAt!)}',
+                            style: const TextStyle(
+                                fontSize: 11, color: AppColors.warning),
+                          ),
+                        const Text(
+                          'Visit scheduling is disabled. Submit a resume request when ready.',
+                          style: TextStyle(
+                              fontSize: 11, color: AppColors.textSecondary),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 8),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton.icon(
+                onPressed: resuming ? null : onRequestResume,
+                icon: resuming
+                    ? const SizedBox(
+                        width: 14,
+                        height: 14,
+                        child: CircularProgressIndicator(
+                            strokeWidth: 1.5, color: Colors.white),
+                      )
+                    : const Icon(Icons.play_circle_outline_rounded,
+                        size: 18),
+                label: const Text('Request Resume'),
+                style: FilledButton.styleFrom(
+                  backgroundColor: AppColors.success,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  static String _fmt(DateTime d) {
+    const m = [
+      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+    ];
+    return '${d.day} ${m[d.month - 1]} ${d.year}';
+  }
+}
+
+// â”€â”€ Cancel option tile (used inside the choice dialog) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class _CancelOptionTile extends StatelessWidget {
   final IconData icon;
@@ -1040,7 +1678,7 @@ class _MembershipCompletedBar extends StatelessWidget {
                   SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      'All visits completed — renew to continue coverage.',
+                      'All visits completed â€” renew to continue coverage.',
                       style: TextStyle(
                           fontSize: 12, color: AppColors.success),
                     ),
@@ -1074,7 +1712,7 @@ class _MembershipCompletedBar extends StatelessWidget {
   }
 }
 
-// ── Main content ──────────────────────────────────────────────────────────────
+// â”€â”€ Main content â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class _ContractContent extends StatelessWidget {
   final AmcContractModel contract;
@@ -1104,7 +1742,7 @@ class _ContractContent extends StatelessWidget {
   }
 }
 
-// ── Previous contract link card ───────────────────────────────────────────────
+// â”€â”€ Previous contract link card â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class _PreviousContractCard extends StatelessWidget {
   final String previousContractId;
@@ -1167,7 +1805,7 @@ class _PreviousContractCard extends StatelessWidget {
   }
 }
 
-// ── Summary card (plan name + status + pricing) ───────────────────────────────
+// â”€â”€ Summary card (plan name + status + pricing) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class _SummaryCard extends StatelessWidget {
   final AmcContractModel contract;
@@ -1257,7 +1895,7 @@ class _SummaryCard extends StatelessWidget {
               _Row(
                 icon: Icons.receipt_outlined,
                 label: 'Original Total',
-                value: '₹${contract.originalTotal!.toStringAsFixed(2)}',
+                value: 'â‚¹${contract.originalTotal!.toStringAsFixed(2)}',
               ),
             if (contract.discountAmount != null && contract.discountAmount! > 0)
               _Row(
@@ -1269,13 +1907,13 @@ class _SummaryCard extends StatelessWidget {
               _Row(
                 icon: Icons.currency_rupee_rounded,
                 label: 'Final AMC Price',
-                value: '₹${contract.finalPrice!.toStringAsFixed(2)}',
+                value: 'â‚¹${contract.finalPrice!.toStringAsFixed(2)}',
               )
             else if (contract.pricePerVisit > 0)
               _Row(
                 icon: Icons.currency_rupee_rounded,
                 label: 'Price Per Visit',
-                value: '₹${contract.pricePerVisit.toStringAsFixed(2)}',
+                value: 'â‚¹${contract.pricePerVisit.toStringAsFixed(2)}',
               ),
             if (contract.quantity > 1)
               _Row(
@@ -1294,6 +1932,13 @@ class _SummaryCard extends StatelessWidget {
               label: 'Started',
               value: _formatDate(contract.createdAt.toLocal()),
             ),
+            if (contract.pauseStartedAt != null &&
+                contract.status == 'paused')
+              _Row(
+                icon: Icons.pause_circle_outline_rounded,
+                label: 'Paused Since',
+                value: _formatDate(contract.pauseStartedAt!),
+              ),
           ],
         ),
       ),
@@ -1303,9 +1948,9 @@ class _SummaryCard extends StatelessWidget {
   String _discountLabel(AmcContractModel c) {
     final amt = c.discountAmount ?? 0;
     if (c.discountType == 'percentage' && c.discountValue != null) {
-      return '−₹${amt.toStringAsFixed(2)} (${c.discountValue!.toStringAsFixed(0)}%)';
+      return 'âˆ’â‚¹${amt.toStringAsFixed(2)} (${c.discountValue!.toStringAsFixed(0)}%)';
     }
-    return '−₹${amt.toStringAsFixed(2)}';
+    return 'âˆ’â‚¹${amt.toStringAsFixed(2)}';
   }
 
   (String, Color, Color) _statusMeta(String status) => switch (status) {
@@ -1371,7 +2016,7 @@ class _Row extends StatelessWidget {
   }
 }
 
-// ── Visits progress bar ───────────────────────────────────────────────────────
+// â”€â”€ Visits progress bar â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class _VisitsProgress extends StatelessWidget {
   final AmcContractModel contract;
@@ -1479,10 +2124,10 @@ class _VisitStat extends StatelessWidget {
   }
 }
 
-// ── Visits list ───────────────────────────────────────────────────────────────
+// â”€â”€ Visits list â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 // Adds N calendar months to a UTC base date, clamping the day to the last day
-// of the target month — mirrors PostgreSQL: start + N * interval '1 month'.
+// of the target month â€” mirrors PostgreSQL: start + N * interval '1 month'.
 // e.g. 2026-07-30 + 7 months = 2027-02-28 (not 2027-03-02).
 DateTime _addCalendarMonths(DateTime base, int months) {
   final total = (base.month - 1) + months;
@@ -1511,7 +2156,7 @@ DateTime? _computePlannedDate(
 }
 
 // Maps each visit booking to its slot using amc_visit_number exclusively.
-// Bookings without a visit number are not placed — their slot renders as
+// Bookings without a visit number are not placed â€” their slot renders as
 // "Remaining". This prevents any positional guessing that would overwrite a
 // completed visit with a pending one or vice-versa.
 Map<int, AmcVisitModel> _buildVisitMap(List<AmcVisitModel> visits) {
@@ -1653,10 +2298,10 @@ class _VisitRow extends StatelessWidget {
       ),
     );
 
-    // ── Placeholder row (no booking yet) ───────────────────────────────────
+    // â”€â”€ Placeholder row (no booking yet) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     if (visit == null) {
       final dueLine = plannedDueDate != null
-          ? 'Visit #$visitNumber · Due: ${_formatDate(plannedDueDate!)}'
+          ? 'Visit #$visitNumber Â· Due: ${_formatDate(plannedDueDate!)}'
           : 'Visit #$visitNumber';
       return Row(
         crossAxisAlignment: CrossAxisAlignment.center,
@@ -1693,12 +2338,12 @@ class _VisitRow extends StatelessWidget {
       );
     }
 
-    // ── Actual visit row ────────────────────────────────────────────────────
+    // â”€â”€ Actual visit row â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     final v = visit!;
     final (statusLabel, statusColor, statusBg) = _statusMeta(v.status);
     final scheduledStr =
         v.serviceDate != null ? _formatDate(v.serviceDate!) : null;
-    final timeStr = v.timeSlot.isNotEmpty ? ' · ${v.timeSlot}' : '';
+    final timeStr = v.timeSlot.isNotEmpty ? ' Â· ${v.timeSlot}' : '';
 
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
