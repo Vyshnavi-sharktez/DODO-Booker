@@ -1,6 +1,7 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../domain/models/vendor.dart';
 import '../domain/models/vendor_detail.dart';
+import '../domain/models/vendor_penalty_record.dart';
 
 class VendorDetailRepository {
   const VendorDetailRepository(this._supabase);
@@ -119,5 +120,39 @@ class VendorDetailRepository {
       cancelled: cancelled,
       totalEarnings: earnings,
     );
+  }
+
+  Future<List<VendorPenaltyRecord>> fetchPenaltyHistory(String vendorId) async {
+    try {
+      final rows = await _supabase
+          .from('wallet_transactions')
+          .select('''
+            id, vendor_id, type, amount, balance_after, reference_id, reference_type, description, created_by, created_at,
+            bookings:reference_id (
+              booking_number,
+              booking_items (
+                catalog_nodes:service_id (name)
+              )
+            )
+          ''')
+          .eq('vendor_id', vendorId)
+          .eq('type', 'penalty')
+          .order('created_at', ascending: false);
+
+      return (rows as List<dynamic>)
+          .map((r) => VendorPenaltyRecord.fromMap(r as Map<String, dynamic>))
+          .toList();
+    } catch (_) {
+      final rows = await _supabase
+          .from('wallet_transactions')
+          .select()
+          .eq('vendor_id', vendorId)
+          .eq('type', 'penalty')
+          .order('created_at', ascending: false);
+
+      return (rows as List<dynamic>)
+          .map((r) => VendorPenaltyRecord.fromMap(r as Map<String, dynamic>))
+          .toList();
+    }
   }
 }

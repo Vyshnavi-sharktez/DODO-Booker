@@ -11,6 +11,8 @@ import '../../application/providers/vendor_detail_providers.dart';
 import '../../application/providers/vendors_providers.dart';
 import '../../domain/models/vendor.dart';
 import '../../domain/models/vendor_detail.dart';
+import '../../domain/models/vendor_penalty_record.dart';
+import '../widgets/manual_penalty_dialog.dart';
 import '../widgets/vendor_form_dialog.dart';
 
 final _currencyFmt =
@@ -42,6 +44,17 @@ class _VendorDetailView extends ConsumerWidget {
   final Vendor vendor;
   final String vendorId;
 
+  Future<void> _openApplyPenalty(BuildContext context, WidgetRef ref) async {
+    await showDialog<void>(
+      context: context,
+      builder: (_) => ManualPenaltyDialog(
+        vendorId: vendorId,
+        vendorName: vendor.businessName,
+        onSuccess: () => ref.invalidate(vendorByIdProvider(vendorId)),
+      ),
+    );
+  }
+
   Future<void> _openEdit(BuildContext context, WidgetRef ref) async {
     await showDialog<void>(
       context: context,
@@ -58,7 +71,6 @@ class _VendorDetailView extends ConsumerWidget {
           required status,
           required isActive,
           rating,
-          walletBalance,
           latitude,
           longitude,
           commissionRate,
@@ -76,7 +88,6 @@ class _VendorDetailView extends ConsumerWidget {
                 status: status,
                 isActive: isActive,
                 rating: rating,
-                walletBalance: walletBalance,
                 latitude: latitude,
                 longitude: longitude,
                 commissionRate: commissionRate,
@@ -92,13 +103,17 @@ class _VendorDetailView extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return DefaultTabController(
-      length: 3,
+      length: 4,
       child: Padding(
         padding: const EdgeInsets.all(24),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _PageHeader(vendor: vendor, onEdit: () => _openEdit(context, ref)),
+            _PageHeader(
+              vendor: vendor,
+              onEdit: () => _openEdit(context, ref),
+              onApplyPenalty: () => _openApplyPenalty(context, ref),
+            ),
             const SizedBox(height: 20),
             TabBar(
               isScrollable: true,
@@ -110,6 +125,7 @@ class _VendorDetailView extends ConsumerWidget {
                 Tab(text: 'Overview'),
                 Tab(text: 'Documents'),
                 Tab(text: 'Analytics'),
+                Tab(text: 'Penalty History'),
               ],
             ),
             const SizedBox(height: 16),
@@ -119,6 +135,7 @@ class _VendorDetailView extends ConsumerWidget {
                   _OverviewTab(vendor: vendor),
                   _DocumentsTab(vendorId: vendorId),
                   _AnalyticsTab(vendor: vendor, vendorId: vendorId),
+                  _PenaltyHistoryTab(vendorId: vendorId),
                 ],
               ),
             ),
@@ -132,9 +149,14 @@ class _VendorDetailView extends ConsumerWidget {
 // ── Page header ────────────────────────────────────────────────────────────────
 
 class _PageHeader extends StatelessWidget {
-  const _PageHeader({required this.vendor, required this.onEdit});
+  const _PageHeader({
+    required this.vendor,
+    required this.onEdit,
+    required this.onApplyPenalty,
+  });
   final Vendor vendor;
   final VoidCallback onEdit;
+  final VoidCallback onApplyPenalty;
 
   @override
   Widget build(BuildContext context) {
@@ -190,6 +212,16 @@ class _PageHeader extends StatelessWidget {
               ),
             ),
             _StatusChip(status: vendor.status),
+            const SizedBox(width: 12),
+            OutlinedButton.icon(
+              onPressed: onApplyPenalty,
+              style: OutlinedButton.styleFrom(
+                foregroundColor: AppColors.error,
+                side: const BorderSide(color: AppColors.error),
+              ),
+              icon: const Icon(Icons.gavel_rounded, size: 16),
+              label: const Text('Charge Penalty'),
+            ),
             const SizedBox(width: 8),
             IconButton(
               onPressed: onEdit,
@@ -1018,6 +1050,387 @@ class _ErrorView extends StatelessWidget {
             onPressed: onRetry,
             icon: const Icon(Icons.refresh_rounded, size: 16),
             label: const Text('Retry'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Penalty History Tab ────────────────────────────────────────────────────────
+
+class _PenaltyHistoryTab extends ConsumerWidget {
+  const _PenaltyHistoryTab({required this.vendorId});
+  final String vendorId;
+
+  static final _dateTimeFmt = DateFormat('dd MMM yyyy, hh:mm a');
+
+  void _viewPenaltyDetails(BuildContext context, VendorPenaltyRecord record) {
+    showDialog<void>(
+      context: context,
+      builder: (_) => _PenaltyDetailsDialog(record: record),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final historyAsync = ref.watch(vendorPenaltyHistoryProvider(vendorId));
+
+    return historyAsync.when(
+      loading: () => const Center(child: CircularProgressIndicator()),
+      error: (e, _) => _ErrorView(
+        message: 'Failed to load penalty history: $e',
+        onRetry: () => ref.invalidate(vendorPenaltyHistoryProvider(vendorId)),
+      ),
+      data: (penalties) {
+        if (penalties.isEmpty) {
+          return const _EmptyTabState(
+            icon: Icons.gavel_rounded,
+            message: 'No penalty history found',
+            sub: 'This vendor has no penalty deductions on record.',
+          );
+        }
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _SectionTitle('Penalty Ledger (${penalties.length})'),
+            const SizedBox(height: 12),
+            Expanded(
+              child: Container(
+                width: double.infinity,
+                decoration: BoxDecoration(
+                  color: AppColors.surface,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: AppColors.border),
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(10),
+                  child: LayoutBuilder(
+                    builder: (context, constraints) {
+                      return SingleChildScrollView(
+                        scrollDirection: Axis.vertical,
+                        child: SingleChildScrollView(
+                          scrollDirection: Axis.horizontal,
+                          child: ConstrainedBox(
+                            constraints: BoxConstraints(
+                              minWidth: constraints.maxWidth,
+                            ),
+                            child: DataTable(
+                              headingRowColor:
+                                  WidgetStateProperty.all(AppColors.background),
+                              columnSpacing: 24,
+                              columns: const [
+                                DataColumn(
+                                    label: Text('Date & Time', softWrap: false)),
+                                DataColumn(
+                                    label: Text('Type', softWrap: false)),
+                                DataColumn(
+                                    label: Text('Amount', softWrap: false)),
+                                DataColumn(
+                                    label: Text('Reason', softWrap: false)),
+                                DataColumn(
+                                    label: Text('Reference', softWrap: false)),
+                                DataColumn(
+                                    label: Text('Applied By', softWrap: false)),
+                                DataColumn(
+                                    label: Text('Balance (Before → After)',
+                                        softWrap: false)),
+                                DataColumn(
+                                    label: Text('Action', softWrap: false)),
+                              ],
+                              rows: penalties.map((p) {
+                                return DataRow(cells: [
+                                  DataCell(Text(
+                                    _dateTimeFmt.format(p.createdAt),
+                                    style: const TextStyle(fontSize: 12),
+                                    softWrap: false,
+                                  )),
+                                  DataCell(_PenaltyTypeBadge(isManual: p.isManual)),
+                                  DataCell(Text(
+                                    '₹${p.amount.toStringAsFixed(2)}',
+                                    style: const TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w600,
+                                      color: AppColors.error,
+                                    ),
+                                    softWrap: false,
+                                  )),
+                                  DataCell(Text(
+                                    p.description ?? '—',
+                                    style: const TextStyle(fontSize: 12),
+                                    overflow: TextOverflow.ellipsis,
+                                  )),
+                                  DataCell(Text(
+                                    p.isManual
+                                        ? (p.description?.isNotEmpty == true
+                                            ? p.description!
+                                            : '—')
+                                        : (p.bookingNumber != null
+                                            ? '#${p.bookingNumber}'
+                                            : (p.referenceId != null &&
+                                                    p.referenceId!.length >= 8
+                                                ? '#${p.referenceId!.substring(0, 8)}'
+                                                : '—')),
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      fontFamily: p.isManual ? null : 'monospace',
+                                    ),
+                                    softWrap: false,
+                                    overflow: TextOverflow.ellipsis,
+                                  )),
+                                  DataCell(Text(
+                                    p.appliedBy,
+                                    style: const TextStyle(fontSize: 12),
+                                    softWrap: false,
+                                  )),
+                                  DataCell(Text(
+                                    '₹${p.balanceBefore.toStringAsFixed(2)} → ₹${p.balanceAfter.toStringAsFixed(2)}',
+                                    style: const TextStyle(fontSize: 12),
+                                    softWrap: false,
+                                  )),
+                                  DataCell(
+                                    OutlinedButton.icon(
+                                      onPressed: () =>
+                                          _viewPenaltyDetails(context, p),
+                                      icon: const Icon(Icons.visibility_rounded,
+                                          size: 14),
+                                      label: const Text('View Details'),
+                                      style: OutlinedButton.styleFrom(
+                                        visualDensity: VisualDensity.compact,
+                                        padding: const EdgeInsets.symmetric(
+                                            horizontal: 10, vertical: 6),
+                                        textStyle:
+                                            const TextStyle(fontSize: 12),
+                                      ),
+                                    ),
+                                  ),
+                                ]);
+                              }).toList(),
+                            ),
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _PenaltyTypeBadge extends StatelessWidget {
+  const _PenaltyTypeBadge({required this.isManual});
+  final bool isManual;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = isManual ? AppColors.warning : AppColors.error;
+    final label = isManual ? 'Manual' : 'Automatic';
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color.withValues(alpha: 0.3)),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          fontSize: 11,
+          fontWeight: FontWeight.w600,
+          color: color,
+        ),
+      ),
+    );
+  }
+}
+
+class _PenaltyDetailsDialog extends StatelessWidget {
+  const _PenaltyDetailsDialog({required this.record});
+  final VendorPenaltyRecord record;
+
+  static final _dateTimeFmt = DateFormat('dd MMM yyyy, hh:mm a');
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 520),
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Header
+              Row(
+                children: [
+                  Container(
+                    width: 38,
+                    height: 38,
+                    decoration: BoxDecoration(
+                      color: AppColors.error.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Icon(
+                      Icons.gavel_rounded,
+                      color: AppColors.error,
+                      size: 20,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Penalty Details',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.textPrimary,
+                          ),
+                        ),
+                        Text(
+                          _dateTimeFmt.format(record.createdAt),
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: AppColors.textSecondary,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    icon: const Icon(Icons.close_rounded, size: 20),
+                    color: AppColors.textSecondary,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 14),
+              const Divider(color: AppColors.border),
+              const SizedBox(height: 14),
+
+              // Banner Amount Card
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: AppColors.error.withValues(alpha: 0.06),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: AppColors.error.withValues(alpha: 0.25),
+                  ),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Amount Deducted',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500,
+                            color: AppColors.textSecondary,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          '₹${record.amount.toStringAsFixed(2)}',
+                          style: const TextStyle(
+                            fontSize: 24,
+                            fontWeight: FontWeight.bold,
+                            color: AppColors.error,
+                          ),
+                        ),
+                      ],
+                    ),
+                    _PenaltyTypeBadge(isManual: record.isManual),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+
+              // Details Grid
+              _DetailRow(label: 'Reason', value: record.description ?? '—'),
+              _DetailRow(label: 'Applied By', value: record.appliedBy),
+              _DetailRow(
+                label: 'Wallet Balance Before',
+                value: '₹${record.balanceBefore.toStringAsFixed(2)}',
+              ),
+              _DetailRow(
+                label: 'Wallet Balance After',
+                value: '₹${record.balanceAfter.toStringAsFixed(2)}',
+              ),
+              if (record.bookingNumber != null || record.referenceId != null)
+                _DetailRow(
+                  label: 'Booking Ref',
+                  value: record.bookingNumber != null
+                      ? '#${record.bookingNumber}'
+                      : (record.referenceId != null && record.referenceId!.length >= 8
+                          ? '#${record.referenceId!.substring(0, 8)}'
+                          : '—'),
+                ),
+              if (record.serviceName != null)
+                _DetailRow(label: 'Linked Service', value: record.serviceName!),
+
+              const SizedBox(height: 20),
+              Align(
+                alignment: Alignment.centerRight,
+                child: TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: const Text('Close'),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _DetailRow extends StatelessWidget {
+  const _DetailRow({required this.label, required this.value});
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(
+            label,
+            style: const TextStyle(
+              fontSize: 13,
+              color: AppColors.textSecondary,
+            ),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Text(
+              value,
+              textAlign: TextAlign.right,
+              style: const TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: AppColors.textPrimary,
+              ),
+            ),
           ),
         ],
       ),

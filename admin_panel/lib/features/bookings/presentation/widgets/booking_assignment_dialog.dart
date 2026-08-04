@@ -11,6 +11,7 @@ import '../../../vendor_serving_areas/application/providers/vendor_serving_areas
 import '../../../vendor_serving_areas/domain/models/vendor_serving_area.dart';
 import '../../../vendors/application/providers/vendors_providers.dart';
 import '../../../vendors/domain/models/vendor.dart';
+import '../../../notifications/application/providers/notifications_providers.dart';
 import '../../domain/models/booking.dart';
 import '../../domain/services/vendor_assignment_service.dart';
 
@@ -130,6 +131,12 @@ class _BookingAssignmentDialogState
   bool _showAllVendors = false;
   bool _showAllTeams = false;
 
+  // Wallet error inline state — populated when the DB rejects an assignment
+  // because the selected vendor's balance is below the global minimum.
+  String? _walletErrVendorId;
+  double? _walletErrBalance;
+  double? _walletErrMinimum;
+
   bool get _bookingHasAddress =>
       widget.booking.address != null &&
       widget.booking.address!.trim().isNotEmpty;
@@ -183,6 +190,12 @@ class _BookingAssignmentDialogState
     }
   }
 
+  void _clearWalletError() {
+    _walletErrVendorId = null;
+    _walletErrBalance = null;
+    _walletErrMinimum = null;
+  }
+
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
     if (_serviceDate == null) {
@@ -222,20 +235,33 @@ class _BookingAssignmentDialogState
       if (mounted) Navigator.of(context).pop();
     } catch (e) {
       if (mounted) {
-        // P0001 is the SQLSTATE raised by fn_enforce_cod_vendor_eligibility.
-        // The raw message contains the vendor UUID — replace with a clean message.
-        final message = (e is PostgrestException && e.code == 'P0001')
-            ? 'This vendor cannot accept COD bookings. '
-                'Ensure they have an active subscription with COD permission.'
-            : e is PostgrestException
-                ? e.message
-                : e.toString().replaceFirst('Exception: ', '');
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(message),
-            backgroundColor: AppColors.error,
-          ),
-        );
+        if (e is PostgrestException &&
+            e.code == 'P0001' &&
+            e.message.toLowerCase().contains('wallet')) {
+          // Parse the two numeric amounts embedded in the trigger message:
+          // "Vendor wallet balance (X) is below the required minimum (Y)."
+          final m = RegExp(r'\((\d+(?:\.\d+)?)\)[^(]*\((\d+(?:\.\d+)?)\)')
+              .firstMatch(e.message);
+          setState(() {
+            _walletErrVendorId = _vendorId;
+            _walletErrBalance = double.tryParse(m?.group(1) ?? '');
+            _walletErrMinimum = double.tryParse(m?.group(2) ?? '');
+          });
+        } else {
+          final message = switch (e) {
+            PostgrestException(:final code) when code == 'P0001' =>
+              'This vendor cannot accept COD bookings. '
+                  'Ensure they have an active subscription with COD permission.',
+            PostgrestException(:final message) => message,
+            _ => e.toString().replaceFirst('Exception: ', ''),
+          };
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(message),
+              backgroundColor: AppColors.error,
+            ),
+          );
+        }
       }
     } finally {
       if (mounted) setState(() => _saving = false);
@@ -354,6 +380,23 @@ class _BookingAssignmentDialogState
                               'Saving will clear any existing vendor or team '
                               'assignment and mark the booking as Unassigned.',
                         ),
+
+                      if (_assigneeType == _AssigneeType.vendor &&
+                          _walletErrVendorId != null &&
+                          _walletErrVendorId == _vendorId) ...[
+                        const SizedBox(height: 12),
+                        _WalletErrorBanner(
+                          key: ValueKey(_walletErrVendorId),
+                          vendorId: _walletErrVendorId!,
+                          vendorName: allVendors
+                                  .where((v) => v.id == _walletErrVendorId)
+                                  .firstOrNull
+                                  ?.businessName ??
+                              'Vendor',
+                          balance: _walletErrBalance ?? 0,
+                          minimum: _walletErrMinimum ?? 0,
+                        ),
+                      ],
 
                       const SizedBox(height: 20),
 
@@ -579,7 +622,10 @@ class _BookingAssignmentDialogState
             isSelected: _vendorId == recVendor.id,
             onSelect: _saving
                 ? null
-                : () => setState(() => _vendorId = recVendor.id),
+                : () => setState(() {
+                      if (recVendor.id != _walletErrVendorId) _clearWalletError();
+                      _vendorId = recVendor.id;
+                    }),
           );
         }
       }
@@ -659,7 +705,11 @@ class _BookingAssignmentDialogState
             ..._candidateCards(
               result.all,
               selectedId: _vendorId,
-              onSelect: (id) => setState(() => _vendorId = _vendorId == id ? '' : id),
+              onSelect: (id) => setState(() {
+                final next = _vendorId == id ? '' : id;
+                if (next != _walletErrVendorId) _clearWalletError();
+                _vendorId = next;
+              }),
             ),
         ],
       );
@@ -754,7 +804,10 @@ class _BookingAssignmentDialogState
         ..._candidateCards(
           result.inArea,
           selectedId: _vendorId,
-          onSelect: (id) => setState(() => _vendorId = id),
+          onSelect: (id) => setState(() {
+            if (id != _walletErrVendorId) _clearWalletError();
+            _vendorId = id;
+          }),
         ),
       ],
     );
@@ -1391,6 +1444,190 @@ class _AmcRecommendedVendorCard extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+// ── Wallet error banner ────────────────────────────────────────────────────────
+
+enum _NotifyState { idle, sending, sent, error }
+
+class _WalletErrorBanner extends ConsumerStatefulWidget {
+  final String vendorId;
+  final String vendorName;
+  final double balance;
+  final double minimum;
+
+  const _WalletErrorBanner({
+    super.key,
+    required this.vendorId,
+    required this.vendorName,
+    required this.balance,
+    required this.minimum,
+  });
+
+  @override
+  ConsumerState<_WalletErrorBanner> createState() => _WalletErrorBannerState();
+}
+
+class _WalletErrorBannerState extends ConsumerState<_WalletErrorBanner> {
+  _NotifyState _notifyState = _NotifyState.idle;
+
+  Future<void> _sendNotification() async {
+    setState(() => _notifyState = _NotifyState.sending);
+    final fmt =
+        NumberFormat.currency(locale: 'en_IN', symbol: '₹', decimalDigits: 2);
+    try {
+      await ref.read(notificationsRepositoryProvider).createNotification(
+            userType: 'vendor',
+            userId: widget.vendorId,
+            title: 'Wallet Balance Alert',
+            message:
+                'Your current wallet balance (${fmt.format(widget.balance)}) '
+                'is below the required minimum of ${fmt.format(widget.minimum)}. '
+                'Please top up your wallet to continue receiving booking assignments.',
+            notificationType: 'wallet_low_balance',
+            entityType: 'vendor_wallet',
+            entityId: widget.vendorId,
+          );
+      if (mounted) setState(() => _notifyState = _NotifyState.sent);
+    } catch (_) {
+      if (mounted) setState(() => _notifyState = _NotifyState.error);
+    }
+  }
+
+  Widget _buildAction() {
+    return switch (_notifyState) {
+      _NotifyState.sending => const SizedBox(
+          width: 18,
+          height: 18,
+          child: CircularProgressIndicator(strokeWidth: 2),
+        ),
+      _NotifyState.sent => Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.check_circle_rounded,
+                size: 14, color: AppColors.success),
+            const SizedBox(width: 5),
+            const Text(
+              'Notification sent',
+              style: TextStyle(
+                  fontSize: 12,
+                  color: AppColors.success,
+                  fontWeight: FontWeight.w500),
+            ),
+          ],
+        ),
+      _NotifyState.idle || _NotifyState.error => Column(
+          crossAxisAlignment: CrossAxisAlignment.end,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            FilledButton.icon(
+              onPressed: _sendNotification,
+              icon: const Icon(Icons.notifications_rounded, size: 13),
+              label: const Text('Notify Vendor'),
+              style: FilledButton.styleFrom(
+                backgroundColor: const Color(0xFFD69E2E),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                minimumSize: Size.zero,
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                textStyle: const TextStyle(fontSize: 12),
+              ),
+            ),
+            if (_notifyState == _NotifyState.error) ...[
+              const SizedBox(height: 3),
+              const Text(
+                'Failed to send. Tap to retry.',
+                style: TextStyle(fontSize: 10, color: AppColors.error),
+              ),
+            ],
+          ],
+        ),
+    };
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final fmt =
+        NumberFormat.currency(locale: 'en_IN', symbol: '₹', decimalDigits: 2);
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.error.withValues(alpha: 0.06),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: AppColors.error.withValues(alpha: 0.35)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.account_balance_wallet_outlined,
+                  size: 15, color: AppColors.error),
+              const SizedBox(width: 7),
+              Text(
+                'Wallet balance too low',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.error,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 5),
+          Text(
+            '${widget.vendorName} cannot be assigned until the wallet is topped up.',
+            style: const TextStyle(fontSize: 12, color: AppColors.textPrimary),
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              _BalanceLabel(
+                  label: 'Current',
+                  value: fmt.format(widget.balance),
+                  valueColor: AppColors.error),
+              const SizedBox(width: 20),
+              _BalanceLabel(
+                  label: 'Required',
+                  value: fmt.format(widget.minimum),
+                  valueColor: AppColors.textSecondary),
+              const Spacer(),
+              _buildAction(),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _BalanceLabel extends StatelessWidget {
+  final String label;
+  final String value;
+  final Color valueColor;
+
+  const _BalanceLabel({
+    required this.label,
+    required this.value,
+    required this.valueColor,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label,
+            style: const TextStyle(
+                fontSize: 10, color: AppColors.textSecondary)),
+        Text(value,
+            style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: valueColor)),
+      ],
     );
   }
 }

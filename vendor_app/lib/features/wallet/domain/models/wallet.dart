@@ -17,10 +17,14 @@ class Wallet {
 
   factory Wallet.fromMap(Map<String, dynamic> map) {
     return Wallet(
-      id: map['id'] as String,
+      id: map['id'] as String? ?? '',
       vendorId: map['vendor_id'] as String? ?? '',
-      balance: (map['balance'] as num?)?.toDouble() ?? 0.0,
-      totalEarned: (map['total_earned'] as num?)?.toDouble() ?? 0.0,
+      balance: (map['available_balance'] as num?)?.toDouble() ??
+          (map['balance'] as num?)?.toDouble() ??
+          0.0,
+      totalEarned: (map['total_earnings'] as num?)?.toDouble() ??
+          (map['total_earned'] as num?)?.toDouble() ??
+          0.0,
       totalWithdrawn: (map['total_withdrawn'] as num?)?.toDouble() ?? 0.0,
       updatedAt: map['updated_at'] != null
           ? DateTime.tryParse(map['updated_at'] as String)

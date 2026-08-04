@@ -40,6 +40,15 @@ const Map<String, String> kSettingDefaults = {
   'allow_customer_registration': 'true',
   'allow_referral_program': 'false',
 
+  // Wallet
+  'wallet_minimum_balance': '0',
+  'penalty_vendor_rejection_enabled': 'false',
+  'penalty_vendor_rejection_amount': '0',
+  'penalty_vendor_cancellation_enabled': 'false',
+  'penalty_vendor_cancellation_amount': '0',
+  'penalty_vendor_noshow_enabled': 'false',
+  'penalty_vendor_noshow_amount': '0',
+
   // Subscription
   'subscription_enabled': 'false',
   'subscription_require_active': 'false',

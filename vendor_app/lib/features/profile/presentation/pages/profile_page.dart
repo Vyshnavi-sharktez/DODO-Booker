@@ -176,11 +176,17 @@ class _ProfileBody extends StatelessWidget {
                   ? '${profile.rating!.toStringAsFixed(1)} / 5.0'
                   : 'Not rated yet',
             ),
+          ],
+        ),
+        _InfoSection(
+          title: 'Finance & Wallet',
+          items: [
             _InfoItem(
               icon: Icons.account_balance_wallet_outlined,
-              label: 'Wallet Balance',
+              label: 'Vendor Wallet',
               value: NumberFormat.currency(symbol: '₹', decimalDigits: 2)
                   .format(profile.walletBalance),
+              onTap: () => context.push(RoutePaths.wallet),
             ),
           ],
         ),
@@ -303,10 +309,12 @@ class _InfoItem extends StatelessWidget {
     required this.icon,
     required this.label,
     required this.value,
+    this.onTap,
   });
   final IconData icon;
   final String label;
   final String value;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -326,6 +334,14 @@ class _InfoItem extends StatelessWidget {
               fontWeight: FontWeight.w500,
             ),
       ),
+      trailing: onTap != null
+          ? const Icon(
+              Icons.chevron_right_rounded,
+              color: AppColors.textSecondary,
+              size: 20,
+            )
+          : null,
+      onTap: onTap,
       dense: true,
     );
   }
