@@ -34,15 +34,22 @@ class _NotificationsPageState extends ConsumerState<NotificationsPage> {
   }
 
   void _handleTap(VendorNotification n) {
-    debugPrint('[NOTIF][Vendor] tapped — entity_type=${n.entityType}, entity_id=${n.entityId}');
+    debugPrint('[NOTIF][Vendor] tapped — type=${n.notificationType}, entity_type=${n.entityType}, entity_id=${n.entityId}');
     _markRead(n);
+    final router = GoRouter.of(context);
     if (n.entityType == 'booking' && n.entityId != null) {
-      final router = GoRouter.of(context);
       debugPrint('[NOTIF][Vendor] navigating → ${RouteNames.bookingDetail} id=${n.entityId}');
       router.pushNamed(
         RouteNames.bookingDetail,
         pathParameters: {'id': n.entityId!},
       );
+    } else if (n.entityType == 'vendor_wallet' ||
+        n.entityType == 'wallet' ||
+        n.notificationType == 'wallet_low_balance' ||
+        n.notificationType == 'wallet_alert' ||
+        n.notificationType == 'wallet_penalty') {
+      debugPrint('[NOTIF][Vendor] navigating → ${RouteNames.wallet}');
+      router.pushNamed(RouteNames.wallet);
     }
   }
 

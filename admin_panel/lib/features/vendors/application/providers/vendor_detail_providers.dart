@@ -4,6 +4,8 @@ import '../../data/vendor_detail_repository.dart';
 import '../../domain/models/vendor.dart';
 import '../../domain/models/vendor_detail.dart';
 
+import '../../domain/models/vendor_penalty_record.dart';
+
 final vendorDetailRepositoryProvider =
     Provider<VendorDetailRepository>((ref) {
   return VendorDetailRepository(ref.watch(supabaseClientProvider));
@@ -47,5 +49,14 @@ final vendorBookingStatsProvider =
     return ref
         .watch(vendorDetailRepositoryProvider)
         .fetchBookingStats(vendorId);
+  },
+);
+
+final vendorPenaltyHistoryProvider =
+    FutureProvider.autoDispose.family<List<VendorPenaltyRecord>, String>(
+  (ref, vendorId) {
+    return ref
+        .watch(vendorDetailRepositoryProvider)
+        .fetchPenaltyHistory(vendorId);
   },
 );
