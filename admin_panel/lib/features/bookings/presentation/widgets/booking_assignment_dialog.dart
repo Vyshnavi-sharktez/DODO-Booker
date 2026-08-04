@@ -167,6 +167,11 @@ class _BookingAssignmentDialogState
         _isDefaultDate = true;
       }
     }
+
+    // Always fetch fresh vendor data & latest wallet balances on opening assignment dialog
+    Future.microtask(() {
+      ref.read(vendorsNotifierProvider.notifier).refresh();
+    });
   }
 
   @override
@@ -384,17 +389,33 @@ class _BookingAssignmentDialogState
                       if (_assigneeType == _AssigneeType.vendor &&
                           _walletErrVendorId != null &&
                           _walletErrVendorId == _vendorId) ...[
-                        const SizedBox(height: 12),
-                        _WalletErrorBanner(
-                          key: ValueKey(_walletErrVendorId),
-                          vendorId: _walletErrVendorId!,
-                          vendorName: allVendors
-                                  .where((v) => v.id == _walletErrVendorId)
-                                  .firstOrNull
-                                  ?.businessName ??
-                              'Vendor',
-                          balance: _walletErrBalance ?? 0,
-                          minimum: _walletErrMinimum ?? 0,
+                        Builder(
+                          builder: (context) {
+                            final currentVendor = allVendors
+                                .where((v) => v.id == _walletErrVendorId)
+                                .firstOrNull;
+                            final liveBalance = currentVendor?.walletBalance ??
+                                _walletErrBalance ??
+                                0;
+                            final minimum = _walletErrMinimum ?? 0;
+
+                            // If live balance now satisfies minimum requirement, auto-dismiss error banner
+                            if (currentVendor != null && liveBalance >= minimum) {
+                              return const SizedBox.shrink();
+                            }
+
+                            return Padding(
+                              padding: const EdgeInsets.only(top: 12),
+                              child: _WalletErrorBanner(
+                                key: ValueKey('${_walletErrVendorId}_$liveBalance'),
+                                vendorId: _walletErrVendorId!,
+                                vendorName:
+                                    currentVendor?.businessName ?? 'Vendor',
+                                balance: liveBalance,
+                                minimum: minimum,
+                              ),
+                            );
+                          },
                         ),
                       ],
 

@@ -14,6 +14,8 @@ import '../../profile/services/profile_providers.dart';
 import '../../reviews/services/review_providers.dart';
 import '../../reviews/widgets/review_modal.dart';
 import '../services/invoice_service.dart';
+import '../widgets/cancel_booking_reason_dialog.dart';
+import '../widgets/vendor_nearby_warning_dialog.dart';
 import '../../amc/screens/amc_contract_details_screen.dart';
 import '../../amc/providers/amc_contract_provider.dart';
 import 'package:customer_app/features/amc/models/amc_contract_model.dart';
@@ -129,30 +131,61 @@ class _BookingDetailsScreenState extends ConsumerState<BookingDetailsScreen> {
   }
 
   Future<void> _confirmCancel(MyBookingModel b) async {
-    final confirmed = await showDialog<bool>(
+    debugPrint('[DODO][CancelFlow] Customer initiated cancel for booking ${b.id}');
+    final cancelResult = await showDialog<CancelBookingResult>(
       context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('Cancel Booking?'),
-        content: const Text('Are you sure you want to cancel this booking?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('No, Keep It'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            style: FilledButton.styleFrom(backgroundColor: AppColors.error),
-            child: const Text('Yes, Cancel'),
-          ),
-        ],
-      ),
+      builder: (_) => const CancelBookingReasonDialog(),
     );
-    if (confirmed != true) return;
+    if (cancelResult == null) {
+      debugPrint('[DODO][CancelFlow] Customer dismissed CancelBookingReasonDialog');
+      return;
+    }
     if (!mounted) return;
 
     setState(() => _isCancelling = true);
     try {
-      await ref.read(bookingsServiceProvider).cancelBooking(b.id);
+      debugPrint('[DODO][CancelFlow] Validating vendor geofence for booking ${b.id}');
+      final geoResult = await ref
+          .read(bookingsServiceProvider)
+          .validateVendorGeofence(b.id);
+
+      debugPrint(
+          '[DODO][CancelFlow] Geofence check result: isInsideGeofence=${geoResult.isInsideGeofence}, minDistance=${geoResult.minDistanceMeters}');
+
+      if (geoResult.isInsideGeofence) {
+        if (!mounted) return;
+        setState(() => _isCancelling = false);
+
+        debugPrint(
+            '[DODO][CancelFlow] Vendor is inside geofence! Displaying VendorNearbyWarningDialog...');
+
+        final proceed = await showDialog<bool>(
+          context: context,
+          builder: (_) => VendorNearbyWarningDialog(
+            minDistanceMeters: geoResult.minDistanceMeters,
+            geofenceRadiusMeters: geoResult.geofenceRadiusMeters,
+          ),
+        );
+
+        debugPrint(
+            '[DODO][CancelFlow] VendorNearbyWarningDialog closed with proceed=$proceed');
+
+        if (proceed != true) {
+          debugPrint(
+              '[DODO][CancelFlow] Customer elected to Go Back. Cancellation ABORTED.');
+          return;
+        }
+        if (!mounted) return;
+        setState(() => _isCancelling = true);
+      }
+
+      debugPrint(
+          '[DODO][CancelFlow] Executing cancelBooking for booking ${b.id}...');
+      await ref.read(bookingsServiceProvider).cancelBooking(
+            b.id,
+            reason: cancelResult.reason,
+            remarks: cancelResult.remarks,
+          );
       if (!mounted) return;
       ref.invalidate(myBookingsProvider);
       ref.invalidate(bookingByIdProvider(b.id));

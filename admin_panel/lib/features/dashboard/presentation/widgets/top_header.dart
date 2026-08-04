@@ -94,6 +94,8 @@ class TopHeader extends ConsumerWidget {
       '/dashboard/vendors': 'Vendors',
       '/dashboard/dodo-teams': 'DODO Teams',
       '/dashboard/bookings': 'Bookings',
+      '/dashboard/gps-audit': 'GPS Cancellation Audit',
+      '/dashboard/gps-analytics': 'GPS Analytics & Insights',
       '/dashboard/customers': 'Customers',
       '/dashboard/coupons': 'Coupons & Promotions',
       '/dashboard/vendor-settlement': 'Vendor Settlement',

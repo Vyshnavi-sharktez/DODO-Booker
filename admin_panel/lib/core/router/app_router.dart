@@ -37,6 +37,8 @@ import '../../features/seo/presentation/pages/seo_management_page.dart';
 import '../../features/vendor_subscriptions/presentation/pages/vendor_subscriptions_page.dart';
 import '../../features/amc_plans/presentation/pages/amc_plans_page.dart';
 import '../../features/amc_plans/presentation/pages/amc_scheduling_requests_page.dart';
+import '../../features/gps_audit/presentation/pages/gps_audit_page.dart';
+import '../../features/gps_audit/presentation/pages/gps_analytics_page.dart';
 import '../../shared/pages/unauthorized_page.dart';
 import '../rbac/permission_guard.dart';
 
@@ -282,6 +284,20 @@ final routerProvider = Provider<GoRouter>((ref) {
             name: 'vendorSettlement',
             pageBuilder: (context, state) => const NoTransitionPage(
               child: VendorSettlementPage(),
+            ),
+          ),
+          GoRoute(
+            path: '/dashboard/gps-audit',
+            name: 'gpsAudit',
+            pageBuilder: (context, state) => const NoTransitionPage(
+              child: GpsAuditPage(),
+            ),
+          ),
+          GoRoute(
+            path: '/dashboard/gps-analytics',
+            name: 'gpsAnalytics',
+            pageBuilder: (context, state) => const NoTransitionPage(
+              child: GpsAnalyticsPage(),
             ),
           ),
           GoRoute(
