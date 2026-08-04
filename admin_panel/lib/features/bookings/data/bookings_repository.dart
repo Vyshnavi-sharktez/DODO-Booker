@@ -139,10 +139,17 @@ class BookingsRepository {
     return Booking.fromMap(data);
   }
 
-  Future<Booking> cancelBooking(String id) async {
+  Future<Booking> cancelBooking(String id, {String? reason}) async {
+    final updateData = <String, dynamic>{
+      'status': 'cancelled',
+      'cancelled_by': 'admin',
+      'cancelled_at': DateTime.now().toUtc().toIso8601String(),
+    };
+    if (reason != null) updateData['cancellation_reason'] = reason;
+
     final data = await _supabase
         .from('bookings')
-        .update({'status': 'cancelled'})
+        .update(updateData)
         .eq('id', id)
         .select(_reviewSelect)
         .single();

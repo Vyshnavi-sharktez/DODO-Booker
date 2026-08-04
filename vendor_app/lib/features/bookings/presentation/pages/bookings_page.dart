@@ -9,6 +9,8 @@ import '../../../auth/presentation/providers/auth_controller.dart';
 import '../providers/bookings_provider.dart';
 import '../widgets/booking_card.dart';
 
+import '../../../location/application/location_tracking_service.dart';
+
 class BookingsPage extends ConsumerStatefulWidget {
   const BookingsPage({super.key, this.initialTabIndex = 0});
 
@@ -61,6 +63,7 @@ class _BookingsPageState extends ConsumerState<BookingsPage>
 
   @override
   Widget build(BuildContext context) {
+    ref.listen(activeBookingTrackerObserver, (_, __) {});
     final bookingsAsync = ref.watch(vendorBookingsProvider);
 
     return VendorScaffold(

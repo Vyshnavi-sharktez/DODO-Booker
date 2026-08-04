@@ -80,6 +80,18 @@ const _navItems = <_NavItem>[
     requiredPermission: 'booking.view',
   ),
   _NavItem(
+    label: 'GPS Audit',
+    icon: Icons.my_location_rounded,
+    route: '/dashboard/gps-audit',
+    requiredPermission: 'booking.view',
+  ),
+  _NavItem(
+    label: 'GPS Analytics',
+    icon: Icons.analytics_rounded,
+    route: '/dashboard/gps-analytics',
+    requiredPermission: 'booking.view',
+  ),
+  _NavItem(
     label: 'Vendor Payouts',
     icon: Icons.account_balance_wallet_rounded,
     route: '/dashboard/vendor-settlement',

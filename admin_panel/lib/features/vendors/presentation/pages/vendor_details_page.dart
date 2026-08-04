@@ -14,6 +14,7 @@ import '../../domain/models/vendor_detail.dart';
 import '../../domain/models/vendor_penalty_record.dart';
 import '../widgets/manual_penalty_dialog.dart';
 import '../widgets/vendor_form_dialog.dart';
+import '../widgets/vendor_wallet_history_dialog.dart';
 
 final _currencyFmt =
     NumberFormat.currency(locale: 'en_IN', symbol: '₹', decimalDigits: 2);
@@ -334,6 +335,94 @@ class _OverviewTab extends ConsumerWidget {
                 label: 'Last Updated',
                 value: updatedStr),
           ]),
+          const SizedBox(height: 24),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              _SectionTitle('Wallet Information'),
+              OutlinedButton.icon(
+                onPressed: () {
+                  showDialog(
+                    context: context,
+                    builder: (_) => VendorWalletHistoryDialog(
+                      vendorId: vendor.id,
+                      vendorName: vendor.businessName,
+                    ),
+                  );
+                },
+                icon: const Icon(Icons.history_rounded, size: 16),
+                label: const Text('View Wallet History'),
+                style: OutlinedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Builder(
+            builder: (context) {
+              final walletInfoAsync =
+                  ref.watch(vendorWalletInfoProvider(vendor.id));
+              return walletInfoAsync.when(
+                loading: () => const Center(
+                  child: Padding(
+                    padding: EdgeInsets.all(16),
+                    child: CircularProgressIndicator(),
+                  ),
+                ),
+                error: (err, _) => Text(
+                  'Failed to load wallet info: $err',
+                  style: const TextStyle(color: AppColors.error, fontSize: 12),
+                ),
+                data: (info) {
+                  final lastTopUpStr =
+                      info.lastTopUpAmount != null && info.lastTopUpDate != null
+                          ? '₹${info.lastTopUpAmount!.toStringAsFixed(2)} on ${DateFormat('d MMM yyyy').format(info.lastTopUpDate!)}'
+                          : '—';
+
+                  return _InfoGrid(
+                    children: [
+                      _InfoCell(
+                        icon: Icons.account_balance_wallet_rounded,
+                        label: 'Available Balance',
+                        value: _currencyFmt.format(info.availableBalance),
+                        valueColor: info.isEligible
+                            ? AppColors.success
+                            : AppColors.error,
+                      ),
+                      _InfoCell(
+                        icon: Icons.hourglass_empty_rounded,
+                        label: 'Pending Balance',
+                        value: _currencyFmt.format(info.pendingBalance),
+                        valueColor: AppColors.warning,
+                      ),
+                      _InfoCell(
+                        icon: Icons.shield_rounded,
+                        label: 'Minimum Required Balance',
+                        value: _currencyFmt.format(info.minimumRequiredBalance),
+                      ),
+                      _InfoCell(
+                        icon: info.isEligible
+                            ? Icons.check_circle_rounded
+                            : Icons.warning_rounded,
+                        label: 'Wallet Status',
+                        value: info.statusLabel,
+                        valueColor: info.isEligible
+                            ? AppColors.success
+                            : AppColors.error,
+                      ),
+                      _InfoCell(
+                        icon: Icons.add_card_rounded,
+                        label: 'Last Top-Up',
+                        value: lastTopUpStr,
+                      ),
+                    ],
+                  );
+                },
+              );
+            },
+          ),
         ],
       ),
     );

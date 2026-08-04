@@ -2,6 +2,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../domain/models/vendor.dart';
 import '../domain/models/vendor_detail.dart';
 import '../domain/models/vendor_penalty_record.dart';
+import '../domain/models/vendor_wallet_info.dart';
 
 class VendorDetailRepository {
   const VendorDetailRepository(this._supabase);
@@ -154,5 +155,61 @@ class VendorDetailRepository {
           .map((r) => VendorPenaltyRecord.fromMap(r as Map<String, dynamic>))
           .toList();
     }
+  }
+
+  Future<VendorWalletInfo> fetchVendorWalletInfo(String vendorId) async {
+    final walletRes = await _supabase
+        .from('vendor_wallets')
+        .select('available_balance, pending_balance')
+        .eq('vendor_id', vendorId)
+        .maybeSingle();
+
+    final avail = (walletRes?['available_balance'] as num?)?.toDouble() ?? 0.0;
+    final pend = (walletRes?['pending_balance'] as num?)?.toDouble() ?? 0.0;
+
+    final settingRes = await _supabase
+        .from('settings')
+        .select('setting_value')
+        .eq('setting_key', 'wallet_minimum_balance')
+        .maybeSingle();
+
+    final minBal =
+        double.tryParse(settingRes?['setting_value'] as String? ?? '0') ?? 0.0;
+
+    final topUpRes = await _supabase
+        .from('wallet_transactions')
+        .select('amount, created_at')
+        .eq('vendor_id', vendorId)
+        .eq('type', 'top_up')
+        .order('created_at', ascending: false)
+        .limit(1)
+        .maybeSingle();
+
+    final lastAmount = (topUpRes?['amount'] as num?)?.toDouble();
+    final lastDate = topUpRes?['created_at'] != null
+        ? DateTime.tryParse(topUpRes!['created_at'] as String)
+        : null;
+
+    return VendorWalletInfo(
+      vendorId: vendorId,
+      availableBalance: avail,
+      pendingBalance: pend,
+      minimumRequiredBalance: minBal,
+      lastTopUpAmount: lastAmount,
+      lastTopUpDate: lastDate,
+    );
+  }
+
+  Future<List<VendorWalletTransaction>> fetchWalletTransactions(
+      String vendorId) async {
+    final rows = await _supabase
+        .from('wallet_transactions')
+        .select()
+        .eq('vendor_id', vendorId)
+        .order('created_at', ascending: false);
+
+    return (rows as List<dynamic>)
+        .map((r) => VendorWalletTransaction.fromMap(r as Map<String, dynamic>))
+        .toList();
   }
 }

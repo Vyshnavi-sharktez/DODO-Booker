@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../constants/app_colors.dart';
 import '../routes/route_names.dart';
+import '../../features/location/application/location_tracking_service.dart';
 import '../../features/notifications/presentation/providers/notifications_provider.dart';
 
 /// Shared scaffold for all authenticated pages.
@@ -57,6 +58,7 @@ class VendorScaffold extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    ref.listen(activeBookingTrackerObserver, (_, __) {});
     final location = GoRouterState.of(context).matchedLocation;
     final currentIndex =
         _tabs.indexWhere((t) => t.path == location).clamp(0, _tabs.length - 1);

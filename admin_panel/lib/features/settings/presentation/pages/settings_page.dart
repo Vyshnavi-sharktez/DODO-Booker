@@ -205,6 +205,15 @@ class SettingsPage extends ConsumerWidget {
           min: 1,
           max: 90,
         ),
+        SettingFieldDef(
+          key: 'gps_geofence_radius_meters',
+          label: 'GPS Geofence Radius',
+          hint: 'Maximum allowable distance in meters between vendor GPS logs and service location for geofence validation',
+          type: SettingFieldType.integer,
+          unit: 'm',
+          min: 10,
+          max: 10000,
+        ),
       ],
     ),
     SettingSectionDef(

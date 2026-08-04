@@ -175,7 +175,55 @@ class BookingsService {
     }
   }
 
-  Future<bool> cancelBooking(String bookingId) async {
+  Future<
+      ({
+        bool isInsideGeofence,
+        double? minDistanceMeters,
+        double? geofenceRadiusMeters
+      })> validateVendorGeofence(String bookingId) async {
+    try {
+      debugPrint(
+          '[DODO][Geofence] Calling validate_vendor_geofence RPC for bookingId=$bookingId');
+      final res = await _client.rpc(
+        'validate_vendor_geofence',
+        params: {'p_booking_id': bookingId},
+      );
+      debugPrint(
+          '[DODO][Geofence] Raw RPC response: $res (${res.runtimeType})');
+
+      Map<String, dynamic>? row;
+      if (res is List && res.isNotEmpty) {
+        final first = res.first;
+        if (first is Map) {
+          row = Map<String, dynamic>.from(first);
+        }
+      } else if (res is Map) {
+        row = Map<String, dynamic>.from(res);
+      }
+
+      if (row != null) {
+        final isInside = row['is_inside_geofence'] == true;
+        final minDistance = (row['min_distance_meters'] as num?)?.toDouble();
+        final radius = (row['geofence_radius_meters'] as num?)?.toDouble();
+        debugPrint(
+            '[DODO][Geofence] Geofence result: isInsideGeofence=$isInside, minDistanceMeters=$minDistance, geofenceRadiusMeters=$radius');
+        return (
+          isInsideGeofence: isInside,
+          minDistanceMeters: minDistance,
+          geofenceRadiusMeters: radius,
+        );
+      }
+    } catch (e, st) {
+      debugPrint('[DODO][Geofence] Validation error: $e\n$st');
+    }
+    return (
+      isInsideGeofence: false,
+      minDistanceMeters: null,
+      geofenceRadiusMeters: null,
+    );
+  }
+
+  Future<bool> cancelBooking(String bookingId, {String? reason, String? remarks}) async {
     debugPrint('[DODO][Booking] Cancel requested for bookingId=$bookingId');
 
     // Fetch metadata needed for notifications before updating.
@@ -189,10 +237,15 @@ class BookingsService {
     } catch (_) {}
 
     debugPrint('[DODO][Booking] Updating booking status');
-    await _client.from('bookings').update({
+    final updateData = <String, dynamic>{
       'status': 'cancelled',
+      'cancelled_by': 'customer',
       'cancelled_at': DateTime.now().toUtc().toIso8601String(),
-    }).eq('id', bookingId);
+    };
+    if (reason != null) updateData['cancellation_reason'] = reason;
+    if (remarks != null) updateData['cancellation_remarks'] = remarks;
+
+    await _client.from('bookings').update(updateData).eq('id', bookingId);
     debugPrint('[DODO][Booking] Booking cancelled successfully');
 
     // Notify admin and vendor (if assigned) — non-fatal.

@@ -35,6 +35,7 @@ const Map<String, String> kSettingDefaults = {
   'vendor_approval_required': 'true',
   'vendor_commission_pct': '80',
   'settlement_cycle_days': '7',
+  'gps_geofence_radius_meters': '100',
 
   // Customer
   'allow_customer_registration': 'true',

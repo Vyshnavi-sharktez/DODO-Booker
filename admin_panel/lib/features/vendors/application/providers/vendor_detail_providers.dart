@@ -5,6 +5,7 @@ import '../../domain/models/vendor.dart';
 import '../../domain/models/vendor_detail.dart';
 
 import '../../domain/models/vendor_penalty_record.dart';
+import '../../domain/models/vendor_wallet_info.dart';
 
 final vendorDetailRepositoryProvider =
     Provider<VendorDetailRepository>((ref) {
@@ -58,5 +59,23 @@ final vendorPenaltyHistoryProvider =
     return ref
         .watch(vendorDetailRepositoryProvider)
         .fetchPenaltyHistory(vendorId);
+  },
+);
+
+final vendorWalletInfoProvider =
+    FutureProvider.autoDispose.family<VendorWalletInfo, String>(
+  (ref, vendorId) {
+    return ref
+        .watch(vendorDetailRepositoryProvider)
+        .fetchVendorWalletInfo(vendorId);
+  },
+);
+
+final vendorWalletTransactionsProvider =
+    FutureProvider.autoDispose.family<List<VendorWalletTransaction>, String>(
+  (ref, vendorId) {
+    return ref
+        .watch(vendorDetailRepositoryProvider)
+        .fetchWalletTransactions(vendorId);
   },
 );
