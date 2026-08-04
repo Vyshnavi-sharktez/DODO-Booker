@@ -27,7 +27,6 @@ class VendorFormDialog extends StatefulWidget {
     required String status,
     required bool isActive,
     double? rating,
-    double? walletBalance,
     double? latitude,
     double? longitude,
     double? commissionRate,
@@ -54,7 +53,6 @@ class _VendorFormDialogState extends State<VendorFormDialog> {
   late final TextEditingController _city;
   late final TextEditingController _address;
   late final TextEditingController _rating;
-  late final TextEditingController _walletBalance;
   late final TextEditingController _commissionRate;
   late String _status;
   late bool _isActive;
@@ -78,9 +76,6 @@ class _VendorFormDialogState extends State<VendorFormDialog> {
     _address = TextEditingController(text: e?.address ?? '');
     _rating = TextEditingController(
       text: e?.rating != null ? e!.rating!.toStringAsFixed(1) : '',
-    );
-    _walletBalance = TextEditingController(
-      text: e != null ? e.walletBalance.toStringAsFixed(2) : '',
     );
     _commissionRate = TextEditingController(
       text: e != null ? e.commissionRate.toStringAsFixed(2) : '0.00',
@@ -106,7 +101,6 @@ class _VendorFormDialogState extends State<VendorFormDialog> {
     _city.dispose();
     _address.dispose();
     _rating.dispose();
-    _walletBalance.dispose();
     _commissionRate.dispose();
     _preferredVendorFee.dispose();
     super.dispose();
@@ -192,7 +186,6 @@ class _VendorFormDialogState extends State<VendorFormDialog> {
     setState(() => _saving = true);
     try {
       final ratingText = _rating.text.trim();
-      final walletText = _walletBalance.text.trim();
       final commissionText = _commissionRate.text.trim();
       await widget.onSave(
         businessName: _businessName.text.trim(),
@@ -204,7 +197,6 @@ class _VendorFormDialogState extends State<VendorFormDialog> {
         status: _status,
         isActive: _isActive,
         rating: ratingText.isEmpty ? null : double.tryParse(ratingText),
-        walletBalance: walletText.isEmpty ? null : double.tryParse(walletText),
         latitude: _latitude,
         longitude: _longitude,
         commissionRate: double.tryParse(commissionText) ?? 0.0,
@@ -512,7 +504,7 @@ class _VendorFormDialogState extends State<VendorFormDialog> {
                       ],
                       const SizedBox(height: 16),
 
-                      // Rating + Wallet Balance + Commission Rate
+                      // Rating + Commission Rate
                       Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
@@ -537,32 +529,6 @@ class _VendorFormDialogState extends State<VendorFormDialog> {
                                 final r = double.tryParse(v.trim());
                                 if (r == null || r < 0 || r > 5) {
                                   return 'Enter 0.0 – 5.0';
-                                }
-                                return null;
-                              },
-                            ),
-                          ),
-                          const SizedBox(width: 16),
-                          SizedBox(
-                            width: 160,
-                            child: TextFormField(
-                              controller: _walletBalance,
-                              decoration: const InputDecoration(
-                                labelText: 'Wallet Balance',
-                                hintText: 'Wallet Balance',
-                                prefixIcon: Icon(Icons.account_balance_wallet_rounded),
-                                helperText: 'Optional, defaults to 0',
-                              ),
-                              keyboardType: const TextInputType.numberWithOptions(
-                                  decimal: true),
-                              inputFormatters: [
-                                FilteringTextInputFormatter.allow(
-                                    RegExp(r'^\d*\.?\d{0,2}')),
-                              ],
-                              validator: (v) {
-                                if (v == null || v.trim().isEmpty) return null;
-                                if (double.tryParse(v.trim()) == null) {
-                                  return 'Invalid amount';
                                 }
                                 return null;
                               },

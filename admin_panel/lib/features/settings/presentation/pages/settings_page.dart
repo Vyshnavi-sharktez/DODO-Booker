@@ -229,6 +229,23 @@ class SettingsPage extends ConsumerWidget {
       ],
     ),
     SettingSectionDef(
+      id: 'wallet',
+      title: 'Wallet Settings',
+      description: 'Vendor prepaid wallet enforcement rules',
+      icon: Icons.account_balance_wallet_rounded,
+      color: Color(0xFF2C7A7B),
+      fields: [
+        SettingFieldDef(
+          key: 'wallet_minimum_balance',
+          label: 'Minimum Wallet Balance',
+          hint: '0 = disabled',
+          type: SettingFieldType.decimal,
+          unit: '₹',
+          min: 0,
+        ),
+      ],
+    ),
+    SettingSectionDef(
       id: 'subscription',
       title: 'Subscription Settings',
       description: 'Control the vendor subscription module and enforcement',
