@@ -64,6 +64,23 @@ class Booking {
 
   bool get isDodoTeam => assignmentType == 'DODO Team';
 
+  bool get isWarrantyRework => (notes ?? '').contains('[WARRANTY REWORK]');
+
+  String? get originalBookingNumber {
+    if (!isWarrantyRework) return null;
+    final match = RegExp(r'Booking #([A-Za-z0-9\-]+)').firstMatch(notes ?? '');
+    return match?.group(1);
+  }
+
+  String? get reworkIssueDescription {
+    if (!isWarrantyRework) return null;
+    final index = (notes ?? '').indexOf('Issue: ');
+    if (index != -1) {
+      return (notes ?? '').substring(index + 7).trim();
+    }
+    return notes;
+  }
+
   factory Booking.fromMap(Map<String, dynamic> map) {
     final rawItems = map['booking_items'] as List<dynamic>? ?? [];
     final items = rawItems

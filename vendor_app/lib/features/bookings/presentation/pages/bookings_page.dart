@@ -120,7 +120,8 @@ class _BookingsPageState extends ConsumerState<BookingsPage>
     final filtered = bookings
         .where((b) =>
             b.status == status ||
-            (additionalStatus != null && b.status == additionalStatus))
+            (additionalStatus != null && b.status == additionalStatus) ||
+            (status == 'assigned' && b.isWarrantyRework && (b.status == 'pending' || b.status == 'assigned')))
         .toList();
     if (filtered.isEmpty) return _emptyState(status);
     return RefreshIndicator(

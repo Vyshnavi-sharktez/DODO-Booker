@@ -95,6 +95,18 @@ class BookingsRepository {
     return _mergeAddons(bookings, addonMap);
   }
 
+  Future<Booking?> fetchBookingById(String id) async {
+    final data = await _supabase
+        .from('bookings')
+        .select(_reviewSelect)
+        .eq('id', id)
+        .maybeSingle();
+    if (data == null) return null;
+    final booking = Booking.fromMap(data as Map<String, dynamic>);
+    final addonMap = await _fetchAddonsByBookingId([id]);
+    return _mergeAddons([booking], addonMap).first;
+  }
+
   // ── Mutations ────────────────────────────────────────────────────────────────
 
   // Status is derived automatically:
@@ -126,21 +138,50 @@ class BookingsRepository {
       case kAssignmentTypeVendor:
         payload['vendor_id'] = vendorId;
         payload['dodo_team_id'] = null;
+        payload['dispatch_status'] = 'assigned';
+        payload['last_dispatch_attempt_at'] = null;
+        payload['current_dispatch_tier_priority'] = null;
       case kAssignmentTypeTeam:
         payload['vendor_id'] = null;
         payload['dodo_team_id'] = dodoTeamId;
+        payload['dispatch_status'] = 'assigned_to_dodo_team';
+        payload['last_dispatch_attempt_at'] = null;
+        payload['current_dispatch_tier_priority'] = null;
       default:
         payload['vendor_id'] = null;
         payload['dodo_team_id'] = null;
+        payload['dispatch_status'] = 'idle';
+        payload['last_dispatch_attempt_at'] = null;
+        payload['current_dispatch_tier_priority'] = null;
     }
 
-    final data = await _supabase
-        .from('bookings')
-        .update(payload)
-        .eq('id', id)
-        .select(_reviewSelect)
-        .single();
-    return Booking.fromMap(data);
+    debugPrint('[MANUAL_ASSIGN][REPO] Executing updateBookingAssignment for bookingId=$id with payload: $payload');
+
+    if (assignmentType == kAssignmentTypeVendor) {
+      try {
+        await _supabase
+            .from('booking_assignments')
+            .update({'status': 'cancelled', 'responded_at': DateTime.now().toIso8601String()})
+            .eq('booking_id', id)
+            .eq('status', 'pending');
+      } catch (e) {
+        debugPrint('Error cancelling pending assignment records on manual assignment: $e');
+      }
+    }
+
+    try {
+      final data = await _supabase
+          .from('bookings')
+          .update(payload)
+          .eq('id', id)
+          .select(_reviewSelect)
+          .single();
+      debugPrint('[MANUAL_ASSIGN][REPO] DB update success for $id. Result status=${data['status']}, vendor_id=${data['vendor_id']}, dispatch_status=${data['dispatch_status']}');
+      return Booking.fromMap(data);
+    } catch (e, st) {
+      debugPrint('[MANUAL_ASSIGN][REPO] DB update FAILED for $id: $e\n$st');
+      rethrow;
+    }
   }
 
   Future<Booking> cancelBooking(String id, {String? reason}) async {
@@ -284,6 +325,15 @@ class BookingsRepository {
         .select(_reviewSelect)
         .single();
 
+    try {
+      await _supabase.from('service_warranties').update({
+        'status': 'Resolved',
+        'updated_at': DateTime.now().toIso8601String(),
+      }).eq('rework_booking_id', id);
+    } catch (e) {
+      debugPrint('[DODO][Admin] Warning: Failed to sync service_warranties status to Resolved via OTP: $e');
+    }
+
     return Booking.fromMap(data);
   }
 
@@ -326,9 +376,11 @@ class BookingsRepository {
   }
 
   Future<Map<String, dynamic>> dispatchBookingNextTier(String bookingId) async {
+    debugPrint('[DISPATCH][REPO] Invoking dispatch_booking_next_tier RPC with p_booking_id: $bookingId');
     final response = await _supabase.rpc('dispatch_booking_next_tier', params: {
       'p_booking_id': bookingId,
     });
+    debugPrint('[DISPATCH][REPO] RPC response for $bookingId: $response');
     return (response as Map<String, dynamic>?) ?? {};
   }
 

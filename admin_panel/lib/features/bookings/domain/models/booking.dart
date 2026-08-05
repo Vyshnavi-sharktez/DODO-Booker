@@ -152,6 +152,23 @@ class Booking {
   // 'cod' is accepted as an alias for backward compatibility.
   bool get isCod => paymentMethod == 'cash' || paymentMethod == 'cod';
 
+  bool get isWarrantyRework => (notes ?? '').contains('[WARRANTY REWORK]');
+
+  String? get originalBookingNumber {
+    if (!isWarrantyRework) return null;
+    final match = RegExp(r'Booking #([A-Za-z0-9\-]+)').firstMatch(notes ?? '');
+    return match?.group(1);
+  }
+
+  String? get reworkIssueDescription {
+    if (!isWarrantyRework) return null;
+    final index = (notes ?? '').indexOf('Issue: ');
+    if (index != -1) {
+      return (notes ?? '').substring(index + 7).trim();
+    }
+    return notes;
+  }
+
   (String label, Color textColor, Color bgColor) get statusConfig {
     if (dispatchStatus == 'exhausted') {
       return ('No Vendor Accepted', const Color(0xFFE53E3E), const Color(0xFFFFF5F5));

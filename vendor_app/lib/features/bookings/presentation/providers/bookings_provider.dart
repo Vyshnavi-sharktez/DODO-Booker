@@ -81,3 +81,9 @@ final bookingImagesProvider =
   (ref, bookingId) =>
       ref.read(bookingImagesDatasourceProvider).fetchImages(bookingId),
 );
+
+final reworkEvidenceImagesProvider =
+    FutureProvider.autoDispose.family<List<String>, String>(
+  (ref, bookingId) =>
+      ref.read(bookingsDatasourceProvider).fetchWarrantyEvidenceImages(bookingId),
+);

@@ -44,7 +44,10 @@ class _BookingCardState extends ConsumerState<BookingCard> {
   // Updates local state immediately and invalidates the provider in the background.
   void _applyStatusUpdate(String newStatus) {
     if (!mounted) return;
-    setState(() => _localBooking = _booking.copyWith(status: newStatus));
+    setState(() => _localBooking = _booking.copyWith(
+      status: newStatus,
+      dispatchStatus: newStatus == 'accepted' ? 'accepted' : _booking.dispatchStatus,
+    ));
     ref.invalidate(vendorBookingsProvider);
   }
 
@@ -78,8 +81,8 @@ class _BookingCardState extends ConsumerState<BookingCard> {
   String? get _actionLabel {
     if (_isDodoBooking) return null;
     return switch (_booking.status) {
-      'assigned' => 'Accept Service',
-      'accepted' => 'Start Service',
+      'pending' || 'assigned' => _booking.isWarrantyRework ? 'Accept Rework' : 'Accept Service',
+      'accepted' => _booking.isWarrantyRework ? 'Start Rework' : 'Start Service',
       _ => null,
     };
   }
@@ -87,7 +90,7 @@ class _BookingCardState extends ConsumerState<BookingCard> {
   String? get _targetStatus {
     if (_isDodoBooking) return null;
     return switch (_booking.status) {
-      'assigned' => 'accepted',
+      'pending' || 'assigned' => 'accepted',
       'accepted' => 'in_progress',
       _ => null,
     };
@@ -100,14 +103,14 @@ class _BookingCardState extends ConsumerState<BookingCard> {
 
     final (title, message, confirmColor) = switch (targetStatus) {
       'accepted' => (
-          'Accept Service',
-          'Accept booking #${_booking.bookingNumber}?\n\n'
+          _booking.isWarrantyRework ? 'Accept Warranty Rework' : 'Accept Service',
+          'Accept ${_booking.isWarrantyRework ? "warranty rework " : ""}booking #${_booking.bookingNumber}?\n\n'
               'Confirm that you are available to carry out this service.',
           AppColors.primary,
         ),
       'in_progress' => (
-          'Start Service',
-          'Start service for booking #${_booking.bookingNumber}?\n\n'
+          _booking.isWarrantyRework ? 'Start Warranty Rework' : 'Start Service',
+          'Start ${_booking.isWarrantyRework ? "warranty rework " : ""}service for booking #${_booking.bookingNumber}?\n\n'
               'Status will change to In Progress.',
           AppColors.primary,
         ),
@@ -150,30 +153,48 @@ class _BookingCardState extends ConsumerState<BookingCard> {
 
       // Notifications — fire-and-forget; must not block the status update.
       if (targetStatus == 'accepted') {
+        final titleAdmin = _booking.isWarrantyRework ? 'Vendor Accepted Warranty Rework' : 'Vendor Accepted Booking';
+        final msgAdmin = _booking.isWarrantyRework
+            ? 'Vendor $_vendorName accepted warranty rework for booking $_bookingRef.'
+            : 'Vendor $_vendorName accepted booking $_bookingRef.';
         ref.read(bookingsRepositoryProvider).createAdminNotification(
-          title: 'Vendor Accepted Booking',
-          message: 'Vendor $_vendorName accepted booking $_bookingRef.',
+          title: titleAdmin,
+          message: msgAdmin,
           notificationType: 'vendor_accepted',
           entityId: _booking.id,
         ).ignore();
+
+        final titleCust = _booking.isWarrantyRework ? 'Warranty Rework Accepted' : 'Service Accepted';
+        final msgCust = _booking.isWarrantyRework
+            ? 'Your technician has accepted the warranty rework request.'
+            : 'Your service provider has accepted your booking and will start soon.';
         ref.read(bookingsRepositoryProvider).createCustomerNotification(
           customerId: _booking.customerId,
-          title: 'Service Accepted',
-          message: 'Your service provider has accepted your booking and will start soon.',
+          title: titleCust,
+          message: msgCust,
           notificationType: 'vendor_accepted',
           entityId: _booking.id,
         ).ignore();
       } else if (targetStatus == 'in_progress') {
+        final titleAdmin = _booking.isWarrantyRework ? 'Vendor Started Warranty Rework' : 'Vendor Started Service';
+        final msgAdmin = _booking.isWarrantyRework
+            ? 'Vendor $_vendorName started work on warranty rework $_bookingRef.'
+            : 'Vendor $_vendorName started work on booking $_bookingRef.';
         ref.read(bookingsRepositoryProvider).createAdminNotification(
-          title: 'Vendor Started Service',
-          message: 'Vendor $_vendorName started work on booking $_bookingRef.',
+          title: titleAdmin,
+          message: msgAdmin,
           notificationType: 'vendor_started',
           entityId: _booking.id,
         ).ignore();
+
+        final titleCust = _booking.isWarrantyRework ? 'Warranty Rework Started' : 'Service Started';
+        final msgCust = _booking.isWarrantyRework
+            ? 'Your warranty rework service is now in progress.'
+            : 'Your service is now in progress.';
         ref.read(bookingsRepositoryProvider).createCustomerNotification(
           customerId: _booking.customerId,
-          title: 'Service Started',
-          message: 'Your service is now in progress.',
+          title: titleCust,
+          message: msgCust,
           notificationType: 'vendor_started',
           entityId: _booking.id,
         ).ignore();
@@ -330,16 +351,25 @@ class _BookingCardState extends ConsumerState<BookingCard> {
       _applyStatusUpdate('completed');
 
       final completedBy = _isDodoBooking ? 'DODO Team ($_vendorName)' : 'Vendor $_vendorName';
+      final titleAdmin = _booking.isWarrantyRework ? 'Warranty Rework Completed' : 'Booking Completed';
+      final msgAdmin = _booking.isWarrantyRework
+          ? 'Vendor $_vendorName completed warranty rework $_bookingRef via OTP.'
+          : '$completedBy completed booking $_bookingRef via OTP.';
       ref.read(bookingsRepositoryProvider).createAdminNotification(
-        title: 'Booking Completed',
-        message: '$completedBy completed booking $_bookingRef via OTP.',
+        title: titleAdmin,
+        message: msgAdmin,
         notificationType: 'booking_completed',
         entityId: _booking.id,
       ).ignore();
+
+      final titleCust = _booking.isWarrantyRework ? 'Warranty Rework Completed' : 'Service Completed';
+      final msgCust = _booking.isWarrantyRework
+          ? 'Your warranty rework service has been completed successfully.'
+          : 'Your service has been completed. You can now rate the experience.';
       ref.read(bookingsRepositoryProvider).createCustomerNotification(
         customerId: _booking.customerId,
-        title: 'Service Completed',
-        message: 'Your service has been completed. You can now rate the experience.',
+        title: titleCust,
+        message: msgCust,
         notificationType: 'booking_completed',
         entityId: _booking.id,
       ).ignore();
@@ -383,18 +413,25 @@ class _BookingCardState extends ConsumerState<BookingCard> {
       _applyStatusUpdate('rejected');
 
       // Notifications — fire-and-forget; must not block the rejection.
+      final titleRejAdmin = _booking.isWarrantyRework ? 'Vendor Rejected Warranty Rework' : 'Vendor Rejected Booking';
+      final msgRejAdmin = _booking.isWarrantyRework
+          ? 'Vendor $_vendorName rejected warranty rework $_bookingRef.\nReason: $reason'
+          : 'Vendor $_vendorName rejected booking $_bookingRef.\nReason: $reason';
       ref.read(bookingsRepositoryProvider).createAdminNotification(
-        title: 'Vendor Rejected Booking',
-        message: 'Vendor $_vendorName rejected booking $_bookingRef.\n'
-            'Reason: $reason',
+        title: titleRejAdmin,
+        message: msgRejAdmin,
         notificationType: 'vendor_rejected',
         entityId: _booking.id,
       ).ignore();
+
+      final titleRejCust = _booking.isWarrantyRework ? 'Warranty Rework Reassigned' : 'Vendor Reassignment Required';
+      final msgRejCust = _booking.isWarrantyRework
+          ? 'Your assigned technician is unavailable for rework. A new provider will be assigned shortly.'
+          : 'Your assigned vendor is unavailable. A new provider will be assigned shortly.';
       ref.read(bookingsRepositoryProvider).createCustomerNotification(
         customerId: _booking.customerId,
-        title: 'Vendor Reassignment Required',
-        message: 'Your assigned vendor is unavailable. '
-            'A new provider will be assigned shortly.',
+        title: titleRejCust,
+        message: msgRejCust,
         notificationType: 'vendor_rejected',
         entityId: _booking.id,
       ).ignore();
@@ -429,20 +466,34 @@ class _BookingCardState extends ConsumerState<BookingCard> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
-    // Check if dispatch timer has elapsed on client side
-    final isTimerExpired = _booking.lastDispatchAttemptAt != null &&
+    final isAutoDispatching = _booking.dispatchStatus == 'dispatching';
+
+    // Check if dispatch timer has elapsed on client side (only relevant during auto-dispatch)
+    final isTimerExpired = isAutoDispatching &&
+        _booking.lastDispatchAttemptAt != null &&
         _booking.tierTimeoutSeconds > 0 &&
         DateTime.now().difference(_booking.lastDispatchAttemptAt!.toUtc()).inSeconds >=
             _booking.tierTimeoutSeconds;
 
     final isDispatchExhausted = _booking.dispatchStatus == 'exhausted';
 
-    final isOfferExpired = _booking.status == 'assigned' &&
+    final isOfferExpired = isAutoDispatching &&
+        _booking.status == 'assigned' &&
         !_isDodoBooking &&
         (isTimerExpired || isDispatchExhausted);
 
-    // Active incoming offer: booking is assigned, vendor is current vendor, timer not expired
-    final isAssigned = _booking.status == 'assigned' && !_isDodoBooking && !isOfferExpired;
+    // Active incoming auto-dispatch offer: ONLY when dispatch_status == 'dispatching'
+    final isIncomingAutoDispatchOffer = isAutoDispatching &&
+        _booking.status == 'assigned' &&
+        !_isDodoBooking &&
+        !isOfferExpired;
+
+    // Normal assigned booking (either manual assignment or auto-dispatch offer)
+    final isPendingOrAssignedRework = _booking.isWarrantyRework &&
+        (_booking.status == 'pending' || _booking.status == 'assigned');
+    final isAssigned = (isPendingOrAssignedRework || _booking.status == 'assigned') &&
+        !_isDodoBooking &&
+        !isOfferExpired;
     final isAccepted = _booking.status == 'accepted' && !_isDodoBooking;
     final isInProgress = _booking.status == 'in_progress';
     final isAwaitingVerification = _booking.status == 'awaiting_verification';
@@ -465,12 +516,12 @@ class _BookingCardState extends ConsumerState<BookingCard> {
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
         side: BorderSide(
-          color: isAssigned
+          color: isIncomingAutoDispatchOffer
               ? AppColors.primary
               : (isOfferExpired || isRejected
                   ? AppColors.error.withValues(alpha: 0.35)
                   : AppColors.border),
-          width: isAssigned ? 1.5 : 1.0,
+          width: isIncomingAutoDispatchOffer ? 1.5 : 1.0,
         ),
       ),
       child: Padding(
@@ -491,7 +542,33 @@ class _BookingCardState extends ConsumerState<BookingCard> {
                   ),
                 ),
                 const SizedBox(width: 8),
-                if (isAssigned && !_isDodoBooking) ...[
+                if (_booking.isWarrantyRework) ...[
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFC53030).withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(4),
+                      border: Border.all(color: const Color(0xFFFEB2B2)),
+                    ),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.shield_rounded, size: 12, color: Color(0xFF9B2C2C)),
+                        SizedBox(width: 4),
+                        Text(
+                          'WARRANTY REWORK',
+                          style: TextStyle(
+                            color: Color(0xFF9B2C2C),
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                ],
+                if (isIncomingAutoDispatchOffer) ...[
                   DispatchCountdownTimer(
                     startTime: _booking.lastDispatchAttemptAt,
                     timeoutSeconds: _booking.tierTimeoutSeconds,
@@ -510,11 +587,13 @@ class _BookingCardState extends ConsumerState<BookingCard> {
                 BookingStatusBadge(
                   status: isOfferExpired
                       ? 'offer_expired'
-                      : (isAssigned ? 'incoming' : _booking.status),
+                      : (isIncomingAutoDispatchOffer ? 'incoming' : _booking.status),
                 ),
               ],
             ),
-            if (isAssigned) ...[
+            if (_booking.isWarrantyRework)
+              _WarrantyReworkCard(booking: _booking),
+            if (isIncomingAutoDispatchOffer) ...[
               const SizedBox(height: 10),
               Container(
                 width: double.infinity,
@@ -714,7 +793,7 @@ class _BookingCardState extends ConsumerState<BookingCard> {
                   ),
                   child: _updating
                       ? const _Spinner(color: Colors.white)
-                      : const Text('Accept Service'),
+                      : Text(_booking.isWarrantyRework ? 'Accept Rework' : 'Accept Service'),
                 ),
               ),
               const SizedBox(height: 8),
@@ -733,7 +812,7 @@ class _BookingCardState extends ConsumerState<BookingCard> {
                   icon: _rejecting
                       ? const _Spinner(color: AppColors.error)
                       : const Icon(Icons.cancel_outlined, size: 16),
-                  label: const Text('Reject Service'),
+                  label: Text(_booking.isWarrantyRework ? 'Reject Rework' : 'Reject Service'),
                 ),
               ),
             ],
@@ -754,7 +833,7 @@ class _BookingCardState extends ConsumerState<BookingCard> {
                   ),
                   child: _updating
                       ? const _Spinner(color: Colors.white)
-                      : const Text('Start Service'),
+                      : Text(_booking.isWarrantyRework ? 'Start Rework' : 'Start Service'),
                 ),
               ),
             ],
@@ -776,7 +855,7 @@ class _BookingCardState extends ConsumerState<BookingCard> {
                   ),
                   child: _updating
                       ? const _Spinner(color: Colors.white)
-                      : const Text('Complete Service'),
+                      : Text(_booking.isWarrantyRework ? 'Complete Rework' : 'Complete Service'),
                 ),
               ),
             ],
@@ -1699,6 +1778,125 @@ class _ConfirmDialog extends StatelessWidget {
           child: Text(confirmLabel),
         ),
       ],
+    );
+  }
+}
+
+// ── Warranty Rework Card ──────────────────────────────────────────────────────
+
+class _WarrantyReworkCard extends ConsumerWidget {
+  final Booking booking;
+
+  const _WarrantyReworkCard({required this.booking});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final origNum = booking.originalBookingNumber ?? '—';
+    final issue = booking.reworkIssueDescription ?? 'No description provided.';
+    final imagesAsync = ref.watch(reworkEvidenceImagesProvider(booking.id));
+
+    return Container(
+      margin: const EdgeInsets.only(top: 10, bottom: 10),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFF5F5),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: const Color(0xFFFEB2B2)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(
+            children: [
+              Icon(Icons.shield_rounded, color: Color(0xFFC53030), size: 18),
+              SizedBox(width: 8),
+              Text(
+                'WARRANTY REWORK DETAILS',
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 12,
+                  color: Color(0xFF9B2C2C),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Original Booking: #$origNum',
+            style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12, color: AppColors.textPrimary),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Customer Issue: $issue',
+            style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+          ),
+          const SizedBox(height: 10),
+          imagesAsync.when(
+            data: (urls) {
+              if (urls.isEmpty) {
+                return const Text(
+                  'No customer evidence photos attached.',
+                  style: TextStyle(fontSize: 11, fontStyle: FontStyle.italic, color: AppColors.textSecondary),
+                );
+              }
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Customer Evidence Photos:',
+                    style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.textPrimary),
+                  ),
+                  const SizedBox(height: 6),
+                  SizedBox(
+                    height: 70,
+                    child: ListView.separated(
+                      scrollDirection: Axis.horizontal,
+                      itemCount: urls.length,
+                      separatorBuilder: (_, __) => const SizedBox(width: 8),
+                      itemBuilder: (ctx, index) {
+                        final url = urls[index];
+                        return GestureDetector(
+                          onTap: () {
+                            showDialog(
+                              context: ctx,
+                              builder: (_) => Dialog(
+                                child: Padding(
+                                  padding: const EdgeInsets.all(8.0),
+                                  child: Image.network(url, fit: BoxFit.contain),
+                                ),
+                              ),
+                            );
+                          },
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(6),
+                            child: Image.network(
+                              url,
+                              width: 70,
+                              height: 70,
+                              fit: BoxFit.cover,
+                              errorBuilder: (_, __, ___) => Container(
+                                width: 70,
+                                height: 70,
+                                color: Colors.grey.shade300,
+                                child: const Icon(Icons.broken_image, size: 20),
+                              ),
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              );
+            },
+            loading: () => const SizedBox(
+              height: 24,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
+            error: (_, __) => const SizedBox.shrink(),
+          ),
+        ],
+      ),
     );
   }
 }

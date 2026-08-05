@@ -207,6 +207,11 @@ class _BookingAssignmentDialogState
   bool _dispatching = false;
 
   Future<void> _dispatchNextTier() async {
+    debugPrint(
+      '[DISPATCH][UI] Auto-Dispatch button clicked for booking ID: ${widget.booking.id}, '
+      'number: #${widget.booking.bookingNumber}, status: ${widget.booking.status}, '
+      'dispatchStatus: ${widget.booking.dispatchStatus}',
+    );
     setState(() => _dispatching = true);
     try {
       final res = await ref
@@ -428,6 +433,10 @@ class _BookingAssignmentDialogState
   }
 
   Future<void> _submit() async {
+    debugPrint(
+      '[MANUAL_ASSIGN][UI] _submit called: assigneeType=$_assigneeType, '
+      'vendorId=$_vendorId, serviceDate=$_serviceDate',
+    );
     if (!_formKey.currentState!.validate()) return;
     if (_serviceDate == null) {
       ScaffoldMessenger.of(context).showSnackBar(

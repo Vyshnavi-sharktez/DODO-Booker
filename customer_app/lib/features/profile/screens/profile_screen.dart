@@ -13,6 +13,7 @@ import '../../address/screens/address_screen.dart';
 import '../../wishlist/screens/wishlist_screen.dart';
 import 'settings_screen.dart';
 import '../../bookings/utils/my_bookings_launcher.dart';
+import '../../warranties/screens/my_warranties_screen.dart';
 class ProfileScreen extends ConsumerWidget {
   const ProfileScreen({super.key});
 
@@ -146,6 +147,22 @@ class _ProfileBody extends ConsumerWidget {
                   title: 'AMC Plans',
                   subtitle: 'Your Annual Maintenance Contracts',
                   onTap: () => context.push(AppRoutes.amcPlans),
+                ),
+              ),
+
+              const SizedBox(height: 12),
+
+              _FloatingCard(
+                child: ProfileMenuTile(
+                  icon: Icons.shield_rounded,
+                  iconColor: const Color(0xFF38A169),
+                  title: 'My Warranties',
+                  subtitle: 'View warranty certificates and claim tracking',
+                  onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => const MyWarrantiesScreen(),
+                    ),
+                  ),
                 ),
               ),
 

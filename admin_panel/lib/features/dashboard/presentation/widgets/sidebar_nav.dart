@@ -80,6 +80,18 @@ const _navItems = <_NavItem>[
     requiredPermission: 'booking.view',
   ),
   _NavItem(
+    label: 'Warranty Claims',
+    icon: Icons.shield_rounded,
+    route: '/dashboard/warranty-claims',
+    requiredPermission: 'booking.view',
+  ),
+  _NavItem(
+    label: 'Warranty Analytics',
+    icon: Icons.analytics_rounded,
+    route: '/dashboard/warranty-analytics',
+    requiredPermission: 'booking.view',
+  ),
+  _NavItem(
     label: 'Dispatch Analytics',
     icon: Icons.insights_rounded,
     route: '/dashboard/dispatch-analytics',
