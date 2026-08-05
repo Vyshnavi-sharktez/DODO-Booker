@@ -43,6 +43,7 @@ import '../../features/gps_audit/presentation/pages/gps_audit_page.dart';
 import '../../features/gps_audit/presentation/pages/gps_analytics_page.dart';
 import '../../features/warranties/presentation/pages/warranty_claims_page.dart';
 import '../../features/warranties/presentation/pages/warranty_analytics_page.dart';
+import '../../features/call_monitoring/presentation/pages/call_sessions_page.dart';
 import '../../shared/pages/unauthorized_page.dart';
 import '../rbac/permission_guard.dart';
 
@@ -272,6 +273,13 @@ final routerProvider = Provider<GoRouter>((ref) {
             name: 'warrantyAnalytics',
             pageBuilder: (context, state) => const NoTransitionPage(
               child: WarrantyAnalyticsPage(),
+            ),
+          ),
+          GoRoute(
+            path: '/dashboard/call-sessions',
+            name: 'callSessions',
+            pageBuilder: (context, state) => const NoTransitionPage(
+              child: CallSessionsPage(),
             ),
           ),
           GoRoute(

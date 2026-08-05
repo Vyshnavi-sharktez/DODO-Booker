@@ -20,6 +20,7 @@ import '../../amc/screens/amc_contract_details_screen.dart';
 import '../../amc/providers/amc_contract_provider.dart';
 import '../../amc/models/amc_contract_model.dart';
 import '../../warranties/widgets/warranty_card.dart';
+import '../../call_bridge/widgets/call_bridge_dialog.dart';
 
 class BookingDetailsScreen extends ConsumerStatefulWidget {
   final MyBookingModel booking;
@@ -783,12 +784,30 @@ class _VendorCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final tt = Theme.of(context).textTheme;
-    final hasVendor = booking.vendorName != null;
+    final isVendorAssigned = (booking.vendorId != null && booking.vendorId!.isNotEmpty) ||
+        (booking.vendorName != null && booking.vendorName!.isNotEmpty);
+
+    final vendorDisplayName = (booking.vendorName != null && booking.vendorName!.isNotEmpty)
+        ? booking.vendorName!
+        : 'Assigned Vendor';
+
+    final statusLower = booking.status.toLowerCase();
+    final isCallActiveStatus = const {
+      'assigned',
+      'assigned_to_dodo_team',
+      'accepted',
+      'en_route',
+      'in_progress',
+      'started',
+      'awaiting_verification',
+    }.contains(statusLower);
+
+    final showCallButton = isVendorAssigned && isCallActiveStatus;
 
     return _SectionCard(
       title: 'ASSIGNED VENDOR',
       children: [
-        if (hasVendor)
+        if (isVendorAssigned) ...[
           Row(
             children: [
               Container(
@@ -800,7 +819,7 @@ class _VendorCard extends StatelessWidget {
                 ),
                 child: Center(
                   child: Text(
-                    booking.vendorName![0].toUpperCase(),
+                    vendorDisplayName[0].toUpperCase(),
                     style: const TextStyle(
                       color: AppColors.primary,
                       fontWeight: FontWeight.w800,
@@ -813,48 +832,75 @@ class _VendorCard extends StatelessWidget {
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
                   children: [
                     Text(
-                      booking.vendorName!,
+                      vendorDisplayName,
                       style: tt.titleSmall?.copyWith(
                         fontWeight: FontWeight.w700,
                       ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
-                    if (booking.vendorPhone != null)
-                      Text(
-                        booking.vendorPhone!,
-                        style: tt.bodySmall?.copyWith(
-                          color: AppColors.textSecondary,
+                    const SizedBox(height: 2),
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.shield_rounded, size: 12, color: AppColors.primary),
+                        const SizedBox(width: 4),
+                        Flexible(
+                          child: Text(
+                            'Protected via DODO Call Bridge',
+                            style: tt.bodySmall?.copyWith(
+                              color: AppColors.primary,
+                              fontWeight: FontWeight.w600,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
                         ),
-                      ),
+                      ],
+                    ),
                   ],
                 ),
               ),
-              if (booking.vendorPhone != null)
-                Container(
-                  decoration: const BoxDecoration(
-                    color: AppColors.primaryLight,
-                    shape: BoxShape.circle,
-                  ),
-                  child: IconButton(
-                    icon: const Icon(Icons.phone_rounded, size: 18),
-                    color: AppColors.primary,
-                    tooltip: 'Copy phone number',
-                    onPressed: () {
-                      Clipboard.setData(
-                        ClipboardData(text: booking.vendorPhone!),
-                      );
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Phone number copied to clipboard'),
-                          duration: Duration(seconds: 2),
-                        ),
-                      );
-                    },
-                  ),
-                ),
             ],
-          )
+          ),
+          if (showCallButton) ...[
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: () {
+                  CallBridgeDialog.show(
+                    context,
+                    bookingId: booking.id,
+                    bookingNumber: booking.displayBookingNumber,
+                    callerId: booking.customerId ?? 'customer_1',
+                    calleeId: booking.vendorId ?? 'vendor_1',
+                    callerRole: 'customer',
+                    recipientName: vendorDisplayName,
+                    bookingStatus: booking.status,
+                  );
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primary,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                  elevation: 0,
+                ),
+                icon: const Icon(Icons.phone_rounded, size: 16),
+                label: const Text(
+                  'Call via DODO',
+                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
+                ),
+              ),
+            ),
+          ],
+        ]
         else
           Row(
             children: [

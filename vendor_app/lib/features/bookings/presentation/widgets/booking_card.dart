@@ -12,6 +12,7 @@ import 'booking_status_badge.dart';
 import 'dispatch_countdown_timer.dart';
 import 'reject_dialog.dart';
 import 'service_photo_sheet.dart';
+import '../../../call_bridge/widgets/call_bridge_dialog.dart';
 
 class BookingCard extends ConsumerStatefulWidget {
   const BookingCard({super.key, required this.booking});
@@ -681,6 +682,81 @@ class _BookingCardState extends ConsumerState<BookingCard> {
                 label: _booking.address!,
                 maxLines: 2,
               ),
+
+            if (['assigned', 'accepted', 'in_progress'].contains(_booking.status.toLowerCase())) ...[
+              const SizedBox(height: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                decoration: BoxDecoration(
+                  color: AppColors.primary.withValues(alpha: 0.06),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: AppColors.primary.withValues(alpha: 0.2)),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.shield_rounded, size: 16, color: AppColors.primary),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            _booking.customerName ?? 'Customer',
+                            style: const TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                              color: AppColors.textPrimary,
+                            ),
+                          ),
+                          const Text(
+                            'Protected via DODO Virtual Call Bridge',
+                            style: TextStyle(
+                              fontSize: 10,
+                              color: AppColors.primary,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    ElevatedButton.icon(
+                      onPressed: () {
+                        final currentVendorId = Supabase.instance.client.auth.currentUser?.id ??
+                            ref.read(currentVendorUserProvider)?.id ??
+                            'vendor_1';
+                        final calleeCustomerId = _booking.customerId.isNotEmpty
+                            ? _booking.customerId
+                            : 'customer_1';
+                        CallBridgeDialog.show(
+                          context,
+                          bookingId: _booking.id,
+                          bookingNumber: _booking.bookingNumber,
+                          callerId: currentVendorId,
+                          calleeId: calleeCustomerId,
+                          callerRole: 'vendor',
+                          recipientName: _booking.customerName ?? 'Customer',
+                          bookingStatus: _booking.status,
+                        );
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.primary,
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                        elevation: 0,
+                      ),
+                      icon: const Icon(Icons.phone_rounded, size: 12),
+                      label: const Text(
+                        'Call Customer',
+                        style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
 
             // ── Rejection reason banner ───────────────────────────────────
             if (isRejected &&

@@ -120,6 +120,8 @@ class MyBookingModel {
   final String status;
   final String assignmentType; // 'Unassigned' | 'External Vendor' | 'DODO Team'
   final DateTime createdAt;
+  final String? customerId;
+  final String? vendorId;
   final String? vendorName;
   final String? vendorPhone;
   final String? completionOtp;
@@ -130,8 +132,6 @@ class MyBookingModel {
   final String? amcPlanName;
   final String? amcRecurrenceInterval;
   final int? amcVisitNumber;
-  // Raw service_date from DB; null when the booking is a trigger-created
-  // unscheduled placeholder (service_date = NULL in the bookings table).
   final DateTime? serviceDate;
 
   const MyBookingModel({
@@ -153,6 +153,8 @@ class MyBookingModel {
     required this.status,
     this.assignmentType = 'Unassigned',
     required this.createdAt,
+    this.customerId,
+    this.vendorId,
     this.vendorName,
     this.vendorPhone,
     this.completionOtp,
@@ -279,8 +281,12 @@ class MyBookingModel {
       status: status,
       assignmentType: assignmentType,
       createdAt: DateTime.parse(createdAtStr),
-      vendorName: (json['vendors'] as Map<String, dynamic>?)?['business_name'] as String?,
-      vendorPhone: (json['vendors'] as Map<String, dynamic>?)?['phone'] as String?,
+      customerId: json['customer_id'] as String?,
+      vendorId: json['vendor_id'] as String?,
+      vendorName: (json['vendors'] as Map<String, dynamic>?)?['business_name'] as String? ??
+          json['vendor_name'] as String?,
+      vendorPhone: (json['vendors'] as Map<String, dynamic>?)?['phone'] as String? ??
+          json['vendor_phone'] as String?,
       completionOtp: rawOtp as String?,
       timeline: (json['timeline'] as List<dynamic>?)
               ?.map((e) =>
