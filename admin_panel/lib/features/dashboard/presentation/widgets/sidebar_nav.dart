@@ -92,6 +92,12 @@ const _navItems = <_NavItem>[
     requiredPermission: 'booking.view',
   ),
   _NavItem(
+    label: 'Call Sessions',
+    icon: Icons.phone_in_talk_rounded,
+    route: '/dashboard/call-sessions',
+    requiredPermission: 'booking.view',
+  ),
+  _NavItem(
     label: 'Dispatch Analytics',
     icon: Icons.insights_rounded,
     route: '/dashboard/dispatch-analytics',

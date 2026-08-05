@@ -67,6 +67,7 @@ class BookingsService {
       debugPrint('[DODO][Bookings] Rows returned: ${rows.length}');
 
       await _injectAddons(rows);
+      await _injectVendorInfo(rows);
       await _injectReviewFlags(rows, customerId);
 
       final bookings = rows.map(MyBookingModel.fromJson).toList();
@@ -103,11 +104,42 @@ class BookingsService {
     debugPrint('[OTP][Customer] raw keys           = ${data.keys.toList()}');
 
     await _injectAddons([data]);
+    await _injectVendorInfo([data]);
 
     final booking = MyBookingModel.fromJson(data);
     debugPrint('[OTP][Customer] model.status       = ${booking.status}');
     debugPrint('[OTP][Customer] model.completionOtp= ${booking.completionOtp}');
     return booking;
+  }
+
+  Future<void> _injectVendorInfo(List<Map<String, dynamic>> rows) async {
+    if (rows.isEmpty) return;
+    final vendorIds = rows
+        .map((r) => r['vendor_id'] as String?)
+        .where((id) => id != null && id.isNotEmpty)
+        .cast<String>()
+        .toSet()
+        .toList();
+    if (vendorIds.isEmpty) return;
+    try {
+      final vendorsData = await _client
+          .from('vendors')
+          .select('id, business_name, phone')
+          .inFilter('id', vendorIds);
+      final vendorMap = <String, Map<String, dynamic>>{};
+      for (final v in vendorsData as List<dynamic>) {
+        final m = Map<String, dynamic>.from(v as Map);
+        vendorMap[m['id'] as String] = m;
+      }
+      for (final row in rows) {
+        final vid = row['vendor_id'] as String?;
+        if (vid != null && vendorMap.containsKey(vid)) {
+          row['vendors'] = vendorMap[vid];
+        }
+      }
+    } catch (e) {
+      debugPrint('[DODO][Bookings] Warning: vendors fetch failed: $e');
+    }
   }
 
   // Batch-fetches review presence for completed bookings owned by this customer.
