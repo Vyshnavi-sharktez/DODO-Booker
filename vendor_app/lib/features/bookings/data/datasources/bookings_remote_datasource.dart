@@ -81,9 +81,31 @@ class BookingsRemoteDatasource {
     String bookingId,
     String newStatus,
   ) async {
+    final payload = <String, dynamic>{'status': newStatus};
+    if (newStatus.toLowerCase() == 'accepted') {
+      payload['dispatch_status'] = 'accepted';
+    }
+
     await _client
         .from('bookings')
-        .update({'status': newStatus}).eq('id', bookingId);
+        .update(payload)
+        .eq('id', bookingId);
+
+    if (newStatus.toLowerCase() == 'completed') {
+      try {
+        final nowIso = DateTime.now().toIso8601String();
+        await _client
+            .from('service_warranties')
+            .update({
+              'status': 'Resolved',
+              'updated_at': nowIso,
+            })
+            .eq('rework_booking_id', bookingId);
+        debugPrint('[DODO][VendorDS] Linked service_warranties status synced to Resolved for rework_booking_id="$bookingId"');
+      } catch (e) {
+        debugPrint('[DODO][VendorDS] Warning: service_warranties status sync failed: $e');
+      }
+    }
   }
 
   Future<Map<String, dynamic>> dispatchBookingNextTier(String bookingId) async {
@@ -191,6 +213,22 @@ class BookingsRemoteDatasource {
 
     final newStatus = updated.first['status'] as String?;
     debugPrint('[OTP][DS] ✓ UPDATE succeeded — newStatus="$newStatus"');
+
+    // Automatically synchronize linked service_warranties record to 'Resolved'
+    try {
+      final nowIso = DateTime.now().toIso8601String();
+      await _client
+          .from('service_warranties')
+          .update({
+            'status': 'Resolved',
+            'updated_at': nowIso,
+          })
+          .eq('rework_booking_id', bookingId);
+      debugPrint('[OTP][DS] ✓ Linked service_warranties updated to Resolved for rework_booking_id="$bookingId"');
+    } catch (e) {
+      debugPrint('[OTP][DS] Warning: Failed to update linked service_warranties status: $e');
+    }
+
     debugPrint('[OTP][DS] ══════════ verifyCompletionOtp() DONE → true ══════════');
     return true;
   }
@@ -230,6 +268,20 @@ class BookingsRemoteDatasource {
       'entity_type': 'booking',
       'entity_id': entityId,
     });
+  }
+
+  Future<List<String>> fetchWarrantyEvidenceImages(String bookingId) async {
+    try {
+      final rows = await _client
+          .from('booking_images')
+          .select('image_url')
+          .eq('booking_id', bookingId)
+          .or('image_type.eq.warranty_claim,image_type.eq.warranty_claim_evidence');
+      return (rows as List).map((r) => r['image_url'] as String).toList();
+    } catch (e) {
+      debugPrint('[BookingsRemoteDatasource] Error fetching evidence images: $e');
+      return [];
+    }
   }
 }
 

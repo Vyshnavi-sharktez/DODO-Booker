@@ -145,6 +145,15 @@ class SettingsPage extends ConsumerWidget {
           min: 1,
           max: 30,
         ),
+        SettingFieldDef(
+          key: 'default_warranty_days',
+          label: 'Default Service Warranty Duration',
+          hint: 'Days of active warranty granted upon booking completion',
+          type: SettingFieldType.integer,
+          unit: 'days',
+          min: 1,
+          max: 365,
+        ),
       ],
     ),
     SettingSectionDef(

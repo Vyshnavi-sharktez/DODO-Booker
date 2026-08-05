@@ -18,7 +18,8 @@ import '../widgets/cancel_booking_reason_dialog.dart';
 import '../widgets/vendor_nearby_warning_dialog.dart';
 import '../../amc/screens/amc_contract_details_screen.dart';
 import '../../amc/providers/amc_contract_provider.dart';
-import 'package:customer_app/features/amc/models/amc_contract_model.dart';
+import '../../amc/models/amc_contract_model.dart';
+import '../../warranties/widgets/warranty_card.dart';
 
 class BookingDetailsScreen extends ConsumerStatefulWidget {
   final MyBookingModel booking;
@@ -99,11 +100,13 @@ class _BookingDetailsScreenState extends ConsumerState<BookingDetailsScreen> {
             child: Column(
               children: [
                 _StatusBanner(booking: booking),
+                if (booking.isCompleted) WarrantyCard(booking: booking),
                 if (booking.completionOtp != null &&
                     _otpVisibleForStatus(booking.status))
                   _OtpDisplayCard(otp: booking.completionOtp!),
                 if (booking.isAmc) _AmcContractCard(booking: booking),
                 _BookingInfoCard(booking: booking),
+                _VendorCard(booking: booking),
                 _ServiceInfoCard(booking: booking),
                 _AddonsCard(booking: booking),
                 _ServicePhotosCard(bookingId: booking.id),

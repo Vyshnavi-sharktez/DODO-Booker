@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/utils/icon_registry.dart';
 import '../../../models/my_booking_model.dart';
+import '../../warranties/widgets/warranty_card.dart';
 
 class BookingCard extends StatelessWidget {
   final MyBookingModel booking;
@@ -188,6 +189,8 @@ class BookingCard extends StatelessWidget {
                   ),
                 ],
               ),
+
+              if (booking.isCompleted) WarrantyCard(booking: booking),
 
               const SizedBox(height: 10),
 

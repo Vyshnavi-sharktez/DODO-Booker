@@ -89,13 +89,21 @@ class _ServicePhotoSheetState extends ConsumerState<ServicePhotoSheet> {
     }
     if (source == null || !mounted) return;
 
-    XFile? picked;
+    List<XFile> pickedList = [];
     try {
-      picked = await _picker.pickImage(
-        source: source,
-        imageQuality: 80,
-        maxWidth: 1920,
-      );
+      if (source == ImageSource.gallery && !kIsWeb) {
+        pickedList = await _picker.pickMultiImage(
+          imageQuality: 80,
+          maxWidth: 1920,
+        );
+      } else {
+        final single = await _picker.pickImage(
+          source: source,
+          imageQuality: 80,
+          maxWidth: 1920,
+        );
+        if (single != null) pickedList.add(single);
+      }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -107,21 +115,23 @@ class _ServicePhotoSheetState extends ConsumerState<ServicePhotoSheet> {
       }
       return;
     }
-    if (picked == null || !mounted) return;
+    if (pickedList.isEmpty || !mounted) return;
 
     setState(() => _isUploading = true);
     try {
-      final bytes = await picked.readAsBytes();
-      final contentType = picked.mimeType ?? 'image/jpeg';
       final vendorName = ref.read(currentVendorUserProvider)?.name;
-      final url = await ref.read(bookingImagesDatasourceProvider).uploadAndSave(
-            bookingId: widget.bookingId,
-            imageType: widget.imageType,
-            bytes: bytes,
-            contentType: contentType,
-            uploadedBy: vendorName,
-          );
-      if (mounted) setState(() => _urls.add(url));
+      for (final picked in pickedList) {
+        final bytes = await picked.readAsBytes();
+        final contentType = picked.mimeType ?? 'image/jpeg';
+        final url = await ref.read(bookingImagesDatasourceProvider).uploadAndSave(
+              bookingId: widget.bookingId,
+              imageType: widget.imageType,
+              bytes: bytes,
+              contentType: contentType,
+              uploadedBy: vendorName,
+            );
+        if (mounted) setState(() => _urls.add(url));
+      }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

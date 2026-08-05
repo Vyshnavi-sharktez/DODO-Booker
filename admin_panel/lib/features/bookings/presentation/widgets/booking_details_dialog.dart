@@ -244,6 +244,32 @@ class _BookingDetailsDialogState extends ConsumerState<BookingDetailsDialog> {
                       ),
                     ),
                   ),
+                  if (booking.isWarrantyRework) ...[
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFED7D7),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(color: const Color(0xFFFEB2B2)),
+                      ),
+                      child: const Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.shield_rounded, size: 11, color: Color(0xFF9B2C2C)),
+                          SizedBox(width: 3),
+                          Text(
+                            'WARRANTY REWORK',
+                            style: TextStyle(
+                              fontSize: 10,
+                              color: Color(0xFF9B2C2C),
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                  ],
                   if (booking.isAmc) ...[
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -310,6 +336,13 @@ class _BookingDetailsDialogState extends ConsumerState<BookingDetailsDialog> {
                     _SectionLabel('Booking Info'),
                     const SizedBox(height: 12),
                     _InfoRow('Booking Number', booking.bookingNumber),
+                    if (booking.isWarrantyRework) ...[
+                      _InfoRow('Booking Type', 'Warranty Rework', bold: true),
+                      if (booking.originalBookingNumber != null)
+                        _InfoRow('Original Booking', '#${booking.originalBookingNumber}'),
+                      if (booking.reworkIssueDescription != null)
+                        _InfoRow('Reported Issue', booking.reworkIssueDescription!),
+                    ],
                     _InfoRow(
                       'Customer ID',
                       _truncateId(booking.customerId),

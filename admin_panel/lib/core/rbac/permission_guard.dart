@@ -48,6 +48,7 @@ const Map<String, String> routePermissions = {
   '/vendor-tiers': 'vendor.view',
   '/amc-plans': 'category.view',
   '/amc-scheduling-requests': 'booking.view',
+  '/warranty-claims': 'booking.view',
 };
 
 // ── Permission guard widget ────────────────────────────────────────────────────

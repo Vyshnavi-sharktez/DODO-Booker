@@ -103,6 +103,7 @@ class BookingStatus {
 
 class MyBookingModel {
   final String id;
+  final String? bookingNumber;
   final String serviceId;
   final String serviceName;
   final String? categoryName;
@@ -135,6 +136,7 @@ class MyBookingModel {
 
   const MyBookingModel({
     required this.id,
+    this.bookingNumber,
     required this.serviceId,
     required this.serviceName,
     this.categoryName,
@@ -163,6 +165,12 @@ class MyBookingModel {
     this.amcVisitNumber,
     this.serviceDate,
   });
+
+  String get displayBookingNumber {
+    if (bookingNumber != null && bookingNumber!.isNotEmpty) return bookingNumber!;
+    if (id.length > 8) return 'BK-${id.substring(0, 8).toUpperCase()}';
+    return id;
+  }
 
   bool get isDodoTeam => assignmentType == 'DODO Team';
 
@@ -250,6 +258,7 @@ class MyBookingModel {
 
     return MyBookingModel(
       id: json['id'] as String,
+      bookingNumber: json['booking_number'] as String?,
       serviceId: serviceId,
       serviceName: serviceName,
       categoryName: categoryData?['name'] as String?,

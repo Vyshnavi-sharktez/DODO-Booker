@@ -41,6 +41,8 @@ import '../../features/amc_plans/presentation/pages/amc_scheduling_requests_page
 import '../../features/dispatch_analytics/presentation/pages/dispatch_analytics_page.dart';
 import '../../features/gps_audit/presentation/pages/gps_audit_page.dart';
 import '../../features/gps_audit/presentation/pages/gps_analytics_page.dart';
+import '../../features/warranties/presentation/pages/warranty_claims_page.dart';
+import '../../features/warranties/presentation/pages/warranty_analytics_page.dart';
 import '../../shared/pages/unauthorized_page.dart';
 import '../rbac/permission_guard.dart';
 
@@ -256,6 +258,20 @@ final routerProvider = Provider<GoRouter>((ref) {
             name: 'bookings',
             pageBuilder: (context, state) => const NoTransitionPage(
               child: BookingsPage(),
+            ),
+          ),
+          GoRoute(
+            path: '/dashboard/warranty-claims',
+            name: 'warrantyClaims',
+            pageBuilder: (context, state) => const NoTransitionPage(
+              child: WarrantyClaimsPage(),
+            ),
+          ),
+          GoRoute(
+            path: '/dashboard/warranty-analytics',
+            name: 'warrantyAnalytics',
+            pageBuilder: (context, state) => const NoTransitionPage(
+              child: WarrantyAnalyticsPage(),
             ),
           ),
           GoRoute(

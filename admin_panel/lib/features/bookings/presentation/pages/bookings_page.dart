@@ -357,6 +357,10 @@ class _BookingsPageState extends ConsumerState<BookingsPage> {
           required serviceDate,
           notes,
         }) async {
+          debugPrint(
+            '[MANUAL_ASSIGN][PAGE] onSave invoked for booking #${booking.bookingNumber} (${booking.id}) '
+            'type=$assignmentType, vendorId=$vendorId, serviceDate=$serviceDate',
+          );
           final assigneeName = switch (assignmentType) {
             'External Vendor' => _vendorName(vendorId ?? ''),
             'DODO Team' => 'DODO Team',
@@ -831,6 +835,9 @@ class _BookingsPageState extends ConsumerState<BookingsPage> {
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(bookingsNotifierProvider);
+    final allBookings = state.valueOrNull ?? [];
+    final normalCount = allBookings.where((b) => !b.isAmc && !b.isWarrantyRework).length;
+    final reworkCount = allBookings.where((b) => b.isWarrantyRework).length;
     final vendors = ref.watch(vendorsNotifierProvider).valueOrNull ?? [];
     final settings = ref.watch(settingsNotifierProvider).valueOrNull ?? {};
     final windowDays = int.tryParse(
@@ -913,7 +920,7 @@ class _BookingsPageState extends ConsumerState<BookingsPage> {
           Row(
             children: [
               _TabButton(
-                label: 'All Bookings',
+                label: normalCount > 0 ? 'Normal Bookings ($normalCount)' : 'Normal Bookings',
                 icon: Icons.list_alt_rounded,
                 selected: _tab == 0,
                 onTap: () => setState(() => _tab = 0),
@@ -926,6 +933,15 @@ class _BookingsPageState extends ConsumerState<BookingsPage> {
                 icon: Icons.autorenew_rounded,
                 selected: _tab == 1,
                 onTap: () => setState(() => _tab = 1),
+              ),
+              const SizedBox(width: 8),
+              _TabButton(
+                label: reworkCount > 0
+                    ? 'Warranty Reworks ($reworkCount)'
+                    : 'Warranty Reworks',
+                icon: Icons.shield_rounded,
+                selected: _tab == 2,
+                onTap: () => setState(() => _tab = 2),
               ),
             ],
           ),
@@ -1114,8 +1130,8 @@ class _BookingsPageState extends ConsumerState<BookingsPage> {
               ),
               data: (all) {
                 if (_tab == 0) {
-                  // ── All Bookings (non-AMC only) ───────────────────────────
-                  final regular = all.where((b) => !b.isAmc).toList();
+                  // ── Normal Bookings (exclude AMC and Warranty Rework) ──────
+                  final regular = all.where((b) => !b.isAmc && !b.isWarrantyRework).toList();
                   final filtered = _applyFilters(regular);
                   if (regular.isEmpty) {
                     return _EmptyState(
@@ -1143,7 +1159,7 @@ class _BookingsPageState extends ConsumerState<BookingsPage> {
                     onDelete: _confirmDelete,
                     searchQuery: _searchQuery,
                   );
-                } else {
+                } else if (_tab == 1) {
                   // ── AMC Bookings (contract-level) ─────────────────────────
                   final contracts = _groupAmcContracts(all, windowDays);
                   if (contracts.isEmpty) {
@@ -1176,6 +1192,34 @@ class _BookingsPageState extends ConsumerState<BookingsPage> {
                         ),
                       ),
                     ],
+                  );
+                } else {
+                  // ── Warranty Rework Bookings ───────────────────────────────
+                  final reworks = all.where((b) => b.isWarrantyRework).toList();
+                  final filtered = _applyFilters(reworks);
+                  if (reworks.isEmpty) {
+                    return _EmptyState(
+                      message: 'No warranty rework bookings',
+                      sub: 'Approved customer warranty claims will generate rework bookings here.',
+                    );
+                  }
+                  if (filtered.isEmpty) {
+                    return _EmptyState(
+                      message: 'No rework bookings match your filters',
+                      sub: 'Try adjusting your search or filters.',
+                    );
+                  }
+                  return _BookingsTable(
+                    bookings: filtered,
+                    totalCount: reworks.length,
+                    vendors: vendors,
+                    onView: _openDetails,
+                    onAssign: _openAssignDialog,
+                    onHistory: _openHistoryDialog,
+                    onStartDodoService: _startDodoService,
+                    onCancel: _confirmCancel,
+                    onDelete: _confirmDelete,
+                    searchQuery: _searchQuery,
                   );
                 }
               },
@@ -1371,6 +1415,36 @@ class _BookingRow extends StatelessWidget {
                   ),
                   overflow: TextOverflow.ellipsis,
                 ),
+                if (booking.isWarrantyRework) ...[
+                  const SizedBox(height: 2),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFED7D7),
+                      borderRadius: BorderRadius.circular(4),
+                      border: Border.all(color: const Color(0xFFFEB2B2)),
+                    ),
+                    child: const Text(
+                      'WARRANTY REWORK',
+                      style: TextStyle(
+                        fontSize: 9,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF9B2C2C),
+                      ),
+                    ),
+                  ),
+                  if (booking.originalBookingNumber != null) ...[
+                    const SizedBox(height: 1),
+                    Text(
+                      'Orig: #${booking.originalBookingNumber}',
+                      style: TextStyle(
+                        fontSize: 10,
+                        color: AppColors.textSecondary,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ],
               ],
             ),
           ),
