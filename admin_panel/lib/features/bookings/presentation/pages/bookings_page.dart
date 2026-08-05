@@ -37,22 +37,26 @@ const double _tableMinWidth =
 // ── Status display config ─────────────────────────────────────────────────────
 
 const _statusConfig = <String, (String, Color, Color)>{
-  'pending':               ('Pending',            Color(0xFFDD6B20), Color(0xFFFEEBC8)),
-  'assigned':              ('Assigned',            Color(0xFF3182CE), Color(0xFFEBF8FF)),
-  'assigned_to_dodo_team': ('DODO Assigned',       Color(0xFF6B46C1), Color(0xFFF3E8FF)),
-  'accepted':              ('Accepted',            Color(0xFF2C7A7B), Color(0xFFE6FFFA)),
-  'on_the_way':            ('On The Way',          Color(0xFF4A6FA5), Color(0xFFEBF4FF)),
-  'arrived':               ('Arrived',             Color(0xFF6B46C1), Color(0xFFF3E8FF)),
-  'in_progress':           ('In Progress',         Color(0xFF805AD5), Color(0xFFFAF5FF)),
-  'completed':             ('Completed',           Color(0xFF38A169), Color(0xFFF0FFF4)),
-  'rejected':              ('Rejected',            Color(0xFFC05621), Color(0xFFFEEBC8)),
-  'cancelled':             ('Cancelled',           Color(0xFFE53E3E), Color(0xFFFFF5F5)),
+  'pending':                ('Pending',                        Color(0xFFDD6B20), Color(0xFFFEEBC8)),
+  'waiting_for_acceptance': ('Waiting for Vendor Acceptance', Color(0xFFDD6B20), Color(0xFFFEEBC8)),
+  'assigned':               ('Assigned',                       Color(0xFF3182CE), Color(0xFFEBF8FF)),
+  'assigned_to_dodo_team':  ('DODO Assigned',                  Color(0xFF6B46C1), Color(0xFFF3E8FF)),
+  'no_vendor_accepted':     ('No Vendor Accepted',             Color(0xFFE53E3E), Color(0xFFFFF5F5)),
+  'accepted':               ('Accepted',                       Color(0xFF2C7A7B), Color(0xFFE6FFFA)),
+  'on_the_way':             ('On The Way',                     Color(0xFF4A6FA5), Color(0xFFEBF4FF)),
+  'arrived':                ('Arrived',                        Color(0xFF6B46C1), Color(0xFFF3E8FF)),
+  'in_progress':            ('In Progress',                    Color(0xFF805AD5), Color(0xFFFAF5FF)),
+  'completed':              ('Completed',                      Color(0xFF38A169), Color(0xFFF0FFF4)),
+  'rejected':               ('Rejected',                       Color(0xFFC05621), Color(0xFFFEEBC8)),
+  'cancelled':              ('Cancelled',                      Color(0xFFE53E3E), Color(0xFFFFF5F5)),
 };
 
 const _allStatuses = [
   'pending',
+  'waiting_for_acceptance',
   'assigned',
   'assigned_to_dodo_team',
+  'no_vendor_accepted',
   'accepted',
   'on_the_way',
   'arrived',
@@ -184,7 +188,25 @@ class _BookingsPageState extends ConsumerState<BookingsPage> {
           .toList();
     }
     if (_statusFilter != null) {
-      result = result.where((b) => b.status == _statusFilter).toList();
+      if (_statusFilter == 'waiting_for_acceptance') {
+        result = result
+            .where((b) =>
+                b.dispatchStatus == 'dispatching' ||
+                (b.status == 'assigned' && b.dispatchStatus != 'accepted'))
+            .toList();
+      } else if (_statusFilter == 'no_vendor_accepted') {
+        result = result
+            .where((b) => b.dispatchStatus == 'exhausted')
+            .toList();
+      } else if (_statusFilter == 'assigned') {
+        result = result
+            .where((b) =>
+                (b.status == 'assigned' && b.dispatchStatus == 'accepted') ||
+                b.status == 'accepted')
+            .toList();
+      } else {
+        result = result.where((b) => b.status == _statusFilter).toList();
+      }
     }
     if (_assignedToFilter == _kUnassigned) {
       result = result.where((b) => b.isUnassigned).toList();
@@ -433,14 +455,10 @@ class _BookingsPageState extends ConsumerState<BookingsPage> {
   }
 
   void _openHistoryDialog(Booking booking) {
-    final history = ref
-        .read(vendorAssignmentHistoryProvider.notifier)
-        .forBooking(booking.id);
     showDialog(
       context: context,
       builder: (_) => AssignmentHistoryDialog(
-        bookingNumber: booking.bookingNumber,
-        entries: history,
+        booking: booking,
       ),
     );
   }
@@ -1365,6 +1383,7 @@ class _BookingRow extends StatelessWidget {
               vendorId: booking.vendorId,
               dodoTeamId: booking.dodoTeamId,
               vendors: vendors,
+              vendorName: booking.vendorName,
             ),
           ),
 
@@ -1413,7 +1432,7 @@ class _BookingRow extends StatelessWidget {
           // Status
           SizedBox(
             width: _wStatus,
-            child: _StatusBadge(status: booking.status),
+            child: _StatusBadge(booking: booking),
           ),
 
           // Total Amount
@@ -1511,12 +1530,14 @@ class _AssignedToCell extends StatelessWidget {
   final String vendorId;
   final String dodoTeamId;
   final List<Vendor> vendors;
+  final String vendorName;
 
   const _AssignedToCell({
     required this.assignmentType,
     required this.vendorId,
     required this.dodoTeamId,
     required this.vendors,
+    this.vendorName = '',
   });
 
   @override
@@ -1539,7 +1560,7 @@ class _AssignedToCell extends StatelessWidget {
       );
     }
 
-    if (assignmentType == 'Unassigned') {
+    if (assignmentType == 'Unassigned' || (vendorId.isEmpty && vendorName.isEmpty)) {
       return Row(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -1566,37 +1587,35 @@ class _AssignedToCell extends StatelessWidget {
 
     // External Vendor
     final vendor = vendors.where((v) => v.id == vendorId).firstOrNull;
-    if (vendor != null) {
-      return Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            width: 6,
-            height: 6,
-            decoration: const BoxDecoration(
-              color: Color(0xFF38A169),
-              shape: BoxShape.circle,
-            ),
-          ),
-          const SizedBox(width: 6),
-          Expanded(
-            child: Text(
-              vendor.businessName,
-              style: const TextStyle(
-                fontSize: 13,
-                color: AppColors.textPrimary,
-                fontWeight: FontWeight.w500,
-              ),
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-        ],
-      );
-    }
+    final resolvedName = vendor?.businessName ??
+        (vendorName.isNotEmpty
+            ? vendorName
+            : (vendorId.length > 8 ? '${vendorId.substring(0, 8)}…' : vendorId));
 
-    return Text(
-      vendorId.length > 8 ? '${vendorId.substring(0, 8)}…' : vendorId,
-      style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 6,
+          height: 6,
+          decoration: const BoxDecoration(
+            color: Color(0xFF38A169),
+            shape: BoxShape.circle,
+          ),
+        ),
+        const SizedBox(width: 6),
+        Expanded(
+          child: Text(
+            resolvedName,
+            style: const TextStyle(
+              fontSize: 13,
+              color: AppColors.textPrimary,
+              fontWeight: FontWeight.w500,
+            ),
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+      ],
     );
   }
 }
@@ -1670,15 +1689,12 @@ class _ServiceCell extends StatelessWidget {
 }
 
 class _StatusBadge extends StatelessWidget {
-  final String status;
-  const _StatusBadge({required this.status});
+  final Booking booking;
+  const _StatusBadge({required this.booking});
 
   @override
   Widget build(BuildContext context) {
-    final cfg = _statusConfig[status];
-    final label = cfg?.$1 ?? status;
-    final color = cfg?.$2 ?? AppColors.textSecondary;
-    final bg = cfg?.$3 ?? AppColors.background;
+    final (label, color, bg) = booking.statusConfig;
 
     return FittedBox(
       fit: BoxFit.scaleDown,

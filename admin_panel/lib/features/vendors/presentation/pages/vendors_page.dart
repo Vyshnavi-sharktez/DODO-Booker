@@ -7,6 +7,7 @@ import '../../../../core/widgets/admin_search_bar.dart';
 import '../../../../core/widgets/highlighted_text.dart';
 import '../../application/providers/vendors_providers.dart';
 import '../../domain/models/vendor.dart';
+import '../../../vendor_tiers/domain/models/vendor_tier.dart';
 import '../widgets/vendor_form_dialog.dart';
 import '../../../bulk_upload/data/modules/vendor_bulk_module.dart';
 import '../../../bulk_upload/presentation/bulk_upload_dialog.dart';
@@ -461,7 +462,7 @@ class _VendorsTable extends StatelessWidget {
                               children: [
                                 _HeaderCell('Name', flex: 3),
                                 _HeaderCell('Phone', flex: 2),
-                                _HeaderCell('Email', flex: 3),
+                                _HeaderCell('Tier', flex: 2),
                                 _HeaderCell('City', flex: 2),
                                 _HeaderCell('Status', flex: 2),
                                 _HeaderCell('Rating', flex: 1),
@@ -627,18 +628,10 @@ class _VendorRow extends StatelessWidget {
             ),
           ),
 
-          // Email
+          // Tier Badge
           Expanded(
-            flex: 3,
-            child: HighlightedText(
-              text: vendor.email,
-              query: searchQuery,
-              style: TextStyle(
-                fontSize: 13,
-                color: AppColors.accent,
-              ),
-              overflow: TextOverflow.ellipsis,
-            ),
+            flex: 2,
+            child: _VendorTierPill(tier: vendor.vendorTier),
           ),
 
           // City
@@ -867,3 +860,49 @@ class _EmptyState extends StatelessWidget {
     );
   }
 }
+
+class _VendorTierPill extends StatelessWidget {
+  final VendorTier? tier;
+
+  const _VendorTierPill({this.tier});
+
+  @override
+  Widget build(BuildContext context) {
+    if (tier == null) {
+      return Text(
+        'Unranked',
+        style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+      );
+    }
+
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          decoration: BoxDecoration(
+            color: tier!.color.withValues(alpha: 0.12),
+            borderRadius: BorderRadius.circular(6),
+            border: Border.all(color: tier!.color.withValues(alpha: 0.3)),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(tier!.iconData, size: 14, color: tier!.color),
+              const SizedBox(width: 4),
+              Text(
+                tier!.name,
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.bold,
+                  color: tier!.color,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+

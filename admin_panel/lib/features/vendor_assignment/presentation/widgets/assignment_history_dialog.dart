@@ -1,27 +1,68 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import '../../../../core/theme/app_theme.dart';
-import '../../domain/models/assignment_entry.dart';
+import '../../../bookings/application/providers/dispatch_providers.dart';
+import '../../../bookings/domain/models/booking.dart';
+import '../../../bookings/domain/models/booking_assignment_record.dart';
 
 final _dateFmt = DateFormat('dd MMM yyyy, hh:mm a');
+final _timeOnlyFmt = DateFormat('hh:mm:ss a');
 
-class AssignmentHistoryDialog extends StatelessWidget {
-  final String bookingNumber;
-  final List<AssignmentEntry> entries;
+class AssignmentHistoryDialog extends ConsumerWidget {
+  final Booking booking;
 
   const AssignmentHistoryDialog({
     super.key,
-    required this.bookingNumber,
-    required this.entries,
+    required this.booking,
   });
 
+  String _formatResponseTime(
+    BookingAssignmentRecord record,
+    int configuredTimeoutSeconds,
+  ) {
+    if (record.status == 'timed_out') {
+      int secs = configuredTimeoutSeconds;
+      if (record.respondedAt != null) {
+        final diff = record.respondedAt!.difference(record.assignedAt).inSeconds.abs();
+        if (diff > 0 && diff <= configuredTimeoutSeconds) {
+          secs = diff;
+        }
+      }
+      return '${secs}s (Timed Out)';
+    }
+    if (record.respondedAt == null) {
+      if (record.status == 'pending') return 'In progress';
+      return '—';
+    }
+    final diff = record.respondedAt!.difference(record.assignedAt);
+    final secs = diff.inSeconds.abs();
+    if (secs < 60) return '${secs}s';
+    final mins = secs ~/ 60;
+    final remSecs = secs % 60;
+    return '${mins}m ${remSecs}s';
+  }
+
+  (String label, Color color, Color bg) _statusBadge(String status) =>
+      switch (status) {
+        'accepted'  => ('Accepted', const Color(0xFF38A169), const Color(0xFFF0FFF4)),
+        'rejected'  => ('Rejected', const Color(0xFFE53E3E), const Color(0xFFFFF5F5)),
+        'timed_out' => ('Timed Out', const Color(0xFFDD6B20), const Color(0xFFFEEBC8)),
+        'pending'   => ('Pending', const Color(0xFF3182CE), const Color(0xFFEBF8FF)),
+        _           => (status, const Color(0xFF718096), const Color(0xFFEDF2F7)),
+      };
+
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final historyAsync = ref.watch(bookingAssignmentsHistoryProvider(booking.id));
+    final dispatchSettings = ref.watch(dispatchSettingsNotifierProvider).valueOrNull;
+    final timeoutSeconds = dispatchSettings?.tierTimeoutSeconds ?? 46;
+
     return Dialog(
       insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 580),
+        constraints: const BoxConstraints(maxWidth: 720),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -39,15 +80,17 @@ class AssignmentHistoryDialog extends StatelessWidget {
                   const Icon(Icons.history_rounded,
                       color: Colors.white, size: 20),
                   const SizedBox(width: 10),
-                  Text(
-                    'Assignment History — #$bookingNumber',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 16,
-                      fontWeight: FontWeight.w700,
+                  Expanded(
+                    child: Text(
+                      'Dispatch & Assignment History — #${booking.bookingNumber}',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                      ),
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
-                  const Spacer(),
                   IconButton(
                     onPressed: () => Navigator.of(context).pop(),
                     icon: const Icon(Icons.close_rounded,
@@ -59,163 +102,289 @@ class AssignmentHistoryDialog extends StatelessWidget {
             ),
 
             // ── Body ────────────────────────────────────────────────────────
-            if (entries.isEmpty)
-              Padding(
-                padding: const EdgeInsets.all(40),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(Icons.history_toggle_off_rounded,
-                        size: 48,
-                        color: AppColors.textSecondary.withValues(alpha: 0.4)),
-                    const SizedBox(height: 12),
-                    Text(
-                      'No assignment history',
-                      style: TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w600,
-                        color: AppColors.textPrimary,
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      'Assignment events are recorded within the current session.',
-                      style: TextStyle(
-                          fontSize: 13, color: AppColors.textSecondary),
-                      textAlign: TextAlign.center,
-                    ),
-                  ],
+            historyAsync.when(
+              loading: () => const SizedBox(
+                height: 240,
+                child: Center(child: CircularProgressIndicator()),
+              ),
+              error: (e, _) => SizedBox(
+                height: 240,
+                child: Center(
+                  child: Text('Failed to load history: $e',
+                      style: const TextStyle(color: AppColors.error)),
                 ),
-              )
-            else
-              ConstrainedBox(
-                constraints: const BoxConstraints(maxHeight: 400),
-                child: Column(
+              ),
+              data: (records) {
+                final acceptedRecord = records
+                    .where((r) => r.status == 'accepted')
+                    .firstOrNull;
+
+                return Column(
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    // Table header
+                    // ── Summary Banner ──────────────────────────────────────
                     Container(
-                      color: AppColors.background,
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 20, vertical: 10),
+                      padding: const EdgeInsets.all(16),
+                      margin: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: acceptedRecord != null
+                            ? const Color(0xFFF0FFF4)
+                            : (booking.dispatchStatus == 'exhausted'
+                                ? const Color(0xFFFFF5F5)
+                                : const Color(0xFFEBF8FF)),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: acceptedRecord != null
+                              ? const Color(0xFF38A169).withValues(alpha: 0.4)
+                              : (booking.dispatchStatus == 'exhausted'
+                                  ? const Color(0xFFE53E3E).withValues(alpha: 0.4)
+                                  : const Color(0xFF3182CE).withValues(alpha: 0.4)),
+                        ),
+                      ),
                       child: Row(
                         children: [
-                          _HCell('Previous Vendor', flex: 3),
-                          _HCell('New Vendor', flex: 3),
-                          _HCell('Assigned At', flex: 3),
-                          _HCell('By', flex: 2),
-                        ],
-                      ),
-                    ),
-                    const Divider(height: 1),
-                    Flexible(
-                      child: ListView.separated(
-                        shrinkWrap: true,
-                        itemCount: entries.length,
-                        separatorBuilder: (_, i) =>
-                            const Divider(height: 1),
-                        itemBuilder: (ctx, i) {
-                          final e = entries[i];
-                          return Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 20, vertical: 12),
-                            color: i == 0
-                                ? AppColors.accent.withValues(alpha: 0.04)
-                                : null,
-                            child: Row(
+                          Icon(
+                            acceptedRecord != null
+                                ? Icons.check_circle_rounded
+                                : (booking.dispatchStatus == 'exhausted'
+                                    ? Icons.cancel_rounded
+                                    : Icons.hourglass_top_rounded),
+                            size: 24,
+                            color: acceptedRecord != null
+                                ? const Color(0xFF38A169)
+                                : (booking.dispatchStatus == 'exhausted'
+                                    ? const Color(0xFFE53E3E)
+                                    : const Color(0xFF3182CE)),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                // Previous vendor
-                                Expanded(
-                                  flex: 3,
-                                  child: e.isReassignment
-                                      ? Text(
-                                          e.previousVendorName,
-                                          style: TextStyle(
-                                            fontSize: 13,
-                                            color: AppColors.textSecondary,
-                                          ),
-                                          overflow: TextOverflow.ellipsis,
-                                        )
-                                      : Text(
-                                          'Unassigned',
-                                          style: TextStyle(
-                                            fontSize: 12,
-                                            color: AppColors.textSecondary
-                                                .withValues(alpha: 0.6),
-                                            fontStyle: FontStyle.italic,
-                                          ),
-                                        ),
-                                ),
-                                // Arrow
-                                Padding(
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 4),
-                                  child: Icon(Icons.arrow_forward_rounded,
-                                      size: 14,
-                                      color: AppColors.textSecondary),
-                                ),
-                                // New vendor
-                                Expanded(
-                                  flex: 3,
-                                  child: Row(
-                                    children: [
-                                      Container(
-                                        width: 6,
-                                        height: 6,
-                                        margin: const EdgeInsets.only(
-                                            right: 6),
-                                        decoration: BoxDecoration(
-                                          color: AppColors.success,
-                                          shape: BoxShape.circle,
-                                        ),
-                                      ),
-                                      Expanded(
-                                        child: Text(
-                                          e.newVendorName,
-                                          style: const TextStyle(
-                                            fontSize: 13,
-                                            fontWeight: FontWeight.w600,
-                                            color: AppColors.textPrimary,
-                                          ),
-                                          overflow: TextOverflow.ellipsis,
-                                        ),
-                                      ),
-                                    ],
+                                Text(
+                                  acceptedRecord != null
+                                      ? 'Final Accepted Vendor: ${acceptedRecord.vendor?.businessName ?? booking.vendorName}'
+                                      : (booking.dispatchStatus == 'exhausted'
+                                          ? 'No Vendor Accepted (Dispatch Exhausted)'
+                                          : 'Auto-Dispatching in Progress'),
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.bold,
+                                    color: acceptedRecord != null
+                                        ? const Color(0xFF276749)
+                                        : (booking.dispatchStatus == 'exhausted'
+                                            ? const Color(0xFF9B2C2C)
+                                            : const Color(0xFF2C5282)),
                                   ),
                                 ),
-                                // Timestamp
-                                Expanded(
-                                  flex: 3,
-                                  child: Text(
-                                    _dateFmt.format(e.assignedAt),
-                                    style: TextStyle(
-                                      fontSize: 11,
-                                      color: AppColors.textSecondary,
-                                    ),
-                                  ),
-                                ),
-                                // Admin
-                                Expanded(
-                                  flex: 2,
-                                  child: Text(
-                                    e.adminName,
-                                    style: TextStyle(
-                                      fontSize: 12,
-                                      color: AppColors.textSecondary,
-                                    ),
-                                    overflow: TextOverflow.ellipsis,
+                                const SizedBox(height: 2),
+                                Text(
+                                  acceptedRecord != null
+                                      ? 'Accepted at ${_timeOnlyFmt.format(acceptedRecord.respondedAt ?? acceptedRecord.assignedAt)} · Response time: ${_formatResponseTime(acceptedRecord, timeoutSeconds)}'
+                                      : '${records.length} attempt(s) recorded from database',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: AppColors.textSecondary,
                                   ),
                                 ),
                               ],
                             ),
-                          );
-                        },
+                          ),
+                        ],
                       ),
                     ),
+
+                    if (records.isEmpty)
+                      const Padding(
+                        padding: EdgeInsets.all(32),
+                        child: Center(
+                          child: Text(
+                            'No assignment attempts recorded in database.',
+                            style: TextStyle(color: AppColors.textSecondary),
+                          ),
+                        ),
+                      )
+                    else
+                      ConstrainedBox(
+                        constraints: const BoxConstraints(maxHeight: 320),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            // Table Header
+                            Container(
+                              color: AppColors.background,
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 16, vertical: 10),
+                              child: const Row(
+                                children: [
+                                  _HCell('Attempt / Tier', flex: 3),
+                                  _HCell('Vendor', flex: 3),
+                                  _HCell('Assigned Time', flex: 3),
+                                  _HCell('Result', flex: 2),
+                                  _HCell('Response', flex: 2),
+                                ],
+                              ),
+                            ),
+                            const Divider(height: 1),
+                            Flexible(
+                              child: ListView.separated(
+                                shrinkWrap: true,
+                                itemCount: records.length,
+                                separatorBuilder: (context, index) =>
+                                    const Divider(height: 1),
+                                itemBuilder: (context, index) {
+                                  final r = records[index];
+                                  final (statusLabel, statusColor, statusBg) =
+                                      _statusBadge(r.status);
+                                  final vendorName = r.vendor?.businessName ??
+                                      'Vendor #${r.vendorId?.substring(0, 6) ?? ''}';
+                                  final tierName = r.vendorTier?.name ??
+                                      'Tier ${r.tierPriority ?? r.attemptNumber}';
+
+                                  return Container(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 16, vertical: 12),
+                                    color: r.status == 'accepted'
+                                        ? const Color(0xFFF0FFF4)
+                                        : null,
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Row(
+                                          children: [
+                                            // Attempt & Tier
+                                            Expanded(
+                                              flex: 3,
+                                              child: Column(
+                                                crossAxisAlignment:
+                                                    CrossAxisAlignment.start,
+                                                children: [
+                                                  Text(
+                                                    'Attempt #${r.attemptNumber}',
+                                                    style: const TextStyle(
+                                                      fontSize: 13,
+                                                      fontWeight:
+                                                          FontWeight.w700,
+                                                      color:
+                                                          AppColors.textPrimary,
+                                                    ),
+                                                  ),
+                                                  Text(
+                                                    tierName,
+                                                    style: TextStyle(
+                                                      fontSize: 11,
+                                                      color: AppColors
+                                                          .textSecondary,
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+
+                                            // Vendor
+                                            Expanded(
+                                              flex: 3,
+                                              child: Text(
+                                                vendorName,
+                                                style: const TextStyle(
+                                                  fontSize: 13,
+                                                  fontWeight: FontWeight.w600,
+                                                  color: AppColors.textPrimary,
+                                                ),
+                                                overflow: TextOverflow.ellipsis,
+                                              ),
+                                            ),
+
+                                            // Assigned Time
+                                            Expanded(
+                                              flex: 3,
+                                              child: Text(
+                                                _dateFmt.format(
+                                                    r.assignedAt.toLocal()),
+                                                style: TextStyle(
+                                                  fontSize: 11,
+                                                  color:
+                                                      AppColors.textSecondary,
+                                                ),
+                                              ),
+                                            ),
+
+                                            // Result status badge
+                                            Expanded(
+                                              flex: 2,
+                                              child: Align(
+                                                alignment: Alignment.centerLeft,
+                                                child: Container(
+                                                  padding: const EdgeInsets.symmetric(
+                                                      horizontal: 8,
+                                                      vertical: 3),
+                                                  decoration: BoxDecoration(
+                                                    color: statusBg,
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                            12),
+                                                  ),
+                                                  child: Text(
+                                                    statusLabel,
+                                                    style: TextStyle(
+                                                      fontSize: 11,
+                                                      fontWeight:
+                                                          FontWeight.w600,
+                                                      color: statusColor,
+                                                    ),
+                                                  ),
+                                                ),
+                                              ),
+                                            ),
+
+                                            // Response Time
+                                            Expanded(
+                                              flex: 2,
+                                              child: Text(
+                                                _formatResponseTime(r, timeoutSeconds),
+                                                style: TextStyle(
+                                                  fontSize: 12,
+                                                  fontWeight: FontWeight.w500,
+                                                  color:
+                                                      AppColors.textSecondary,
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+
+                                        if (r.rejectionReason != null &&
+                                            r.rejectionReason!.isNotEmpty) ...[
+                                          const SizedBox(height: 6),
+                                          Padding(
+                                            padding:
+                                                const EdgeInsets.only(left: 4),
+                                            child: Text(
+                                              'Reason: "${r.rejectionReason}"',
+                                              style: const TextStyle(
+                                                fontSize: 11,
+                                                fontStyle: FontStyle.italic,
+                                                color: AppColors.error,
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ],
+                                    ),
+                                  );
+                                },
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
                   ],
-                ),
-              ),
+                );
+              },
+            ),
 
             // ── Footer ──────────────────────────────────────────────────────
             Container(
@@ -225,18 +394,13 @@ class AssignmentHistoryDialog extends StatelessWidget {
               ),
               child: Row(
                 children: [
-                  if (entries.isNotEmpty)
-                    Text(
-                      '${entries.length} event${entries.length == 1 ? '' : 's'} this session',
-                      style: TextStyle(
-                          fontSize: 12, color: AppColors.textSecondary),
-                    ),
                   const Spacer(),
                   OutlinedButton(
                     onPressed: () => Navigator.of(context).pop(),
                     style: OutlinedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 24, vertical: 12)),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 24, vertical: 12),
+                    ),
                     child: const Text('Close'),
                   ),
                 ],

@@ -1,3 +1,4 @@
+import 'package:flutter/material.dart';
 import 'customer.dart';
 import 'customer_address.dart';
 
@@ -70,6 +71,7 @@ class CustomerBooking {
   final String assignmentType;
   final DateTime? serviceDate;
   final String status;
+  final String dispatchStatus;
   final double subtotal;
   final double discountAmount;
   final double totalAmount;
@@ -89,6 +91,7 @@ class CustomerBooking {
     required this.assignmentType,
     this.serviceDate,
     required this.status,
+    this.dispatchStatus = 'idle',
     required this.subtotal,
     required this.discountAmount,
     required this.totalAmount,
@@ -98,6 +101,33 @@ class CustomerBooking {
     required this.items,
     this.review,
   });
+
+  (String label, Color textColor, Color bgColor) get statusConfig {
+    if (dispatchStatus == 'exhausted') {
+      return ('No Vendor Accepted', const Color(0xFFE53E3E), const Color(0xFFFFF5F5));
+    }
+    if (dispatchStatus == 'dispatching' || (status == 'assigned' && dispatchStatus != 'accepted')) {
+      return ('Waiting for Vendor Acceptance', const Color(0xFFDD6B20), const Color(0xFFFEEBC8));
+    }
+    if (status == 'accepted' || (status == 'assigned' && dispatchStatus == 'accepted')) {
+      return ('Assigned', const Color(0xFF3182CE), const Color(0xFFEBF8FF));
+    }
+    if (status == 'assigned_to_dodo_team') {
+      return ('DODO Assigned', const Color(0xFF6B46C1), const Color(0xFFF3E8FF));
+    }
+    return switch (status) {
+      'pending'     => ('Pending', const Color(0xFFDD6B20), const Color(0xFFFEEBC8)),
+      'assigned'    => ('Assigned', const Color(0xFF3182CE), const Color(0xFFEBF8FF)),
+      'accepted'    => ('Assigned', const Color(0xFF3182CE), const Color(0xFFEBF8FF)),
+      'on_the_way'  => ('On The Way', const Color(0xFF4A6FA5), const Color(0xFFEBF4FF)),
+      'arrived'     => ('Arrived', const Color(0xFF6B46C1), const Color(0xFFF3E8FF)),
+      'in_progress' => ('In Progress', const Color(0xFF805AD5), const Color(0xFFFAF5FF)),
+      'completed'   => ('Completed', const Color(0xFF38A169), const Color(0xFFF0FFF4)),
+      'rejected'    => ('Rejected', const Color(0xFFC05621), const Color(0xFFFEEBC8)),
+      'cancelled'   => ('Cancelled', const Color(0xFFE53E3E), const Color(0xFFFFF5F5)),
+      _             => (status, const Color(0xFF718096), const Color(0xFFEDF2F7)),
+    };
+  }
 
   factory CustomerBooking.fromMap(Map<String, dynamic> map) {
     final vendor =
@@ -133,6 +163,7 @@ class CustomerBooking {
           ? DateTime.tryParse(map['service_date'] as String)
           : null,
       status: (map['status'] as String?) ?? 'pending',
+      dispatchStatus: (map['dispatch_status'] as String?) ?? 'idle',
       subtotal: (map['subtotal'] as num?)?.toDouble() ?? 0.0,
       discountAmount: (map['discount_amount'] as num?)?.toDouble() ?? 0.0,
       totalAmount: (map['total_amount'] as num?)?.toDouble() ?? 0.0,

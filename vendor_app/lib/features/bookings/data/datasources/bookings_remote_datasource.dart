@@ -14,6 +14,7 @@ class BookingsRemoteDatasource {
     address, notes, created_at, rejection_reason, rejected_at,
     completion_otp, otp_verified_at,
     is_amc, amc_plan_name, amc_recurrence_interval, amc_contract_id,
+    dispatch_status, current_dispatch_tier_priority, dispatch_started_at, last_dispatch_attempt_at,
     booking_items(
       service_id,
       quantity,
@@ -26,12 +27,29 @@ class BookingsRemoteDatasource {
   Future<List<Map<String, dynamic>>> fetchVendorBookings(
     String vendorId,
   ) async {
+    int timeout = 60;
+    try {
+      final settings = await _client
+          .from('dispatch_settings')
+          .select('tier_timeout_seconds')
+          .limit(1)
+          .maybeSingle();
+      if (settings != null && settings['tier_timeout_seconds'] != null) {
+        timeout = settings['tier_timeout_seconds'] as int;
+      }
+    } catch (_) {}
+
     final data = await _client
         .from('bookings')
         .select(_select)
         .eq('vendor_id', vendorId)
         .order('created_at', ascending: false);
-    return List<Map<String, dynamic>>.from(data as List);
+
+    final list = List<Map<String, dynamic>>.from(data as List);
+    for (final row in list) {
+      row['tier_timeout_seconds'] = timeout;
+    }
+    return list;
   }
 
   Future<List<Map<String, dynamic>>> fetchDodoTeamBookings(
@@ -66,6 +84,13 @@ class BookingsRemoteDatasource {
     await _client
         .from('bookings')
         .update({'status': newStatus}).eq('id', bookingId);
+  }
+
+  Future<Map<String, dynamic>> dispatchBookingNextTier(String bookingId) async {
+    final response = await _client.rpc('dispatch_booking_next_tier', params: {
+      'p_booking_id': bookingId,
+    });
+    return (response as Map<String, dynamic>?) ?? {};
   }
 
   // vendor_id is intentionally NOT set to null — the vendor retains ownership

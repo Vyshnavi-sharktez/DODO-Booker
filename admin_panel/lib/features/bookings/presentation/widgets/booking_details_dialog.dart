@@ -194,17 +194,19 @@ class _BookingDetailsDialogState extends ConsumerState<BookingDetailsDialog> {
     final bookingCustomer =
         customers.where((c) => c.id == booking.customerId).firstOrNull;
 
+    final vendorNameResolved = vendor?.businessName ??
+        (booking.vendorName.isNotEmpty
+            ? booking.vendorName
+            : _truncateId(booking.vendorId));
+
     final assignedToLabel = switch (booking.assignmentType) {
       'External Vendor' =>
-        vendor?.businessName ?? _truncateId(booking.vendorId),
+        vendorNameResolved.isNotEmpty ? vendorNameResolved : 'Unassigned',
       'DODO Team' => team?.teamName ?? _truncateId(booking.dodoTeamId),
       _ => 'Unassigned',
     };
 
-    final statusCfg = _statusConfig[booking.status];
-    final statusLabel = statusCfg?.$1 ?? booking.status;
-    final statusColor = statusCfg?.$2 ?? AppColors.textSecondary;
-    final statusBg = statusCfg?.$3 ?? AppColors.background;
+    final (statusLabel, statusColor, statusBg) = booking.statusConfig;
 
     return Dialog(
       insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
@@ -315,6 +317,10 @@ class _BookingDetailsDialogState extends ConsumerState<BookingDetailsDialog> {
                     ),
                     _InfoRow('Assignment Type', booking.assignmentType),
                     _InfoRow('Assigned To', assignedToLabel),
+                    if (booking.assignmentType == 'External Vendor' &&
+                        vendorNameResolved.isNotEmpty &&
+                        vendorNameResolved != 'Unassigned')
+                      _InfoRow('Accepted By', vendorNameResolved, bold: true),
                     _InfoRow(
                       'Service Date',
                       booking.serviceDate != null

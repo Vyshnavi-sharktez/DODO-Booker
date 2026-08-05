@@ -9,6 +9,7 @@ import '../../../../core/widgets/admin_back_button.dart';
 import '../../../vendor_settlement/application/providers/vendor_settlement_providers.dart';
 import '../../application/providers/vendor_detail_providers.dart';
 import '../../application/providers/vendors_providers.dart';
+import '../../data/vendors_repository.dart';
 import '../../domain/models/vendor.dart';
 import '../../domain/models/vendor_detail.dart';
 import '../../domain/models/vendor_penalty_record.dart';
@@ -278,6 +279,10 @@ class _OverviewTab extends ConsumerWidget {
                 label: 'Business Address',
                 value: vendor.address ?? '—'),
           ]),
+          const SizedBox(height: 24),
+          _SectionTitle('Vendor Tier & Performance'),
+          const SizedBox(height: 12),
+          _VendorPerformanceSection(vendor: vendor),
           const SizedBox(height: 24),
           _SectionTitle('Business Details'),
           const SizedBox(height: 12),
@@ -1526,3 +1531,209 @@ class _DetailRow extends StatelessWidget {
     );
   }
 }
+
+class _VendorPerformanceSection extends ConsumerStatefulWidget {
+  final Vendor vendor;
+  const _VendorPerformanceSection({required this.vendor});
+
+  @override
+  ConsumerState<_VendorPerformanceSection> createState() =>
+      _VendorPerformanceSectionState();
+}
+
+class _VendorPerformanceSectionState
+    extends ConsumerState<_VendorPerformanceSection> {
+  bool _evaluating = false;
+
+  Future<void> _reevaluateTier() async {
+    setState(() => _evaluating = true);
+    try {
+      await ref
+          .read(vendorsRepositoryProvider)
+          .evaluateVendorPerformance(widget.vendor.id);
+      ref.invalidate(vendorByIdProvider(widget.vendor.id));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Vendor tier re-evaluated successfully.'),
+            backgroundColor: AppColors.success,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to evaluate vendor performance: $e'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _evaluating = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final v = widget.vendor;
+    final tier = v.vendorTier;
+    final evalTime = v.tierEvaluatedAt != null
+        ? DateFormat('dd MMM yyyy, hh:mm a').format(v.tierEvaluatedAt!)
+        : 'Never evaluated';
+
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
+                children: [
+                  if (tier != null) ...[
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: tier.color.withValues(alpha: 0.15),
+                        shape: BoxShape.circle,
+                        border:
+                            Border.all(color: tier.color.withValues(alpha: 0.4)),
+                      ),
+                      child: Icon(tier.iconData, color: tier.color, size: 22),
+                    ),
+                    const SizedBox(width: 12),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          tier.name,
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: tier.color,
+                          ),
+                        ),
+                        Text(
+                          'Priority Rank #${tier.priority}',
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: AppColors.textSecondary,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ] else ...[
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: AppColors.background,
+                        shape: BoxShape.circle,
+                        border: Border.all(color: AppColors.border),
+                      ),
+                      child: const Icon(Icons.workspace_premium_rounded,
+                          color: AppColors.textSecondary, size: 22),
+                    ),
+                    const SizedBox(width: 12),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Unranked Vendor',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: AppColors.textPrimary,
+                          ),
+                        ),
+                        Text(
+                          'Evaluated: $evalTime',
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: AppColors.textSecondary,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ],
+              ),
+              OutlinedButton.icon(
+                style: OutlinedButton.styleFrom(
+                  minimumSize: const Size(0, 38),
+                ),
+                onPressed: _evaluating ? null : _reevaluateTier,
+                icon: _evaluating
+                    ? const SizedBox(
+                        width: 14,
+                        height: 14,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.sync_rounded, size: 16),
+                label: const Text('Recalculate Tier'),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          const Divider(height: 1),
+          const SizedBox(height: 16),
+
+          // Live Metrics Async Loader
+          FutureBuilder<VendorPerformanceMetrics>(
+            future: ref
+                .read(vendorsRepositoryProvider)
+                .getVendorPerformanceMetrics(v.id),
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const Center(
+                  child: Padding(
+                    padding: EdgeInsets.all(16.0),
+                    child: CircularProgressIndicator(),
+                  ),
+                );
+              }
+              if (snapshot.hasError) {
+                return Text(
+                  'Error loading metrics: ${snapshot.error}',
+                  style:
+                      const TextStyle(color: AppColors.error, fontSize: 12),
+                );
+              }
+
+              final metrics = snapshot.data!;
+              return _InfoGrid(children: [
+                _InfoCell(
+                  icon: Icons.check_circle_rounded,
+                  label: 'Completed Orders',
+                  value: '${metrics.completedBookings}',
+                ),
+                _InfoCell(
+                  icon: Icons.star_rounded,
+                  label: 'Average Rating',
+                  value: '${metrics.avgRating.toStringAsFixed(1)} ★',
+                ),
+                _InfoCell(
+                  icon: Icons.cancel_rounded,
+                  label: 'Cancellation Rate',
+                  value: '${metrics.cancellationRate.toStringAsFixed(1)}%',
+                ),
+                _InfoCell(
+                  icon: Icons.task_alt_rounded,
+                  label: 'Completion Rate',
+                  value: '${metrics.completionRate.toStringAsFixed(1)}%',
+                ),
+              ]);
+            },
+          ),
+        ],
+      ),
+    );
+  }
+}
+

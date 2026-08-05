@@ -4,6 +4,9 @@ import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../domain/models/booking.dart';
 import '../domain/models/booking_addon.dart';
+import '../domain/models/booking_assignment_record.dart';
+import '../domain/models/dispatch_settings.dart';
+import '../../vendors/domain/models/vendor.dart';
 
 String _generateOtp() => (100000 + Random().nextInt(900000)).toString();
 
@@ -11,6 +14,7 @@ String _generateOtp() => (100000 + Random().nextInt(900000)).toString();
 // without a recognised FK. Addons are fetched via a separate query.
 const _reviewSelect = '''
   *,
+  vendors(id, business_name),
   customer_reviews!booking_id(id, rating, review_text, created_at),
   booking_items(
     service_id,
@@ -285,5 +289,74 @@ class BookingsRepository {
 
   Future<void> deleteBooking(String id) async {
     await _supabase.from('bookings').delete().eq('id', id);
+  }
+
+  // ── Phase 4 Dispatch Engine Methods ─────────────────────────────────────────
+
+  Future<DispatchSettings> fetchDispatchSettings() async {
+    final data = await _supabase
+        .from('dispatch_settings')
+        .select('*')
+        .limit(1)
+        .maybeSingle();
+    if (data == null) {
+      return const DispatchSettings(
+        id: '',
+        isTierDispatchEnabled: true,
+        tierTimeoutSeconds: 60,
+        maxAttemptsPerTier: 1,
+      );
+    }
+    return DispatchSettings.fromMap(data);
+  }
+
+  Future<DispatchSettings> updateDispatchSettings(DispatchSettings settings) async {
+    final userId = _supabase.auth.currentUser?.id;
+    final payload = settings.toMap();
+    if (userId != null) payload['updated_by'] = userId;
+    payload['updated_at'] = DateTime.now().toIso8601String();
+
+    final data = await _supabase
+        .from('dispatch_settings')
+        .update(payload)
+        .eq('id', settings.id)
+        .select('*')
+        .single();
+    return DispatchSettings.fromMap(data);
+  }
+
+  Future<Map<String, dynamic>> dispatchBookingNextTier(String bookingId) async {
+    final response = await _supabase.rpc('dispatch_booking_next_tier', params: {
+      'p_booking_id': bookingId,
+    });
+    return (response as Map<String, dynamic>?) ?? {};
+  }
+
+  Future<List<BookingAssignmentRecord>> fetchBookingAssignmentsHistory(
+      String bookingId) async {
+    final data = await _supabase
+        .from('booking_assignments')
+        .select('*, vendors(*), vendor_tiers(*), bookings(booking_number)')
+        .eq('booking_id', bookingId)
+        .order('assigned_at', ascending: true);
+    return (data as List<dynamic>)
+        .map((r) => BookingAssignmentRecord.fromMap(r as Map<String, dynamic>))
+        .toList();
+  }
+
+  Future<List<BookingAssignmentRecord>> fetchAllBookingAssignmentsHistory() async {
+    final data = await _supabase
+        .from('booking_assignments')
+        .select('*, vendors(*), vendor_tiers(*), bookings(booking_number)')
+        .order('assigned_at', ascending: false);
+    return (data as List<dynamic>)
+        .map((r) => BookingAssignmentRecord.fromMap(r as Map<String, dynamic>))
+        .toList();
+  }
+
+  Future<int> processPendingDispatchEscalations() async {
+    final response =
+        await _supabase.rpc('process_pending_dispatch_escalations');
+    return (response as num?)?.toInt() ?? 0;
   }
 }

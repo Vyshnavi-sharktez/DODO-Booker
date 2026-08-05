@@ -35,8 +35,10 @@ import '../../features/service_availability_areas/presentation/pages/service_ava
 import '../../features/surge_fees/presentation/pages/surge_fee_settings_page.dart';
 import '../../features/seo/presentation/pages/seo_management_page.dart';
 import '../../features/vendor_subscriptions/presentation/pages/vendor_subscriptions_page.dart';
+import '../../features/vendor_tiers/presentation/pages/vendor_tiers_page.dart';
 import '../../features/amc_plans/presentation/pages/amc_plans_page.dart';
 import '../../features/amc_plans/presentation/pages/amc_scheduling_requests_page.dart';
+import '../../features/dispatch_analytics/presentation/pages/dispatch_analytics_page.dart';
 import '../../features/gps_audit/presentation/pages/gps_audit_page.dart';
 import '../../features/gps_audit/presentation/pages/gps_analytics_page.dart';
 import '../../shared/pages/unauthorized_page.dart';
@@ -257,6 +259,13 @@ final routerProvider = Provider<GoRouter>((ref) {
             ),
           ),
           GoRoute(
+            path: '/dashboard/dispatch-analytics',
+            name: 'dispatchAnalytics',
+            pageBuilder: (context, state) => const NoTransitionPage(
+              child: DispatchAnalyticsPage(),
+            ),
+          ),
+          GoRoute(
             path: '/dashboard/customers',
             name: 'customers',
             pageBuilder: (context, state) => const NoTransitionPage(
@@ -375,6 +384,13 @@ final routerProvider = Provider<GoRouter>((ref) {
             name: 'vendorSubscriptions',
             pageBuilder: (context, state) => const NoTransitionPage(
               child: VendorSubscriptionsPage(),
+            ),
+          ),
+          GoRoute(
+            path: '/dashboard/vendor-tiers',
+            name: 'vendorTiers',
+            pageBuilder: (context, state) => const NoTransitionPage(
+              child: VendorTiersPage(),
             ),
           ),
           GoRoute(

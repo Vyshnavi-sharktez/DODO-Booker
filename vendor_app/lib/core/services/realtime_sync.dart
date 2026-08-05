@@ -91,9 +91,10 @@ class VendorRealtimeSync {
   }
 
   void _invalidateBookings() {
-    debugPrint('[DODO][VendorSync] invalidating vendorBookingsProvider + dashboardStatsProvider');
+    debugPrint('[DODO][VendorSync] invalidating vendorBookingsProvider + dashboardStatsProvider + vendorNotificationsProvider');
     _ref.invalidate(vendorBookingsProvider);
     _ref.invalidate(dashboardStatsProvider);
+    _ref.invalidate(vendorNotificationsProvider);
   }
 
   // ── Settings ────────────────────────────────────────────────────────────────

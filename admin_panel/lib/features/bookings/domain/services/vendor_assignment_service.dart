@@ -3,6 +3,7 @@ import '../../../dodo_teams/domain/models/dodo_team.dart';
 import '../../../vendor_serving_areas/domain/models/vendor_serving_area.dart';
 import '../../../vendors/domain/models/vendor.dart';
 import '../../../vendors/domain/models/vendor_detail.dart';
+import '../../../vendor_tiers/domain/models/vendor_tier.dart';
 
 // ── Unified assignee representation ───────────────────────────────────────────
 
@@ -18,6 +19,7 @@ class AssigneeCandidate {
   final double? distanceKm; // populated only by legacy Haversine path
   final AssigneeStatus status;
   final AssigneeKind kind;
+  final VendorTier? vendorTier;
   // True when the booking is COD and this vendor has no active subscription.
   // Selection is disabled in the assignment dialog; backend enforces the same rule.
   final bool ineligibleForCod;
@@ -30,6 +32,7 @@ class AssigneeCandidate {
     this.distanceKm,
     required this.status,
     required this.kind,
+    this.vendorTier,
     this.ineligibleForCod = false,
   });
 
@@ -48,6 +51,7 @@ class AssigneeCandidate {
             ? AssigneeStatus.available
             : AssigneeStatus.offline,
         kind: AssigneeKind.vendor,
+        vendorTier: v.vendorTier,
         ineligibleForCod: ineligibleForCod,
       );
 
@@ -65,6 +69,7 @@ class AssigneeCandidate {
                 _ => AssigneeStatus.offline,
               },
         kind: AssigneeKind.team,
+        vendorTier: null,
       );
 }
 
@@ -98,6 +103,24 @@ class VendorAssignmentService {
 
   static double _rad(double deg) => deg * pi / 180;
 
+  /// Comparator prioritizing candidates by Vendor Tier Priority (Rank 1 first),
+  /// then by Rating (highest first), then by Name (alphabetical).
+  static int compareCandidates(AssigneeCandidate a, AssigneeCandidate b) {
+    final priorityA = a.vendorTier?.priority ?? 99999;
+    final priorityB = b.vendorTier?.priority ?? 99999;
+    if (priorityA != priorityB) {
+      return priorityA.compareTo(priorityB);
+    }
+
+    final ratingA = a.rating ?? 0.0;
+    final ratingB = b.rating ?? 0.0;
+    if (ratingA != ratingB) {
+      return ratingB.compareTo(ratingA);
+    }
+
+    return a.name.compareTo(b.name);
+  }
+
   /// Legacy — unchanged.
   static List<VendorCandidate> rankEligibleVendors({
     required double bookingLat,
@@ -126,28 +149,24 @@ class VendorAssignmentService {
         ));
       }
     }
-    return candidates..sort((a, b) => a.distanceKm.compareTo(b.distanceKm));
+    // Sort by tier priority first, then distance
+    return candidates..sort((a, b) {
+      final pA = a.vendor.vendorTier?.priority ?? 99999;
+      final pB = b.vendor.vendorTier?.priority ?? 99999;
+      if (pA != pB) return pA.compareTo(pB);
+      return a.distanceKm.compareTo(b.distanceKm);
+    });
   }
 
   // ── Service-area text matching ─────────────────────────────────────────────
 
-  /// Returns true if this service area's [area] name appears (case-insensitive,
-  /// trimmed) as a substring in [addressLower] (the booking address, already
-  /// lowercased). Only the [area] field is checked — city and pincode are NOT
-  /// used to avoid false positives from broad city-level matches.
   static bool _serviceAreaMatchesAddress(
       VendorServiceArea sa, String addressLower) {
     final area = sa.area?.trim().toLowerCase();
     return area != null && area.isNotEmpty && addressLower.contains(area);
   }
 
-  /// Returns `({inArea, all})` for the assignment dialog.
-  ///
-  /// - inArea: active vendors whose [vendor_service_areas] contain at least
-  ///   one entry whose city/area/pincode appears in [bookingAddress], sorted
-  ///   alphabetically. Empty when no address is provided.
-  /// - all: every active vendor — in-area ones first, then the rest,
-  ///   both groups sorted alphabetically.
+  /// Returns `({inArea, all})` sorted by Tier Priority -> Rating -> Name.
   static ({List<AssigneeCandidate> inArea, List<AssigneeCandidate> all})
       rankVendorAssignees({
     String? bookingAddress,
@@ -180,22 +199,13 @@ class VendorAssignmentService {
       }
     }
 
-    inArea.sort((a, b) => a.name.compareTo(b.name));
-    outside.sort((a, b) => a.name.compareTo(b.name));
+    inArea.sort(compareCandidates);
+    outside.sort(compareCandidates);
 
     return (inArea: inArea, all: [...inArea, ...outside]);
   }
 
-  /// Returns `({inArea, all})` using serving-area assignments.
-  ///
-  /// - inArea: active vendors assigned to any serving area that contains the
-  ///   booking coordinates (Haversine ≤ radius_km).  Empty when coordinates
-  ///   are absent or no matching area exists.
-  /// - all: every active vendor — in-area first, alphabetically.
-  /// - [busyVendorIds]: vendor IDs with a committed booking on the service date
-  ///   (statuses: accepted, in_progress, awaiting_verification).  'assigned'
-  ///   is excluded — the vendor has not yet accepted so they are still
-  ///   available.  Computed with a single batch query by the caller.
+  /// Returns `({inArea, all})` using serving-area assignments, sorted by Tier Priority.
   static ({List<AssigneeCandidate> inArea, List<AssigneeCandidate> all})
       rankVendorAssigneesByServingAreas({
     double? bookingLat,
@@ -219,6 +229,7 @@ class VendorAssignmentService {
           distanceKm: null,
           status: AssigneeStatus.busy,
           kind: AssigneeKind.vendor,
+          vendorTier: v.vendorTier,
           ineligibleForCod: ineligible,
         );
       }
@@ -227,7 +238,7 @@ class VendorAssignmentService {
 
     if (bookingLat == null || bookingLng == null) {
       final all = activeVendors.map(toCandidate).toList()
-        ..sort((a, b) => a.name.compareTo(b.name));
+        ..sort(compareCandidates);
       return (inArea: [], all: all);
     }
 
@@ -255,18 +266,13 @@ class VendorAssignmentService {
       }
     }
 
-    inArea.sort((a, b) => a.name.compareTo(b.name));
-    outside.sort((a, b) => a.name.compareTo(b.name));
+    inArea.sort(compareCandidates);
+    outside.sort(compareCandidates);
 
     return (inArea: inArea, all: [...inArea, ...outside]);
   }
 
   /// Returns `({inArea, all})` for DODO team assignment.
-  ///
-  /// - inArea: active teams whose [locality] appears in [bookingAddress],
-  ///   sorted Available → Busy → Offline.
-  /// - all: every active team in the same sort order — in-area first.
-  ///   Empty locality teams are always placed in [all] but not [inArea].
   static ({List<AssigneeCandidate> inArea, List<AssigneeCandidate> all})
       rankTeamAssignees({
     String? bookingAddress,

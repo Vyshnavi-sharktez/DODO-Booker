@@ -5,6 +5,7 @@ abstract class IBookingsRepository {
   Future<List<Booking>> getDodoTeamBookings(String dodoTeamId);
   Future<Booking?> getBookingById(String bookingId);
   Future<void> updateBookingStatus(String bookingId, String newStatus);
+  Future<Map<String, dynamic>> dispatchBookingNextTier(String bookingId);
   Future<void> rejectBooking({
     required String bookingId,
     required String rejectionReason,

@@ -23,15 +23,6 @@ final _currency = NumberFormat.currency(symbol: '₹', decimalDigits: 0);
 
 enum _AssignFilter { all, pending, assigned, inProgress, rejected }
 
-const _statusBadgeData = <String, (String, Color, Color)>{
-  'pending': ('Pending', Color(0xFFF6E05E), Color(0xFF744210)),
-  'assigned': ('Assigned', Color(0xFF90CDF4), Color(0xFF1A365D)),
-  'in_progress': ('In Progress', Color(0xFF9AE6B4), Color(0xFF1C4532)),
-  'completed': ('Completed', Color(0xFFC6F6D5), Color(0xFF276749)),
-  'cancelled': ('Cancelled', Color(0xFFFED7D7), Color(0xFF742A2A)),
-  'rejected': ('Rejected', Color(0xFFFEB2B2), Color(0xFF742A2A)),
-};
-
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 class VendorAssignmentPage extends ConsumerStatefulWidget {
@@ -243,14 +234,10 @@ class _VendorAssignmentPageState
   }
 
   void _openHistoryDialog(Booking booking) {
-    final history = ref.read(vendorAssignmentHistoryProvider
-        .notifier)
-        .forBooking(booking.id);
     showDialog(
       context: context,
       builder: (_) => AssignmentHistoryDialog(
-        bookingNumber: booking.bookingNumber,
-        entries: history,
+        booking: booking,
       ),
     );
   }
@@ -756,8 +743,8 @@ class _BookingAssignRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final b = booking;
-    final badge = _statusBadgeData[b.status] ??
-        ('Unknown', AppColors.border, AppColors.textSecondary);
+    final (label, fg, bg) = b.statusConfig;
+    final badge = (label, bg, fg);
     final serviceDateStr =
         b.serviceDate != null ? _dateFmt.format(b.serviceDate!) : '—';
     final isUnassigned = b.vendorId.isEmpty || b.status == 'pending';
