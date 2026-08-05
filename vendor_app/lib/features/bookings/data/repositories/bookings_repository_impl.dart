@@ -44,6 +44,11 @@ class BookingsRepositoryImpl implements IBookingsRepository {
   }
 
   @override
+  Future<Map<String, dynamic>> dispatchBookingNextTier(String bookingId) {
+    return _datasource.dispatchBookingNextTier(bookingId);
+  }
+
+  @override
   Future<void> rejectBooking({
     required String bookingId,
     required String rejectionReason,

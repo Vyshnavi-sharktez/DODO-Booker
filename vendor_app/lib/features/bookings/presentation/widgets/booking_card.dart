@@ -9,6 +9,7 @@ import '../../domain/models/booking_item.dart';
 import '../../../auth/presentation/providers/auth_controller.dart';
 import '../providers/bookings_provider.dart';
 import 'booking_status_badge.dart';
+import 'dispatch_countdown_timer.dart';
 import 'reject_dialog.dart';
 import 'service_photo_sheet.dart';
 
@@ -427,10 +428,21 @@ class _BookingCardState extends ConsumerState<BookingCard> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    // External vendor: assigned → Accept Service → accepted → Start Service
-    // → in_progress → Complete Service → awaiting_verification → OTP → completed.
-    // DODO Team: admin handles assignment + start; team sees in_progress → Complete Service → OTP → completed.
-    final isAssigned = _booking.status == 'assigned' && !_isDodoBooking;
+
+    // Check if dispatch timer has elapsed on client side
+    final isTimerExpired = _booking.lastDispatchAttemptAt != null &&
+        _booking.tierTimeoutSeconds > 0 &&
+        DateTime.now().difference(_booking.lastDispatchAttemptAt!.toUtc()).inSeconds >=
+            _booking.tierTimeoutSeconds;
+
+    final isDispatchExhausted = _booking.dispatchStatus == 'exhausted';
+
+    final isOfferExpired = _booking.status == 'assigned' &&
+        !_isDodoBooking &&
+        (isTimerExpired || isDispatchExhausted);
+
+    // Active incoming offer: booking is assigned, vendor is current vendor, timer not expired
+    final isAssigned = _booking.status == 'assigned' && !_isDodoBooking && !isOfferExpired;
     final isAccepted = _booking.status == 'accepted' && !_isDodoBooking;
     final isInProgress = _booking.status == 'in_progress';
     final isAwaitingVerification = _booking.status == 'awaiting_verification';
@@ -449,13 +461,16 @@ class _BookingCardState extends ConsumerState<BookingCard> {
 
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
-      elevation: 0,
+      elevation: isAssigned ? 2 : 0,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
         side: BorderSide(
-          color: isRejected
-              ? AppColors.error.withValues(alpha: 0.35)
-              : AppColors.border,
+          color: isAssigned
+              ? AppColors.primary
+              : (isOfferExpired || isRejected
+                  ? AppColors.error.withValues(alpha: 0.35)
+                  : AppColors.border),
+          width: isAssigned ? 1.5 : 1.0,
         ),
       ),
       child: Padding(
@@ -476,9 +491,95 @@ class _BookingCardState extends ConsumerState<BookingCard> {
                   ),
                 ),
                 const SizedBox(width: 8),
-                BookingStatusBadge(status: _booking.status),
+                if (isAssigned && !_isDodoBooking) ...[
+                  DispatchCountdownTimer(
+                    startTime: _booking.lastDispatchAttemptAt,
+                    timeoutSeconds: _booking.tierTimeoutSeconds,
+                    onExpired: () async {
+                      if (mounted) setState(() {});
+                      try {
+                        await ref
+                            .read(bookingsRepositoryProvider)
+                            .dispatchBookingNextTier(_booking.id);
+                      } catch (_) {}
+                      ref.invalidate(vendorBookingsProvider);
+                    },
+                  ),
+                  const SizedBox(width: 8),
+                ],
+                BookingStatusBadge(
+                  status: isOfferExpired
+                      ? 'offer_expired'
+                      : (isAssigned ? 'incoming' : _booking.status),
+                ),
               ],
             ),
+            if (isAssigned) ...[
+              const SizedBox(height: 10),
+              Container(
+                width: double.infinity,
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                decoration: BoxDecoration(
+                  color: AppColors.primary.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                    color: AppColors.primary.withValues(alpha: 0.3),
+                  ),
+                ),
+                child: const Row(
+                  children: [
+                    Icon(Icons.bolt_rounded,
+                        size: 16, color: AppColors.primary),
+                    SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'INCOMING DISPATCH OFFER — Action Required',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.primary,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+            if (isOfferExpired) ...[
+              const SizedBox(height: 10),
+              Container(
+                width: double.infinity,
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                decoration: BoxDecoration(
+                  color: AppColors.error.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                    color: AppColors.error.withValues(alpha: 0.3),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.timer_off_outlined,
+                        size: 16, color: AppColors.error),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        isDispatchExhausted
+                            ? 'OFFER EXPIRED — Dispatch process exhausted'
+                            : 'OFFER EXPIRED — Time limit reached',
+                        style: const TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.error,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
             const SizedBox(height: 12),
 
             if (_booking.items.isNotEmpty)

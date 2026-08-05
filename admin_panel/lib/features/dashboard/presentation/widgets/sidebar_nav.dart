@@ -80,6 +80,12 @@ const _navItems = <_NavItem>[
     requiredPermission: 'booking.view',
   ),
   _NavItem(
+    label: 'Dispatch Analytics',
+    icon: Icons.insights_rounded,
+    route: '/dashboard/dispatch-analytics',
+    requiredPermission: 'booking.view',
+  ),
+  _NavItem(
     label: 'GPS Audit',
     icon: Icons.my_location_rounded,
     route: '/dashboard/gps-audit',
@@ -161,6 +167,12 @@ const _navItems = <_NavItem>[
     label: 'Subscriptions',
     icon: Icons.workspace_premium_rounded,
     route: '/dashboard/vendor-subscriptions',
+    requiredPermission: 'vendor.view',
+  ),
+  _NavItem(
+    label: 'Vendor Tiers',
+    icon: Icons.layers_rounded,
+    route: '/dashboard/vendor-tiers',
     requiredPermission: 'vendor.view',
   ),
   _NavItem(

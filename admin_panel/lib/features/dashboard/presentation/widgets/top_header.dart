@@ -6,6 +6,8 @@ import '../../../../core/theme/app_theme.dart';
 import '../../../../features/auth/application/providers/auth_provider.dart';
 import '../../../../features/notifications/application/providers/notifications_providers.dart';
 import '../../../../features/notifications/domain/models/app_notification.dart';
+import '../../../bookings/application/providers/bookings_providers.dart';
+import '../../../bookings/presentation/widgets/booking_details_dialog.dart';
 
 final _timeFmt = DateFormat('dd MMM, h:mm a');
 
@@ -94,6 +96,7 @@ class TopHeader extends ConsumerWidget {
       '/dashboard/vendors': 'Vendors',
       '/dashboard/dodo-teams': 'DODO Teams',
       '/dashboard/bookings': 'Bookings',
+      '/dashboard/dispatch-analytics': 'Dispatch Analytics',
       '/dashboard/gps-audit': 'GPS Cancellation Audit',
       '/dashboard/gps-analytics': 'GPS Analytics & Insights',
       '/dashboard/customers': 'Customers',
@@ -123,7 +126,22 @@ class _NotificationsPanelDialogState
           .read(notificationsNotifierProvider.notifier)
           .toggleRead(n.id, currentIsRead: n.isRead);
     }
-    if (n.entityType == 'amc_scheduling_request') {
+    if (n.entityType == 'booking' || n.notificationType == 'vendor_accepted') {
+      final router = GoRouter.of(context);
+      Navigator.of(context).pop();
+      if (n.entityId != null) {
+        final bookings = ref.read(bookingsNotifierProvider).valueOrNull ?? [];
+        final booking = bookings.where((b) => b.id == n.entityId).firstOrNull;
+        if (booking != null) {
+          showDialog(
+            context: context,
+            builder: (_) => BookingDetailsDialog(booking: booking),
+          );
+          return;
+        }
+      }
+      router.go('/dashboard/bookings');
+    } else if (n.entityType == 'amc_scheduling_request') {
       final router = GoRouter.of(context);
       Navigator.of(context).pop();
       router.go('/dashboard/amc-scheduling-requests');

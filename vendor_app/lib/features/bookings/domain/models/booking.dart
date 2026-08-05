@@ -26,6 +26,9 @@ class Booking {
     this.amcPlanName,
     this.amcRecurrenceInterval,
     this.amcContractId,
+    this.dispatchStatus,
+    this.lastDispatchAttemptAt,
+    this.tierTimeoutSeconds = 60,
   });
 
   final String id;
@@ -53,6 +56,11 @@ class Booking {
   final String? amcPlanName;
   final String? amcRecurrenceInterval;
   final String? amcContractId;
+
+  // Dispatch fields
+  final String? dispatchStatus;
+  final DateTime? lastDispatchAttemptAt;
+  final int tierTimeoutSeconds;
 
   bool get isDodoTeam => assignmentType == 'DODO Team';
 
@@ -92,10 +100,21 @@ class Booking {
       amcPlanName: map['amc_plan_name'] as String?,
       amcRecurrenceInterval: map['amc_recurrence_interval'] as String?,
       amcContractId: map['amc_contract_id'] as String?,
+      dispatchStatus: map['dispatch_status'] as String?,
+      lastDispatchAttemptAt: map['last_dispatch_attempt_at'] != null
+          ? DateTime.tryParse(map['last_dispatch_attempt_at'] as String)
+          : null,
+      tierTimeoutSeconds: map['tier_timeout_seconds'] as int? ?? 60,
     );
   }
 
-  Booking copyWith({String? status, String? notes}) {
+  Booking copyWith({
+    String? status,
+    String? notes,
+    String? dispatchStatus,
+    DateTime? lastDispatchAttemptAt,
+    int? tierTimeoutSeconds,
+  }) {
     return Booking(
       id: id,
       bookingNumber: bookingNumber,
@@ -121,6 +140,10 @@ class Booking {
       amcPlanName: amcPlanName,
       amcRecurrenceInterval: amcRecurrenceInterval,
       amcContractId: amcContractId,
+      dispatchStatus: dispatchStatus ?? this.dispatchStatus,
+      lastDispatchAttemptAt:
+          lastDispatchAttemptAt ?? this.lastDispatchAttemptAt,
+      tierTimeoutSeconds: tierTimeoutSeconds ?? this.tierTimeoutSeconds,
     );
   }
 }

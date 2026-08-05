@@ -1,3 +1,5 @@
+import '../../../vendor_tiers/domain/models/vendor_tier.dart';
+
 class Vendor {
   final String id;
   final String businessName;
@@ -19,6 +21,9 @@ class Vendor {
   final bool isPreferredVendor;
   final double preferredVendorFee;
   final bool isOnline;
+  final String? tierId;
+  final VendorTier? vendorTier;
+  final DateTime? tierEvaluatedAt;
 
   const Vendor({
     required this.id,
@@ -41,9 +46,17 @@ class Vendor {
     this.isPreferredVendor = false,
     this.preferredVendorFee = 0.0,
     this.isOnline = true,
+    this.tierId,
+    this.vendorTier,
+    this.tierEvaluatedAt,
   });
 
   factory Vendor.fromMap(Map<String, dynamic> map) {
+    VendorTier? tier;
+    if (map['vendor_tiers'] != null && map['vendor_tiers'] is Map<String, dynamic>) {
+      tier = VendorTier.fromMap(map['vendor_tiers'] as Map<String, dynamic>);
+    }
+
     return Vendor(
       id: map['id'] as String,
       businessName: map['business_name'] as String? ?? '',
@@ -69,6 +82,11 @@ class Vendor {
       isPreferredVendor: (map['is_preferred_vendor'] as bool?) ?? false,
       preferredVendorFee: (map['preferred_vendor_fee'] as num?)?.toDouble() ?? 0.0,
       isOnline: map['is_online'] as bool? ?? true,
+      tierId: map['tier_id'] as String?,
+      vendorTier: tier,
+      tierEvaluatedAt: map['tier_evaluated_at'] != null
+          ? DateTime.tryParse(map['tier_evaluated_at'] as String)
+          : null,
     );
   }
 
@@ -89,6 +107,9 @@ class Vendor {
     bool? isPreferredVendor,
     double? preferredVendorFee,
     bool? isOnline,
+    String? tierId,
+    VendorTier? vendorTier,
+    DateTime? tierEvaluatedAt,
   }) {
     return Vendor(
       id: id,
@@ -110,6 +131,9 @@ class Vendor {
       isPreferredVendor: isPreferredVendor ?? this.isPreferredVendor,
       preferredVendorFee: preferredVendorFee ?? this.preferredVendorFee,
       isOnline: isOnline ?? this.isOnline,
+      tierId: tierId ?? this.tierId,
+      vendorTier: vendorTier ?? this.vendorTier,
+      tierEvaluatedAt: tierEvaluatedAt ?? this.tierEvaluatedAt,
     );
   }
 }

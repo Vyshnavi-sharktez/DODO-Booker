@@ -5,6 +5,7 @@ import '../../data/notifications_repository.dart';
 import '../../domain/models/vendor_notification.dart';
 
 export '../../data/notifications_repository.dart';
+export '../../domain/models/vendor_notification.dart';
 
 final notificationsRepositoryProvider = Provider<NotificationsRepository>(
   (ref) => NotificationsRepository(ref.watch(supabaseClientProvider)),
@@ -29,3 +30,6 @@ final vendorUnreadCountProvider = Provider<int>((ref) {
         error: (e, st) => 0,
       );
 });
+
+/// Tracks in-app notification IDs already presented to avoid duplicates
+final handledDispatchNotifIdsProvider = StateProvider<Set<String>>((ref) => {});

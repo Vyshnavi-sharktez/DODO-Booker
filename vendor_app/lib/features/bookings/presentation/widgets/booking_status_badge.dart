@@ -9,6 +9,8 @@ class BookingStatusBadge extends StatelessWidget {
   Color get _color => switch (status) {
         'pending' => AppColors.statusPending,
         'assigned' => AppColors.statusAssigned,
+        'incoming' => AppColors.primary,
+        'timed_out' => const Color(0xFFD69E2E),
         'assigned_to_dodo_team' => AppColors.primary,
         'accepted' => const Color(0xFF2C7A7B),
         'in_progress' => AppColors.statusInProgress,
@@ -22,6 +24,8 @@ class BookingStatusBadge extends StatelessWidget {
   String get _label => switch (status) {
         'pending' => 'Pending',
         'assigned' => 'Assigned',
+        'incoming' => 'Incoming Offer',
+        'timed_out' => 'Timed Out',
         'assigned_to_dodo_team' => 'DODO Assigned',
         'accepted' => 'Accepted',
         'in_progress' => 'In Progress',

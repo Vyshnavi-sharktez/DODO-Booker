@@ -7,7 +7,6 @@ import '../../../../core/widgets/vendor_scaffold.dart';
 import '../../../auth/presentation/providers/auth_controller.dart';
 import '../providers/notifications_provider.dart';
 import '../widgets/notification_tile.dart';
-import '../../domain/models/vendor_notification.dart';
 
 class NotificationsPage extends ConsumerStatefulWidget {
   const NotificationsPage({super.key});
@@ -37,7 +36,11 @@ class _NotificationsPageState extends ConsumerState<NotificationsPage> {
     debugPrint('[NOTIF][Vendor] tapped — type=${n.notificationType}, entity_type=${n.entityType}, entity_id=${n.entityId}');
     _markRead(n);
     final router = GoRouter.of(context);
-    if (n.entityType == 'booking' && n.entityId != null) {
+    if ((n.entityType == 'booking' ||
+            n.notificationType == 'vendor_assigned' ||
+            n.notificationType == 'new_dispatch_offer' ||
+            n.notificationType == 'vendor_reassigned') &&
+        n.entityId != null) {
       debugPrint('[NOTIF][Vendor] navigating → ${RouteNames.bookingDetail} id=${n.entityId}');
       router.pushNamed(
         RouteNames.bookingDetail,

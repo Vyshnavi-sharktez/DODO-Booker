@@ -650,10 +650,7 @@ class _ExpandableBookingRowState extends State<_ExpandableBookingRow> {
   @override
   Widget build(BuildContext context) {
     final b = widget.booking;
-    final cfg = _statusConfig[b.status];
-    final statusLabel = cfg?.$1 ?? 'Unknown';
-    final statusFg = cfg?.$2 ?? AppColors.textSecondary;
-    final statusBg = cfg?.$3 ?? AppColors.border;
+    final (statusLabel, statusFg, statusBg) = b.statusConfig;
 
     return Column(
       children: [

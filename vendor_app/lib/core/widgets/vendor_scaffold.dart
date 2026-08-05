@@ -59,6 +59,98 @@ class VendorScaffold extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     ref.listen(activeBookingTrackerObserver, (_, __) {});
+
+    // Listen for incoming dispatch notifications and present in-app banner
+    ref.listen<AsyncValue<List<VendorNotification>>>(
+      vendorNotificationsProvider,
+      (previous, next) {
+        final notifications = next.valueOrNull;
+        if (notifications == null || notifications.isEmpty) return;
+
+        final handledIds = ref.read(handledDispatchNotifIdsProvider);
+
+        for (final n in notifications) {
+          if (n.isRead) continue;
+          final isDispatchReq = n.title == 'New Booking Request' ||
+              n.notificationType == 'vendor_assigned' ||
+              n.notificationType == 'new_dispatch_offer';
+          if (!isDispatchReq) continue;
+          if (handledIds.contains(n.id)) continue;
+
+          // Record as handled to guarantee only one notification per dispatch attempt
+          ref.read(handledDispatchNotifIdsProvider.notifier).state = {
+            ...ref.read(handledDispatchNotifIdsProvider.notifier).state,
+            n.id,
+          };
+
+          if (context.mounted) {
+            ScaffoldMessenger.of(context).hideCurrentMaterialBanner();
+            ScaffoldMessenger.of(context).showMaterialBanner(
+              MaterialBanner(
+                elevation: 4,
+                backgroundColor: AppColors.primary,
+                leading: const Icon(Icons.bolt_rounded, color: Colors.white, size: 28),
+                content: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'New Booking Request',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 15,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      n.message.isNotEmpty
+                          ? n.message
+                          : 'You have a new dispatch offer! Tap to review.',
+                      style: const TextStyle(color: Colors.white70, fontSize: 13),
+                    ),
+                  ],
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () {
+                      ScaffoldMessenger.of(context).hideCurrentMaterialBanner();
+                    },
+                    child: const Text(
+                      'DISMISS',
+                      style: TextStyle(color: Colors.white70),
+                    ),
+                  ),
+                  ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.white,
+                      foregroundColor: AppColors.primary,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                    ),
+                    onPressed: () {
+                      ScaffoldMessenger.of(context).hideCurrentMaterialBanner();
+                      if (n.entityType == 'booking' && n.entityId != null) {
+                        context.pushNamed(
+                          RouteNames.bookingDetail,
+                          pathParameters: {'id': n.entityId!},
+                        );
+                      } else {
+                        context.pushNamed(RouteNames.notifications);
+                      }
+                    },
+                    child: const Text('VIEW OFFER'),
+                  ),
+                ],
+              ),
+            );
+          }
+          break;
+        }
+      },
+    );
+
     final location = GoRouterState.of(context).matchedLocation;
     final currentIndex =
         _tabs.indexWhere((t) => t.path == location).clamp(0, _tabs.length - 1);

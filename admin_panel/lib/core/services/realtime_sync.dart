@@ -3,6 +3,8 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../features/auth/application/providers/auth_provider.dart';
 import '../../features/bookings/application/providers/bookings_providers.dart';
+import '../../features/bookings/application/providers/dispatch_providers.dart';
+import '../../features/notifications/application/providers/notifications_providers.dart';
 import '../../features/vendors/application/providers/vendors_providers.dart';
 
 /// Manages Supabase Realtime subscriptions for the admin panel.
@@ -21,6 +23,7 @@ class AdminRealtimeSync {
 
   AdminRealtimeSync(this._ref, this._client) {
     _subscribe();
+    _ref.watch(dispatchEscalationTimerProvider);
   }
 
   void _subscribe() {
@@ -52,6 +55,13 @@ class AdminRealtimeSync {
           table: 'vendors',
           callback: (_) => _refreshVendors(),
         )
+        // Admin notification inserted (e.g. when vendor accepts booking)
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'notifications',
+          callback: (_) => _refreshNotifications(),
+        )
         .subscribe();
   }
 
@@ -61,6 +71,10 @@ class AdminRealtimeSync {
 
   void _refreshVendors() {
     _ref.read(vendorsNotifierProvider.notifier).refresh();
+  }
+
+  void _refreshNotifications() {
+    _ref.read(notificationsNotifierProvider.notifier).refresh();
   }
 
   /// Called by the lifecycle observer on admin panel resume after a long pause.

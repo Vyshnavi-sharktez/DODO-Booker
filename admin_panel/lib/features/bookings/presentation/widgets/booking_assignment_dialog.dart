@@ -14,6 +14,9 @@ import '../../../vendors/domain/models/vendor.dart';
 import '../../../notifications/application/providers/notifications_providers.dart';
 import '../../domain/models/booking.dart';
 import '../../domain/services/vendor_assignment_service.dart';
+import '../../application/providers/bookings_providers.dart';
+import '../../application/providers/dispatch_providers.dart';
+import '../../domain/models/booking_assignment_record.dart';
 
 final _dateFmt = DateFormat('dd MMM yyyy');
 final _isoDateFmt = DateFormat('yyyy-MM-dd');
@@ -199,6 +202,229 @@ class _BookingAssignmentDialogState
     _walletErrVendorId = null;
     _walletErrBalance = null;
     _walletErrMinimum = null;
+  }
+
+  bool _dispatching = false;
+
+  Future<void> _dispatchNextTier() async {
+    setState(() => _dispatching = true);
+    try {
+      final res = await ref
+          .read(bookingsRepositoryProvider)
+          .dispatchBookingNextTier(widget.booking.id);
+
+      final success = res['success'] == true;
+      final vendorName = res['vendor_name'] as String?;
+      final tierName = res['tier_name'] as String?;
+
+      if (mounted) {
+        if (success) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                'Offered to $vendorName ($tierName Tier) successfully.',
+              ),
+              backgroundColor: AppColors.success,
+            ),
+          );
+          ref.invalidate(bookingAssignmentsHistoryProvider(widget.booking.id));
+          Navigator.of(context).pop();
+        } else {
+          final message =
+              res['message'] as String? ?? 'No eligible vendors for auto-dispatch.';
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(message),
+              backgroundColor: AppColors.warning,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Auto-dispatch failed: $e'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _dispatching = false);
+    }
+  }
+
+  Widget _buildAutoDispatchBanner() {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 14),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.primary.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: AppColors.primary.withValues(alpha: 0.25)),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.bolt_rounded, color: AppColors.primary, size: 22),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Sequential Tier Auto-Dispatch',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 13,
+                    color: AppColors.primary,
+                  ),
+                ),
+                Text(
+                  'Offer booking to top-tier vendors with automatic timeout escalation.',
+                  style: TextStyle(fontSize: 11, color: AppColors.textSecondary),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 12),
+          ElevatedButton.icon(
+            style: ElevatedButton.styleFrom(
+              minimumSize: const Size(0, 36),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+            ),
+            onPressed: (_saving || _dispatching) ? null : _dispatchNextTier,
+            icon: _dispatching
+                ? const SizedBox(
+                    width: 14,
+                    height: 14,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Colors.white,
+                    ),
+                  )
+                : const Icon(Icons.play_arrow_rounded, size: 16),
+            label: const Text('Auto-Dispatch'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAssignmentHistorySection() {
+    final historyAsync =
+        ref.watch(bookingAssignmentsHistoryProvider(widget.booking.id));
+
+    return historyAsync.when(
+      data: (history) {
+        if (history.isEmpty) return const SizedBox.shrink();
+
+        return Container(
+          margin: const EdgeInsets.only(bottom: 14),
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: AppColors.surface,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: AppColors.border),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  const Icon(Icons.history_toggle_off_rounded,
+                      size: 16, color: AppColors.primary),
+                  const SizedBox(width: 6),
+                  Text(
+                    'Dispatch Attempt History (${history.length})',
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 13,
+                      color: AppColors.primary,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              ...history.map((rec) {
+                final statusColor = switch (rec.status) {
+                  'accepted' => AppColors.success,
+                  'rejected' => AppColors.error,
+                  'timed_out' => AppColors.warning,
+                  _ => AppColors.accent,
+                };
+
+                final timeStr = DateFormat('hh:mm a').format(rec.assignedAt);
+
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 6.0),
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: statusColor.withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: Text(
+                          '#${rec.attemptNumber}',
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                            color: statusColor,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              rec.vendor?.businessName ?? 'Vendor',
+                              style: const TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            if (rec.vendorTier != null)
+                              Text(
+                                '${rec.vendorTier!.name} Tier',
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  color: rec.vendorTier!.color,
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                      Text(
+                        rec.status.toUpperCase(),
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                          color: statusColor,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        timeStr,
+                        style: const TextStyle(
+                          fontSize: 11,
+                          color: AppColors.textSecondary,
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              }),
+            ],
+          ),
+        );
+      },
+      loading: () => const SizedBox.shrink(),
+      error: (_, __) => const SizedBox.shrink(),
+    );
   }
 
   Future<void> _submit() async {
@@ -806,6 +1032,8 @@ class _BookingAssignmentDialogState
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        _buildAutoDispatchBanner(),
+        _buildAssignmentHistorySection(),
         ?codBanner,
         if (codBanner != null) const SizedBox(height: 12),
         ?currentAssigneeNote,
@@ -1097,14 +1325,53 @@ class _AssigneeCandidateCard extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      candidate.name,
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                        color: AppColors.textPrimary,
-                      ),
-                      overflow: TextOverflow.ellipsis,
+                    Row(
+                      children: [
+                        Flexible(
+                          child: Text(
+                            candidate.name,
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                              color: AppColors.textPrimary,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        if (candidate.vendorTier != null) ...[
+                          const SizedBox(width: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 8, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: candidate.vendorTier!.color
+                                  .withValues(alpha: 0.12),
+                              borderRadius: BorderRadius.circular(6),
+                              border: Border.all(
+                                color: candidate.vendorTier!.color
+                                    .withValues(alpha: 0.3),
+                              ),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(candidate.vendorTier!.iconData,
+                                    size: 13,
+                                    color: candidate.vendorTier!.color),
+                                const SizedBox(width: 4),
+                                Text(
+                                  candidate.vendorTier!.name,
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.bold,
+                                    color: candidate.vendorTier!.color,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ],
                     ),
                     if (candidate.subtitle != null)
                       Text(
