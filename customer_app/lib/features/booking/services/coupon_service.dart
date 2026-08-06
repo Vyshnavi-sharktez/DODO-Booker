@@ -20,16 +20,14 @@ class CouponService {
   }
 
   Future<void> incrementUsedCount(String couponId) async {
-    final row = await _client
-        .from('coupons')
-        .select('used_count')
-        .eq('id', couponId)
-        .single();
-    final current = (row['used_count'] as int?) ?? 0;
-    await _client
-        .from('coupons')
-        .update({'used_count': current + 1})
-        .eq('id', couponId);
-    debugPrint('[DODO][Coupon] Incremented used_count for coupon $couponId → ${current + 1}');
+    // The RPC performs `UPDATE coupons SET used_count = used_count + 1 WHERE id = p_coupon_id`
+    // as a single atomic statement inside PostgreSQL. No value is read into Flutter,
+    // so two concurrent bookings cannot both read the same count, both add 1, and
+    // both write the same result — the previous read-modify-write race condition.
+    await _client.rpc(
+      'increment_coupon_used_count',
+      params: {'p_coupon_id': couponId},
+    );
+    debugPrint('[DODO][Coupon] Incremented used_count for coupon $couponId (atomic RPC)');
   }
 }
