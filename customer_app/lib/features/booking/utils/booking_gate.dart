@@ -149,12 +149,12 @@ Future<void> launchBookingFlow(
   final finalTotal = (subtotal + pvSelection.fee - discountAmount).clamp(0.0, double.infinity);
 
   // ── Step 6: Payment ───────────────────────────────────────────────────────
-  final payFuture = AppModalDialog.show<bool>(
+  final payFuture = AppModalDialog.show<String>(
     context: context,
     child: PaymentModal(totalAmount: finalTotal),
   );
-  final paid = await payFuture;
-  if (!context.mounted || paid != true) {
+  final paymentMethod = await payFuture;
+  if (!context.mounted || paymentMethod == null) {
     ref.read(selectedCouponProvider.notifier).state = null;
     return;
   }
@@ -175,6 +175,7 @@ Future<void> launchBookingFlow(
           preferredVendorId: amcPlan != null ? null : pvSelection.id,
           preferredVendorFeeAmount: amcPlan != null ? null : (pvSelection.fee > 0 ? pvSelection.fee : null),
           amcPlan: amcPlan,
+          paymentMethod: paymentMethod,
         );
     ref.read(selectedCouponProvider.notifier).state = null;
     if (!context.mounted) return;

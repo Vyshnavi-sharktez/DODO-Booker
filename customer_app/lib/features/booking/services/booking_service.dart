@@ -329,6 +329,7 @@ class BookingService {
     String? preferredVendorId,
     double? preferredVendorFeeAmount,
     AmcPlanModel? amcPlan,
+    String paymentMethod = 'cod',
   }) async {
     debugPrint('[DODO][Booking] createBooking started');
     debugPrint('[DODO][Booking] Service: ${service.name} (id=${service.id})');
@@ -455,6 +456,8 @@ class BookingService {
         'customer_id': customerId,
         'service_date': serviceDate,
         'status': 'pending',
+        'payment_method': paymentMethod,
+        'payment_status': 'pending',
         'subtotal': subtotal,
         'discount_amount': discountAmount,
         'total_amount': totalAmount,

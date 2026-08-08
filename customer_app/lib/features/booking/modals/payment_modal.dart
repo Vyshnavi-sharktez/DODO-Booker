@@ -100,7 +100,7 @@ class PaymentModal extends StatelessWidget {
           const SizedBox(height: 20),
 
           FilledButton(
-            onPressed: () => Navigator.of(context).pop(true),
+            onPressed: () => Navigator.of(context).pop('razorpay'),
             style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(52)),
             child: Text(
               'Pay ₹${totalAmount.toStringAsFixed(2)}',
