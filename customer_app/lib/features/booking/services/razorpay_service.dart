@@ -2,6 +2,8 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:razorpay_flutter/razorpay_flutter.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'razorpay_web_checkout_stub.dart'
+    if (dart.library.html) 'razorpay_web_checkout.dart';
 
 // ── Callback data ─────────────────────────────────────────────────────────────
 //
@@ -55,6 +57,24 @@ class RazorpayCallbackData {
         status: 'external_wallet',
         walletName: r.walletName,
       );
+
+  factory RazorpayCallbackData.webSuccess({
+    required String paymentId,
+    required String orderId,
+    required String signature,
+  }) =>
+      RazorpayCallbackData._(
+        status: 'success',
+        paymentId: paymentId,
+        orderId: orderId,
+        signature: signature,
+      );
+
+  factory RazorpayCallbackData.webFailure(String description) =>
+      RazorpayCallbackData._(
+        status: 'failure',
+        errorDescription: description,
+      );
 }
 
 // ── Service ───────────────────────────────────────────────────────────────────
@@ -103,6 +123,28 @@ class RazorpayService {
     final currency = data['currency'] as String;
 
     debugPrint('[DODO][Razorpay] Order created — orderId=$orderId  amount=$amount  currency=$currency');
+
+    // ── Web: delegate to Checkout.js via dart:js_interop ────────────────────
+    if (kIsWeb) {
+      final webResult = await launchRazorpayWeb(
+        keyId: keyId,
+        amount: amount,
+        orderId: orderId,
+        currency: currency,
+        bookingId: bookingId,
+      );
+      if (webResult['success'] == true) {
+        return RazorpayCallbackData.webSuccess(
+          paymentId: webResult['paymentId'] as String,
+          orderId: webResult['orderId'] as String,
+          signature: webResult['signature'] as String,
+        );
+      } else {
+        return RazorpayCallbackData.webFailure(
+          webResult['errorDescription'] as String? ?? 'Payment cancelled.',
+        );
+      }
+    }
 
     // 2. Open the Razorpay checkout.
     //    Completer bridges the SDK's event callbacks to a single Future.
