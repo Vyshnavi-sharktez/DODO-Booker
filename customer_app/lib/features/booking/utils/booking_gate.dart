@@ -16,6 +16,7 @@ import '../../service_availability/widgets/service_area_unavailable_dialog.dart'
 import '../modals/booking_summary_modal.dart';
 import '../modals/payment_modal.dart';
 import '../services/booking_providers.dart';
+import '../services/razorpay_service.dart';
 import '../services/coupon_providers.dart';
 import '../../../features/tax/providers/tax_provider.dart';
 import '../../../features/tax/models/tax_settings_model.dart';
@@ -179,6 +180,56 @@ Future<void> launchBookingFlow(
         );
     ref.read(selectedCouponProvider.notifier).state = null;
     if (!context.mounted) return;
+
+    // ── Step 8 (Razorpay): Open payment checkout + server-side verification ──
+    // Runs only when the booking was created with payment_method = 'razorpay'.
+    // The booking row already exists; success screen is only shown after both
+    // the SDK callback AND the HMAC verification edge function confirm success.
+    if (paymentMethod == 'razorpay') {
+      try {
+        final result = await RazorpayService().launchCheckout(booking.id);
+        debugPrint(
+          '[DODO][Razorpay] checkout result: status=${result.status}'
+          '  paymentId=${result.paymentId}'
+          '  orderId=${result.orderId}'
+          '  errorCode=${result.errorCode}'
+          '  wallet=${result.walletName}',
+        );
+        if (result.status != 'success') {
+          if (!context.mounted) return;
+          final msg = result.status == 'external_wallet'
+              ? 'Please complete payment via ${result.walletName ?? 'external wallet'}. Your booking is saved.'
+              : (result.errorDescription?.isNotEmpty == true
+                  ? result.errorDescription!
+                  : 'Payment was not completed. Your booking is saved — check My Bookings.');
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(msg),
+            backgroundColor: const Color(0xFFEA4335),
+            behavior: SnackBarBehavior.floating,
+          ));
+          return;
+        }
+        debugPrint('[DODO][Razorpay] → verifyPayment(${booking.id})');
+        await RazorpayService().verifyPayment(
+          bookingId: booking.id,
+          paymentId: result.paymentId!,
+          orderId: result.orderId!,
+          signature: result.signature!,
+        );
+        debugPrint('[DODO][Razorpay] ✓ verifyPayment succeeded');
+      } catch (e) {
+        debugPrint('[DODO][Razorpay] checkout/verification error: $e');
+        if (!context.mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('Payment verification failed. Your booking is saved — check My Bookings.'),
+          backgroundColor: const Color(0xFFEA4335),
+          behavior: SnackBarBehavior.floating,
+        ));
+        return;
+      }
+      if (!context.mounted) return;
+    }
+
     debugPrint('[DODO][Booking] Navigating to success screen');
     context.push('/booking-success', extra: booking);
   } catch (e) {

@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/widgets/app_modal_dialog.dart';
 
-/// Payment modal. Pops with `true` when the user confirms payment.
+/// Payment modal. Pops with `'razorpay'` (Pay Online) or `'cod'` (Cash After Service).
 class PaymentModal extends StatelessWidget {
   final double totalAmount;
 
@@ -50,63 +50,22 @@ class PaymentModal extends StatelessWidget {
 
           const SizedBox(height: 20),
 
-          // Payment options (placeholder)
           _PaymentOption(
             icon: Icons.account_balance_wallet_rounded,
-            label: 'UPI / QR Code',
+            label: 'Pay Online',
+            subtitle: 'UPI, Cards, Net Banking & more',
             tag: 'Recommended',
-          ),
-          const SizedBox(height: 10),
-          _PaymentOption(
-            icon: Icons.credit_card_rounded,
-            label: 'Credit / Debit Card',
-          ),
-          const SizedBox(height: 10),
-          _PaymentOption(
-            icon: Icons.account_balance_rounded,
-            label: 'Net Banking',
+            onTap: () => Navigator.of(context).pop('razorpay'),
           ),
           const SizedBox(height: 10),
           _PaymentOption(
             icon: Icons.money_rounded,
-            label: 'Cash on Service',
+            label: 'Cash After Service',
+            subtitle: 'Pay when the service is done',
+            onTap: () => Navigator.of(context).pop('cod'),
           ),
 
           const SizedBox(height: 20),
-
-          // Coming soon banner
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: AppColors.warning.withAlpha(25),
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: AppColors.warning.withAlpha(80)),
-            ),
-            child: Row(
-              children: [
-                const Icon(Icons.info_outline_rounded, size: 16, color: AppColors.warning),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    'Payment gateway integration is coming soon. '
-                    'Tap below to confirm a test booking.',
-                    style: tt.labelSmall?.copyWith(color: const Color(0xFFB45309)),
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-          const SizedBox(height: 20),
-
-          FilledButton(
-            onPressed: () => Navigator.of(context).pop('razorpay'),
-            style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(52)),
-            child: Text(
-              'Pay ₹${totalAmount.toStringAsFixed(2)}',
-              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
-            ),
-          ),
         ],
       ),
     );
@@ -116,16 +75,24 @@ class PaymentModal extends StatelessWidget {
 class _PaymentOption extends StatelessWidget {
   final IconData icon;
   final String label;
+  final String? subtitle;
   final String? tag;
+  final VoidCallback onTap;
 
-  const _PaymentOption({required this.icon, required this.label, this.tag});
+  const _PaymentOption({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+    this.subtitle,
+    this.tag,
+  });
 
   @override
   Widget build(BuildContext context) {
     final tt = Theme.of(context).textTheme;
     return InkWell(
       borderRadius: BorderRadius.circular(12),
-      onTap: () {},
+      onTap: onTap,
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         decoration: BoxDecoration(
@@ -137,12 +104,24 @@ class _PaymentOption extends StatelessWidget {
             Icon(icon, color: AppColors.primary, size: 22),
             const SizedBox(width: 12),
             Expanded(
-              child: Text(
-                label,
-                style: tt.bodyMedium?.copyWith(fontWeight: FontWeight.w500),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    label,
+                    style: tt.bodyMedium?.copyWith(fontWeight: FontWeight.w500),
+                  ),
+                  if (subtitle != null)
+                    Text(
+                      subtitle!,
+                      style: tt.labelSmall?.copyWith(
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                ],
               ),
             ),
-            if (tag != null)
+            if (tag != null) ...[
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                 decoration: BoxDecoration(
@@ -158,7 +137,8 @@ class _PaymentOption extends StatelessWidget {
                   ),
                 ),
               ),
-            const SizedBox(width: 4),
+              const SizedBox(width: 4),
+            ],
             const Icon(
               Icons.chevron_right_rounded,
               size: 18,

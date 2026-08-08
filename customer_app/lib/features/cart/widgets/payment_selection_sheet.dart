@@ -53,13 +53,11 @@ class _PaymentSelectionSheetState extends State<PaymentSelectionSheet> {
           ),
           const SizedBox(height: 12),
           _PaymentOption(
-            selected: false,
-            disabled: true,
+            selected: _selected == 'razorpay',
             icon: Icons.credit_card_outlined,
             title: 'Pay Online',
             subtitle: 'Card, UPI, Net Banking.',
-            badge: 'Coming Soon',
-            onTap: null,
+            onTap: () => setState(() => _selected = 'razorpay'),
           ),
           const SizedBox(height: 28),
           SizedBox(
@@ -78,11 +76,9 @@ class _PaymentSelectionSheetState extends State<PaymentSelectionSheet> {
 
 class _PaymentOption extends StatelessWidget {
   final bool selected;
-  final bool disabled;
   final IconData icon;
   final String title;
   final String subtitle;
-  final String? badge;
   final VoidCallback? onTap;
 
   const _PaymentOption({
@@ -91,8 +87,6 @@ class _PaymentOption extends StatelessWidget {
     required this.title,
     required this.subtitle,
     required this.onTap,
-    this.disabled = false,
-    this.badge,
   });
 
   @override
@@ -116,11 +110,7 @@ class _PaymentOption extends StatelessWidget {
             Icon(
               icon,
               size: 24,
-              color: disabled
-                  ? AppColors.textHint
-                  : selected
-                      ? AppColors.primary
-                      : AppColors.textSecondary,
+              color: selected ? AppColors.primary : AppColors.textSecondary,
             ),
             const SizedBox(width: 14),
             Expanded(
@@ -129,36 +119,13 @@ class _PaymentOption extends StatelessWidget {
                 children: [
                   Row(
                     children: [
-                      Flexible(
-                        child: Text(
-                          title,
-                          style: tt.bodyMedium?.copyWith(
-                            fontWeight: FontWeight.w600,
-                            color: disabled
-                                ? AppColors.textHint
-                                : AppColors.textPrimary,
-                          ),
+                      Text(
+                        title,
+                        style: tt.bodyMedium?.copyWith(
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.textPrimary,
                         ),
                       ),
-                      if (badge != null) ...[
-                        const SizedBox(width: 8),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 6, vertical: 2),
-                          decoration: BoxDecoration(
-                            color: AppColors.secondary.withAlpha(25),
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                          child: Text(
-                            badge!,
-                            style: tt.labelSmall?.copyWith(
-                              color: AppColors.secondary,
-                              fontSize: 10,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ),
-                      ],
                     ],
                   ),
                   const SizedBox(height: 2),

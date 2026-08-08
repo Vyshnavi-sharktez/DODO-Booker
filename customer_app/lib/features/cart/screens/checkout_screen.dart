@@ -32,6 +32,7 @@ import '../../surge_fee/providers/surge_fee_provider.dart';
 import '../../preferred_vendor/providers/preferred_vendor_provider.dart';
 import '../../service_availability/services/serviceability_service.dart';
 import '../../service_availability/widgets/service_area_unavailable_dialog.dart';
+import '../../../features/booking/services/razorpay_service.dart';
 
 class CheckoutScreen extends ConsumerStatefulWidget {
   final bool inModal;
@@ -204,7 +205,11 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
 
     // ── Payment method selection ─────────────────────────────────────────────
     final paymentMethod = await _selectPaymentMethod();
-    if (!mounted || paymentMethod == null) return;
+    debugPrint('[DODO][Razorpay][TRACE] payment selected: paymentMethod=$paymentMethod');
+    if (!mounted || paymentMethod == null) {
+      debugPrint('[DODO][Razorpay][TRACE] ✗ paymentMethod is null or unmounted — returning early');
+      return;
+    }
 
     final redeemPoints = _loyaltyRedeemPoints;
 
@@ -258,6 +263,54 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         paymentMethod: paymentMethod,
       );
       debugPrint('[DODO][Checkout] ✓ createCartBooking returned — id=${booking.id}');
+
+      // ── Razorpay payment ───────────────────────────────────────────────────
+      if (paymentMethod == 'razorpay') {
+        debugPrint('[DODO][Razorpay][TRACE] → launchCheckout(${booking.id})');
+        try {
+          final result = await RazorpayService().launchCheckout(booking.id);
+          debugPrint(
+            '[DODO][Razorpay][TRACE] result: status=${result.status}'
+            '  paymentId=${result.paymentId}  orderId=${result.orderId}'
+            '  errorCode=${result.errorCode}  wallet=${result.walletName}',
+          );
+          if (result.status != 'success') {
+            final msg = result.status == 'external_wallet'
+                ? 'Please complete payment via ${result.walletName ?? 'external wallet'}. Your booking is saved.'
+                : (result.errorDescription?.isNotEmpty == true
+                    ? result.errorDescription!
+                    : 'Payment was not completed. Your booking is saved — check My Bookings.');
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                content: Text(msg),
+                backgroundColor: const Color(0xFFEA4335),
+                behavior: SnackBarBehavior.floating,
+              ));
+            }
+            return;
+          }
+          debugPrint('[DODO][Razorpay][TRACE] → verifyPayment(${booking.id})');
+          await RazorpayService().verifyPayment(
+            bookingId: booking.id,
+            paymentId: result.paymentId!,
+            orderId: result.orderId!,
+            signature: result.signature!,
+          );
+          debugPrint('[DODO][Razorpay][TRACE] ✓ verifyPayment succeeded');
+        } catch (e) {
+          debugPrint('[DODO][Razorpay][TRACE] exception: $e');
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+              content: Text('Payment error. Your booking is saved — check My Bookings.'),
+              backgroundColor: Color(0xFFEA4335),
+              behavior: SnackBarBehavior.floating,
+            ));
+          }
+          return;
+        }
+        if (!mounted) return;
+      }
+
       ref.invalidate(myBookingsProvider);
 
       // Record loyalty redemption after booking is confirmed
