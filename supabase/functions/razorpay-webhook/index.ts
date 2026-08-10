@@ -1,5 +1,6 @@
 import "@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "@supabase/supabase-js";
+import type { SupabaseClient } from "@supabase/supabase-js";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -18,6 +19,24 @@ interface RazorpayWebhookPayload {
       entity: RazorpayPaymentEntity;
     };
   };
+}
+
+// ── Credential loading ────────────────────────────────────────────────────────
+// Resolution order:
+//   1. Admin Panel / Supabase Vault (get_gateway_secret_value RPC, service_role only)
+//   2. RAZORPAY_WEBHOOK_SECRET env var (backward-compat fallback only)
+
+async function loadWebhookSecret(supabaseAdmin: SupabaseClient): Promise<string | null> {
+  // ── 1. Vault / Admin Panel (preferred) ─────────────────────────────────────
+  const { data: vaultSecret } = await supabaseAdmin
+    .rpc("get_gateway_secret_value", {
+      p_gateway: "razorpay",
+      p_secret_name: "webhook_secret",
+    });
+  if (vaultSecret) return vaultSecret as string;
+
+  // ── 2. Environment variable (backward-compat fallback) ─────────────────────
+  return Deno.env.get("RAZORPAY_WEBHOOK_SECRET") ?? null;
 }
 
 // ── HMAC-SHA256 webhook signature verification ────────────────────────────────
@@ -81,8 +100,23 @@ export default {
       );
     }
 
-    // ── Load webhook secret ─────────────────────────────────────────────────
-    const webhookSecret = Deno.env.get("RAZORPAY_WEBHOOK_SECRET");
+    // ── Supabase admin client ───────────────────────────────────────────────
+    // Razorpay sends no Supabase JWT, so withSupabase (which validates the JWT)
+    // cannot be used. We instantiate createClient directly with the service_role
+    // key, which bypasses RLS — the same effective access as ctx.supabaseAdmin
+    // in the sibling Edge Functions.
+    const supabaseUrl = Deno.env.get("SUPABASE_URL");
+    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    if (!supabaseUrl || !serviceRoleKey) {
+      return Response.json({ error: "Supabase not configured." }, { status: 503 });
+    }
+
+    const supabase = createClient(supabaseUrl, serviceRoleKey, {
+      auth: { persistSession: false },
+    });
+
+    // ── Load webhook secret (Vault → env var fallback) ──────────────────────
+    const webhookSecret = await loadWebhookSecret(supabase);
     if (!webhookSecret) {
       return Response.json({ error: "Webhook not configured." }, { status: 503 });
     }
@@ -119,21 +153,6 @@ export default {
 
     const razorpayOrderId = paymentEntity.order_id;
     const razorpayPaymentId = paymentEntity.id;
-
-    // ── Supabase admin client ───────────────────────────────────────────────
-    // Razorpay sends no Supabase JWT, so withSupabase (which validates the JWT)
-    // cannot be used. We instantiate createClient directly with the service_role
-    // key, which bypasses RLS — the same effective access as ctx.supabaseAdmin
-    // in the sibling Edge Functions.
-    const supabaseUrl = Deno.env.get("SUPABASE_URL");
-    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-    if (!supabaseUrl || !serviceRoleKey) {
-      return Response.json({ error: "Supabase not configured." }, { status: 503 });
-    }
-
-    const supabase = createClient(supabaseUrl, serviceRoleKey, {
-      auth: { persistSession: false },
-    });
 
     // ── Look up booking_payments row by gateway_order_id ───────────────────
     // gateway_order_id has a partial unique index — this is a fast indexed lookup.

@@ -44,6 +44,7 @@ const Map<String, String> routePermissions = {
   '/service-availability-areas': 'settings.manage',
   '/surge-fees': 'settings.manage',
   '/seo': 'settings.manage',
+  '/payment-config': 'settings.manage',
   '/vendor-subscriptions': 'vendor.view',
   '/vendor-tiers': 'vendor.view',
   '/amc-plans': 'category.view',
