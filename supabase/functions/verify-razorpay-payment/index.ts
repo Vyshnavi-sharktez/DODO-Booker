@@ -1,5 +1,6 @@
 import "@supabase/functions-js/edge-runtime.d.ts";
 import { withSupabase } from "@supabase/server";
+import type { SupabaseClient } from "@supabase/supabase-js";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -16,6 +17,24 @@ interface PaymentRow {
   gateway: string;
   gateway_order_id: string | null;
   status: string;
+}
+
+// ── Credential loading ────────────────────────────────────────────────────────
+// Resolution order:
+//   1. Admin Panel / Supabase Vault (get_gateway_secret_value RPC, service_role only)
+//   2. RAZORPAY_KEY_SECRET env var (backward-compat fallback only)
+
+async function loadKeySecret(supabaseAdmin: SupabaseClient): Promise<string | null> {
+  // ── 1. Vault / Admin Panel (preferred) ─────────────────────────────────────
+  const { data: vaultSecret } = await supabaseAdmin
+    .rpc("get_gateway_secret_value", {
+      p_gateway: "razorpay",
+      p_secret_name: "key_secret",
+    });
+  if (vaultSecret) return vaultSecret as string;
+
+  // ── 2. Environment variable (backward-compat fallback) ─────────────────────
+  return Deno.env.get("RAZORPAY_KEY_SECRET") ?? null;
 }
 
 // ── HMAC-SHA256 verification ──────────────────────────────────────────────────
@@ -82,8 +101,8 @@ export default {
       return Response.json({ error: "razorpay_signature is required." }, { status: 400 });
     }
 
-    // ── Load secret before any DB work ─────────────────────────────────────
-    const keySecret = Deno.env.get("RAZORPAY_KEY_SECRET");
+    // ── Load key secret (Vault → env var fallback) ──────────────────────────
+    const keySecret = await loadKeySecret(ctx.supabaseAdmin);
     if (!keySecret) {
       return Response.json(
         { error: "Payment gateway is not configured." },
@@ -131,7 +150,6 @@ export default {
     );
 
     if (!signatureValid) {
-      // Mark the attempt as failed; do NOT touch bookings.payment_status.
       await ctx.supabaseAdmin
         .from("booking_payments")
         .update({

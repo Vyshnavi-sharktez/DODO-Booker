@@ -34,6 +34,7 @@ import '../../features/vendor_serving_areas/presentation/pages/vendor_serving_ar
 import '../../features/service_availability_areas/presentation/pages/service_availability_areas_page.dart';
 import '../../features/surge_fees/presentation/pages/surge_fee_settings_page.dart';
 import '../../features/seo/presentation/pages/seo_management_page.dart';
+import '../../features/payment_config/presentation/pages/payment_config_page.dart';
 import '../../features/vendor_subscriptions/presentation/pages/vendor_subscriptions_page.dart';
 import '../../features/vendor_tiers/presentation/pages/vendor_tiers_page.dart';
 import '../../features/amc_plans/presentation/pages/amc_plans_page.dart';
@@ -401,6 +402,13 @@ final routerProvider = Provider<GoRouter>((ref) {
             name: 'seo',
             pageBuilder: (context, state) => const NoTransitionPage(
               child: SeoManagementPage(),
+            ),
+          ),
+          GoRoute(
+            path: '/dashboard/payment-config',
+            name: 'paymentConfig',
+            pageBuilder: (context, state) => const NoTransitionPage(
+              child: PaymentConfigPage(),
             ),
           ),
           GoRoute(

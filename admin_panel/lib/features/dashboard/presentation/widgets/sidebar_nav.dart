@@ -38,6 +38,12 @@ const _navItems = <_NavItem>[
     requiredPermission: 'settings.manage',
   ),
   _NavItem(
+    label: 'Online Payments',
+    icon: Icons.payment_rounded,
+    route: '/dashboard/payment-config',
+    requiredPermission: 'settings.manage',
+  ),
+  _NavItem(
     label: 'Catalog',
     icon: Icons.layers_rounded,
     route: '/dashboard/catalog',

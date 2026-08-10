@@ -1,5 +1,6 @@
 import "@supabase/functions-js/edge-runtime.d.ts";
 import { withSupabase } from "@supabase/server";
+import type { SupabaseClient } from "@supabase/supabase-js";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -20,6 +21,65 @@ interface RazorpayOrderResponse {
   currency: string;
   receipt: string;
   status: string;
+}
+
+interface RazorpayCredentials {
+  keyId: string;
+  keySecret: string;
+}
+
+// ── Credential loading ────────────────────────────────────────────────────────
+// Resolution order:
+//   1. Admin Panel / Supabase Vault (payment_gateway_configs + get_gateway_secret_value)
+//   2. RAZORPAY_KEY_ID + RAZORPAY_KEY_SECRET env vars (backward-compat fallback only)
+//
+// is_enabled enforcement:
+//   When a payment_gateway_configs row exists, its is_enabled flag is authoritative.
+//   is_enabled=false → return null immediately (blocks order creation).
+//   The env-var fallback is only reached when no DB row exists at all (legacy deployments).
+//
+// Test vs Live mode:
+//   The mode column is informational — it is NOT checked here. The credential itself
+//   determines test vs live: Razorpay keys are prefixed rzp_test_ or rzp_live_ and
+//   Razorpay enforces the mode server-side. The Admin Panel mode field helps the admin
+//   track which credential set they have entered.
+
+async function loadRazorpayCredentials(
+  supabaseAdmin: SupabaseClient,
+): Promise<RazorpayCredentials | null> {
+  // ── 1. Vault / Admin Panel (preferred) ─────────────────────────────────────
+  const { data: cfg } = await supabaseAdmin
+    .from("payment_gateway_configs")
+    .select("is_enabled, public_key")
+    .eq("gateway", "razorpay")
+    .single();
+
+  if (cfg !== null) {
+    // Admin Panel row exists — it is the authority for enable/disable.
+    // Explicitly disabled → block new order creation regardless of env vars.
+    if (!cfg.is_enabled) return null;
+
+    if (cfg.public_key) {
+      const { data: vaultSecret } = await supabaseAdmin
+        .rpc("get_gateway_secret_value", {
+          p_gateway: "razorpay",
+          p_secret_name: "key_secret",
+        });
+      if (vaultSecret) {
+        return { keyId: cfg.public_key, keySecret: vaultSecret as string };
+      }
+    }
+  }
+
+  // ── 2. Environment variables (backward-compat fallback) ────────────────────
+  // Only reached when no payment_gateway_configs row exists (pre-Admin-Panel deployments).
+  const envKeyId = Deno.env.get("RAZORPAY_KEY_ID");
+  const envKeySecret = Deno.env.get("RAZORPAY_KEY_SECRET");
+  if (envKeyId && envKeySecret) {
+    return { keyId: envKeyId, keySecret: envKeySecret };
+  }
+
+  return null;
 }
 
 // ── Razorpay Orders API ───────────────────────────────────────────────────────
@@ -98,6 +158,15 @@ export default {
       );
     }
 
+    // ── Load Razorpay credentials (Vault → env var fallback) ───────────────────
+    const creds = await loadRazorpayCredentials(ctx.supabaseAdmin);
+    if (!creds) {
+      return Response.json(
+        { error: "Payment gateway is not configured." },
+        { status: 503 },
+      );
+    }
+
     // ── Idempotency: reuse an existing pending order if one exists ───────────
     // Covers cases where the client retries after a network failure mid-flow.
     const { data: reusableRows, error: reusableError } = await ctx.supabaseAdmin
@@ -124,15 +193,8 @@ export default {
         amount: number;
         currency: string;
       };
-      const keyId = Deno.env.get("RAZORPAY_KEY_ID");
-      if (!keyId) {
-        return Response.json(
-          { error: "Payment gateway is not configured." },
-          { status: 503 },
-        );
-      }
       return Response.json({
-        key_id: keyId,
+        key_id: creds.keyId,
         order_id: existing.gateway_order_id,
         amount: Math.round(existing.amount * 100),
         currency: existing.currency,
@@ -181,37 +243,16 @@ export default {
       );
     }
 
-    // ── Load Razorpay credentials from environment ──────────────────────────
-    const keyId = Deno.env.get("RAZORPAY_KEY_ID");
-    const keySecret = Deno.env.get("RAZORPAY_KEY_SECRET");
-
-    if (!keyId || !keySecret) {
-      await ctx.supabaseAdmin
-        .from("booking_payments")
-        .update({
-          status: "failed",
-          failure_reason: "Razorpay credentials missing",
-          gateway_response: { error: "Missing Razorpay credentials" },
-        })
-        .eq("id", paymentRow.id);
-
-      return Response.json(
-        { error: "Payment gateway is not configured." },
-        { status: 503 },
-      );
-    }
-
     // ── Create order with Razorpay ──────────────────────────────────────────
     let razorpayOrder: RazorpayOrderResponse;
     try {
       razorpayOrder = await createRazorpayOrder(
-        keyId,
-        keySecret,
+        creds.keyId,
+        creds.keySecret,
         amountPaise,
         `bp_${paymentRow.id}`,
       );
     } catch (err) {
-      // Mark the row failed so it is visible in the audit log
       await ctx.supabaseAdmin
         .from("booking_payments")
         .update({
@@ -237,7 +278,6 @@ export default {
       .eq("id", paymentRow.id);
 
     if (updateError) {
-      // Order exists at Razorpay but we failed to persist it — log and surface.
       return Response.json(
         { error: "Order created but failed to save. Contact support with booking ID." },
         { status: 500 },
@@ -246,7 +286,7 @@ export default {
 
     // ── Return only what the Flutter SDK needs ───────────────────────────────
     return Response.json({
-      key_id: keyId,
+      key_id: creds.keyId,
       order_id: razorpayOrder.id,
       amount: razorpayOrder.amount,
       currency: "INR",
