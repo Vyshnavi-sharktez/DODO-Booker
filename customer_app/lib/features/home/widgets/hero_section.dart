@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/utils/service_image_registry.dart';
+import '../../../core/widgets/pwa_install_dialog.dart';
 import '../services/home_providers.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -265,6 +266,10 @@ class _HeroContent extends StatelessWidget {
             _ExploreButton(onTap: onExplore, large: isDesktop),
           ],
         ),
+        SizedBox(height: isDesktop ? 28 : 20),
+
+        // Download App strip
+        _GetAppStrip(isDesktop: isDesktop),
       ],
     );
   }
@@ -394,6 +399,69 @@ class _ExploreButtonState extends State<_ExploreButton> {
                 ),
               ],
             ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ── Install App strip ─────────────────────────────────────────────────────────
+
+class _GetAppStrip extends StatefulWidget {
+  final bool isDesktop;
+  const _GetAppStrip({required this.isDesktop});
+
+  @override
+  State<_GetAppStrip> createState() => _GetAppStripState();
+}
+
+class _GetAppStripState extends State<_GetAppStrip> {
+  bool _hovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final fontSize = widget.isDesktop ? 13.0 : 12.5;
+    final hPad = widget.isDesktop ? 16.0 : 14.0;
+    final vPad = widget.isDesktop ? 11.0 : 10.0;
+
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      child: GestureDetector(
+        onTap: () => PwaInstallDialog.show(context),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 150),
+          padding: EdgeInsets.symmetric(horizontal: hPad, vertical: vPad),
+          decoration: BoxDecoration(
+            color: _hovered ? const Color(0xFF222222) : AppColors.textPrimary,
+            borderRadius: BorderRadius.circular(11),
+            boxShadow: _hovered
+                ? [
+                    BoxShadow(
+                      color: Colors.black.withAlpha(40),
+                      blurRadius: 8,
+                      offset: const Offset(0, 3),
+                    ),
+                  ]
+                : null,
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.download_rounded,
+                  size: widget.isDesktop ? 16.0 : 15.0, color: Colors.white),
+              SizedBox(width: widget.isDesktop ? 8.0 : 7.0),
+              Text(
+                'Install DODO',
+                style: TextStyle(
+                  fontSize: fontSize,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.white,
+                ),
+              ),
+            ],
           ),
         ),
       ),

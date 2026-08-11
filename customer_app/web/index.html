@@ -37,6 +37,59 @@
 
   <title>DODO Booker</title>
   <link rel="manifest" href="manifest.json">
+
+  <script>
+    // Register the DODO service worker. Must happen before Flutter loads so
+    // that the service worker can activate before Chrome evaluates PWA
+    // installability (beforeinstallprompt fires only after SW activation).
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/sw.js').catch(function(err) {
+        console.warn('SW registration failed:', err);
+      });
+    }
+
+    window._deferredInstallPrompt = null;
+    window._pwaInstallAvailable = false;
+
+    window.addEventListener('beforeinstallprompt', function(e) {
+      e.preventDefault();
+      window._deferredInstallPrompt = e;
+      window._pwaInstallAvailable = true;
+    });
+
+    window.addEventListener('appinstalled', function() {
+      window._deferredInstallPrompt = null;
+      window._pwaInstallAvailable = false;
+    });
+
+    // Called from Flutter via dart:js_interop.
+    window._getPwaInstallAvailable = function() {
+      return window._pwaInstallAvailable === true;
+    };
+
+    window._getPwaIsStandalone = function() {
+      try {
+        return window.matchMedia('(display-mode: standalone)').matches ||
+               window.matchMedia('(display-mode: fullscreen)').matches;
+      } catch(e) { return false; }
+    };
+
+    // Returns a Promise resolving to 'accepted', 'dismissed', or 'unavailable'.
+    window.triggerPwaInstall = function() {
+      if (!window._deferredInstallPrompt) {
+        return Promise.resolve('unavailable');
+      }
+      var prompt = window._deferredInstallPrompt;
+      window._deferredInstallPrompt = null;
+      window._pwaInstallAvailable = false;
+      prompt.prompt();
+      return prompt.userChoice.then(function(choice) {
+        return choice.outcome;
+      }).catch(function() {
+        return 'error';
+      });
+    };
+  </script>
 </head>
 <body>
   <!--

@@ -27,6 +27,7 @@ import '../features/search/screens/search_screen.dart';
 import '../features/info/screens/contact_screen.dart';
 import '../features/info/screens/help_screen.dart';
 import '../features/info/screens/refund_policy_screen.dart';
+import '../features/service_areas/screens/service_areas_screen.dart';
 import '../models/booking_model.dart';
 import '../models/category_model.dart';
 import '../models/subcategory_model.dart';
@@ -61,6 +62,7 @@ class AppRoutes {
   static const String amcPlans = '/amc-plans';
   static const String profile = '/profile';
   static const String categories = '/categories';
+  static const String serviceAreas = '/service-areas';
   static const String contact = '/contact';
   static const String help = '/help';
   static const String refundPolicy = '/refund-policy';
@@ -256,6 +258,11 @@ final appRouter = GoRouter(
     GoRoute(
       path: AppRoutes.refundPolicy,
       builder: (context, state) => const RefundPolicyScreen(),
+    ),
+
+    GoRoute(
+      path: AppRoutes.serviceAreas,
+      builder: (context, state) => const ServiceAreasScreen(),
     ),
   ],
 );
