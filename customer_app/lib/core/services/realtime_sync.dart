@@ -10,6 +10,7 @@ import '../../features/bookings/services/bookings_providers.dart';
 import '../../features/notifications/services/notification_providers.dart';
 import '../../features/catalog/providers/catalog_providers.dart';
 import '../../features/home/services/home_providers.dart';
+import '../../features/home/services/landing_page_sections_provider.dart';
 import '../../features/loyalty/providers/loyalty_providers.dart';
 import '../../features/surge_fee/providers/surge_fee_provider.dart';
 import '../../features/tax/providers/tax_provider.dart';
@@ -109,6 +110,17 @@ class CustomerRealtimeSync {
           schema: 'public',
           table: 'catalog_node_configs',
           callback: (_) => _debouncedInvalidateConfig(),
+        )
+        // ── Landing page CMS publish events ──────────────────────────────────
+        // Invalidated when admin publishes sections (is_published / is_enabled /
+        // display_order changes). The anon RLS policy means we only receive events
+        // for rows that are (or become) published+enabled, which is exactly what
+        // the customer app renders.
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'landing_page_sections',
+          callback: (_) => _ref.invalidate(landingPageSectionsProvider),
         )
         // ── Home banners ─────────────────────────────────────────────────────
         .onPostgresChanges(
@@ -295,6 +307,7 @@ class CustomerRealtimeSync {
   void refetchAll() {
     _invalidateCatalog();
     _invalidateConfig();
+    _ref.invalidate(landingPageSectionsProvider);
     _ref.invalidate(myBookingsProvider);
     _ref.invalidate(processedBookingsProvider);
     _ref.invalidate(amcContractProvider);

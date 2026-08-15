@@ -73,6 +73,8 @@ class _DodoAdminAppState extends ConsumerState<DodoAdminApp>
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light,
       routerConfig: router,
+      // Admin panel is always LTR regardless of system locale.
+      locale: const Locale('en'),
     );
   }
 }

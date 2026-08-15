@@ -575,6 +575,7 @@ class _FloatingInfoCard extends StatelessWidget {
                       height: 1.0,
                     ),
                   ),
+                  
                   const SizedBox(width: 6),
                   Text(
                     hasAdjustment ? 'incl. adjustments' : 'onwards',

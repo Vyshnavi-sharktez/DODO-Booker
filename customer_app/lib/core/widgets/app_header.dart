@@ -1,6 +1,7 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:google_fonts/google_fonts.dart';
 import '../constants/app_colors.dart';
 import 'app_modal_dialog.dart';
 import 'pwa_install_dialog.dart';
@@ -67,11 +68,10 @@ class AppHeader extends ConsumerWidget implements PreferredSizeWidget {
                 curve: Curves.easeOut,
                 height: 84,
                 decoration: BoxDecoration(
-                  color: Colors.white.withAlpha(isScrolled ? 224 : 247),
+                  color: const Color(0xFF111111),
                   border: Border(
                     bottom: BorderSide(
-                      color: AppColors.divider
-                          .withAlpha(isScrolled ? 127 : 255),
+                      color: Colors.white.withAlpha(isScrolled ? 30 : 18),
                       width: 0.8,
                     ),
                   ),
@@ -390,7 +390,7 @@ class _NavDropdownAnchorState extends State<_NavDropdownAnchor> {
             padding:
                 const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             decoration: BoxDecoration(
-              color: _open ? AppColors.goldLight : Colors.transparent,
+              color: _open ? Colors.white.withAlpha(18) : Colors.transparent,
               borderRadius: BorderRadius.circular(8),
             ),
             child: Row(
@@ -398,12 +398,12 @@ class _NavDropdownAnchorState extends State<_NavDropdownAnchor> {
               children: [
                 Text(
                   widget.label,
-                  style: TextStyle(
+                  style: GoogleFonts.inter(
                     fontSize: 13.5,
                     fontWeight: FontWeight.w500,
                     color: _open
-                        ? AppColors.textPrimary
-                        : AppColors.textSecondary,
+                        ? Colors.white
+                        : const Color(0xFFEDEAE4),
                   ),
                 ),
                 const SizedBox(width: 2),
@@ -414,8 +414,8 @@ class _NavDropdownAnchorState extends State<_NavDropdownAnchor> {
                     Icons.keyboard_arrow_down_rounded,
                     size: 16,
                     color: _open
-                        ? AppColors.textPrimary
-                        : AppColors.textSecondary,
+                        ? Colors.white
+                        : const Color(0xFFEDEAE4),
                   ),
                 ),
               ],
@@ -1160,24 +1160,22 @@ class _DownloadAppButtonState extends State<_DownloadAppButton> {
         onTap: () => PwaInstallDialog.show(context),
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 150),
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
           decoration: BoxDecoration(
-            color: _hovered
-                ? const Color(0xFF333333)
-                : AppColors.textPrimary,
-            borderRadius: BorderRadius.circular(10),
+            color: _hovered ? AppColors.goldDeep : AppColors.gold,
+            borderRadius: BorderRadius.circular(100),
           ),
-          child: const Row(
+          child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(Icons.download_rounded, size: 15, color: Colors.white),
-              SizedBox(width: 6),
+              const Icon(Icons.download_rounded, size: 15, color: AppColors.primary),
+              const SizedBox(width: 6),
               Text(
                 'Get App',
-                style: TextStyle(
+                style: GoogleFonts.poppins(
                   fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                  color: Colors.white,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.primary,
                   letterSpacing: 0.1,
                 ),
               ),
@@ -1286,12 +1284,14 @@ class _NotifButtonState extends ConsumerState<_NotifButton> {
           width: 40,
           height: 40,
           decoration: BoxDecoration(
-            color: _hovered ? AppColors.goldLight : AppColors.surfaceVariant,
+            color: _hovered
+                ? Colors.white.withAlpha(28)
+                : Colors.white.withAlpha(14),
             borderRadius: BorderRadius.circular(12),
             border: Border.all(
               color: _hovered
-                  ? AppColors.gold.withAlpha(100)
-                  : AppColors.border,
+                  ? Colors.white.withAlpha(80)
+                  : Colors.white.withAlpha(35),
               width: 0.8,
             ),
           ),
@@ -1301,9 +1301,7 @@ class _NotifButtonState extends ConsumerState<_NotifButton> {
             children: [
               Icon(Icons.notifications_outlined,
                   size: 20,
-                  color: _hovered
-                      ? AppColors.primary
-                      : AppColors.textPrimary),
+                  color: _hovered ? AppColors.gold : Colors.white.withAlpha(220)),
               if (unread > 0)
                 Positioned(
                   top: 8,
@@ -1354,12 +1352,14 @@ class _CartButtonState extends ConsumerState<_CartButton> {
           width: 40,
           height: 40,
           decoration: BoxDecoration(
-            color: _hovered ? AppColors.goldLight : AppColors.surfaceVariant,
+            color: _hovered
+                ? Colors.white.withAlpha(28)
+                : Colors.white.withAlpha(14),
             borderRadius: BorderRadius.circular(12),
             border: Border.all(
               color: _hovered
-                  ? AppColors.gold.withAlpha(100)
-                  : AppColors.border,
+                  ? Colors.white.withAlpha(80)
+                  : Colors.white.withAlpha(35),
               width: 0.8,
             ),
           ),
@@ -1369,9 +1369,7 @@ class _CartButtonState extends ConsumerState<_CartButton> {
             children: [
               Icon(Icons.shopping_cart_outlined,
                   size: 20,
-                  color: _hovered
-                      ? AppColors.primary
-                      : AppColors.textPrimary),
+                  color: _hovered ? AppColors.gold : Colors.white.withAlpha(220)),
               if (count > 0)
                 Positioned(
                   top: 4,
@@ -1471,16 +1469,22 @@ class _HeaderIconBtnState extends State<_HeaderIconBtn> {
           width: 38,
           height: 38,
           decoration: BoxDecoration(
-            color: _hovered ? AppColors.goldLight : AppColors.surfaceVariant,
+            color: _hovered
+                ? Colors.white.withAlpha(28)
+                : Colors.white.withAlpha(14),
             borderRadius: BorderRadius.circular(10),
             border: Border.all(
               color: _hovered
-                  ? AppColors.gold.withAlpha(100)
-                  : AppColors.border,
+                  ? Colors.white.withAlpha(80)
+                  : Colors.white.withAlpha(35),
               width: 0.8,
             ),
           ),
-          child: Icon(widget.icon, size: 20, color: AppColors.textPrimary),
+          child: Icon(
+            widget.icon,
+            size: 20,
+            color: _hovered ? AppColors.gold : Colors.white.withAlpha(220),
+          ),
         ),
       ),
     );

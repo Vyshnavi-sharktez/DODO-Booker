@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../../core/constants/app_colors.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../../profile/services/profile_providers.dart';
 
 class HomeHeaderSection extends ConsumerWidget {
-  const HomeHeaderSection({super.key});
+  const HomeHeaderSection({super.key, this.padding});
+
+  final EdgeInsets? padding;
 
   static String _greeting() {
     final h = DateTime.now().hour;
@@ -34,13 +35,16 @@ class HomeHeaderSection extends ConsumerWidget {
             ? 'Welcome back!'
             : null;
 
+    final effectivePadding = padding ??
+        EdgeInsets.fromLTRB(
+          isDesktop ? 24 : 16,
+          isDesktop ? 28 : 20,
+          isDesktop ? 24 : 16,
+          0,
+        );
+
     return Padding(
-      padding: EdgeInsets.fromLTRB(
-        isDesktop ? 24 : 16,
-        isDesktop ? 28 : 20,
-        isDesktop ? 24 : 16,
-        0,
-      ),
+      padding: effectivePadding,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -49,7 +53,7 @@ class HomeHeaderSection extends ConsumerWidget {
             style: TextStyle(
               fontSize: isDesktop ? 14 : 13,
               fontWeight: FontWeight.w500,
-              color: AppColors.textHint,
+              color: Colors.white.withAlpha(140),
               height: 1.3,
             ),
           ),
@@ -60,7 +64,7 @@ class HomeHeaderSection extends ConsumerWidget {
               style: TextStyle(
                 fontSize: isDesktop ? 26 : 22,
                 fontWeight: FontWeight.w800,
-                color: AppColors.textPrimary,
+                color: Colors.white,
                 height: 1.2,
                 letterSpacing: -0.3,
               ),
