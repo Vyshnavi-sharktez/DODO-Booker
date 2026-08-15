@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/constants/app_colors.dart';
@@ -87,15 +88,21 @@ class FooterSection extends StatelessWidget {
     final isTablet = width >= 768;
 
     return ColoredBox(
-      color: const Color(0xFFF5F5F5),
+      color: const Color(0xFF111111),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const Divider(height: 1, thickness: 1, color: AppColors.divider),
+          // ── Top banner ────────────────────────────────────────────────
+          _FooterTopBanner(
+            isDesktop: isDesktop,
+            onGooglePlay: () => openExternalUrl(context, _googlePlayUrl),
+            onAppStore: () => openExternalUrl(context, _appStoreUrl),
+          ),
+
           Padding(
             padding: EdgeInsets.symmetric(
               horizontal: isDesktop ? 32 : 16,
-              vertical: isDesktop ? 48 : 32,
+              vertical: isDesktop ? 52 : 36,
             ),
             child: isDesktop
                 ? _DesktopLayout(onLink: (action) => action(context))
@@ -106,21 +113,231 @@ class FooterSection extends StatelessWidget {
           Container(
             padding: EdgeInsets.symmetric(
               horizontal: isDesktop ? 32 : 16,
-              vertical: isDesktop ? 48 : 32,
+              vertical: 20,
             ),
-            decoration: const BoxDecoration(
-              border: Border(top: BorderSide(color: AppColors.divider)),
+            decoration: BoxDecoration(
+              border: Border(
+                top: BorderSide(color: Colors.white.withAlpha(20)),
+              ),
             ),
             child: Text(
               '© ${DateTime.now().year} DODO Booker. All rights reserved.',
               textAlign: TextAlign.center,
-              style: const TextStyle(
+              style: GoogleFonts.inter(
                 fontSize: 12,
-                color: AppColors.textSecondary,
+                color: Colors.white.withAlpha(100),
               ),
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+// ── Footer top banner ─────────────────────────────────────────────────────────
+
+class _FooterTopBanner extends StatelessWidget {
+  final bool isDesktop;
+  final VoidCallback onGooglePlay;
+  final VoidCallback onAppStore;
+
+  const _FooterTopBanner({
+    required this.isDesktop,
+    required this.onGooglePlay,
+    required this.onAppStore,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final hPad = isDesktop ? 32.0 : 16.0;
+
+    return Container(
+      decoration: BoxDecoration(
+        color: const Color(0xFF1A1714),
+        border: Border(
+          bottom: BorderSide(color: Colors.white.withAlpha(18)),
+        ),
+      ),
+      padding: EdgeInsets.symmetric(
+        horizontal: hPad,
+        vertical: isDesktop ? 36 : 28,
+      ),
+      child: isDesktop
+          ? _BannerRow(onGooglePlay: onGooglePlay, onAppStore: onAppStore)
+          : _BannerColumn(onGooglePlay: onGooglePlay, onAppStore: onAppStore),
+    );
+  }
+}
+
+class _BannerRow extends StatelessWidget {
+  final VoidCallback onGooglePlay;
+  final VoidCallback onAppStore;
+
+  const _BannerRow({required this.onGooglePlay, required this.onAppStore});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        Expanded(
+          child: _BannerTextAndButtons(
+            onGooglePlay: onGooglePlay,
+            onAppStore: onAppStore,
+          ),
+        ),
+        const SizedBox(width: 32),
+        // Mascot thumbnail: 70×90, cropped from top
+        ClipRect(
+          child: SizedBox(
+            width: 70,
+            height: 90,
+            child: OverflowBox(
+              alignment: Alignment.topCenter,
+              maxWidth: 70,
+              maxHeight: double.infinity,
+              child: Image.asset(
+                'assets/images/dodo-mascot.png',
+                width: 70,
+                fit: BoxFit.fitWidth,
+                errorBuilder: (_, _, _) => const SizedBox.shrink(),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _BannerColumn extends StatelessWidget {
+  final VoidCallback onGooglePlay;
+  final VoidCallback onAppStore;
+
+  const _BannerColumn({required this.onGooglePlay, required this.onAppStore});
+
+  @override
+  Widget build(BuildContext context) {
+    return _BannerTextAndButtons(
+      onGooglePlay: onGooglePlay,
+      onAppStore: onAppStore,
+    );
+  }
+}
+
+class _BannerTextAndButtons extends StatelessWidget {
+  final VoidCallback onGooglePlay;
+  final VoidCallback onAppStore;
+
+  const _BannerTextAndButtons({
+    required this.onGooglePlay,
+    required this.onAppStore,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isDesktop = MediaQuery.sizeOf(context).width >= 1024;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          'Home services, whenever you need them.',
+          style: GoogleFonts.poppins(
+            fontSize: isDesktop ? 22 : 18,
+            fontWeight: FontWeight.w700,
+            color: Colors.white,
+            height: 1.25,
+          ),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          'Download the DODO Booker App',
+          style: GoogleFonts.inter(
+            fontSize: 14,
+            color: Colors.white.withAlpha(160),
+          ),
+        ),
+        const SizedBox(height: 16),
+        Wrap(
+          spacing: 12,
+          runSpacing: 10,
+          children: [
+            _BannerStoreButton(
+              label: 'Google Play',
+              icon: Icons.android_rounded,
+              onTap: onGooglePlay,
+            ),
+            _BannerStoreButton(
+              label: 'App Store',
+              icon: Icons.phone_iphone_rounded,
+              onTap: onAppStore,
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class _BannerStoreButton extends StatefulWidget {
+  final String label;
+  final IconData icon;
+  final VoidCallback onTap;
+
+  const _BannerStoreButton({
+    required this.label,
+    required this.icon,
+    required this.onTap,
+  });
+
+  @override
+  State<_BannerStoreButton> createState() => _BannerStoreButtonState();
+}
+
+class _BannerStoreButtonState extends State<_BannerStoreButton> {
+  bool _hovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      cursor: SystemMouseCursors.click,
+      child: GestureDetector(
+        onTap: widget.onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 150),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          decoration: BoxDecoration(
+            color: _hovered ? AppColors.gold : Colors.transparent,
+            borderRadius: BorderRadius.circular(100),
+            border: Border.all(
+              color: _hovered ? AppColors.gold : Colors.white.withAlpha(80),
+            ),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                widget.icon,
+                size: 18,
+                color: _hovered ? AppColors.primary : Colors.white,
+              ),
+              const SizedBox(width: 8),
+              Text(
+                widget.label,
+                style: GoogleFonts.inter(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: _hovered ? AppColors.primary : Colors.white,
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -352,22 +569,31 @@ class _BrandColumn extends StatelessWidget {
       children: [
         Image.asset(
           'assets/images/logo.png',
-          height: 56,
+          height: 52,
           fit: BoxFit.contain,
-          errorBuilder: (_, _, _) => const Icon(
-            Icons.home_repair_service_rounded,
-            size: 48,
-            color: AppColors.primary,
+          errorBuilder: (_, _, _) => Container(
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+              color: AppColors.gold,
+              borderRadius: BorderRadius.circular(9),
+            ),
+            alignment: Alignment.center,
+            child: const Icon(
+              Icons.home_repair_service_rounded,
+              size: 26,
+              color: AppColors.primary,
+            ),
           ),
         ),
         const SizedBox(height: 12),
         Text(
           'DODO Booker',
           textAlign: textAlign,
-          style: const TextStyle(
+          style: GoogleFonts.poppins(
             fontSize: 20,
             fontWeight: FontWeight.w800,
-            color: AppColors.textPrimary,
+            color: Colors.white,
             letterSpacing: -0.3,
           ),
         ),
@@ -375,11 +601,11 @@ class _BrandColumn extends StatelessWidget {
         SizedBox(
           width: centered ? 320 : 280,
           child: Text(
-            'Premium home services, delivered by verified professionals you can trust.',
+            'Home services whenever you need them.',
             textAlign: textAlign,
-            style: const TextStyle(
+            style: GoogleFonts.inter(
               fontSize: 13,
-              color: AppColors.textSecondary,
+              color: Colors.white.withAlpha(160),
               height: 1.55,
             ),
           ),
@@ -431,11 +657,11 @@ class _LinkColumn extends StatelessWidget {
       children: [
         Text(
           title,
-          style: const TextStyle(
-            fontSize: 14,
-            fontWeight: FontWeight.w700,
-            color: AppColors.textPrimary,
-            letterSpacing: 0.2,
+          style: GoogleFonts.poppins(
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+            color: Colors.white,
+            letterSpacing: 0.3,
           ),
         ),
         const SizedBox(height: 14),
@@ -474,12 +700,10 @@ class _FooterLinkState extends State<_FooterLink> {
         onTap: widget.onTap,
         child: Text(
           widget.label,
-          style: TextStyle(
+          style: GoogleFonts.inter(
             fontSize: 13,
-            color: _hovered ? AppColors.primary : AppColors.textSecondary,
-            fontWeight: _hovered ? FontWeight.w600 : FontWeight.w400,
-            decoration: _hovered ? TextDecoration.underline : null,
-            decorationColor: AppColors.primary,
+            color: _hovered ? AppColors.gold : Colors.white.withAlpha(140),
+            fontWeight: _hovered ? FontWeight.w500 : FontWeight.w400,
           ),
         ),
       ),
@@ -517,25 +741,32 @@ class _DownloadButtonState extends State<_DownloadButton> {
           duration: const Duration(milliseconds: 150),
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
           decoration: BoxDecoration(
-            color: _hovered ? AppColors.goldLight : AppColors.surfaceVariant,
-            borderRadius: BorderRadius.circular(12),
+            color: _hovered
+                ? AppColors.gold
+                : Colors.white.withAlpha(16),
+            borderRadius: BorderRadius.circular(100),
             border: Border.all(
               color: _hovered
-                  ? AppColors.gold.withAlpha(180)
-                  : AppColors.border,
+                  ? AppColors.gold
+                  : Colors.white.withAlpha(50),
+              width: 1,
             ),
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(widget.icon, size: 18, color: AppColors.textPrimary),
+              Icon(
+                widget.icon,
+                size: 18,
+                color: _hovered ? AppColors.primary : Colors.white.withAlpha(200),
+              ),
               const SizedBox(width: 8),
               Text(
                 widget.label,
-                style: const TextStyle(
+                style: GoogleFonts.inter(
                   fontSize: 13,
                   fontWeight: FontWeight.w600,
-                  color: AppColors.textPrimary,
+                  color: _hovered ? AppColors.primary : Colors.white.withAlpha(200),
                 ),
               ),
             ],
@@ -605,17 +836,17 @@ class _SocialIconButtonState extends State<_SocialIconButton> {
             width: 38,
             height: 38,
             decoration: BoxDecoration(
-              color: _hovered ? AppColors.goldLight : AppColors.surfaceVariant,
+              color: _hovered ? AppColors.gold : Colors.white.withAlpha(16),
               shape: BoxShape.circle,
               border: Border.all(
-                color: _hovered ? AppColors.gold.withAlpha(180) : AppColors.border,
+                color: _hovered ? AppColors.gold : Colors.white.withAlpha(50),
               ),
             ),
             alignment: Alignment.center,
             child: Icon(
               widget.icon,
               size: 18,
-              color: _hovered ? AppColors.primary : AppColors.textSecondary,
+              color: _hovered ? AppColors.primary : Colors.white.withAlpha(200),
             ),
           ),
         ),

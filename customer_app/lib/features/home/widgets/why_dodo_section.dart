@@ -1,32 +1,85 @@
 import 'package:flutter/material.dart';
 import '../../../core/constants/app_colors.dart';
+import '../../../core/utils/icon_resolver.dart';
+
+// ── Public data model (used by CMS renderer) ──────────────────────────────────
+
+class WhyDodoItem {
+  final IconData icon;
+  final String title;
+  final String description;
+
+  const WhyDodoItem({
+    required this.icon,
+    required this.title,
+    required this.description,
+  });
+
+  factory WhyDodoItem.fromMap(Map<String, dynamic> map) {
+    return WhyDodoItem(
+      icon: resolveIconData(map['icon'] as String?),
+      title: map['title'] as String? ?? '',
+      description: map['description'] as String? ?? '',
+    );
+  }
+}
+
+// ── Default items (unchanged approved design) ─────────────────────────────────
+
+const _kDefaultItems = [
+  _TrustItem(
+    icon: Icons.verified_user_rounded,
+    title: 'Verified Professionals',
+    description:
+        'Every service provider is background-checked and certified before joining our platform.',
+  ),
+  _TrustItem(
+    icon: Icons.receipt_long_rounded,
+    title: 'Transparent Pricing',
+    description:
+        'No hidden charges — what you see is what you pay. Get instant quotes upfront.',
+  ),
+  _TrustItem(
+    icon: Icons.lock_rounded,
+    title: 'Secure Booking',
+    description:
+        'Your payments and personal data are protected with bank-grade encryption.',
+  ),
+];
+
+// ── Widget ────────────────────────────────────────────────────────────────────
 
 class WhyDodoSection extends StatelessWidget {
-  const WhyDodoSection({super.key});
+  const WhyDodoSection({
+    super.key,
+    this.title,
+    this.subtitle,
+    this.items,
+  });
 
-  static const _items = [
-    _TrustItem(
-      icon: Icons.verified_user_rounded,
-      title: 'Verified Professionals',
-      description:
-          'Every service provider is background-checked and certified before joining our platform.',
-    ),
-    _TrustItem(
-      icon: Icons.receipt_long_rounded,
-      title: 'Transparent Pricing',
-      description:
-          'No hidden charges — what you see is what you pay. Get instant quotes upfront.',
-    ),
-    _TrustItem(
-      icon: Icons.lock_rounded,
-      title: 'Secure Booking',
-      description:
-          'Your payments and personal data are protected with bank-grade encryption.',
-    ),
-  ];
+  /// Section heading. Defaults to 'Why Choose DODO Booker?'.
+  final String? title;
+
+  /// Sub-heading. Defaults to the approved copy.
+  final String? subtitle;
+
+  /// Trust items from CMS config. Falls back to hardcoded defaults when null.
+  final List<WhyDodoItem>? items;
 
   @override
   Widget build(BuildContext context) {
+    final effectiveTitle = title ?? 'Why Choose DODO Booker?';
+    final effectiveSubtitle = subtitle ??
+        'Everything you need for a seamless home services experience.';
+
+    // Build the _TrustItem list from CMS items or use hardcoded defaults.
+    final List<_TrustItem> trustItems = (items?.isNotEmpty == true)
+        ? items!
+            .map((i) =>
+                _TrustItem(icon: i.icon, title: i.title, description: i.description))
+            .toList()
+        : _kDefaultItems;
+
     final width = MediaQuery.of(context).size.width;
     final isDesktop = width >= 768;
 
@@ -53,7 +106,7 @@ class WhyDodoSection extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Why Choose DODO Booker?',
+            effectiveTitle,
             style: TextStyle(
               fontSize: isDesktop ? 20 : 18,
               fontWeight: FontWeight.w800,
@@ -64,8 +117,8 @@ class WhyDodoSection extends StatelessWidget {
           ),
           const SizedBox(height: 6),
           Text(
-            'Everything you need for a seamless home services experience.',
-            style: TextStyle(
+            effectiveSubtitle,
+            style: const TextStyle(
               fontSize: 13,
               color: AppColors.textSecondary,
               height: 1.5,
@@ -75,17 +128,17 @@ class WhyDodoSection extends StatelessWidget {
           isDesktop
               ? Row(
                   children: [
-                    for (int i = 0; i < _items.length; i++) ...[
+                    for (int i = 0; i < trustItems.length; i++) ...[
                       if (i > 0) const SizedBox(width: 20),
-                      Expanded(child: _TrustCard(item: _items[i])),
+                      Expanded(child: _TrustCard(item: trustItems[i])),
                     ],
                   ],
                 )
               : Column(
                   children: [
-                    for (int i = 0; i < _items.length; i++) ...[
+                    for (int i = 0; i < trustItems.length; i++) ...[
                       if (i > 0) const SizedBox(height: 16),
-                      _TrustCard(item: _items[i]),
+                      _TrustCard(item: trustItems[i]),
                     ],
                   ],
                 ),
@@ -95,7 +148,7 @@ class WhyDodoSection extends StatelessWidget {
   }
 }
 
-// ── Data model ────────────────────────────────────────────────────────────────
+// ── Internal data model ───────────────────────────────────────────────────────
 
 class _TrustItem {
   final IconData icon;

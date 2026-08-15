@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:google_fonts/google_fonts.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../models/service_model.dart';
 import '../../../features/catalog/models/catalog_node_model.dart';
@@ -173,6 +174,62 @@ class _ServiceDetailsScreenState extends ConsumerState<ServiceDetailsScreen> {
   }
 }
 
+// ── Gold pill CTA button ──────────────────────────────────────────────────────
+
+class _GoldPillButton extends StatelessWidget {
+  final VoidCallback? onPressed;
+  final IconData icon;
+  final String label;
+
+  const _GoldPillButton({
+    required this.onPressed,
+    required this.icon,
+    required this.label,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final enabled = onPressed != null;
+    return Material(
+      color: enabled ? AppColors.gold : AppColors.border,
+      borderRadius: BorderRadius.circular(100),
+      elevation: 0,
+      child: InkWell(
+        onTap: onPressed,
+        borderRadius: BorderRadius.circular(100),
+        splashColor: Colors.white.withAlpha(60),
+        highlightColor: Colors.transparent,
+        child: Container(
+          height: 50,
+          alignment: Alignment.center,
+          padding: const EdgeInsets.symmetric(horizontal: 20),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                icon,
+                size: 18,
+                color: enabled ? AppColors.primary : AppColors.textHint,
+              ),
+              const SizedBox(width: 8),
+              Text(
+                label,
+                style: GoogleFonts.poppins(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w700,
+                  color: enabled ? AppColors.primary : AppColors.textHint,
+                  letterSpacing: 0.1,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 // ── Sticky booking bar ────────────────────────────────────────────────────────
 
 class _BookingBar extends ConsumerWidget {
@@ -255,7 +312,6 @@ class _BookingBar extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final tt = Theme.of(context).textTheme;
     final canBook = !_hasRequiredAttrs || _requiredFilled;
     final inCart = ref.watch(cartProvider).any((item) => item.serviceId == service.id);
 
@@ -283,48 +339,47 @@ class _BookingBar extends ConsumerWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
+                'From',
+                style: GoogleFonts.inter(
+                  fontSize: 11,
+                  color: AppColors.textHint,
+                  fontWeight: FontWeight.w400,
+                ),
+              ),
+              Text(
                 '₹${displayPrice.toInt()}',
-                style: tt.headlineSmall?.copyWith(
-                  color: AppColors.primary,
+                style: GoogleFonts.poppins(
+                  fontSize: 20,
                   fontWeight: FontWeight.w800,
+                  color: AppColors.primary,
+                  height: 1.1,
                 ),
               ),
               Text(
                 amcPlan != null
-                    ? 'AMC total · ${amcPlan!.numVisits} visits'
+                    ? '${amcPlan!.numVisits} visits'
                     : (priceAdjustment > 0 || addonsTotal > 0)
                         ? 'incl. adjustments'
                         : 'onwards',
-                style: tt.labelSmall?.copyWith(color: AppColors.textHint),
+                style: GoogleFonts.inter(
+                  fontSize: 10,
+                  color: AppColors.textHint,
+                ),
               ),
             ],
           ),
           const SizedBox(width: 12),
           Expanded(
             child: inCart
-                ? FilledButton.icon(
+                ? _GoldPillButton(
                     onPressed: () => openCart(context),
-                    icon: const Icon(Icons.shopping_cart_rounded, size: 16),
-                    label: const Text(
-                      'View Cart',
-                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
-                    ),
-                    style: FilledButton.styleFrom(
-                      minimumSize: const Size.fromHeight(48),
-                    ),
+                    icon: Icons.shopping_cart_rounded,
+                    label: 'View Cart',
                   )
-                : FilledButton(
+                : _GoldPillButton(
                     onPressed: canBook ? () => _addToCart(context, ref) : null,
-                    style: FilledButton.styleFrom(
-                      minimumSize: const Size.fromHeight(48),
-                    ),
-                    child: Text(
-                      canBook ? 'Book Now' : 'Select options',
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
+                    icon: Icons.shopping_cart_checkout_rounded,
+                    label: canBook ? 'Add to Cart' : 'Select options',
                   ),
           ),
         ],

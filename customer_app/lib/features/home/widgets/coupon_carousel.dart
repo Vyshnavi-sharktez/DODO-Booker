@@ -522,13 +522,7 @@ class _TextPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [Color(0xFFFFFDF7), Color(0xFFFFF6DA)],
-        ),
-      ),
+      color: const Color(0xFF0D0D0D),
       child: LayoutBuilder(
         builder: (context, bc) {
           final w = bc.maxWidth;
@@ -576,7 +570,7 @@ class _TextPanel extends StatelessWidget {
                 Text(
                   coupon.discountLabel,
                   style: TextStyle(
-                    color: AppColors.textPrimary,
+                    color: Colors.white,
                     fontSize: titleSize,
                     fontWeight: FontWeight.w800,
                     height: 1.15,
@@ -592,7 +586,7 @@ class _TextPanel extends StatelessWidget {
                   Text(
                     coupon.description!,
                     style: TextStyle(
-                      color: AppColors.textSecondary,
+                      color: const Color(0xFFB3ADA3),
                       fontSize: descSize,
                       height: 1.5,
                     ),
@@ -710,7 +704,7 @@ class _BenefitChip extends StatelessWidget {
       child: Text(
         label,
         style: const TextStyle(
-          color: AppColors.textPrimary,
+          color: Colors.white,
           fontSize: 11,
           fontWeight: FontWeight.w600,
           height: 1.2,

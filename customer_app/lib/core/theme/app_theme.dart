@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:google_fonts/google_fonts.dart';
 import '../constants/app_colors.dart';
 
 class AppTheme {
@@ -85,8 +86,10 @@ class AppTheme {
     final surfaceVar    = isDark ? _darkSurfaceVar    : AppColors.surfaceVariant;
     final borderColor   = isDark ? _darkBorder        : AppColors.border;
     final dividerColor  = isDark ? _darkBorder        : AppColors.divider;
-    final navIndicator  = isDark ? _darkGoldContainer : AppColors.primaryLight;
-    final navSelected   = isDark ? AppColors.gold     : AppColors.primary;
+    final navIndicator  = isDark ? _darkGoldContainer : AppColors.goldLight;
+    // Gold active for both themes — matches design system
+    final navSelected   = AppColors.gold;
+    final navUnselected = isDark ? _darkTextSecondary : AppColors.textSecondary;
 
     final overlayStyle = isDark ? SystemUiOverlayStyle.light : SystemUiOverlayStyle.dark;
     final primary = colorScheme.primary;
@@ -104,7 +107,7 @@ class AppTheme {
         elevation: 0,
         scrolledUnderElevation: 1,
         centerTitle: true,
-        titleTextStyle: TextStyle(
+        titleTextStyle: GoogleFonts.poppins(
           color: textPrimary,
           fontSize: 18,
           fontWeight: FontWeight.w600,
@@ -129,18 +132,18 @@ class AppTheme {
           if (states.contains(WidgetState.selected)) {
             return IconThemeData(color: navSelected, size: 24);
           }
-          return IconThemeData(color: textSecondary, size: 24);
+          return IconThemeData(color: navUnselected, size: 24);
         }),
         labelTextStyle: WidgetStateProperty.resolveWith((states) {
           if (states.contains(WidgetState.selected)) {
-            return TextStyle(
+            return GoogleFonts.poppins(
               color: navSelected,
               fontSize: 12,
               fontWeight: FontWeight.w600,
             );
           }
-          return TextStyle(
-            color: textSecondary,
+          return GoogleFonts.inter(
+            color: navUnselected,
             fontSize: 12,
             fontWeight: FontWeight.w400,
           );
@@ -166,15 +169,15 @@ class AppTheme {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       ),
 
-      // ── Buttons ─────────────────────────────────────────────────────────
+      // ── Buttons — pill shape (design system) ────────────────────────────
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
           backgroundColor: primary,
           foregroundColor: colorScheme.onPrimary,
           minimumSize: const Size.fromHeight(52),
           elevation: 0,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          textStyle: const TextStyle(
+          shape: const StadiumBorder(),
+          textStyle: GoogleFonts.poppins(
             fontSize: 16,
             fontWeight: FontWeight.w600,
             letterSpacing: 0.2,
@@ -187,8 +190,11 @@ class AppTheme {
           backgroundColor: primary,
           foregroundColor: colorScheme.onPrimary,
           minimumSize: const Size.fromHeight(52),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+          shape: const StadiumBorder(),
+          textStyle: GoogleFonts.poppins(
+            fontSize: 16,
+            fontWeight: FontWeight.w600,
+          ),
         ),
       ),
 
@@ -197,15 +203,21 @@ class AppTheme {
           foregroundColor: primary,
           minimumSize: const Size(double.infinity, 52),
           side: BorderSide(color: primary, width: 1.5),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+          shape: const StadiumBorder(),
+          textStyle: GoogleFonts.poppins(
+            fontSize: 16,
+            fontWeight: FontWeight.w600,
+          ),
         ),
       ),
 
       textButtonTheme: TextButtonThemeData(
         style: TextButton.styleFrom(
           foregroundColor: primary,
-          textStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+          textStyle: GoogleFonts.poppins(
+            fontSize: 14,
+            fontWeight: FontWeight.w600,
+          ),
         ),
       ),
 
@@ -234,18 +246,18 @@ class AppTheme {
           borderSide: BorderSide(color: errorColor, width: 2),
         ),
         contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-        hintStyle: TextStyle(color: textHint, fontSize: 14),
-        labelStyle: TextStyle(color: textSecondary, fontSize: 14),
-        errorStyle: TextStyle(color: errorColor, fontSize: 12),
+        hintStyle: GoogleFonts.inter(color: textHint, fontSize: 14),
+        labelStyle: GoogleFonts.inter(color: textSecondary, fontSize: 14),
+        errorStyle: GoogleFonts.inter(color: errorColor, fontSize: 12),
       ),
 
       // ── Chip ────────────────────────────────────────────────────────────
       chipTheme: ChipThemeData(
         backgroundColor: surfaceVar,
         selectedColor: navIndicator,
-        labelStyle: TextStyle(fontSize: 13, color: textPrimary),
+        labelStyle: GoogleFonts.inter(fontSize: 13, color: textPrimary),
         side: BorderSide(color: borderColor),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        shape: const StadiumBorder(),
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
       ),
 
@@ -253,7 +265,7 @@ class AppTheme {
       snackBarTheme: SnackBarThemeData(
         behavior: SnackBarBehavior.floating,
         backgroundColor: isDark ? surfaceBg : AppColors.textPrimary,
-        contentTextStyle: TextStyle(
+        contentTextStyle: GoogleFonts.inter(
           color: isDark ? textPrimary : Colors.white,
           fontSize: 14,
         ),
@@ -271,89 +283,89 @@ class AppTheme {
       bottomSheetTheme: BottomSheetThemeData(
         backgroundColor: surfaceBg,
         shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
         ),
       ),
 
-      // ── Typography ──────────────────────────────────────────────────────
+      // ── Typography — Poppins for display/headline, Inter for body ───────
       textTheme: TextTheme(
-        displayLarge: TextStyle(
+        displayLarge: GoogleFonts.poppins(
           color: textPrimary,
           fontSize: 57,
           fontWeight: FontWeight.w700,
           letterSpacing: -0.25,
         ),
-        displayMedium: TextStyle(
+        displayMedium: GoogleFonts.poppins(
           color: textPrimary,
           fontSize: 45,
           fontWeight: FontWeight.w700,
         ),
-        displaySmall: TextStyle(
+        displaySmall: GoogleFonts.poppins(
           color: textPrimary,
           fontSize: 36,
           fontWeight: FontWeight.w600,
         ),
-        headlineLarge: TextStyle(
+        headlineLarge: GoogleFonts.poppins(
           color: textPrimary,
           fontSize: 32,
           fontWeight: FontWeight.w700,
         ),
-        headlineMedium: TextStyle(
+        headlineMedium: GoogleFonts.poppins(
           color: textPrimary,
           fontSize: 24,
           fontWeight: FontWeight.w600,
         ),
-        headlineSmall: TextStyle(
+        headlineSmall: GoogleFonts.poppins(
           color: textPrimary,
           fontSize: 20,
           fontWeight: FontWeight.w600,
         ),
-        titleLarge: TextStyle(
+        titleLarge: GoogleFonts.poppins(
           color: textPrimary,
           fontSize: 18,
           fontWeight: FontWeight.w600,
           letterSpacing: 0.1,
         ),
-        titleMedium: TextStyle(
+        titleMedium: GoogleFonts.poppins(
           color: textPrimary,
           fontSize: 16,
           fontWeight: FontWeight.w500,
           letterSpacing: 0.1,
         ),
-        titleSmall: TextStyle(
+        titleSmall: GoogleFonts.poppins(
           color: textPrimary,
           fontSize: 14,
           fontWeight: FontWeight.w500,
           letterSpacing: 0.1,
         ),
-        bodyLarge: TextStyle(
+        bodyLarge: GoogleFonts.inter(
           color: textPrimary,
           fontSize: 16,
           fontWeight: FontWeight.w400,
         ),
-        bodyMedium: TextStyle(
+        bodyMedium: GoogleFonts.inter(
           color: textSecondary,
           fontSize: 14,
           fontWeight: FontWeight.w400,
         ),
-        bodySmall: TextStyle(
+        bodySmall: GoogleFonts.inter(
           color: textHint,
           fontSize: 12,
           fontWeight: FontWeight.w400,
         ),
-        labelLarge: TextStyle(
+        labelLarge: GoogleFonts.inter(
           color: textPrimary,
           fontSize: 14,
           fontWeight: FontWeight.w600,
           letterSpacing: 0.1,
         ),
-        labelMedium: TextStyle(
+        labelMedium: GoogleFonts.inter(
           color: textSecondary,
           fontSize: 12,
           fontWeight: FontWeight.w500,
           letterSpacing: 0.5,
         ),
-        labelSmall: TextStyle(
+        labelSmall: GoogleFonts.inter(
           color: textHint,
           fontSize: 11,
           fontWeight: FontWeight.w500,
