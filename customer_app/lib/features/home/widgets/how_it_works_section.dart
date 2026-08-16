@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/utils/icon_resolver.dart';
 
-// ── Public data model ─────────────────────────────────────────────────────────
+// ── Public data model (used by CMS renderer) ──────────────────────────────────
 
 class HowItWorksStep {
   final IconData icon;
@@ -24,28 +25,28 @@ class HowItWorksStep {
   }
 }
 
-// ── Approved default steps ────────────────────────────────────────────────────
+// ── Default steps (approved Phase 1 content) ──────────────────────────────────
 
 const _kDefaultSteps = [
   HowItWorksStep(
-    icon: Icons.search_rounded,
+    icon: Icons.grid_view_rounded,
     title: 'Choose a Service',
-    description: 'Browse our wide range of professional home services and find exactly what you need.',
+    description: 'Browse and select the service you need from our catalogue.',
   ),
   HowItWorksStep(
-    icon: Icons.access_time_rounded,
+    icon: Icons.schedule_rounded,
     title: 'Pick a Time',
-    description: 'Select a date and time slot that works best for your schedule.',
+    description: 'Select your preferred date and time slot.',
   ),
   HowItWorksStep(
-    icon: Icons.verified_user_rounded,
+    icon: Icons.person_rounded,
     title: 'Book a Professional',
-    description: 'Get matched with a verified, background-checked professional near you.',
+    description: 'We match you with a trusted, verified professional.',
   ),
   HowItWorksStep(
-    icon: Icons.check_circle_rounded,
+    icon: Icons.check_circle_outline_rounded,
     title: 'Get It Done',
-    description: 'Relax while our expert handles the job to your complete satisfaction.',
+    description: 'Sit back while we take care of it, every time.',
   ),
 ];
 
@@ -67,141 +68,136 @@ class HowItWorksSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final effectiveTitle = title ?? 'How DODO Booker Works';
-    final effectiveSteps = (steps?.isNotEmpty == true) ? steps! : _kDefaultSteps;
-    final width = MediaQuery.of(context).size.width;
-    final isDesktop = width >= 768;
+    final effectiveSteps =
+        (steps?.isNotEmpty == true) ? steps! : _kDefaultSteps;
 
-    return Container(
-      margin: EdgeInsets.symmetric(horizontal: isDesktop ? 24 : 16),
-      padding: EdgeInsets.all(isDesktop ? 40 : 24),
-      decoration: BoxDecoration(
-        color: AppColors.primary,
-        borderRadius: BorderRadius.circular(24),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x1A000000),
-            blurRadius: 20,
-            offset: Offset(0, 6),
-          ),
-        ],
+    // Convert public CMS steps to internal _WorkStep with auto-assigned
+    // numbered labels and cycling step colors from the approved palette.
+    const stepColors = [
+      AppColors.stepGold,
+      AppColors.stepTeal,
+      AppColors.stepCoral,
+      AppColors.stepBrown,
+    ];
+    final workSteps = [
+      for (int i = 0; i < effectiveSteps.length; i++)
+        _WorkStep(
+          number: (i + 1).toString().padLeft(2, '0'),
+          color: stepColors[i % stepColors.length],
+          icon: effectiveSteps[i].icon,
+          title: effectiveSteps[i].title,
+          description: effectiveSteps[i].description,
+        ),
+    ];
+
+    final isDesktop = MediaQuery.of(context).size.width >= 768;
+
+    return Padding(
+      padding: EdgeInsets.symmetric(
+        horizontal: isDesktop ? 24 : 20,
+        vertical: 8,
       ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          // Header
           Text(
             effectiveTitle,
-            style: TextStyle(
-              fontSize: isDesktop ? 22 : 18,
-              fontWeight: FontWeight.w800,
-              color: Colors.white,
-              height: 1.2,
+            textAlign: TextAlign.center,
+            style: GoogleFonts.poppins(
+              fontSize: isDesktop ? 28 : 20,
+              fontWeight: FontWeight.w700,
+              color: AppColors.textPrimary,
               letterSpacing: -0.3,
             ),
           ),
-          SizedBox(height: isDesktop ? 36 : 28),
-          // Steps
+          SizedBox(height: isDesktop ? 36 : 24),
           isDesktop
-              ? Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    for (int i = 0; i < effectiveSteps.length; i++) ...[
-                      if (i > 0) _Connector(),
-                      Expanded(
-                        child: _StepCard(
-                          step: effectiveSteps[i],
-                          stepNumber: i + 1,
-                        ),
-                      ),
-                    ],
-                  ],
-                )
-              : Column(
-                  children: [
-                    for (int i = 0; i < effectiveSteps.length; i++) ...[
-                      if (i > 0) const SizedBox(height: 20),
-                      _StepRow(
-                        step: effectiveSteps[i],
-                        stepNumber: i + 1,
-                      ),
-                    ],
-                  ],
-                ),
+              ? _DesktopRow(steps: workSteps)
+              : _MobileRow(steps: workSteps),
         ],
       ),
     );
   }
 }
 
-// ── Desktop step card ─────────────────────────────────────────────────────────
+// ── Desktop: horizontal row with CustomPaint connectors ──────────────────────
 
-class _StepCard extends StatelessWidget {
-  const _StepCard({required this.step, required this.stepNumber});
-  final HowItWorksStep step;
-  final int stepNumber;
+class _DesktopRow extends StatelessWidget {
+  final List<_WorkStep> steps;
+  const _DesktopRow({required this.steps});
+
+  // icon center y from step-item top: number(~30px) + gap(12) + half-circle(32) = 74
+  static const double _connectorY = 74.0;
+  static const double _iconR = 32.0; // half of 64px circle
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      children: [
+        Positioned.fill(
+          child: CustomPaint(
+            painter: _StepConnectorPainter(
+              stepCount: steps.length,
+              iconCenterY: _connectorY,
+              iconRadius: _iconR,
+            ),
+          ),
+        ),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            for (final step in steps) Expanded(child: _DesktopStepItem(step: step)),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class _DesktopStepItem extends StatelessWidget {
+  final _WorkStep step;
+  const _DesktopStepItem({required this.step});
 
   @override
   Widget build(BuildContext context) {
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.center,
       children: [
-        // Step number badge + icon
-        Stack(
-          alignment: Alignment.center,
-          children: [
-            Container(
-              width: 64,
-              height: 64,
-              decoration: BoxDecoration(
-                color: Colors.white.withAlpha(18),
-                shape: BoxShape.circle,
-                border: Border.all(
-                  color: AppColors.gold.withAlpha(100),
-                  width: 1.5,
-                ),
-              ),
-              child: Icon(step.icon, size: 28, color: AppColors.gold),
-            ),
-            Positioned(
-              top: 0,
-              right: 0,
-              child: Container(
-                width: 22,
-                height: 22,
-                decoration: const BoxDecoration(
-                  color: AppColors.gold,
-                  shape: BoxShape.circle,
-                ),
-                alignment: Alignment.center,
-                child: Text(
-                  '$stepNumber',
-                  style: const TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w800,
-                    color: Colors.black,
-                  ),
-                ),
-              ),
-            ),
-          ],
+        Text(
+          step.number,
+          style: GoogleFonts.poppins(
+            fontSize: 26,
+            fontWeight: FontWeight.w800,
+            color: step.color,
+          ),
+        ),
+        const SizedBox(height: 12),
+        Container(
+          width: 64,
+          height: 64,
+          decoration: const BoxDecoration(
+            color: Color(0xFFF2EFE9),
+            shape: BoxShape.circle,
+          ),
+          child: Icon(step.icon, size: 26, color: AppColors.primary),
         ),
         const SizedBox(height: 16),
         Text(
           step.title,
           textAlign: TextAlign.center,
-          style: const TextStyle(
-            fontSize: 14,
+          style: GoogleFonts.poppins(
+            fontSize: 15,
             fontWeight: FontWeight.w700,
-            color: Colors.white,
-            height: 1.3,
+            color: AppColors.textPrimary,
           ),
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: 6),
         Text(
           step.description,
           textAlign: TextAlign.center,
-          style: TextStyle(
+          style: GoogleFonts.inter(
             fontSize: 12,
-            color: Colors.white.withAlpha(178),
+            color: const Color(0xFF9A948C),
             height: 1.55,
           ),
         ),
@@ -210,82 +206,76 @@ class _StepCard extends StatelessWidget {
   }
 }
 
-// ── Mobile step row ────────────────────────────────────────────────────────────
+// ── Mobile: compact horizontal row with CustomPaint connectors ───────────────
 
-class _StepRow extends StatelessWidget {
-  const _StepRow({required this.step, required this.stepNumber});
-  final HowItWorksStep step;
-  final int stepNumber;
+class _MobileRow extends StatelessWidget {
+  final List<_WorkStep> steps;
+  const _MobileRow({required this.steps});
+
+  // icon center y: number(~14px) + gap(5) + half-circle(17) = 36
+  static const double _connectorY = 36.0;
+  static const double _iconR = 17.0; // half of 34px circle
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
+    return Stack(
       children: [
-        Stack(
-          alignment: Alignment.center,
-          clipBehavior: Clip.none,
+        Positioned.fill(
+          child: CustomPaint(
+            painter: _StepConnectorPainter(
+              stepCount: steps.length,
+              iconCenterY: _connectorY,
+              iconRadius: _iconR,
+            ),
+          ),
+        ),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Container(
-              width: 52,
-              height: 52,
-              decoration: BoxDecoration(
-                color: Colors.white.withAlpha(18),
-                shape: BoxShape.circle,
-                border: Border.all(
-                  color: AppColors.gold.withAlpha(100),
-                  width: 1.5,
-                ),
-              ),
-              child: Icon(step.icon, size: 22, color: AppColors.gold),
-            ),
-            Positioned(
-              top: -4,
-              right: -4,
-              child: Container(
-                width: 18,
-                height: 18,
-                decoration: const BoxDecoration(
-                  color: AppColors.gold,
-                  shape: BoxShape.circle,
-                ),
-                alignment: Alignment.center,
-                child: Text(
-                  '$stepNumber',
-                  style: const TextStyle(
-                    fontSize: 10,
-                    fontWeight: FontWeight.w800,
-                    color: Colors.black,
-                  ),
-                ),
-              ),
-            ),
+            for (final step in steps) Expanded(child: _MobileStepItem(step: step)),
           ],
         ),
-        const SizedBox(width: 16),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                step.title,
-                style: const TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w700,
-                  color: Colors.white,
-                  height: 1.3,
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                step.description,
-                style: TextStyle(
-                  fontSize: 12.5,
-                  color: Colors.white.withAlpha(178),
-                  height: 1.55,
-                ),
-              ),
-            ],
+      ],
+    );
+  }
+}
+
+class _MobileStepItem extends StatelessWidget {
+  final _WorkStep step;
+  const _MobileStepItem({required this.step});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        Text(
+          step.number,
+          style: GoogleFonts.poppins(
+            fontSize: 12,
+            fontWeight: FontWeight.w800,
+            color: step.color,
+          ),
+        ),
+        const SizedBox(height: 5),
+        Container(
+          width: 34,
+          height: 34,
+          decoration: const BoxDecoration(
+            color: Color(0xFFF2EFE9),
+            shape: BoxShape.circle,
+          ),
+          child: Icon(step.icon, size: 14, color: AppColors.primary),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          step.title,
+          textAlign: TextAlign.center,
+          style: GoogleFonts.inter(
+            fontSize: 9,
+            fontWeight: FontWeight.w600,
+            color: AppColors.textPrimary,
+            height: 1.35,
           ),
         ),
       ],
@@ -293,20 +283,63 @@ class _StepRow extends StatelessWidget {
   }
 }
 
-// ── Horizontal connector line between desktop step cards ──────────────────────
+// ── Connector painter ─────────────────────────────────────────────────────────
 
-class _Connector extends StatelessWidget {
+class _StepConnectorPainter extends CustomPainter {
+  final int stepCount;
+  final double iconCenterY;
+  final double iconRadius;
+
+  const _StepConnectorPainter({
+    required this.stepCount,
+    required this.iconCenterY,
+    required this.iconRadius,
+  });
+
   @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(top: 32),
-      child: SizedBox(
-        width: 24,
-        height: 1,
-        child: Container(
-          color: AppColors.gold.withAlpha(80),
-        ),
-      ),
-    );
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = const Color(0xFFECE7DE)
+      ..strokeWidth = 1.5
+      ..style = PaintingStyle.stroke;
+
+    final stepW = size.width / stepCount;
+    for (int i = 0; i < stepCount - 1; i++) {
+      final cx1 = (i + 0.5) * stepW;
+      final cx2 = (i + 1.5) * stepW;
+      final x1 = cx1 + iconRadius + 6;
+      final x2 = cx2 - iconRadius - 6;
+      if (x2 > x1) {
+        canvas.drawLine(
+          Offset(x1, iconCenterY),
+          Offset(x2, iconCenterY),
+          paint,
+        );
+      }
+    }
   }
+
+  @override
+  bool shouldRepaint(_StepConnectorPainter old) =>
+      old.stepCount != stepCount ||
+      old.iconCenterY != iconCenterY ||
+      old.iconRadius != iconRadius;
+}
+
+// ── Internal data model ───────────────────────────────────────────────────────
+
+class _WorkStep {
+  final String number;
+  final Color color;
+  final IconData icon;
+  final String title;
+  final String description;
+
+  const _WorkStep({
+    required this.number,
+    required this.color,
+    required this.icon,
+    required this.title,
+    required this.description,
+  });
 }

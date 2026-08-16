@@ -24,11 +24,19 @@ class AvailableCouponsSheet extends ConsumerStatefulWidget {
 class _AvailableCouponsSheetState
     extends ConsumerState<AvailableCouponsSheet> {
   bool _loggedLoaded = false;
+  final TextEditingController _codeCtrl = TextEditingController();
+  String? _codeError;
 
   @override
   void initState() {
     super.initState();
     debugPrint('[DODO][Coupon] Loading coupons');
+  }
+
+  @override
+  void dispose() {
+    _codeCtrl.dispose();
+    super.dispose();
   }
 
   List<CouponModel> _sorted(List<CouponModel> coupons) {
@@ -45,6 +53,26 @@ class _AvailableCouponsSheetState
       return a.validTo!.compareTo(b.validTo!);
     });
     return list;
+  }
+
+  void _applyCode() {
+    final code = _codeCtrl.text.trim();
+    if (code.isEmpty) return;
+    setState(() => _codeError = null);
+    final all = ref.read(activeCouponsProvider).valueOrNull;
+    if (all == null) {
+      setState(() => _codeError = 'Invalid coupon code');
+      return;
+    }
+    final matches =
+        all.where((c) => c.code.toLowerCase() == code.toLowerCase());
+    final match = matches.isEmpty ? null : matches.first;
+    if (match == null || match.validate(widget.subtotal) != null) {
+      setState(() => _codeError = 'Invalid coupon code');
+      return;
+    }
+    debugPrint('[DODO][Coupon] Manual code applied: ${match.code}');
+    Navigator.of(context).pop(match);
   }
 
   @override
@@ -107,6 +135,64 @@ class _AvailableCouponsSheetState
               ),
             ),
             const Divider(height: 1),
+
+            // ── Manual code entry ──────────────────────────────────────────
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: _codeCtrl,
+                          textCapitalization: TextCapitalization.characters,
+                          decoration: InputDecoration(
+                            hintText: 'Enter coupon code',
+                            contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 12, vertical: 10),
+                            isDense: true,
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(8),
+                              borderSide:
+                                  const BorderSide(color: AppColors.border),
+                            ),
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(8),
+                              borderSide:
+                                  const BorderSide(color: AppColors.border),
+                            ),
+                          ),
+                          onSubmitted: (_) => _applyCode(),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      FilledButton(
+                        onPressed: _applyCode,
+                        style: FilledButton.styleFrom(
+                          backgroundColor: AppColors.primary,
+                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                          minimumSize: const Size(0, 44),
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        ),
+                        child: const Text('Apply'),
+                      ),
+                    ],
+                  ),
+                  if (_codeError != null) ...[
+                    const SizedBox(height: 4),
+                    Text(
+                      _codeError!,
+                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                            color: AppColors.error,
+                          ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            const SizedBox(height: 8),
 
             // ── Body ───────────────────────────────────────────────────────
             Expanded(

@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  body{margin:0;background:#FBF8F3;}
+  a{color:#D98A0A;text-decoration:none;}
+  a:hover{color:#B36F06;text-decoration:underline;}
+  ::-webkit-scrollbar{width:10px;} ::-webkit-scrollbar-thumb{background:#E4DECF;border-radius:8px;}
+</style>
+</helmet>
+
+<div style="font-family:'Inter',sans-serif;color:#2E2A26;max-width:1280px;margin:0 auto;padding:56px 40px 120px;">
+
+  <div style="margin-bottom:64px;">
+    <div style="display:inline-flex;align-items:center;gap:8px;background:#1A1714;color:#F4A81D;font-family:'Poppins',sans-serif;font-weight:700;font-size:13px;letter-spacing:0.06em;text-transform:uppercase;padding:6px 14px;border-radius:100px;margin-bottom:20px;">Phase 1 · Visual Foundation</div>
+    <h1 style="font-family:'Poppins',sans-serif;font-weight:800;font-size:44px;line-height:1.1;margin:0 0 12px;color:#1A1714;">DODO Booker Design System</h1>
+    <p style="font-size:17px;line-height:1.6;color:#6E6A64;max-width:680px;margin:0;">Visual tokens and core components distilled from the approved web and mobile references — the shared language both experiences will be built from. No app screens yet.</p>
+  </div>
+
+  <!-- COLOR -->
+  <section style="margin-bottom:72px;">
+    <h2 style="font-family:'Poppins',sans-serif;font-weight:700;font-size:24px;margin:0 0 6px;color:#1A1714;">Color</h2>
+    <p style="font-size:15px;color:#6E6A64;margin:0 0 28px;">Warm ink, warm white, and one gold accent — plus the four step colors from “How DODO Booker Works”.</p>
+
+    <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:16px;margin-bottom:20px;">
+      <div>
+        <div style="height:96px;border-radius:16px;background:#1A1714;"></div>
+        <div style="margin-top:10px;font-family:'Poppins',sans-serif;font-weight:600;font-size:14px;color:#1A1714;">Ink</div>
+        <div style="font-size:13px;color:#9A948C;">#1A1714 · Hero bg, text, footer, primary buttons</div>
+      </div>
+      <div>
+        <div style="height:96px;border-radius:16px;background:#F4A81D;"></div>
+        <div style="margin-top:10px;font-family:'Poppins',sans-serif;font-weight:600;font-size:14px;color:#1A1714;">DODO Gold</div>
+        <div style="font-size:13px;color:#9A948C;">#F4A81D · Mascot, accents, CTAs, badges</div>
+      </div>
+      <div>
+        <div style="height:96px;border-radius:16px;background:#D98A0A;"></div>
+        <div style="margin-top:10px;font-family:'Poppins',sans-serif;font-weight:600;font-size:14px;color:#1A1714;">Gold Deep</div>
+        <div style="font-size:13px;color:#9A948C;">#D98A0A · Gold hover / pressed</div>
+      </div>
+      <div>
+        <div style="height:96px;border-radius:16px;background:#FBF8F3;border:1px solid #ECE7DE;"></div>
+        <div style="margin-top:10px;font-family:'Poppins',sans-serif;font-weight:600;font-size:14px;color:#1A1714;">Warm White</div>
+        <div style="font-size:13px;color:#9A948C;">#FBF8F3 · App / page background</div>
+      </div>
+      <div>
+        <div style="height:96px;border-radius:16px;background:#FFFFFF;border:1px solid #ECE7DE;"></div>
+        <div style="margin-top:10px;font-family:'Poppins',sans-serif;font-weight:600;font-size:14px;color:#1A1714;">Card White</div>
+        <div style="font-size:13px;color:#9A948C;">#FFFFFF · Cards, sheets, inputs</div>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:16px;margin-bottom:20px;">
+      <div>
+        <div style="height:72px;border-radius:16px;background:#6E6A64;"></div>
+        <div style="margin-top:10px;font-family:'Poppins',sans-serif;font-weight:600;font-size:14px;color:#1A1714;">Text Muted</div>
+        <div style="font-size:13px;color:#9A948C;">#6E6A64 · Body / secondary text</div>
+      </div>
+      <div>
+        <div style="height:72px;border-radius:16px;background:#ECE7DE;"></div>
+        <div style="margin-top:10px;font-family:'Poppins',sans-serif;font-weight:600;font-size:14px;color:#1A1714;">Border</div>
+        <div style="font-size:13px;color:#9A948C;">#ECE7DE · Dividers, input borders</div>
+      </div>
+      <div>
+        <div style="height:72px;border-radius:16px;background:#F0B429;"></div>
+        <div style="margin-top:10px;font-family:'Poppins',sans-serif;font-weight:600;font-size:14px;color:#1A1714;">Step Gold</div>
+        <div style="font-size:13px;color:#9A948C;">#F0B429 · How It Works 01</div>
+      </div>
+      <div>
+        <div style="height:72px;border-radius:16px;background:#4FA394;"></div>
+        <div style="margin-top:10px;font-family:'Poppins',sans-serif;font-weight:600;font-size:14px;color:#1A1714;">Step Teal</div>
+        <div style="font-size:13px;color:#9A948C;">#4FA394 · How It Works 02</div>
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:16px;margin-bottom:20px;">
+      <div>
+        <div style="height:72px;border-radius:16px;background:#E2735A;"></div>
+        <div style="margin-top:10px;font-family:'Poppins',sans-serif;font-weight:600;font-size:14px;color:#1A1714;">Step Coral</div>
+        <div style="font-size:13px;color:#9A948C;">#E2735A · How It Works 03</div>
+      </div>
+      <div>
+        <div style="height:72px;border-radius:16px;background:#6B4A38;"></div>
+        <div style="margin-top:10px;font-family:'Poppins',sans-serif;font-weight:600;font-size:14px;color:#1A1714;">Step Brown</div>
+        <div style="font-size:13px;color:#9A948C;">#6B4A38 · How It Works 04</div>
+      </div>
+      <div>
+        <div style="height:72px;border-radius:16px;background:#8F8A82;"></div>
+        <div style="margin-top:10px;font-family:'Poppins',sans-serif;font-weight:600;font-size:14px;color:#1A1714;">Why Choose Gray</div>
+        <div style="font-size:13px;color:#9A948C;">#8F8A82 · Why Choose step 2 circle</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- TYPE -->
+  <section style="margin-bottom:72px;">
+    <h2 style="font-family:'Poppins',sans-serif;font-weight:700;font-size:24px;margin:0 0 6px;color:#1A1714;">Typography</h2>
+    <p style="font-size:15px;color:#6E6A64;margin:0 0 28px;">Poppins for headlines — bold, rounded, friendly. Inter for everything readable at small sizes.</p>
+
+    <div style="display:flex;flex-direction:column;gap:20px;">
+      <div style="display:flex;align-items:baseline;gap:24px;border-bottom:1px solid #ECE7DE;padding-bottom:16px;">
+        <div style="width:170px;font-size:13px;color:#9A948C;flex-shrink:0;">Display / 44 Poppins 800</div>
+        <div style="font-family:'Poppins',sans-serif;font-weight:800;font-size:44px;color:#1A1714;">Are you looking for <span style="color:#F4A81D;">home service?</span></div>
+      </div>
+      <div style="display:flex;align-items:baseline;gap:24px;border-bottom:1px solid #ECE7DE;padding-bottom:16px;">
+        <div style="width:170px;font-size:13px;color:#9A948C;flex-shrink:0;">H2 / 28 Poppins 700</div>
+        <div style="font-family:'Poppins',sans-serif;font-weight:700;font-size:28px;color:#1A1714;">How DODO Booker Works</div>
+      </div>
+      <div style="display:flex;align-items:baseline;gap:24px;border-bottom:1px solid #ECE7DE;padding-bottom:16px;">
+        <div style="width:170px;font-size:13px;color:#9A948C;flex-shrink:0;">H3 / 18 Poppins 600</div>
+        <div style="font-family:'Poppins',sans-serif;font-weight:600;font-size:18px;color:#1A1714;">Home Cleaning — sub-services</div>
+      </div>
+      <div style="display:flex;align-items:baseline;gap:24px;border-bottom:1px solid #ECE7DE;padding-bottom:16px;">
+        <div style="width:170px;font-size:13px;color:#9A948C;flex-shrink:0;">Body / 15 Inter 400</div>
+        <div style="font-family:'Inter',sans-serif;font-weight:400;font-size:15px;color:#2E2A26;">Let us take care of it. Book trusted professionals in just a few taps.</div>
+      </div>
+      <div style="display:flex;align-items:baseline;gap:24px;">
+        <div style="width:170px;font-size:13px;color:#9A948C;flex-shrink:0;">Caption / 13 Inter 500</div>
+        <div style="font-family:'Inter',sans-serif;font-weight:500;font-size:13px;color:#6E6A64;">Valid till 30th May 2025 · From ₹399</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- SPACING / RADIUS -->
+  <section style="margin-bottom:72px;">
+    <h2 style="font-family:'Poppins',sans-serif;font-weight:700;font-size:24px;margin:0 0 6px;color:#1A1714;">Radius &amp; Elevation</h2>
+    <p style="font-size:15px;color:#6E6A64;margin:0 0 28px;">Cards and imagery are consistently soft-rounded; buttons range from pill to slightly rounded.</p>
+    <div style="display:flex;gap:20px;align-items:flex-end;">
+      <div style="text-align:center;">
+        <div style="width:88px;height:88px;background:#FFFFFF;border:1px solid #ECE7DE;border-radius:10px;"></div>
+        <div style="margin-top:8px;font-size:13px;color:#9A948C;">10px · chips</div>
+      </div>
+      <div style="text-align:center;">
+        <div style="width:88px;height:88px;background:#FFFFFF;border:1px solid #ECE7DE;border-radius:16px;box-shadow:0 8px 24px -12px rgba(26,23,20,0.18);"></div>
+        <div style="margin-top:8px;font-size:13px;color:#9A948C;">16px · cards</div>
+      </div>
+      <div style="text-align:center;">
+        <div style="width:88px;height:88px;background:#FFFFFF;border:1px solid #ECE7DE;border-radius:24px;box-shadow:0 12px 28px -14px rgba(26,23,20,0.2);"></div>
+        <div style="margin-top:8px;font-size:13px;color:#9A948C;">24px · sheets</div>
+      </div>
+      <div style="text-align:center;">
+        <div style="width:88px;height:44px;background:#1A1714;border-radius:999px;margin-top:44px;"></div>
+        <div style="margin-top:8px;font-size:13px;color:#9A948C;">pill · buttons/nav</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- BUTTONS -->
+  <section style="margin-bottom:72px;">
+    <h2 style="font-family:'Poppins',sans-serif;font-weight:700;font-size:24px;margin:0 0 6px;color:#1A1714;">Buttons</h2>
+    <p style="font-size:15px;color:#6E6A64;margin:0 0 28px;">Primary is ink with a gold icon chip — matches “Get Started” on the mobile hero.</p>
+    <div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap;">
+      <div style="display:flex;align-items:center;background:#1A1714;border-radius:100px;padding:4px 4px 4px 22px;height:52px;">
+        <span style="font-family:'Poppins',sans-serif;font-weight:600;font-size:15px;color:#FFFFFF;margin-right:18px;">Get Started</span>
+        <span style="width:40px;height:40px;border-radius:100px;background:#FFFFFF;display:flex;align-items:center;justify-content:center;font-size:16px;">→</span>
+      </div>
+      <div style="font-family:'Poppins',sans-serif;font-weight:600;font-size:15px;color:#FFFFFF;background:#1A1714;border-radius:100px;padding:15px 26px;">Continue to Home →</div>
+      <div style="font-family:'Poppins',sans-serif;font-weight:600;font-size:15px;color:#1A1714;background:#FFFFFF;border:1.5px solid #1A1714;border-radius:100px;padding:14px 26px;">Enter Location Manually</div>
+      <div style="font-family:'Poppins',sans-serif;font-weight:600;font-size:15px;color:#1A1714;background:#F4A81D;border-radius:100px;padding:15px 26px;">See all →</div>
+    </div>
+  </section>
+
+  <!-- PRICE CHIP + SERVICE CARD -->
+  <section style="margin-bottom:72px;">
+    <h2 style="font-family:'Poppins',sans-serif;font-weight:700;font-size:24px;margin:0 0 6px;color:#1A1714;">Service Card &amp; Price Chip</h2>
+    <p style="font-size:15px;color:#6E6A64;margin:0 0 28px;">The recurring building block across Home, category, and offer sections.</p>
+    <div style="display:flex;gap:20px;">
+      <div style="width:220px;background:#FFFFFF;border-radius:18px;overflow:hidden;box-shadow:0 10px 26px -14px rgba(26,23,20,0.2);">
+        <div style="position:relative;height:130px;background:repeating-linear-gradient(135deg,#F1ECE1,#F1ECE1 10px,#EAE3D4 10px,#EAE3D4 20px);display:flex;align-items:center;justify-content:center;font-family:'Inter',sans-serif;font-size:11px;color:#B3A98F;">service photo</div>
+        <div style="padding:14px 16px 16px;">
+          <div style="font-family:'Poppins',sans-serif;font-weight:600;font-size:15px;color:#1A1714;margin-bottom:4px;">AC Service</div>
+          <div style="font-size:13px;color:#9A948C;margin-bottom:12px;">Repair, service &amp; install</div>
+          <div style="display:flex;align-items:center;justify-content:space-between;">
+            <span style="font-family:'Poppins',sans-serif;font-weight:700;font-size:14px;color:#1A1714;">₹399 <span style="font-weight:400;color:#9A948C;font-size:12px;">onwards</span></span>
+            <span style="width:30px;height:30px;border-radius:100px;background:#F4A81D;display:flex;align-items:center;justify-content:center;font-size:13px;color:#1A1714;">→</span>
+          </div>
+        </div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:14px;justify-content:center;">
+        <div style="display:inline-flex;align-items:center;gap:8px;background:#FFFFFF;border:1px solid #ECE7DE;border-radius:100px;padding:8px 14px;font-family:'Poppins',sans-serif;font-weight:600;font-size:13px;color:#1A1714;width:fit-content;">4.8 <span style="color:#F4A81D;">★</span></div>
+        <div style="display:inline-flex;align-items:center;gap:6px;background:#1A1714;color:#F4A81D;border-radius:100px;padding:6px 12px;font-family:'Inter',sans-serif;font-weight:600;font-size:12px;width:fit-content;">30% OFF</div>
+        <div style="display:inline-flex;align-items:center;gap:6px;border:1px dashed #D98A0A;color:#D98A0A;border-radius:8px;padding:6px 12px;font-family:'Inter',sans-serif;font-weight:600;font-size:12px;width:fit-content;">CODE: CLEAN30</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- STEP BADGES -->
+  <section style="margin-bottom:72px;">
+    <h2 style="font-family:'Poppins',sans-serif;font-weight:700;font-size:24px;margin:0 0 6px;color:#1A1714;">Step Badges</h2>
+    <p style="font-size:15px;color:#6E6A64;margin:0 0 28px;">Two numbering treatments, both from the reference.</p>
+
+    <div style="font-family:'Poppins',sans-serif;font-weight:600;font-size:13px;color:#9A948C;margin-bottom:12px;">How DODO Booker Works — colored number, neutral icon circle, dashed connector</div>
+    <div style="display:flex;gap:36px;margin-bottom:36px;">
+      <div style="text-align:center;">
+        <div style="font-family:'Poppins',sans-serif;font-weight:800;font-size:20px;color:#F0B429;margin-bottom:8px;">01</div>
+        <div style="width:52px;height:52px;border-radius:100px;background:#ECE7DE;margin:0 auto;"></div>
+        <div style="font-family:'Inter',sans-serif;font-size:13px;color:#6E6A64;margin-top:8px;">Choose a Service</div>
+      </div>
+      <div style="text-align:center;">
+        <div style="font-family:'Poppins',sans-serif;font-weight:800;font-size:20px;color:#4FA394;margin-bottom:8px;">02</div>
+        <div style="width:52px;height:52px;border-radius:100px;background:#ECE7DE;margin:0 auto;"></div>
+        <div style="font-family:'Inter',sans-serif;font-size:13px;color:#6E6A64;margin-top:8px;">Pick a Time</div>
+      </div>
+      <div style="text-align:center;">
+        <div style="font-family:'Poppins',sans-serif;font-weight:800;font-size:20px;color:#E2735A;margin-bottom:8px;">03</div>
+        <div style="width:52px;height:52px;border-radius:100px;background:#ECE7DE;margin:0 auto;"></div>
+        <div style="font-family:'Inter',sans-serif;font-size:13px;color:#6E6A64;margin-top:8px;">We assign trusted professional to u</div>
+      </div>
+      <div style="text-align:center;">
+        <div style="font-family:'Poppins',sans-serif;font-weight:800;font-size:20px;color:#6B4A38;margin-bottom:8px;">04</div>
+        <div style="width:52px;height:52px;border-radius:100px;background:#ECE7DE;margin:0 auto;"></div>
+        <div style="font-family:'Inter',sans-serif;font-size:13px;color:#6E6A64;margin-top:8px;">Get It Done</div>
+      </div>
+    </div>
+
+    <div style="font-family:'Poppins',sans-serif;font-weight:600;font-size:13px;color:#9A948C;margin-bottom:12px;">Why Choose DODO — solid numbered circles joined by a vertical line</div>
+    <div style="display:flex;flex-direction:column;width:fit-content;">
+      <div style="display:flex;flex-direction:column;align-items:center;">
+        <span style="width:36px;height:36px;border-radius:100px;background:#1A1714;color:#FFFFFF;display:flex;align-items:center;justify-content:center;font-family:'Poppins',sans-serif;font-weight:700;font-size:14px;">1</span>
+        <span style="width:2px;height:22px;background:#ECE7DE;"></span>
+      </div>
+      <div style="display:flex;flex-direction:column;align-items:center;">
+        <span style="width:36px;height:36px;border-radius:100px;background:#8F8A82;color:#FFFFFF;display:flex;align-items:center;justify-content:center;font-family:'Poppins',sans-serif;font-weight:700;font-size:14px;">2</span>
+        <span style="width:2px;height:22px;background:#ECE7DE;"></span>
+      </div>
+      <span style="width:36px;height:36px;border-radius:100px;background:#F4A81D;color:#1A1714;display:flex;align-items:center;justify-content:center;font-family:'Poppins',sans-serif;font-weight:700;font-size:14px;">3</span>
+    </div>
+  </section>
+
+  <!-- NAV -->
+  <section style="margin-bottom:72px;">
+    <h2 style="font-family:'Poppins',sans-serif;font-weight:700;font-size:24px;margin:0 0 6px;color:#1A1714;">Navigation</h2>
+    <p style="font-size:15px;color:#6E6A64;margin:0 0 28px;">Web: light top bar with pill CTA. Mobile: fixed bottom tab bar, gold when active.</p>
+
+    <div style="display:flex;align-items:center;justify-content:space-between;background:#111111;border-radius:14px;padding:14px 24px;margin-bottom:20px;">
+      <div style="display:flex;align-items:center;gap:10px;font-family:'Poppins',sans-serif;font-weight:700;font-size:15px;color:#FFFFFF;">
+        <span style="width:26px;height:26px;border-radius:8px;background:#F4A81D;display:inline-block;"></span>DODO BOOKER
+      </div>
+      <div style="display:flex;gap:28px;font-family:'Inter',sans-serif;font-weight:500;font-size:14px;color:#EDEAE4;">
+        <span>Services</span><span>Service Areas</span>
+      </div>
+      <div style="font-family:'Poppins',sans-serif;font-weight:600;font-size:13px;color:#1A1714;background:#F4A81D;border-radius:100px;padding:10px 18px;">Get App</div>
+    </div>
+
+    <div style="width:320px;display:flex;align-items:center;justify-content:space-around;background:#FFFFFF;border:1px solid #ECE7DE;border-radius:100px;padding:12px 0;">
+      <div style="display:flex;flex-direction:column;align-items:center;gap:4px;color:#F4A81D;font-family:'Inter',sans-serif;font-size:11px;font-weight:600;"><span style="width:20px;height:20px;border-radius:6px;background:#F4A81D;display:block;"></span>Home</div>
+      <div style="display:flex;flex-direction:column;align-items:center;gap:4px;color:#9A948C;font-family:'Inter',sans-serif;font-size:11px;font-weight:600;"><span style="width:20px;height:20px;border-radius:6px;background:#ECE7DE;display:block;"></span>Bookings</div>
+      <div style="display:flex;flex-direction:column;align-items:center;gap:4px;color:#9A948C;font-family:'Inter',sans-serif;font-size:11px;font-weight:600;"><span style="width:20px;height:20px;border-radius:6px;background:#ECE7DE;display:block;"></span>Profile</div>
+    </div>
+  </section>
+
+  <!-- RESPONSIVE STRATEGY -->
+  <section style="margin-bottom:72px;">
+    <h2 style="font-family:'Poppins',sans-serif;font-weight:700;font-size:24px;margin:0 0 6px;color:#1A1714;">Responsive Strategy</h2>
+    <p style="font-size:15px;color:#6E6A64;margin:0 0 20px;max-width:720px;">No page is built at a fixed pixel width. Web and mobile stay two intentional compositions (per the references), but each is fluid within its own device class — grids use <code>auto-fit/minmax</code>, type and spacing use <code>clamp()</code>, and rows wrap instead of overflowing.</p>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px;">
+      <div style="background:#FFFFFF;border:1px solid #ECE7DE;border-radius:14px;padding:18px;">
+        <div style="font-family:'Poppins',sans-serif;font-weight:700;font-size:14px;color:#1A1714;margin-bottom:4px;">Mobile · 320–599px</div>
+        <div style="font-size:13px;color:#6E6A64;">Single column, full-width cards, bottom tab nav, fluid clamp() type.</div>
+      </div>
+      <div style="background:#FFFFFF;border:1px solid #ECE7DE;border-radius:14px;padding:18px;">
+        <div style="font-family:'Poppins',sans-serif;font-weight:700;font-size:14px;color:#1A1714;margin-bottom:4px;">Tablet · 600–1023px</div>
+        <div style="font-size:13px;color:#6E6A64;">Web composition begins; grids collapse to 2 columns via auto-fit.</div>
+      </div>
+      <div style="background:#FFFFFF;border:1px solid #ECE7DE;border-radius:14px;padding:18px;">
+        <div style="font-family:'Poppins',sans-serif;font-weight:700;font-size:14px;color:#1A1714;margin-bottom:4px;">Desktop · 1024px+</div>
+        <div style="font-size:13px;color:#6E6A64;">Full web layout per reference; max-width container, generous gutters.</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- HERO TREATMENT -->
+  <section style="margin-bottom:72px;">
+    <h2 style="font-family:'Poppins',sans-serif;font-weight:700;font-size:24px;margin:0 0 6px;color:#1A1714;">Hero Treatment — Web &amp; Mobile</h2>
+    <p style="font-size:15px;color:#6E6A64;margin:0 0 28px;max-width:640px;">Both hero surfaces are black #111111, full-bleed, with white headline text, gold emphasis words, and the DODO mascot as the visual anchor. This is the definitive hero spec — not the light mascot-placement box above.</p>
+
+    <div style="font-family:'Poppins',sans-serif;font-weight:600;font-size:13px;color:#9A948C;margin-bottom:10px;">Web hero — mascot right, input + CTA left</div>
+    <div style="width:100%;height:280px;border-radius:20px;background:#111111;position:relative;overflow:hidden;display:flex;align-items:center;justify-content:space-between;padding:0 48px;box-sizing:border-box;margin-bottom:32px;">
+      <div style="max-width:440px;">
+        <div style="font-family:'Poppins',sans-serif;font-weight:800;font-size:34px;line-height:1.15;color:#FFFFFF;margin-bottom:12px;">Are you looking for <span style="color:#F4A81D;">home service?</span></div>
+        <div style="font-family:'Inter',sans-serif;font-size:14px;color:#B3ADA3;margin-bottom:20px;">Let us take care of it. Book a trusted professional in just a few taps.</div>
+        <div style="display:flex;flex-direction:column;gap:10px;max-width:300px;">
+          <div style="background:#FFFFFF;border-radius:100px;padding:13px 18px;font-family:'Inter',sans-serif;font-size:13px;color:#9A948C;">Enter your location or select from map</div>
+          <div style="font-family:'Poppins',sans-serif;font-weight:600;font-size:13px;color:#FFFFFF;background:#1E1B17;border:1px solid #2A2622;border-radius:100px;padding:13px 22px;text-align:center;width:fit-content;">Continue</div>
+        </div>
+      </div>
+      <div style="width:220px;height:220px;border-radius:16px;background:#1E1B17;display:flex;align-items:center;justify-content:center;overflow:hidden;flex-shrink:0;"><img src="assets/dodo-mascot.png" alt="DODO mascot" style="height:100%;width:100%;object-fit:contain;"/></div>
+    </div>
+
+    <div style="font-family:'Poppins',sans-serif;font-weight:600;font-size:13px;color:#9A948C;margin-bottom:10px;">Mobile hero — mascot behind headline, CTA bottom</div>
+    <div style="width:280px;height:340px;border-radius:24px;background:#111111;position:relative;overflow:hidden;padding:24px;box-sizing:border-box;display:flex;flex-direction:column;justify-content:flex-end;">
+      <div style="position:absolute;top:20px;left:24px;right:24px;bottom:80px;border-radius:12px;background:#1E1B17;display:flex;align-items:center;justify-content:center;overflow:hidden;"><img src="assets/dodo-mascot.png" alt="DODO mascot" style="height:100%;width:100%;object-fit:contain;"/></div>
+      <div style="position:relative;">
+        <div style="font-family:'Poppins',sans-serif;font-weight:800;font-size:24px;line-height:1.15;color:#FFFFFF;margin-bottom:14px;">Are you looking for <span style="color:#F4A81D;">home service?</span></div>
+        <div style="font-family:'Poppins',sans-serif;font-weight:600;font-size:14px;color:#1A1714;background:#F4A81D;border-radius:100px;padding:13px 20px;text-align:center;">Get Started →</div>
+      </div>
+    </div>
+  </section>
+
+</div>
+
+</x-dc>
+</body>
+</html>

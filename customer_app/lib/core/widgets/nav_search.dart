@@ -51,6 +51,9 @@ class _NavSearchCoreState extends State<_NavSearchCore> {
   final _link = LayerLink();
   OverlayEntry? _entry;
   bool _open = false;
+  List<CatalogNodeModel> _panelResults = [];
+  // Tracked so _onNodeTap can cancel it before it races with a tap.
+  Timer? _focusCloseTimer;
 
   @override
   void initState() {
@@ -59,6 +62,7 @@ class _NavSearchCoreState extends State<_NavSearchCore> {
     _focus.onKeyEvent = (_, event) {
       if (event is KeyDownEvent &&
           event.logicalKey == LogicalKeyboardKey.escape) {
+        _focusCloseTimer?.cancel();
         _close();
         _focus.unfocus();
         return KeyEventResult.handled;
@@ -69,6 +73,7 @@ class _NavSearchCoreState extends State<_NavSearchCore> {
 
   @override
   void dispose() {
+    _focusCloseTimer?.cancel();
     _entry?.remove();
     _ctrl.dispose();
     _focus.dispose();
@@ -77,10 +82,11 @@ class _NavSearchCoreState extends State<_NavSearchCore> {
 
   void _onFocusChange() {
     if (_focus.hasFocus) {
+      _focusCloseTimer?.cancel();
       _openOverlay();
     } else {
-      // Delay so result taps can fire before the overlay disappears.
-      Future.delayed(const Duration(milliseconds: 200), () {
+      _focusCloseTimer?.cancel();
+      _focusCloseTimer = Timer(const Duration(milliseconds: 250), () {
         if (!_focus.hasFocus && mounted) _close();
       });
     }
@@ -102,10 +108,15 @@ class _NavSearchCoreState extends State<_NavSearchCore> {
   }
 
   // Called from panel when a node is tapped.
-  // Uses State.context (stable as long as the nav bar is mounted).
+  // Cancel the focus-loss close timer first so it cannot race with this tap,
+  // then open the node in the next frame (after overlay removal is committed).
   void _onNodeTap(CatalogNodeModel node) {
+    _focusCloseTimer?.cancel();
+    _focus.unfocus();
     _close();
-    openCatalogNode(context, node);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) openCatalogNode(context, node);
+    });
   }
 
   // Called from trending chip — populate the text field with the node name.
@@ -147,6 +158,7 @@ class _NavSearchCoreState extends State<_NavSearchCore> {
               onNodeTap: _onNodeTap,
               onTrendingTap: _onTrendingTap,
               onClose: _close,
+              onResultsChanged: (r) { _panelResults = r; },
             ),
           ),
         ),
@@ -191,7 +203,9 @@ class _NavSearchCoreState extends State<_NavSearchCore> {
                 controller: _ctrl,
                 focusNode: _focus,
                 textInputAction: TextInputAction.search,
-                onSubmitted: (_) {},
+                onSubmitted: (_) {
+                  if (_panelResults.isNotEmpty) _onNodeTap(_panelResults.first);
+                },
                 style: tt.bodySmall
                     ?.copyWith(color: AppColors.textPrimary, fontSize: 14),
                 decoration: InputDecoration(
@@ -242,6 +256,7 @@ class _SearchPanel extends ConsumerStatefulWidget {
   final void Function(CatalogNodeModel) onNodeTap;
   final void Function(String) onTrendingTap;
   final VoidCallback onClose;
+  final ValueChanged<List<CatalogNodeModel>>? onResultsChanged;
 
   const _SearchPanel({
     required this.ctrl,
@@ -249,6 +264,7 @@ class _SearchPanel extends ConsumerStatefulWidget {
     required this.onNodeTap,
     required this.onTrendingTap,
     required this.onClose,
+    this.onResultsChanged,
   });
 
   @override
@@ -283,6 +299,7 @@ class _SearchPanelState extends ConsumerState<_SearchPanel> {
 
     if (q.length < 2) {
       if (mounted) setState(() { _results = []; _isLoading = false; });
+      widget.onResultsChanged?.call([]);
       return;
     }
 
@@ -299,6 +316,7 @@ class _SearchPanelState extends ConsumerState<_SearchPanel> {
       _results = results;
       _isLoading = false;
     });
+    widget.onResultsChanged?.call(results);
   }
 
   @override
@@ -403,7 +421,7 @@ class _TrendingSection extends ConsumerWidget {
             children: visible
                 .map((n) => _TrendingChip(
                       node: n,
-                      onTap: () => onTrendingTap(n.name),
+                      onTap: () => onNodeTap(n),
                     ))
                 .toList(),
           ),
@@ -804,14 +822,16 @@ List<InlineSpan> _highlight(String text, String query) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _MobileSearchModal extends StatefulWidget {
-  const _MobileSearchModal();
+  final BuildContext parentContext;
+
+  const _MobileSearchModal({required this.parentContext});
 
   static Future<void> show(BuildContext context) {
     return showDialog<void>(
       context: context,
       barrierColor: Colors.black.withAlpha(180),
       useSafeArea: false,
-      builder: (_) => const _MobileSearchModal(),
+      builder: (_) => _MobileSearchModal(parentContext: context),
     );
   }
 
@@ -822,6 +842,7 @@ class _MobileSearchModal extends StatefulWidget {
 class _MobileSearchModalState extends State<_MobileSearchModal> {
   final _ctrl = TextEditingController();
   final _focus = FocusNode();
+  List<CatalogNodeModel> _panelResults = [];
 
   @override
   void initState() {
@@ -838,8 +859,12 @@ class _MobileSearchModalState extends State<_MobileSearchModal> {
   }
 
   void _onNodeTap(CatalogNodeModel node) {
+    final parentCtx = widget.parentContext;
     Navigator.pop(context);
-    openCatalogNode(context, node);
+    // Open in next frame so the dialog pop is committed before pushing the modal.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (parentCtx.mounted) openCatalogNode(parentCtx, node);
+    });
   }
 
   void _onTrendingTap(String name) {
@@ -911,7 +936,11 @@ class _MobileSearchModalState extends State<_MobileSearchModal> {
                             controller: _ctrl,
                             focusNode: _focus,
                             textInputAction: TextInputAction.search,
-                            onSubmitted: (_) {},
+                            onSubmitted: (_) {
+                              if (_panelResults.isNotEmpty) {
+                                _onNodeTap(_panelResults.first);
+                              }
+                            },
                             style: const TextStyle(
                                 fontSize: 14,
                                 color: AppColors.textPrimary),
@@ -957,6 +986,7 @@ class _MobileSearchModalState extends State<_MobileSearchModal> {
               onNodeTap: _onNodeTap,
               onTrendingTap: _onTrendingTap,
               onClose: () => Navigator.pop(context),
+              onResultsChanged: (r) { _panelResults = r; },
             ),
           ),
 
