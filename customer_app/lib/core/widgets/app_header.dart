@@ -1,6 +1,7 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../constants/app_colors.dart';
 import 'app_modal_dialog.dart';
@@ -17,7 +18,9 @@ import '../../features/catalog/providers/catalog_providers.dart';
 import '../../features/catalog/models/catalog_node_model.dart';
 import '../../features/catalog/utils/catalog_launcher.dart';
 import '../../features/service_areas/providers/service_areas_providers.dart';
+import '../../features/wishlist/screens/wishlist_screen.dart';
 import 'nav_search.dart';
+import 'page_sheet.dart';
 
 /// Persistent DODO BOOKER header. Implements [PreferredSizeWidget].
 class AppHeader extends ConsumerWidget implements PreferredSizeWidget {
@@ -169,6 +172,8 @@ class _DesktopRow extends StatelessWidget {
               context: context, child: const NotificationsModal());
         }),
         const SizedBox(width: 8),
+        const _WishlistButton(),
+        const SizedBox(width: 8),
         const _CartButton(),
         const SizedBox(width: 8),
         _ProfileAvatar(onTap: onProfileTap),
@@ -233,6 +238,8 @@ class _WideRow extends StatelessWidget {
               context: context, child: const NotificationsModal());
         }),
         const SizedBox(width: 8),
+        const _WishlistButton(),
+        const SizedBox(width: 8),
         const _CartButton(),
         const SizedBox(width: 8),
         _ProfileAvatar(onTap: onProfileTap),
@@ -241,7 +248,7 @@ class _WideRow extends StatelessWidget {
   }
 }
 
-// Mobile (<768px): Logo | Spacer | Loyalty | Search | Cart | Notif | ☰ | Profile
+// Mobile (<768px): Logo | Spacer | Loyalty | Notif | Wishlist | Search | Cart | ☰ | Profile
 
 class _MobileRow extends StatelessWidget {
   final VoidCallback onLogoTap;
@@ -275,16 +282,18 @@ class _MobileRow extends StatelessWidget {
         const Spacer(),
         const _LoyaltyPill(),
         const SizedBox(width: 4),
-        const NavSearchButton(),
-        const SizedBox(width: 4),
-        const _CartButton(),
-        const SizedBox(width: 4),
         _NotifButton(onTap: () {
           debugPrint(
               '[DODO][Notif] tap fired — ${DateTime.now().millisecondsSinceEpoch}ms');
           AppModalDialog.show(
               context: context, child: const NotificationsModal());
         }),
+        const SizedBox(width: 4),
+        const _WishlistButton(),
+        const SizedBox(width: 4),
+        const NavSearchButton(),
+        const SizedBox(width: 4),
+        const _CartButton(),
         const SizedBox(width: 4),
         _HeaderIconBtn(
           icon: Icons.menu_rounded,
@@ -1272,6 +1281,7 @@ class _NotifButtonState extends ConsumerState<_NotifButton> {
 
   @override
   Widget build(BuildContext context) {
+    if (!ref.watch(isAuthenticatedProvider)) return const SizedBox.shrink();
     final unread = ref.watch(unreadCountProvider);
     return MouseRegion(
       cursor: SystemMouseCursors.click,
@@ -1482,6 +1492,65 @@ class _HeaderIconBtnState extends State<_HeaderIconBtn> {
           ),
           child: Icon(
             widget.icon,
+            size: 20,
+            color: _hovered ? AppColors.gold : Colors.white.withAlpha(220),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Wishlist button
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _WishlistButton extends StatefulWidget {
+  const _WishlistButton();
+
+  @override
+  State<_WishlistButton> createState() => _WishlistButtonState();
+}
+
+class _WishlistButtonState extends State<_WishlistButton> {
+  bool _hovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      child: GestureDetector(
+        onTap: () {
+          if (MediaQuery.of(context).size.width >= 768) {
+            PageSheet.show(
+              context,
+              title: 'Wishlist',
+              child: const WishlistScreen(inModal: true),
+            );
+          } else {
+            context.push('/wishlist');
+          }
+        },
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 150),
+          width: 40,
+          height: 40,
+          decoration: BoxDecoration(
+            color: _hovered
+                ? Colors.white.withAlpha(28)
+                : Colors.white.withAlpha(14),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: _hovered
+                  ? Colors.white.withAlpha(80)
+                  : Colors.white.withAlpha(35),
+              width: 0.8,
+            ),
+          ),
+          child: Icon(
+            Icons.favorite_outline_rounded,
             size: 20,
             color: _hovered ? AppColors.gold : Colors.white.withAlpha(220),
           ),

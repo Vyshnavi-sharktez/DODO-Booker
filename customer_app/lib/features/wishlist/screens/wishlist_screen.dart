@@ -4,7 +4,8 @@ import '../../../core/constants/app_colors.dart';
 import '../services/wishlist_providers.dart';
 import '../models/wishlist_item_model.dart';
 import '../widgets/wishlist_item_card.dart';
-import '../../service/utils/service_detail_launcher.dart';
+import '../../catalog/models/catalog_node_model.dart';
+import '../../catalog/widgets/catalog_service_detail_web_modal.dart';
 
 class WishlistScreen extends ConsumerWidget {
   final bool inModal;
@@ -51,7 +52,7 @@ class WishlistScreen extends ConsumerWidget {
                   itemCount: items.length,
                   itemBuilder: (_, i) => WishlistItemCard(
                     item: items[i],
-                    onTap: () => openServiceDetail(context, items[i].service),
+                    onTap: () => CatalogServiceDetailWebModal.show(context, CatalogNodeModel.fromServiceModel(items[i].service)),
                     onRemove: () => _remove(context, ref, items[i]),
                   ),
                 ),

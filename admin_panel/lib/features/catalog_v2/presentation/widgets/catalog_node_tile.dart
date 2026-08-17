@@ -19,6 +19,8 @@ class NodeCallbacks {
     required this.onOpenScheduling,
     required this.onOpenConfig,
     required this.onOpenAmcPlans,
+    required this.onOpenFaqs,
+    required this.onOpenShowcaseImages,
   });
 
   final void Function(CatalogNode parent) onAddChild;
@@ -45,6 +47,12 @@ class NodeCallbacks {
 
   /// Opens the AMC Plans linking dialog for this bookable leaf node.
   final void Function(CatalogNode node) onOpenAmcPlans;
+
+  /// Opens the FAQ management dialog for this bookable leaf node.
+  final void Function(CatalogNode node) onOpenFaqs;
+
+  /// Opens the showcase photos dialog for this bookable leaf node.
+  final void Function(CatalogNode node) onOpenShowcaseImages;
 }
 
 /// Renders a single catalog item row and recursively renders its children
@@ -285,6 +293,24 @@ class CatalogNodeTile extends StatelessWidget {
                     tooltip: 'AMC Plans',
                     color: AppColors.primary,
                     onPressed: () => callbacks.onOpenAmcPlans(node),
+                  ),
+
+                // FAQs — bookable leaf nodes only
+                if (!hasChildren && node.isBookable)
+                  IconButton(
+                    icon: const Icon(Icons.quiz_rounded, size: 17),
+                    tooltip: 'FAQs',
+                    color: AppColors.primary,
+                    onPressed: () => callbacks.onOpenFaqs(node),
+                  ),
+
+                // Showcase Photos — bookable leaf nodes only
+                if (!hasChildren && node.isBookable)
+                  IconButton(
+                    icon: const Icon(Icons.photo_library_rounded, size: 17),
+                    tooltip: 'Showcase Photos',
+                    color: AppColors.primary,
+                    onPressed: () => callbacks.onOpenShowcaseImages(node),
                   ),
 
                 // Module config (Tax / Loyalty / Scheduling / Commission)

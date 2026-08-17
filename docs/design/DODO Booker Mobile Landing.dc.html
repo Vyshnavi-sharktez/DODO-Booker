@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  body{margin:0;background:#111111;}
+  @keyframes spin{to{transform:rotate(360deg);}}
+  *::-webkit-scrollbar{display:none;}
+  *{scrollbar-width:none;}
+</style>
+</helmet>
+
+<div style="font-family:'Inter',sans-serif;width:100%;min-height:100vh;max-width:520px;margin:0 auto;position:relative;overflow:hidden;box-sizing:border-box;">
+
+  <!-- SCREEN 1: HERO -->
+  <sc-if value="{{ isHero }}" hint-placeholder-val="{{ true }}">
+    <div style="background:#111111;min-height:100vh;padding:clamp(20px,5vw,32px) clamp(20px,6vw,28px);display:flex;flex-direction:column;box-sizing:border-box;position:relative;">
+      <div style="position:absolute;top:8%;left:0;right:0;font-family:'Poppins',sans-serif;font-weight:800;font-size:clamp(50px,16vw,80px);color:#1E1B17;line-height:0.95;text-align:left;padding-left:clamp(20px,6vw,28px);letter-spacing:-0.02em;pointer-events:none;user-select:none;">SERV<br/>ICE</div>
+      <div style="display:flex;align-items:center;gap:8px;position:relative;z-index:1;">
+        <span style="width:22px;height:22px;border-radius:6px;background:#F4A81D;display:inline-block;"></span>
+        <span style="font-family:'Poppins',sans-serif;font-weight:800;font-size:14px;color:#FFFFFF;letter-spacing:0.02em;">DODO<br/>BOOKER</span>
+      </div>
+      <div style="flex:1;display:flex;align-items:flex-end;justify-content:center;position:relative;z-index:1;margin:12px 0;">
+        <img src="assets/dodo-mascot.png" alt="DODO mascot" style="width:min(78%,320px);height:auto;"/>
+      </div>
+      <div style="position:relative;z-index:1;">
+        <h1 style="font-family:'Poppins',sans-serif;font-weight:800;font-size:clamp(26px,7vw,32px);line-height:1.15;color:#FFFFFF;margin:0 0 10px;">Are you looking for <span style="color:#F4A81D;">home service?</span></h1>
+        <p style="font-size:14px;color:#B3ADA3;line-height:1.6;margin:0 0 24px;">Let us take care of it. Book trusted professionals in just a few taps.</p>
+        <div onClick="{{ startFlow }}" style="display:flex;align-items:center;background:#FFFFFF;border-radius:100px;padding:4px 4px 4px 26px;height:56px;cursor:pointer;">
+          <span style="flex:1;font-family:'Poppins',sans-serif;font-weight:600;font-size:15px;color:#1A1714;">Get Started</span>
+          <span style="width:46px;height:46px;border-radius:100px;background:#1A1714;color:#F4A81D;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;">→</span>
+        </div>
+        <div style="width:120px;height:4px;background:#2A2622;border-radius:100px;margin:20px auto 0;"></div>
+        <div onClick="{{ toggleSimulate }}" style="text-align:center;margin-top:14px;font-size:11px;color:#5A554E;cursor:pointer;">Preview: serving {{ simulateLabel }} — tap to flip</div>
+      </div>
+    </div>
+  </sc-if>
+
+  <!-- SCREEN 2: FETCHING LOCATION -->
+  <sc-if value="{{ isFetching }}" hint-placeholder-val="{{ false }}">
+    <div style="background:#FBF8F3;min-height:100vh;padding:clamp(28px,6vw,40px) clamp(20px,6vw,28px);display:flex;flex-direction:column;align-items:center;box-sizing:border-box;">
+      <div style="width:96px;height:96px;border-radius:100px;background:#ECE7DE;display:flex;align-items:center;justify-content:center;margin:48px 0 28px;position:relative;">
+        <span style="width:0;height:0;border-left:16px solid transparent;border-right:16px solid transparent;border-bottom:26px solid #1A1714;border-radius:4px;"></span>
+      </div>
+      <h2 style="font-family:'Poppins',sans-serif;font-weight:700;font-size:20px;color:#1A1714;margin:0 0 8px;text-align:center;">Getting your location…</h2>
+      <p style="font-size:13px;color:#9A948C;text-align:center;margin:0 0 32px;max-width:280px;">We're checking if DODO Booker is available in your area.</p>
+      <div style="width:100%;background:#FFFFFF;border:1px solid #ECE7DE;border-radius:16px;padding:18px 20px;display:flex;flex-direction:column;gap:16px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;font-size:13px;color:#2E2A26;">
+          <span>Requesting location permission</span>
+          <sc-if value="{{ checks.0 }}" hint-placeholder-val="{{ false }}"><span style="color:#3F9142;font-weight:700;">✓</span></sc-if>
+        </div>
+        <div style="display:flex;align-items:center;justify-content:space-between;font-size:13px;color:#2E2A26;">
+          <span>Detecting your location</span>
+          <sc-if value="{{ checks.1 }}" hint-placeholder-val="{{ false }}"><span style="color:#3F9142;font-weight:700;">✓</span></sc-if>
+        </div>
+        <div style="display:flex;align-items:center;justify-content:space-between;font-size:13px;color:#2E2A26;">
+          <span>Checking service availability</span>
+          <sc-if value="{{ checks.2 }}" hint-placeholder-val="{{ false }}"><span style="color:#3F9142;font-weight:700;">✓</span></sc-if>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+  <!-- SCREEN 3: LOCATION SUPPORTED -->
+  <sc-if value="{{ isSupported }}" hint-placeholder-val="{{ false }}">
+    <div style="background:#FBF8F3;min-height:100vh;padding:clamp(28px,6vw,40px) clamp(20px,6vw,28px);display:flex;flex-direction:column;align-items:center;box-sizing:border-box;">
+      <div style="width:96px;height:96px;border-radius:100px;background:#1A1714;display:flex;align-items:center;justify-content:center;margin:56px 0 24px;color:#FFFFFF;font-size:36px;">✓</div>
+      <h2 style="font-family:'Poppins',sans-serif;font-weight:700;font-size:22px;color:#1A1714;margin:0 0 4px;text-align:center;">Great!</h2>
+      <p style="font-size:15px;color:#2E2A26;text-align:center;margin:0 0 24px;">We serve your location 🎉</p>
+      <div style="display:flex;align-items:center;gap:8px;background:#FFFFFF;border:1px solid #ECE7DE;border-radius:100px;padding:10px 18px;font-size:13px;color:#1A1714;margin-bottom:36px;">📍 Banjara Hills, Hyderabad</div>
+      <div onClick="{{ goHome }}" style="width:100%;background:#1A1714;color:#FFFFFF;border-radius:100px;padding:16px;text-align:center;font-family:'Poppins',sans-serif;font-weight:600;font-size:15px;cursor:pointer;">Continue to Home →</div>
+    </div>
+  </sc-if>
+
+  <!-- SCREEN 5: HOME -->
+  <sc-if value="{{ isHomeScreen }}" hint-placeholder-val="{{ false }}">
+    <div style="background:#FBF8F3;min-height:100vh;box-sizing:border-box;padding-bottom:84px;">
+
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:20px 20px 0;">
+        <div>
+          <div style="font-size:12px;color:#9A948C;">Hello,</div>
+          <div style="font-family:'Poppins',sans-serif;font-weight:700;font-size:17px;color:#1A1714;">Koushik Sarkar!</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:12px;">
+          <span style="position:relative;font-size:18px;">🔔<span style="position:absolute;top:-2px;right:-2px;width:8px;height:8px;border-radius:100px;background:#E2735A;"></span></span>
+          <span style="width:36px;height:36px;border-radius:100px;background:#ECE7DE;display:inline-block;"></span>
+        </div>
+      </div>
+
+      <div style="display:flex;align-items:center;gap:10px;padding:16px 20px;">
+        <div style="flex:1;display:flex;align-items:center;gap:8px;background:#FFFFFF;border:1px solid #ECE7DE;border-radius:100px;padding:11px 16px;font-size:13px;color:#9A948C;">🔍 Search for a service…</div>
+        <span style="width:40px;height:40px;border-radius:100px;background:#FFFFFF;border:1px solid #ECE7DE;display:flex;align-items:center;justify-content:center;flex-shrink:0;">⦿</span>
+      </div>
+
+      <div style="padding:8px 20px 0;">
+        <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:14px;">
+          <h3 style="font-family:'Poppins',sans-serif;font-weight:700;font-size:16px;color:#1A1714;margin:0;">Our Services</h3>
+          <span style="font-size:12px;font-weight:600;color:#D98A0A;">See all →</span>
+        </div>
+        <div style="display:flex;gap:12px;overflow-x:auto;padding-bottom:6px;margin-bottom:28px;">
+          <div style="flex:0 0 180px;background:#FFFFFF;border-radius:16px;overflow:hidden;box-shadow:0 8px 20px -12px rgba(26,23,20,0.18);">
+            <div style="position:relative;height:96px;background:repeating-linear-gradient(135deg,#F1ECE1,#F1ECE1 8px,#EAE3D4 8px,#EAE3D4 16px);">
+              <span style="position:absolute;top:8px;right:8px;font-size:13px;">♡</span>
+            </div>
+            <div style="padding:10px 12px;">
+              <div style="font-family:'Poppins',sans-serif;font-weight:600;font-size:13px;color:#1A1714;">AC Service</div>
+              <div style="font-size:11px;color:#9A948C;margin-bottom:8px;">Repair, service &amp; install</div>
+              <div style="display:flex;align-items:center;justify-content:space-between;">
+                <span style="font-family:'Poppins',sans-serif;font-weight:700;font-size:12px;color:#1A1714;">₹399 <span style="font-weight:400;color:#9A948C;">onwards</span></span>
+                <span style="width:24px;height:24px;border-radius:100px;background:#F4A81D;display:flex;align-items:center;justify-content:center;font-size:11px;color:#1A1714;">→</span>
+              </div>
+            </div>
+          </div>
+          <div style="flex:0 0 180px;background:#FFFFFF;border-radius:16px;overflow:hidden;box-shadow:0 8px 20px -12px rgba(26,23,20,0.18);">
+            <div style="position:relative;height:96px;background:repeating-linear-gradient(135deg,#F1ECE1,#F1ECE1 8px,#EAE3D4 8px,#EAE3D4 16px);">
+              <span style="position:absolute;top:8px;right:8px;font-size:13px;">♡</span>
+            </div>
+            <div style="padding:10px 12px;">
+              <div style="font-family:'Poppins',sans-serif;font-weight:600;font-size:13px;color:#1A1714;">Home Cleaning</div>
+              <div style="font-size:11px;color:#9A948C;margin-bottom:8px;">Deep clean, safe home</div>
+              <div style="display:flex;align-items:center;justify-content:space-between;">
+                <span style="font-family:'Poppins',sans-serif;font-weight:700;font-size:12px;color:#1A1714;">₹299 <span style="font-weight:400;color:#9A948C;">onwards</span></span>
+                <span style="width:24px;height:24px;border-radius:100px;background:#F4A81D;display:flex;align-items:center;justify-content:center;font-size:11px;color:#1A1714;">→</span>
+              </div>
+            </div>
+          </div>
+          <div style="flex:0 0 180px;background:#FFFFFF;border-radius:16px;overflow:hidden;box-shadow:0 8px 20px -12px rgba(26,23,20,0.18);">
+            <div style="height:96px;background:repeating-linear-gradient(135deg,#F1ECE1,#F1ECE1 8px,#EAE3D4 8px,#EAE3D4 16px);"></div>
+            <div style="padding:10px 12px;">
+              <div style="font-family:'Poppins',sans-serif;font-weight:600;font-size:13px;color:#1A1714;">Plumbing</div>
+              <div style="font-size:11px;color:#9A948C;">Leaks &amp; fittings</div>
+            </div>
+          </div>
+        </div>
+
+        <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:14px;">
+          <h3 style="font-family:'Poppins',sans-serif;font-weight:700;font-size:16px;color:#1A1714;margin:0;">Home Cleaning — sub-services</h3>
+          <span style="font-size:12px;font-weight:600;color:#D98A0A;">See all →</span>
+        </div>
+        <div style="display:flex;gap:12px;overflow-x:auto;padding-bottom:6px;margin-bottom:28px;">
+          <div style="flex:0 0 130px;">
+            <div style="height:80px;border-radius:12px;background:repeating-linear-gradient(135deg,#F1ECE1,#F1ECE1 8px,#EAE3D4 8px,#EAE3D4 16px);margin-bottom:8px;"></div>
+            <div style="font-size:12px;font-weight:600;color:#1A1714;">Balcony Cleaning</div>
+            <div style="font-size:11px;color:#9A948C;">₹149</div>
+          </div>
+          <div style="flex:0 0 130px;">
+            <div style="height:80px;border-radius:12px;background:repeating-linear-gradient(135deg,#F1ECE1,#F1ECE1 8px,#EAE3D4 8px,#EAE3D4 16px);margin-bottom:8px;"></div>
+            <div style="font-size:12px;font-weight:600;color:#1A1714;">Sofa Cleaning</div>
+            <div style="font-size:11px;color:#9A948C;">₹199</div>
+          </div>
+          <div style="flex:0 0 130px;">
+            <div style="height:80px;border-radius:12px;background:repeating-linear-gradient(135deg,#F1ECE1,#F1ECE1 8px,#EAE3D4 8px,#EAE3D4 16px);margin-bottom:8px;"></div>
+            <div style="font-size:12px;font-weight:600;color:#1A1714;">Bathroom Cleaning</div>
+            <div style="font-size:11px;color:#9A948C;">₹179</div>
+          </div>
+        </div>
+
+        <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:14px;">
+          <h3 style="font-family:'Poppins',sans-serif;font-weight:700;font-size:16px;color:#1A1714;margin:0;">Best Offers for You</h3>
+          <span style="font-size:12px;font-weight:600;color:#D98A0A;">See all →</span>
+        </div>
+        <div style="display:flex;gap:12px;overflow-x:auto;padding-bottom:6px;margin-bottom:28px;">
+          <div style="flex:0 0 200px;background:#FDECC8;border-radius:14px;padding:16px;">
+            <div style="font-family:'Poppins',sans-serif;font-weight:800;font-size:18px;color:#1A1714;margin-bottom:2px;">30% OFF</div>
+            <div style="font-size:12px;color:#6E6A64;margin-bottom:12px;">on Home Cleaning</div>
+            <div style="font-size:11px;font-weight:600;color:#D98A0A;">Use Code: CLEAN30</div>
+          </div>
+          <div style="flex:0 0 200px;background:#FDECC8;border-radius:14px;padding:16px;">
+            <div style="font-family:'Poppins',sans-serif;font-weight:800;font-size:18px;color:#1A1714;margin-bottom:2px;">₹150 OFF</div>
+            <div style="font-size:12px;color:#6E6A64;margin-bottom:12px;">on AC Service</div>
+            <div style="font-size:11px;font-weight:600;color:#D98A0A;">Use Code: AC150</div>
+          </div>
+        </div>
+
+        <h3 style="font-family:'Poppins',sans-serif;font-weight:700;font-size:16px;color:#1A1714;margin:0 0 18px;text-align:center;">How DODO Booker Works</h3>
+        <div style="display:flex;justify-content:space-between;margin-bottom:32px;position:relative;">
+          <div style="text-align:center;flex:1;position:relative;">
+            <div style="font-family:'Poppins',sans-serif;font-weight:800;font-size:12px;color:#F0B429;margin-bottom:5px;">01</div>
+            <div style="width:34px;height:34px;border-radius:100px;background:#ECE7DE;margin:0 auto 8px;display:flex;align-items:center;justify-content:center;position:relative;z-index:1;">
+              <div style="display:grid;grid-template-columns:repeat(2,4px);grid-template-rows:repeat(2,4px);gap:2px;">
+                <span style="width:4px;height:4px;border-radius:1px;background:#1A1714;"></span><span style="width:4px;height:4px;border-radius:1px;background:#1A1714;"></span>
+                <span style="width:4px;height:4px;border-radius:1px;background:#1A1714;"></span><span style="width:4px;height:4px;border-radius:1px;background:#1A1714;"></span>
+              </div>
+            </div>
+            <div style="font-size:9px;color:#1A1714;font-weight:600;line-height:1.3;">Choose a<br/>Service</div>
+            <div style="position:absolute;top:32px;left:60%;width:80%;border-top:1.5px dashed #ECE7DE;z-index:0;"></div>
+          </div>
+          <div style="text-align:center;flex:1;position:relative;">
+            <div style="font-family:'Poppins',sans-serif;font-weight:800;font-size:12px;color:#4FA394;margin-bottom:5px;">02</div>
+            <div style="width:34px;height:34px;border-radius:100px;background:#ECE7DE;margin:0 auto 8px;display:flex;align-items:center;justify-content:center;position:relative;z-index:1;">
+              <span style="width:16px;height:16px;border-radius:100px;border:1.5px solid #1A1714;position:relative;display:block;"><span style="position:absolute;top:1px;left:7px;width:1px;height:6px;background:#1A1714;"></span></span>
+            </div>
+            <div style="font-size:9px;color:#1A1714;font-weight:600;line-height:1.3;">Pick a<br/>Time</div>
+            <div style="position:absolute;top:32px;left:60%;width:80%;border-top:1.5px dashed #ECE7DE;z-index:0;"></div>
+          </div>
+          <div style="text-align:center;flex:1;position:relative;">
+            <div style="font-family:'Poppins',sans-serif;font-weight:800;font-size:12px;color:#E2735A;margin-bottom:5px;">03</div>
+            <div style="width:34px;height:34px;border-radius:100px;background:#ECE7DE;margin:0 auto 8px;display:flex;align-items:center;justify-content:center;position:relative;z-index:1;">
+              <span style="display:flex;flex-direction:column;align-items:center;gap:1px;">
+                <span style="width:7px;height:7px;border-radius:100px;background:#1A1714;"></span>
+                <span style="width:13px;height:6px;border-radius:6px 6px 0 0;background:#1A1714;"></span>
+              </span>
+            </div>
+            <div style="font-size:9px;color:#1A1714;font-weight:600;line-height:1.3;">We assign trusted<br/>professional to u</div>
+            <div style="position:absolute;top:32px;left:60%;width:80%;border-top:1.5px dashed #ECE7DE;z-index:0;"></div>
+          </div>
+          <div style="text-align:center;flex:1;position:relative;">
+            <div style="font-family:'Poppins',sans-serif;font-weight:800;font-size:12px;color:#6B4A38;margin-bottom:5px;">04</div>
+            <div style="width:34px;height:34px;border-radius:100px;background:#ECE7DE;margin:0 auto 8px;display:flex;align-items:center;justify-content:center;position:relative;z-index:1;">
+              <span style="width:12px;height:12px;border-radius:50% 50% 50% 0;background:#1A1714;transform:rotate(-45deg);"></span>
+            </div>
+            <div style="font-size:9px;color:#1A1714;font-weight:600;line-height:1.3;">Get it<br/>Done</div>
+          </div>
+        </div>
+
+        <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:14px;">
+          <h3 style="font-family:'Poppins',sans-serif;font-weight:700;font-size:16px;color:#1A1714;margin:0;">Popular Services</h3>
+          <span style="font-size:12px;font-weight:600;color:#D98A0A;">See all →</span>
+        </div>
+        <div style="display:flex;gap:12px;overflow-x:auto;padding-bottom:6px;margin-bottom:28px;">
+          <div style="flex:0 0 140px;">
+            <div style="height:90px;border-radius:12px;background:repeating-linear-gradient(135deg,#F1ECE1,#F1ECE1 8px,#EAE3D4 8px,#EAE3D4 16px);margin-bottom:8px;"></div>
+            <div style="font-size:12px;font-weight:600;color:#1A1714;">Deep Cleaning</div>
+            <div style="font-size:11px;color:#9A948C;">From ₹699 · 4.8★</div>
+          </div>
+          <div style="flex:0 0 140px;">
+            <div style="height:90px;border-radius:12px;background:repeating-linear-gradient(135deg,#F1ECE1,#F1ECE1 8px,#EAE3D4 8px,#EAE3D4 16px);margin-bottom:8px;"></div>
+            <div style="font-size:12px;font-weight:600;color:#1A1714;">AC Deep Clean</div>
+            <div style="font-size:11px;color:#9A948C;">From ₹599 · 4.8★</div>
+          </div>
+          <div style="flex:0 0 140px;">
+            <div style="height:90px;border-radius:12px;background:repeating-linear-gradient(135deg,#F1ECE1,#F1ECE1 8px,#EAE3D4 8px,#EAE3D4 16px);margin-bottom:8px;"></div>
+            <div style="font-size:12px;font-weight:600;color:#1A1714;">Plumbing</div>
+            <div style="font-size:11px;color:#9A948C;">From ₹499 · 4.7★</div>
+          </div>
+        </div>
+
+        <h3 style="font-family:'Poppins',sans-serif;font-weight:700;font-size:16px;color:#1A1714;margin:0 0 14px;">Why Choose DODO?</h3>
+        <div style="display:flex;justify-content:space-between;gap:8px;margin-bottom:28px;">
+          <div style="display:flex;align-items:center;gap:8px;flex:1;">
+            <div style="width:32px;height:32px;border-radius:9px;background:#ECE7DE;flex-shrink:0;display:flex;align-items:center;justify-content:center;">
+              <span style="width:11px;height:8px;border-left:1.5px solid #1A1714;border-bottom:1.5px solid #1A1714;transform:rotate(-45deg) translate(1px,-2px);display:block;"></span>
+            </div>
+            <div style="font-size:10px;color:#1A1714;font-weight:600;line-height:1.3;">Verified<br/>Professionals</div>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;flex:1;">
+            <div style="width:32px;height:32px;border-radius:9px;background:#ECE7DE;flex-shrink:0;display:flex;align-items:center;justify-content:center;">
+              <span style="font-family:'Poppins',sans-serif;font-weight:800;font-size:13px;color:#1A1714;">₹</span>
+            </div>
+            <div style="font-size:10px;color:#1A1714;font-weight:600;line-height:1.3;">Transparent<br/>Pricing</div>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;flex:1;">
+            <div style="width:32px;height:32px;border-radius:9px;background:#ECE7DE;flex-shrink:0;display:flex;align-items:center;justify-content:center;">
+              <span style="width:14px;height:14px;border-radius:100px;border:1.5px solid #1A1714;position:relative;display:block;"><span style="position:absolute;top:1px;left:6px;width:1px;height:6px;background:#1A1714;"></span></span>
+            </div>
+            <div style="font-size:10px;color:#1A1714;font-weight:600;line-height:1.3;">On-Time<br/>Service</div>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;flex:1;">
+            <div style="width:32px;height:32px;border-radius:9px;background:#ECE7DE;flex-shrink:0;display:flex;align-items:center;justify-content:center;">
+              <span style="width:13px;height:13px;border:1.5px solid #1A1714;border-radius:50%;border-bottom-color:transparent;display:block;"></span>
+            </div>
+            <div style="font-size:10px;color:#1A1714;font-weight:600;line-height:1.3;">24/7<br/>Support</div>
+          </div>
+        </div>
+
+        <h3 style="font-family:'Poppins',sans-serif;font-weight:700;font-size:16px;color:#1A1714;margin:0 0 14px;">What our customers say</h3>
+        <div style="display:flex;gap:12px;overflow-x:auto;padding-bottom:6px;">
+          <div style="flex:0 0 240px;background:#FFFFFF;border:1px solid #ECE7DE;border-radius:14px;padding:16px;">
+            <div style="color:#F4A81D;font-size:12px;margin-bottom:8px;">★★★★★ 4.9</div>
+            <div style="font-size:12px;color:#2E2A26;line-height:1.5;margin-bottom:10px;">"On-time service and very polite staff. Highly recommend!"</div>
+            <div style="display:flex;align-items:center;gap:8px;"><span style="width:26px;height:26px;border-radius:100px;background:#ECE7DE;display:inline-block;"></span><span style="font-size:12px;font-weight:600;color:#1A1714;">Karthi Iyer</span></div>
+          </div>
+          <div style="flex:0 0 240px;background:#FFFFFF;border:1px solid #ECE7DE;border-radius:14px;padding:16px;">
+            <div style="color:#F4A81D;font-size:12px;margin-bottom:8px;">★★★☆☆</div>
+            <div style="font-size:12px;color:#2E2A26;line-height:1.5;margin-bottom:10px;">"Reliable and trustworthy service, every time."</div>
+            <div style="display:flex;align-items:center;gap:8px;"><span style="width:26px;height:26px;border-radius:100px;background:#ECE7DE;display:inline-block;"></span><span style="font-size:12px;font-weight:600;color:#1A1714;">Lana Cooper</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div style="position:fixed;bottom:0;left:0;right:0;max-width:520px;margin:0 auto;background:#FFFFFF;border-top:1px solid #ECE7DE;display:flex;justify-content:space-around;padding:12px 0 calc(12px + env(safe-area-inset-bottom));">
+        <div style="display:flex;flex-direction:column;align-items:center;gap:3px;color:#F4A81D;">
+          <span style="width:20px;height:20px;border-radius:6px;background:#F4A81D;display:block;"></span>
+          <span style="font-size:11px;font-weight:600;">Home</span>
+        </div>
+        <div style="display:flex;flex-direction:column;align-items:center;gap:3px;color:#9A948C;">
+          <span style="width:20px;height:20px;border-radius:6px;background:#ECE7DE;display:block;"></span>
+          <span style="font-size:11px;font-weight:600;">Bookings</span>
+        </div>
+        <div style="display:flex;flex-direction:column;align-items:center;gap:3px;color:#9A948C;">
+          <span style="width:20px;height:20px;border-radius:6px;background:#ECE7DE;display:block;"></span>
+          <span style="font-size:11px;font-weight:600;">Profile</span>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+  <!-- SCREEN 4: LOCATION NOT SUPPORTED -->
+  <sc-if value="{{ isNotSupported }}" hint-placeholder-val="{{ false }}">
+    <div style="background:#FBF8F3;min-height:100vh;padding:clamp(28px,6vw,40px) clamp(20px,6vw,28px);display:flex;flex-direction:column;align-items:center;box-sizing:border-box;">
+      <div style="width:96px;height:96px;border-radius:100px;background:#ECE7DE;display:flex;align-items:center;justify-content:center;margin:56px 0 24px;color:#6E6A64;font-size:34px;">⊘</div>
+      <h2 style="font-family:'Poppins',sans-serif;font-weight:700;font-size:19px;color:#1A1714;margin:0 0 8px;text-align:center;">Sorry, we're not serving your location yet.</h2>
+      <p style="font-size:13px;color:#9A948C;text-align:center;margin:0 0 28px;max-width:280px;">We are expanding our service areas. Please check back soon!</p>
+      <div style="display:flex;align-items:center;gap:8px;background:#FFFFFF;border:1px solid #ECE7DE;border-radius:100px;padding:10px 18px;font-size:13px;color:#1A1714;margin-bottom:32px;">📍 Karimnagar, Telangana</div>
+      <div onClick="{{ toggleSimulate }}" style="width:100%;background:#1A1714;color:#FFFFFF;border-radius:100px;padding:16px;text-align:center;font-family:'Poppins',sans-serif;font-weight:600;font-size:15px;cursor:pointer;margin-bottom:12px;">Try Another Location →</div>
+      <div style="width:100%;background:#FFFFFF;border:1.5px solid #1A1714;color:#1A1714;border-radius:100px;padding:15px;text-align:center;font-family:'Poppins',sans-serif;font-weight:600;font-size:15px;">Enter Location Manually</div>
+    </div>
+  </sc-if>
+
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  state = { screen: 'hero', checks: [false, false, false], simulateSupported: true };
+
+  startFlow = () => {
+    this.setState({ screen: 'fetching', checks: [false, false, false] });
+    [700, 1400, 2100].forEach((t, i) => {
+      setTimeout(() => {
+        this.setState(s => {
+          const checks = [...s.checks];
+          checks[i] = true;
+          return { checks };
+        });
+      }, t);
+    });
+    setTimeout(() => {
+      this.setState(s => ({ screen: s.simulateSupported ? 'supported' : 'notSupported' }));
+    }, 2800);
+  };
+
+  toggleSimulate = () => {
+    this.setState(s => ({ simulateSupported: !s.simulateSupported, screen: 'hero', checks: [false, false, false] }));
+  };
+
+  goHome = () => {
+    this.setState({ screen: 'home' });
+  };
+
+  renderVals() {
+    const { screen, checks, simulateSupported } = this.state;
+    return {
+      isHero: screen === 'hero',
+      isFetching: screen === 'fetching',
+      isSupported: screen === 'supported',
+      isNotSupported: screen === 'notSupported',
+      isHomeScreen: screen === 'home',
+      checks,
+      simulateLabel: simulateSupported ? 'this area' : 'not this area',
+      startFlow: this.startFlow,
+      toggleSimulate: this.toggleSimulate,
+      goHome: this.goHome
+    };
+  }
+}
+</script>
+</body>
+</html>

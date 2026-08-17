@@ -11,7 +11,6 @@ import '../features/catalog/screens/catalog_node_screen.dart';
 import '../features/category/screens/subcategory_screen.dart';
 import '../features/service/screens/services_screen.dart';
 import '../features/service/screens/category_services_screen.dart';
-import '../features/service/screens/service_details_screen.dart';
 import '../features/booking/screens/booking_success_screen.dart';
 import '../features/bookings/screens/booking_details_screen.dart';
 import '../features/bookings/screens/my_bookings_screen.dart';
@@ -31,7 +30,6 @@ import '../features/service_areas/screens/service_areas_screen.dart';
 import '../models/booking_model.dart';
 import '../models/category_model.dart';
 import '../models/subcategory_model.dart';
-import '../models/service_model.dart';
 import '../models/my_booking_model.dart';
 
 class AppRoutes {
@@ -42,10 +40,9 @@ class AppRoutes {
   // ── Catalog Engine (Phase 3+) ──────────────────────────────────────────────
   static const String catalogNode = '/catalog/:nodeId';
 
-  // ── Legacy routes kept for backward-compat until Phase 5 cleanup ──────────
+  // ── Legacy browse routes ───────────────────────────────────────────────────
   static const String subcategory = '/subcategory/:categoryId';
   static const String services = '/services/:subcategoryId';
-  static const String serviceDetail = '/service-detail/:serviceId';
   static const String categoryServices = '/category-services/:categoryId';
 
   static const String booking = '/booking';
@@ -115,16 +112,6 @@ final appRouter = GoRouter(
         final sub = state.extra;
         if (sub is SubcategoryModel) return ServicesScreen(subcategory: sub);
         return const Scaffold(body: Center(child: Text('Subcategory not found')));
-      },
-    ),
-
-    // Services list → Service details
-    GoRoute(
-      path: AppRoutes.serviceDetail,
-      builder: (context, state) {
-        final service = state.extra;
-        if (service is ServiceModel) return ServiceDetailsScreen(service: service);
-        return const Scaffold(body: Center(child: Text('Service not found')));
       },
     ),
 

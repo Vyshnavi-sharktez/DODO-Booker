@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  body{margin:0;background:#FBF8F3;}
+  a{color:#D98A0A;text-decoration:none;}
+  a:hover{color:#B36F06;text-decoration:underline;}
+</style>
+</helmet>
+
+<div style="font-family:'Inter',sans-serif;color:#2E2A26;background:#FBF8F3;">
+
+  <!-- HEADER -->
+  <header style="display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;padding:clamp(14px,2vw,20px) clamp(20px,4vw,64px);background:#111111;border-bottom:1px solid #2A2622;">
+    <div style="display:flex;align-items:center;gap:10px;font-family:'Poppins',sans-serif;font-weight:800;font-size:clamp(15px,1.4vw,18px);color:#FFFFFF;flex-shrink:0;">
+      <span style="width:30px;height:30px;border-radius:9px;background:#F4A81D;display:inline-block;"></span>DODO BOOKER
+    </div>
+    <nav style="display:flex;gap:clamp(16px,2vw,32px);font-weight:500;font-size:14px;color:#EDEAE4;flex-wrap:wrap;">
+      <span>Services ▾</span><span>Service Areas ▾</span>
+    </nav>
+    <div style="flex:1;min-width:180px;max-width:360px;background:#1E1B17;border:1px solid #2A2622;border-radius:100px;padding:10px 18px;font-size:13px;color:#7A756D;">Search for a service…</div>
+    <div style="display:flex;align-items:center;gap:16px;flex-shrink:0;">
+      <span style="font-size:18px;color:#EDEAE4;">♡</span><span style="font-size:18px;color:#EDEAE4;">🔔</span>
+      <span style="width:32px;height:32px;border-radius:100px;background:#2A2622;display:inline-block;"></span>
+      <span style="font-family:'Poppins',sans-serif;font-weight:600;font-size:13px;color:#1A1714;background:#F4A81D;border-radius:100px;padding:10px 20px;white-space:nowrap;">Get App</span>
+    </div>
+  </header>
+
+  <!-- HERO -->
+  <section style="background:#111111;padding:clamp(48px,7vw,88px) clamp(20px,5vw,64px);display:flex;align-items:center;justify-content:space-between;gap:40px;flex-wrap:wrap;">
+    <div style="max-width:520px;flex:1;min-width:280px;">
+      <div style="display:inline-flex;align-items:center;gap:6px;background:#1E1B17;color:#F4A81D;font-size:12px;font-weight:600;padding:6px 14px;border-radius:100px;margin-bottom:18px;">✓ Trusted Home Services</div>
+      <h1 style="font-family:'Poppins',sans-serif;font-weight:800;font-size:clamp(30px,4.2vw,48px);line-height:1.12;color:#FFFFFF;margin:0 0 16px;">Are you looking for <span style="color:#F4A81D;">home service?</span></h1>
+      <p style="font-size:15px;color:#B3ADA3;line-height:1.6;margin:0 0 8px;max-width:420px;">Let us take care of it. Book a trusted professional in just a few taps.</p>
+      <p style="font-size:13px;color:#7A756D;margin:0 0 20px;">We'll show services for your location</p>
+      <div style="display:flex;flex-direction:column;gap:12px;max-width:380px;">
+        <div style="background:#FFFFFF;border-radius:100px;padding:14px 20px;font-size:14px;color:#9A948C;">Enter your location or select from map</div>
+        <div style="font-family:'Poppins',sans-serif;font-weight:600;font-size:14px;color:#FFFFFF;background:#1E1B17;border:1px solid #2A2622;border-radius:100px;padding:14px 28px;text-align:center;width:fit-content;">Continue</div>
+      </div>
+    </div>
+    <div style="flex:1;min-width:260px;max-width:420px;display:flex;justify-content:center;">
+      <img src="assets/dodo-mascot.png" alt="DODO mascot" style="width:100%;max-width:360px;height:auto;"/>
+    </div>
+  </section>
+
+  <!-- OUR SERVICES -->
+  <section style="padding:clamp(40px,5vw,64px) clamp(20px,5vw,64px);max-width:1280px;margin:0 auto;">
+    <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:24px;">
+      <h2 style="font-family:'Poppins',sans-serif;font-weight:700;font-size:clamp(20px,2vw,26px);color:#1A1714;margin:0;">Our Services</h2>
+      <a href="#" style="font-size:14px;font-weight:600;">See all →</a>
+    </div>
+    <div style="display:flex;gap:16px;overflow-x:auto;padding-bottom:6px;">
+      <div style="position:relative;background:#FFFFFF;border:1px solid #ECE7DE;border-radius:16px;padding:16px;text-align:center;flex:0 0 160px;">
+        <span style="position:absolute;top:10px;right:10px;background:#F4A81D;color:#1A1714;font-size:10px;font-weight:700;padding:2px 6px;border-radius:100px;">899</span>
+        <div style="height:70px;border-radius:12px;background:repeating-linear-gradient(135deg,#F1ECE1,#F1ECE1 8px,#EAE3D4 8px,#EAE3D4 16px);margin-bottom:10px;"></div>
+        <div style="font-family:'Poppins',sans-serif;font-weight:600;font-size:14px;color:#1A1714;">AC Service</div>
+      </div>
+      <div style="position:relative;background:#FFFFFF;border:1px solid #ECE7DE;border-radius:16px;padding:16px;text-align:center;flex:0 0 160px;">
+        <span style="position:absolute;top:10px;right:10px;background:#F4A81D;color:#1A1714;font-size:10px;font-weight:700;padding:2px 6px;border-radius:100px;">299</span>
+        <div style="height:70px;border-radius:12px;background:repeating-linear-gradient(135deg,#F1ECE1,#F1ECE1 8px,#EAE3D4 8px,#EAE3D4 16px);margin-bottom:10px;"></div>
+        <div style="font-family:'Poppins',sans-serif;font-weight:600;font-size:14px;color:#1A1714;">Home Cleaning</div>
+      </div>
+      <div style="position:relative;background:#FFFFFF;border:1px solid #ECE7DE;border-radius:16px;padding:16px;text-align:center;flex:0 0 160px;">
+        <span style="position:absolute;top:10px;right:10px;background:#F4A81D;color:#1A1714;font-size:10px;font-weight:700;padding:2px 6px;border-radius:100px;">199</span>
+        <div style="height:70px;border-radius:12px;background:repeating-linear-gradient(135deg,#F1ECE1,#F1ECE1 8px,#EAE3D4 8px,#EAE3D4 16px);margin-bottom:10px;"></div>
+        <div style="font-family:'Poppins',sans-serif;font-weight:600;font-size:14px;color:#1A1714;">Plumbing</div>
+      </div>
+      <div style="position:relative;background:#FFFFFF;border:1px solid #ECE7DE;border-radius:16px;padding:16px;text-align:center;flex:0 0 160px;">
+        <span style="position:absolute;top:10px;right:10px;background:#F4A81D;color:#1A1714;font-size:10px;font-weight:700;padding:2px 6px;border-radius:100px;">249</span>
+        <div style="height:70px;border-radius:12px;background:repeating-linear-gradient(135deg,#F1ECE1,#F1ECE1 8px,#EAE3D4 8px,#EAE3D4 16px);margin-bottom:10px;"></div>
+        <div style="font-family:'Poppins',sans-serif;font-weight:600;font-size:14px;color:#1A1714;">Electrical</div>
+      </div>
+      <div style="position:relative;background:#FFFFFF;border:1px solid #ECE7DE;border-radius:16px;padding:16px;text-align:center;flex:0 0 160px;">
+        <span style="position:absolute;top:10px;right:10px;background:#F4A81D;color:#1A1714;font-size:10px;font-weight:700;padding:2px 6px;border-radius:100px;">449</span>
+        <div style="height:70px;border-radius:12px;background:repeating-linear-gradient(135deg,#F1ECE1,#F1ECE1 8px,#EAE3D4 8px,#EAE3D4 16px);margin-bottom:10px;"></div>
+        <div style="font-family:'Poppins',sans-serif;font-weight:600;font-size:14px;color:#1A1714;">Painting</div>
+      </div>
+    </div>
+
+    <!-- SUB-SERVICES -->
+    <div style="display:flex;justify-content:space-between;align-items:baseline;margin:40px 0 24px;">
+      <h3 style="font-family:'Poppins',sans-serif;font-weight:600;font-size:18px;color:#1A1714;margin:0;">Home Cleaning — sub-services</h3>
+      <a href="#" style="font-size:14px;font-weight:600;">See all →</a>
+    </div>
+    <div style="display:flex;gap:16px;overflow-x:auto;padding-bottom:6px;">
+      <div style="background:#FFFFFF;border-radius:16px;overflow:hidden;border:1px solid #ECE7DE;flex:0 0 180px;">
+        <div style="height:110px;background:repeating-linear-gradient(135deg,#F1ECE1,#F1ECE1 8px,#EAE3D4 8px,#EAE3D4 16px);"></div>
+        <div style="padding:12px 14px;"><div style="font-family:'Poppins',sans-serif;font-weight:600;font-size:13px;color:#1A1714;">Balcony Cleaning</div><div style="font-size:12px;color:#9A948C;">₹149</div></div>
+      </div>
+      <div style="background:#FFFFFF;border-radius:16px;overflow:hidden;border:1px solid #ECE7DE;flex:0 0 180px;">
+        <div style="height:110px;background:repeating-linear-gradient(135deg,#F1ECE1,#F1ECE1 8px,#EAE3D4 8px,#EAE3D4 16px);"></div>
+        <div style="padding:12px 14px;"><div style="font-family:'Poppins',sans-serif;font-weight:600;font-size:13px;color:#1A1714;">Sofa Cleaning</div><div style="font-size:12px;color:#9A948C;">₹199</div></div>
+      </div>
+      <div style="background:#FFFFFF;border-radius:16px;overflow:hidden;border:1px solid #ECE7DE;flex:0 0 180px;">
+        <div style="height:110px;background:repeating-linear-gradient(135deg,#F1ECE1,#F1ECE1 8px,#EAE3D4 8px,#EAE3D4 16px);"></div>
+        <div style="padding:12px 14px;"><div style="font-family:'Poppins',sans-serif;font-weight:600;font-size:13px;color:#1A1714;">Bathroom Cleaning</div><div style="font-size:12px;color:#9A948C;">₹179</div></div>
+      </div>
+      <div style="background:#FFFFFF;border-radius:16px;overflow:hidden;border:1px solid #ECE7DE;flex:0 0 180px;">
+        <div style="height:110px;background:repeating-linear-gradient(135deg,#F1ECE1,#F1ECE1 8px,#EAE3D4 8px,#EAE3D4 16px);"></div>
+        <div style="padding:12px 14px;"><div style="font-family:'Poppins',sans-serif;font-weight:600;font-size:13px;color:#1A1714;">AC Gas Refill</div><div style="font-size:12px;color:#9A948C;">₹499</div></div>
+      </div>
+      <div style="background:#FFFFFF;border-radius:16px;overflow:hidden;border:1px solid #ECE7DE;flex:0 0 180px;">
+        <div style="height:110px;background:repeating-linear-gradient(135deg,#F1ECE1,#F1ECE1 8px,#EAE3D4 8px,#EAE3D4 16px);"></div>
+        <div style="padding:12px 14px;"><div style="font-family:'Poppins',sans-serif;font-weight:600;font-size:13px;color:#1A1714;">AC Deep Clean</div><div style="font-size:12px;color:#9A948C;">₹599</div></div>
+      </div>
+      <div style="background:#FFFFFF;border-radius:16px;overflow:hidden;border:1px solid #ECE7DE;flex:0 0 180px;">
+        <div style="height:110px;background:repeating-linear-gradient(135deg,#F1ECE1,#F1ECE1 8px,#EAE3D4 8px,#EAE3D4 16px);"></div>
+        <div style="padding:12px 14px;"><div style="font-family:'Poppins',sans-serif;font-weight:600;font-size:13px;color:#1A1714;">AC Installation</div><div style="font-size:12px;color:#9A948C;">₹699</div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- WHY CHOOSE -->
+  <section style="padding:0 clamp(20px,5vw,64px) clamp(40px,5vw,64px);max-width:1280px;margin:0 auto;">
+    <div style="display:flex;gap:0;flex-wrap:wrap;border-radius:20px;overflow:hidden;">
+      <div style="flex:1;min-width:220px;background:#111111;padding:clamp(28px,4vw,44px);display:flex;flex-direction:column;justify-content:center;">
+        <h2 style="font-family:'Poppins',sans-serif;font-weight:700;font-size:clamp(22px,2.4vw,28px);color:#FFFFFF;margin:0 0 8px;">Why Choose DODO?</h2>
+        <p style="font-size:14px;color:#9A948C;margin:0;">The numbers speak for themselves.</p>
+      </div>
+      <div style="flex:2;min-width:280px;background:#FFFFFF;padding:clamp(28px,4vw,44px);display:flex;flex-direction:column;gap:0;justify-content:center;">
+        <div style="display:flex;gap:16px;align-items:flex-start;">
+          <div style="display:flex;flex-direction:column;align-items:center;flex-shrink:0;">
+            <span style="width:36px;height:36px;border-radius:100px;background:#1A1714;color:#FFFFFF;display:flex;align-items:center;justify-content:center;font-family:'Poppins',sans-serif;font-weight:700;font-size:14px;">1</span>
+            <span style="width:2px;flex:1;min-height:22px;background:#ECE7DE;"></span>
+          </div>
+          <div style="padding-top:6px;"><div style="font-family:'Poppins',sans-serif;font-weight:600;font-size:15px;color:#1A1714;margin-bottom:4px;">Verified Professionals</div><div style="font-size:13px;color:#9A948C;">Every professional is background-checked and trained before the door bell rings.</div></div>
+        </div>
+        <div style="display:flex;gap:16px;align-items:flex-start;">
+          <div style="display:flex;flex-direction:column;align-items:center;flex-shrink:0;">
+            <span style="width:36px;height:36px;border-radius:100px;background:#8F8A82;color:#FFFFFF;display:flex;align-items:center;justify-content:center;font-family:'Poppins',sans-serif;font-weight:700;font-size:14px;">2</span>
+            <span style="width:2px;flex:1;min-height:22px;background:#ECE7DE;"></span>
+          </div>
+          <div style="padding-top:6px;"><div style="font-family:'Poppins',sans-serif;font-weight:600;font-size:15px;color:#1A1714;margin-bottom:4px;">Transparent Pricing</div><div style="font-size:13px;color:#9A948C;">No hidden charges. What you see is what you pay.</div></div>
+        </div>
+        <div style="display:flex;gap:16px;align-items:flex-start;">
+          <div style="display:flex;flex-direction:column;align-items:center;flex-shrink:0;">
+            <span style="width:36px;height:36px;border-radius:100px;background:#F4A81D;color:#1A1714;display:flex;align-items:center;justify-content:center;font-family:'Poppins',sans-serif;font-weight:700;font-size:14px;">3</span>
+          </div>
+          <div style="padding-top:6px;"><div style="font-family:'Poppins',sans-serif;font-weight:600;font-size:15px;color:#1A1714;margin-bottom:4px;">Reliable &amp; On-Time</div><div style="font-size:13px;color:#9A948C;">We value your time. On-time, every time.</div></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- HOW IT WORKS -->
+  <section style="padding:0 clamp(20px,5vw,64px) clamp(48px,6vw,72px);max-width:1280px;margin:0 auto;text-align:center;">
+    <h2 style="font-family:'Poppins',sans-serif;font-weight:700;font-size:clamp(22px,2.4vw,28px);color:#1A1714;margin:0 0 36px;">How DODO Booker Works</h2>
+    <div style="display:flex;justify-content:center;align-items:flex-start;gap:0;flex-wrap:wrap;position:relative;">
+      <div style="text-align:center;width:200px;position:relative;">
+        <div style="font-family:'Poppins',sans-serif;font-weight:800;font-size:26px;color:#F0B429;margin-bottom:12px;">01</div>
+        <div style="width:64px;height:64px;border-radius:100px;background:#F2EFE9;display:flex;align-items:center;justify-content:center;margin:0 auto 16px;position:relative;z-index:1;">
+          <div style="display:grid;grid-template-columns:repeat(2,5px);grid-template-rows:repeat(2,5px);gap:3px;">
+            <span style="width:5px;height:5px;border-radius:1px;background:#1A1714;"></span><span style="width:5px;height:5px;border-radius:1px;background:#1A1714;"></span>
+            <span style="width:5px;height:5px;border-radius:1px;background:#1A1714;"></span><span style="width:5px;height:5px;border-radius:1px;background:#1A1714;"></span>
+          </div>
+        </div>
+        <div style="font-family:'Poppins',sans-serif;font-weight:700;font-size:15px;color:#1A1714;margin-bottom:6px;">Choose a Service</div>
+        <div style="font-size:12px;color:#9A948C;line-height:1.5;">Browse and select the service you need.</div>
+        <div style="position:absolute;top:75px;left:140px;width:120px;border-top:2px solid #ECE7DE;z-index:0;"></div>
+      </div>
+      <div style="text-align:center;width:200px;position:relative;">
+        <div style="font-family:'Poppins',sans-serif;font-weight:800;font-size:26px;color:#4FA394;margin-bottom:12px;">02</div>
+        <div style="width:64px;height:64px;border-radius:100px;background:#F2EFE9;display:flex;align-items:center;justify-content:center;margin:0 auto 16px;position:relative;z-index:1;">
+          <span style="width:20px;height:20px;border-radius:100px;border:2px solid #1A1714;position:relative;display:block;"><span style="position:absolute;top:2px;left:9px;width:1.5px;height:7px;background:#1A1714;"></span></span>
+        </div>
+        <div style="font-family:'Poppins',sans-serif;font-weight:700;font-size:15px;color:#1A1714;margin-bottom:6px;">Pick a Time</div>
+        <div style="font-size:12px;color:#9A948C;line-height:1.5;">Select your preferred date and time.</div>
+        <div style="position:absolute;top:75px;left:140px;width:120px;border-top:2px solid #ECE7DE;z-index:0;"></div>
+      </div>
+      <div style="text-align:center;width:200px;position:relative;">
+        <div style="font-family:'Poppins',sans-serif;font-weight:800;font-size:26px;color:#E2735A;margin-bottom:12px;">03</div>
+        <div style="width:64px;height:64px;border-radius:100px;background:#F2EFE9;display:flex;align-items:center;justify-content:center;margin:0 auto 16px;position:relative;z-index:1;">
+          <span style="display:flex;flex-direction:column;align-items:center;gap:2px;">
+            <span style="width:9px;height:9px;border-radius:100px;background:#1A1714;"></span>
+            <span style="width:16px;height:8px;border-radius:8px 8px 0 0;background:#1A1714;"></span>
+          </span>
+        </div>
+        <div style="font-family:'Poppins',sans-serif;font-weight:700;font-size:15px;color:#1A1714;margin-bottom:6px;">We assign trusted professional to u</div>
+        <div style="font-size:12px;color:#9A948C;line-height:1.5;">We assign a trusted professional for you.</div>
+        <div style="position:absolute;top:75px;left:140px;width:120px;border-top:2px solid #ECE7DE;z-index:0;"></div>
+      </div>
+      <div style="text-align:center;width:200px;position:relative;">
+        <div style="font-family:'Poppins',sans-serif;font-weight:800;font-size:26px;color:#6B4A38;margin-bottom:12px;">04</div>
+        <div style="width:64px;height:64px;border-radius:100px;background:#F2EFE9;display:flex;align-items:center;justify-content:center;margin:0 auto 16px;position:relative;z-index:1;">
+          <span style="width:16px;height:16px;border-radius:50% 50% 50% 0;background:#1A1714;transform:rotate(-45deg);"></span>
+        </div>
+        <div style="font-family:'Poppins',sans-serif;font-weight:700;font-size:15px;color:#1A1714;margin-bottom:6px;">Get It Done</div>
+        <div style="font-size:12px;color:#9A948C;line-height:1.5;">Sit back and relax while we take care of it.</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- OFFER BANNER -->
+  <section style="padding:0 clamp(20px,5vw,64px) clamp(48px,6vw,72px);max-width:1280px;margin:0 auto;">
+    <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:16px;">
+      <h2 style="font-family:'Poppins',sans-serif;font-weight:700;font-size:clamp(18px,2vw,22px);color:#1A1714;margin:0;">Special Offers for You</h2>
+      <a href="#" style="font-size:14px;font-weight:600;">View all offers →</a>
+    </div>
+    <div style="display:flex;align-items:center;gap:14px;">
+      <span style="width:38px;height:38px;border-radius:100px;border:1px solid #ECE7DE;background:#FFFFFF;display:flex;align-items:center;justify-content:center;flex-shrink:0;color:#1A1714;">←</span>
+      <div style="flex:1;background:#0D0D0D;border-radius:18px;overflow:hidden;display:flex;align-items:center;justify-content:space-between;min-height:160px;">
+        <div style="padding:clamp(20px,3vw,32px);flex:1;min-width:220px;">
+          <div style="display:inline-flex;background:#F4A81D;color:#1A1714;font-weight:700;font-size:11px;padding:5px 12px;border-radius:100px;margin-bottom:14px;">LIMITED PERIOD</div>
+          <div style="font-family:'Poppins',sans-serif;font-weight:800;font-size:clamp(24px,2.6vw,32px);color:#FFFFFF;margin-bottom:4px;">20% OFF</div>
+          <div style="font-size:14px;color:#B3ADA3;margin-bottom:16px;">on Home Cleaning Services</div>
+          <div style="display:inline-flex;align-items:center;gap:6px;border:1px dashed #F4A81D;color:#F4A81D;border-radius:8px;padding:6px 12px;font-weight:600;font-size:12px;">Use Code: CLEAN20 →</div>
+        </div>
+        <div style="width:42%;min-width:180px;height:160px;background:repeating-linear-gradient(135deg,#1E1B17,#1E1B17 10px,#171512 10px,#171512 20px);flex-shrink:0;"></div>
+      </div>
+      <span style="width:38px;height:38px;border-radius:100px;border:1px solid #ECE7DE;background:#FFFFFF;display:flex;align-items:center;justify-content:center;flex-shrink:0;color:#1A1714;">→</span>
+    </div>
+  </section>
+
+  <!-- POPULAR NEAR YOU -->
+  <section style="padding:0 clamp(20px,5vw,64px) clamp(48px,6vw,72px);max-width:1280px;margin:0 auto;">
+    <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:24px;">
+      <h2 style="font-family:'Poppins',sans-serif;font-weight:700;font-size:clamp(20px,2vw,26px);color:#1A1714;margin:0;">Popular near you</h2>
+      <a href="#" style="font-size:14px;font-weight:600;">See all →</a>
+    </div>
+    <div style="display:flex;gap:18px;overflow-x:auto;padding-bottom:6px;">
+      <div style="background:#FFFFFF;border-radius:18px;overflow:hidden;box-shadow:0 10px 26px -14px rgba(26,23,20,0.16);flex:0 0 220px;">
+        <div style="height:130px;background:repeating-linear-gradient(135deg,#F1ECE1,#F1ECE1 8px,#EAE3D4 8px,#EAE3D4 16px);"></div>
+        <div style="padding:14px 16px;"><div style="font-family:'Poppins',sans-serif;font-weight:600;font-size:14px;color:#1A1714;margin-bottom:6px;">Bathroom Cleaning</div><div style="display:flex;justify-content:space-between;font-size:13px;color:#9A948C;"><span>From ₹179</span><span>4.8 ★</span></div></div>
+      </div>
+      <div style="background:#FFFFFF;border-radius:18px;overflow:hidden;box-shadow:0 10px 26px -14px rgba(26,23,20,0.16);flex:0 0 220px;">
+        <div style="height:130px;background:repeating-linear-gradient(135deg,#F1ECE1,#F1ECE1 8px,#EAE3D4 8px,#EAE3D4 16px);"></div>
+        <div style="padding:14px 16px;"><div style="font-family:'Poppins',sans-serif;font-weight:600;font-size:14px;color:#1A1714;margin-bottom:6px;">AC Deep Clean</div><div style="display:flex;justify-content:space-between;font-size:13px;color:#9A948C;"><span>From ₹599</span><span>4.8 ★</span></div></div>
+      </div>
+      <div style="background:#FFFFFF;border-radius:18px;overflow:hidden;box-shadow:0 10px 26px -14px rgba(26,23,20,0.16);flex:0 0 220px;">
+        <div style="height:130px;background:repeating-linear-gradient(135deg,#F1ECE1,#F1ECE1 8px,#EAE3D4 8px,#EAE3D4 16px);"></div>
+        <div style="padding:14px 16px;"><div style="font-family:'Poppins',sans-serif;font-weight:600;font-size:14px;color:#1A1714;margin-bottom:6px;">Kitchen Cleaning</div><div style="display:flex;justify-content:space-between;font-size:13px;color:#9A948C;"><span>From ₹399</span><span>4.7 ★</span></div></div>
+      </div>
+      <div style="background:#FFFFFF;border-radius:18px;overflow:hidden;box-shadow:0 10px 26px -14px rgba(26,23,20,0.16);flex:0 0 220px;">
+        <div style="height:130px;background:repeating-linear-gradient(135deg,#F1ECE1,#F1ECE1 8px,#EAE3D4 8px,#EAE3D4 16px);"></div>
+        <div style="padding:14px 16px;"><div style="font-family:'Poppins',sans-serif;font-weight:600;font-size:14px;color:#1A1714;margin-bottom:6px;">Electrical Repair</div><div style="display:flex;justify-content:space-between;font-size:13px;color:#9A948C;"><span>From ₹179</span><span>4.7 ★</span></div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- TESTIMONIALS -->
+  <section style="padding:0 clamp(20px,5vw,64px) clamp(48px,6vw,72px);max-width:1280px;margin:0 auto;">
+    <h2 style="font-family:'Poppins',sans-serif;font-weight:700;font-size:clamp(20px,2vw,26px);color:#1A1714;margin:0 0 24px;">What our customers say</h2>
+    <div style="display:flex;gap:18px;overflow-x:auto;padding-bottom:6px;">
+      <div style="background:#FFFFFF;border:1px solid #ECE7DE;border-radius:18px;padding:22px;flex:0 0 300px;">
+        <div style="color:#F4A81D;margin-bottom:10px;">★★★★★</div>
+        <div style="font-size:14px;color:#2E2A26;line-height:1.6;margin-bottom:16px;">"On-time service and very polite staff. Highly recommend!"</div>
+        <div style="display:flex;align-items:center;gap:10px;"><span style="width:32px;height:32px;border-radius:100px;background:#ECE7DE;display:inline-block;"></span><span style="font-family:'Poppins',sans-serif;font-weight:600;font-size:13px;color:#1A1714;">Karthi Iyer</span></div>
+      </div>
+      <div style="background:#FFFFFF;border:1px solid #ECE7DE;border-radius:18px;padding:22px;flex:0 0 300px;">
+        <div style="color:#F4A81D;margin-bottom:10px;">★★★★☆</div>
+        <div style="font-size:14px;color:#2E2A26;line-height:1.6;margin-bottom:16px;">"Impressed by the professionals and attention to detail."</div>
+        <div style="display:flex;align-items:center;gap:10px;"><span style="width:32px;height:32px;border-radius:100px;background:#ECE7DE;display:inline-block;"></span><span style="font-family:'Poppins',sans-serif;font-weight:600;font-size:13px;color:#1A1714;">Our Workers</span></div>
+      </div>
+      <div style="background:#FFFFFF;border:1px solid #ECE7DE;border-radius:18px;padding:22px;flex:0 0 300px;">
+        <div style="color:#F4A81D;margin-bottom:10px;">★★★★★</div>
+        <div style="font-size:14px;color:#2E2A26;line-height:1.6;margin-bottom:16px;">"Reliable and trustworthy. Makes my life so much easier!"</div>
+        <div style="display:flex;align-items:center;gap:10px;"><span style="width:32px;height:32px;border-radius:100px;background:#ECE7DE;display:inline-block;"></span><span style="font-family:'Poppins',sans-serif;font-weight:600;font-size:13px;color:#1A1714;">Lana Cooper</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- FOOTER -->
+  <footer style="background:#111111;color:#B3ADA3;">
+    <div style="max-width:1280px;margin:0 auto;padding:clamp(28px,4vw,40px) clamp(20px,5vw,64px);border-bottom:1px solid #2A2622;display:flex;align-items:center;justify-content:space-between;gap:24px;flex-wrap:wrap;">
+      <div>
+        <div style="font-family:'Poppins',sans-serif;font-weight:700;font-size:clamp(18px,2vw,22px);color:#FFFFFF;margin-bottom:6px;">Home services, whenever you need them.</div>
+        <div style="font-size:13px;">Download the <span style="color:#F4A81D;">DODO Booker App</span></div>
+      </div>
+      <div style="display:flex;align-items:center;gap:24px;flex-wrap:wrap;">
+        <div style="display:flex;gap:10px;">
+          <div style="background:#1E1B17;border:1px solid #2A2622;border-radius:8px;padding:8px 14px;font-size:11px;color:#FFFFFF;">▶ Google Play</div>
+          <div style="background:#1E1B17;border:1px solid #2A2622;border-radius:8px;padding:8px 14px;font-size:11px;color:#FFFFFF;">🍎 App Store</div>
+        </div>
+        <div style="width:70px;height:90px;border-radius:12px;background:#1E1B17;overflow:hidden;flex-shrink:0;"><img src="assets/dodo-mascot.png" alt="DODO mascot" style="width:100%;height:100%;object-fit:cover;object-position:top;"/></div>
+      </div>
+    </div>
+
+    <div style="max-width:1280px;margin:0 auto;padding:clamp(32px,4vw,44px) clamp(20px,5vw,64px);display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:28px;">
+      <div>
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
+          <span style="width:24px;height:24px;border-radius:7px;background:#F4A81D;display:inline-block;"></span>
+          <span style="font-family:'Poppins',sans-serif;font-weight:700;font-size:13px;color:#FFFFFF;">DODO BOOKER</span>
+        </div>
+        <div style="font-size:12px;line-height:1.6;margin-bottom:14px;">Your trusted partner for home services.</div>
+        <div style="display:flex;gap:10px;font-size:13px;">
+          <span>f</span><span>ig</span><span>in</span>
+        </div>
+      </div>
+      <div>
+        <div style="font-family:'Poppins',sans-serif;font-weight:600;font-size:13px;color:#FFFFFF;margin-bottom:14px;">Services</div>
+        <div style="display:flex;flex-direction:column;gap:10px;font-size:13px;">
+          <span>AC Service</span><span>Home Cleaning</span><span>Plumbing</span><span>Electrical</span><span>Painting</span><span>View all</span>
+        </div>
+      </div>
+      <div>
+        <div style="font-family:'Poppins',sans-serif;font-weight:600;font-size:13px;color:#FFFFFF;margin-bottom:14px;">Service Areas</div>
+        <div style="display:flex;flex-direction:column;gap:10px;font-size:13px;">
+          <span>Hyderabad</span>
+        </div>
+      </div>
+      <div>
+        <div style="font-family:'Poppins',sans-serif;font-weight:600;font-size:13px;color:#FFFFFF;margin-bottom:14px;">Support</div>
+        <div style="display:flex;flex-direction:column;gap:10px;font-size:13px;">
+          <span>Help Center</span><span>Contact Us</span><span>Track Booking</span><span>Be a DODO Partner</span><span>Blog</span>
+        </div>
+      </div>
+      <div>
+        <div style="font-family:'Poppins',sans-serif;font-weight:600;font-size:13px;color:#FFFFFF;margin-bottom:14px;">Company</div>
+        <div style="display:flex;flex-direction:column;gap:10px;font-size:13px;">
+          <span>About Us</span><span>Careers</span><span>Partner With Us</span>
+        </div>
+      </div>
+      <div>
+        <div style="font-family:'Poppins',sans-serif;font-weight:600;font-size:13px;color:#FFFFFF;margin-bottom:14px;">Get the App</div>
+        <div style="font-size:12px;margin-bottom:14px;">Faster booking. Exclusive offers. Better experience.</div>
+        <div style="display:flex;flex-direction:column;gap:10px;">
+          <div style="background:#1E1B17;border:1px solid #2A2622;border-radius:8px;padding:8px 12px;font-size:11px;color:#FFFFFF;width:fit-content;">▶ Google Play</div>
+          <div style="background:#1E1B17;border:1px solid #2A2622;border-radius:8px;padding:8px 12px;font-size:11px;color:#FFFFFF;width:fit-content;">🍎 App Store</div>
+        </div>
+      </div>
+    </div>
+    <div style="border-top:1px solid #2A2622;padding:20px clamp(20px,5vw,64px);font-size:12px;text-align:center;">© 2026 DODO Booker. All rights reserved.</div>
+  </footer>
+
+</div>
+
+</x-dc>
+</body>
+</html>

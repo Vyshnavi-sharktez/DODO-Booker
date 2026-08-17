@@ -33,12 +33,19 @@ class _AddonsPageState extends ConsumerState<AddonsPage> {
       context: context,
       barrierDismissible: false,
       builder: (_) => AddonFormDialog(
-        onSave: ({required name, description, required price, required isActive}) =>
+        onSave: ({
+          required name,
+          description,
+          required price,
+          required isActive,
+          serviceId,
+        }) =>
             ref.read(allAddonsNotifierProvider.notifier).create(
                   name: name,
                   description: description,
                   price: price,
                   isActive: isActive,
+                  serviceId: serviceId,
                 ),
       ),
     );
@@ -50,13 +57,20 @@ class _AddonsPageState extends ConsumerState<AddonsPage> {
       barrierDismissible: false,
       builder: (_) => AddonFormDialog(
         existing: addon,
-        onSave: ({required name, description, required price, required isActive}) =>
+        onSave: ({
+          required name,
+          description,
+          required price,
+          required isActive,
+          serviceId,
+        }) =>
             ref.read(allAddonsNotifierProvider.notifier).update(
                   addon.id,
                   name: name,
                   description: description,
                   price: price,
                   isActive: isActive,
+                  serviceId: serviceId,
                 ),
       ),
     );
@@ -221,6 +235,7 @@ class _AddonsPageState extends ConsumerState<AddonsPage> {
                               AppColors.background),
                           columns: const [
                             DataColumn(label: Text('Name')),
+                            DataColumn(label: Text('Service')),
                             DataColumn(
                                 label: Text('Price'), numeric: true),
                             DataColumn(label: Text('Status')),
@@ -255,6 +270,34 @@ class _AddonsPageState extends ConsumerState<AddonsPage> {
                                       ),
                                   ],
                                 ),
+                              ),
+                              DataCell(
+                                addon.serviceId != null
+                                    ? Container(
+                                        padding: const EdgeInsets.symmetric(
+                                            horizontal: 8, vertical: 3),
+                                        decoration: BoxDecoration(
+                                          color: AppColors.primary
+                                              .withValues(alpha: 0.08),
+                                          borderRadius:
+                                              BorderRadius.circular(6),
+                                        ),
+                                        child: Text(
+                                          addon.serviceId!.substring(0, 8),
+                                          style: TextStyle(
+                                            fontSize: 11,
+                                            color: AppColors.primary,
+                                            fontWeight: FontWeight.w500,
+                                          ),
+                                        ),
+                                      )
+                                    : Text(
+                                        '—',
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          color: AppColors.textSecondary,
+                                        ),
+                                      ),
                               ),
                               DataCell(
                                 Text(

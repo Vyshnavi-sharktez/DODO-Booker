@@ -170,7 +170,7 @@ class _BookingCard extends StatelessWidget {
                         child: GestureDetector(
                           behavior: HitTestBehavior.opaque,
                           onTap: () => context
-                              .push('/service-detail/${booking.serviceId}'),
+                              .push('/catalog/${booking.serviceId}'),
                           child: Container(
                             padding: const EdgeInsets.symmetric(
                                 horizontal: 14, vertical: 5),
