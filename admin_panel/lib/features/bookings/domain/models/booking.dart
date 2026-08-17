@@ -81,6 +81,9 @@ class Booking {
   final double? longitude;
   final String? completionOtp;
   final String paymentMethod; // 'cash' | 'cod' | 'online' — mirrors DB default 'cash'
+  final bool? codCashCollected;
+  final String? codNotCollectedReason;
+  final DateTime? codConfirmedAt;
   final bool isAmc;
   final String? amcPlanName;
   final String? amcRecurrenceInterval;
@@ -131,6 +134,9 @@ class Booking {
     this.longitude,
     this.completionOtp,
     this.paymentMethod = 'cash',
+    this.codCashCollected,
+    this.codNotCollectedReason,
+    this.codConfirmedAt,
     this.isAmc = false,
     this.amcPlanName,
     this.amcRecurrenceInterval,
@@ -259,6 +265,11 @@ class Booking {
       longitude: (map['longitude'] as num?)?.toDouble(),
       completionOtp: map['completion_otp'] as String?,
       paymentMethod: map['payment_method'] as String? ?? 'cash',
+      codCashCollected: map['cod_cash_collected'] as bool?,
+      codNotCollectedReason: map['cod_not_collected_reason'] as String?,
+      codConfirmedAt: map['cod_confirmed_at'] != null
+          ? DateTime.tryParse(map['cod_confirmed_at'] as String)
+          : null,
       isAmc: map['is_amc'] as bool? ?? false,
       amcPlanName: map['amc_plan_name'] as String?,
       amcRecurrenceInterval: map['amc_recurrence_interval'] as String?,
@@ -324,6 +335,9 @@ class Booking {
     String? notes,
     String? completionOtp,
     List<BookingAddon>? addons,
+    bool? codCashCollected,
+    String? codNotCollectedReason,
+    DateTime? codConfirmedAt,
   }) {
     return Booking(
       id: id,
@@ -351,6 +365,9 @@ class Booking {
       longitude: longitude,
       completionOtp: completionOtp ?? this.completionOtp,
       paymentMethod: paymentMethod,
+      codCashCollected: codCashCollected ?? this.codCashCollected,
+      codNotCollectedReason: codNotCollectedReason ?? this.codNotCollectedReason,
+      codConfirmedAt: codConfirmedAt ?? this.codConfirmedAt,
       isAmc: isAmc,
       amcPlanName: amcPlanName,
       amcRecurrenceInterval: amcRecurrenceInterval,

@@ -25,4 +25,9 @@ abstract class IBookingsRepository {
     required String notificationType,
     required String entityId,
   });
+  Future<void> confirmCodCashCollection({
+    required String bookingId,
+    required bool cashCollected,
+    String? notCollectedReason,
+  });
 }
