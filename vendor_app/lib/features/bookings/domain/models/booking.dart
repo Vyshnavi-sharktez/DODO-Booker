@@ -26,6 +26,10 @@ class Booking {
     this.amcPlanName,
     this.amcRecurrenceInterval,
     this.amcContractId,
+    this.paymentMethod = 'cash',
+    this.codCashCollected,
+    this.codNotCollectedReason,
+    this.codConfirmedAt,
     this.dispatchStatus,
     this.lastDispatchAttemptAt,
     this.tierTimeoutSeconds = 60,
@@ -56,6 +60,10 @@ class Booking {
   final String? amcPlanName;
   final String? amcRecurrenceInterval;
   final String? amcContractId;
+  final String paymentMethod;
+  final bool? codCashCollected;
+  final String? codNotCollectedReason;
+  final DateTime? codConfirmedAt;
 
   // Dispatch fields
   final String? dispatchStatus;
@@ -63,6 +71,12 @@ class Booking {
   final int tierTimeoutSeconds;
 
   bool get isDodoTeam => assignmentType == 'DODO Team';
+
+  bool get isCod =>
+      paymentMethod.toLowerCase() == 'cash' || paymentMethod.toLowerCase() == 'cod';
+
+  bool get isCodCollectionPending =>
+      isCod && status == 'completed' && codConfirmedAt == null;
 
   bool get isWarrantyRework => (notes ?? '').contains('[WARRANTY REWORK]');
 
@@ -117,6 +131,12 @@ class Booking {
       amcPlanName: map['amc_plan_name'] as String?,
       amcRecurrenceInterval: map['amc_recurrence_interval'] as String?,
       amcContractId: map['amc_contract_id'] as String?,
+      paymentMethod: map['payment_method'] as String? ?? 'cash',
+      codCashCollected: map['cod_cash_collected'] as bool?,
+      codNotCollectedReason: map['cod_not_collected_reason'] as String?,
+      codConfirmedAt: map['cod_confirmed_at'] != null
+          ? DateTime.tryParse(map['cod_confirmed_at'] as String)
+          : null,
       dispatchStatus: map['dispatch_status'] as String?,
       lastDispatchAttemptAt: map['last_dispatch_attempt_at'] != null
           ? DateTime.tryParse(map['last_dispatch_attempt_at'] as String)
@@ -131,6 +151,9 @@ class Booking {
     String? dispatchStatus,
     DateTime? lastDispatchAttemptAt,
     int? tierTimeoutSeconds,
+    bool? codCashCollected,
+    String? codNotCollectedReason,
+    DateTime? codConfirmedAt,
   }) {
     return Booking(
       id: id,
@@ -157,6 +180,10 @@ class Booking {
       amcPlanName: amcPlanName,
       amcRecurrenceInterval: amcRecurrenceInterval,
       amcContractId: amcContractId,
+      paymentMethod: paymentMethod,
+      codCashCollected: codCashCollected ?? this.codCashCollected,
+      codNotCollectedReason: codNotCollectedReason ?? this.codNotCollectedReason,
+      codConfirmedAt: codConfirmedAt ?? this.codConfirmedAt,
       dispatchStatus: dispatchStatus ?? this.dispatchStatus,
       lastDispatchAttemptAt:
           lastDispatchAttemptAt ?? this.lastDispatchAttemptAt,

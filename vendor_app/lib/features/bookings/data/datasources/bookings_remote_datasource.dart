@@ -12,7 +12,8 @@ class BookingsRemoteDatasource {
     assignment_type, service_date,
     status, subtotal, discount_amount, total_amount,
     address, notes, created_at, rejection_reason, rejected_at,
-    completion_otp, otp_verified_at,
+    completion_otp, otp_verified_at, payment_method,
+    cod_cash_collected, cod_not_collected_reason, cod_confirmed_at,
     is_amc, amc_plan_name, amc_recurrence_interval, amc_contract_id,
     dispatch_status, current_dispatch_tier_priority, dispatch_started_at, last_dispatch_attempt_at,
     booking_items(
@@ -282,6 +283,18 @@ class BookingsRemoteDatasource {
       debugPrint('[BookingsRemoteDatasource] Error fetching evidence images: $e');
       return [];
     }
+  }
+
+  Future<void> confirmCodCashCollection({
+    required String bookingId,
+    required bool cashCollected,
+    String? notCollectedReason,
+  }) async {
+    await _client.from('bookings').update({
+      'cod_cash_collected': cashCollected,
+      'cod_not_collected_reason': cashCollected ? null : notCollectedReason,
+      'cod_confirmed_at': DateTime.now().toUtc().toIso8601String(),
+    }).eq('id', bookingId);
   }
 }
 

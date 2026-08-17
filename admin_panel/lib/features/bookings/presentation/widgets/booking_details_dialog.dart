@@ -410,6 +410,129 @@ class _BookingDetailsDialogState extends ConsumerState<BookingDetailsDialog> {
                     ),
                     const SizedBox(height: 20),
 
+                    if (booking.isCod) ...[
+                      _SectionLabel('COD Reconciliation'),
+                      const SizedBox(height: 12),
+                      _InfoRow('Payment Method', 'Cash on Delivery (COD)', bold: true),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 4),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            SizedBox(
+                              width: 140,
+                              child: Text(
+                                'Collection Status',
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  color: AppColors.textSecondary,
+                                ),
+                              ),
+                            ),
+                            Expanded(
+                              child: booking.codConfirmedAt == null
+                                  ? Container(
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 8, vertical: 4),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFFFEEBC8),
+                                        borderRadius: BorderRadius.circular(6),
+                                      ),
+                                      child: const Text(
+                                        'Pending Vendor Confirmation',
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          color: Color(0xFFDD6B20),
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                    )
+                                  : (booking.codCashCollected == true
+                                      ? Container(
+                                          padding: const EdgeInsets.symmetric(
+                                              horizontal: 8, vertical: 4),
+                                          decoration: BoxDecoration(
+                                            color: const Color(0xFFF0FFF4),
+                                            borderRadius:
+                                                BorderRadius.circular(6),
+                                            border: Border.all(
+                                                color: const Color(0xFFC6F6D5)),
+                                          ),
+                                          child: Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              const Icon(
+                                                  Icons.check_circle_rounded,
+                                                  size: 14,
+                                                  color: Color(0xFF38A169)),
+                                              const SizedBox(width: 4),
+                                              Text(
+                                                'Cash Collected (${_dateFmt.format(booking.codConfirmedAt!)})',
+                                                style: const TextStyle(
+                                                  fontSize: 12,
+                                                  color: Color(0xFF2F855A),
+                                                  fontWeight: FontWeight.bold,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        )
+                                      : Container(
+                                          padding: const EdgeInsets.all(8),
+                                          decoration: BoxDecoration(
+                                            color: const Color(0xFFFFF5F5),
+                                            borderRadius:
+                                                BorderRadius.circular(6),
+                                            border: Border.all(
+                                                color: const Color(0xFFFEB2B2)),
+                                          ),
+                                          child: Column(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
+                                            children: [
+                                              Row(
+                                                mainAxisSize: MainAxisSize.min,
+                                                children: [
+                                                  const Icon(
+                                                      Icons.cancel_rounded,
+                                                      size: 14,
+                                                      color: Color(0xFFE53E3E)),
+                                                  const SizedBox(width: 4),
+                                                  Text(
+                                                    'Cash Not Collected (${_dateFmt.format(booking.codConfirmedAt!)})',
+                                                    style: const TextStyle(
+                                                      fontSize: 12,
+                                                      color: Color(0xFFC53030),
+                                                      fontWeight:
+                                                          FontWeight.bold,
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                              if (booking.codNotCollectedReason !=
+                                                      null &&
+                                                  booking.codNotCollectedReason!
+                                                      .isNotEmpty) ...[
+                                                const SizedBox(height: 4),
+                                                Text(
+                                                  'Reason: ${booking.codNotCollectedReason}',
+                                                  style: const TextStyle(
+                                                    fontSize: 12,
+                                                    color: Color(0xFF9B2C2C),
+                                                    fontStyle: FontStyle.italic,
+                                                  ),
+                                                ),
+                                              ],
+                                            ],
+                                          ),
+                                        )),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 20),
+                    ],
+
                     _SectionLabel('Timestamps'),
                     const SizedBox(height: 12),
                     _InfoRow(
