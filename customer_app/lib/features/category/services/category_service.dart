@@ -143,7 +143,7 @@ class CategoryService {
     return results;
   }
 
-  // ── Add-ons (all active) ───────────────────────────────────────────────────
+  // ── Add-ons ────────────────────────────────────────────────────────────────
 
   Future<List<AddOnModel>> fetchAllActiveAddons() async {
     if (!_ready) {
@@ -155,6 +155,19 @@ class CategoryService {
         .from('addons')
         .select()
         .eq('is_active', true)
+        .order('name', ascending: true);
+    return (data as List)
+        .map((e) => AddOnModel.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  Future<List<AddOnModel>> fetchAddonsForService(String serviceId) async {
+    if (!_ready) return [];
+    final data = await _db
+        .from('addons')
+        .select()
+        .eq('is_active', true)
+        .eq('service_id', serviceId)
         .order('name', ascending: true);
     return (data as List)
         .map((e) => AddOnModel.fromJson(e as Map<String, dynamic>))

@@ -7,6 +7,9 @@ import '../../../routes/app_router.dart';
 import '../models/notification_model.dart';
 import '../services/notification_providers.dart';
 
+import '../../catalog/providers/catalog_providers.dart';
+import '../../catalog/widgets/catalog_service_detail_web_modal.dart';
+
 class NotificationsModal extends ConsumerStatefulWidget {
   const NotificationsModal({super.key});
 
@@ -39,17 +42,32 @@ class _NotificationsModalState extends ConsumerState<NotificationsModal> {
     }
   }
 
-  void _handleTap(NotificationModel n) {
-    debugPrint('[NOTIF][Customer] tapped — entity_type=${n.entityType}, entity_id=${n.entityId}');
+  Future<void> _handleTap(NotificationModel n) async {
+    debugPrint(
+        '[NOTIF][Customer] tapped — entity_type=${n.entityType}, entity_id=${n.entityId}, customer_question_id=${n.customerQuestionId}');
     _markRead(n);
-    if (n.entityType == 'booking' && n.entityId != null) {
-      // Capture the router BEFORE pop — after pop() this widget is unmounted
-      // and context.go() on a stale context silently no-ops.
-      final router = GoRouter.of(context);
-      final route = AppRoutes.notificationBooking.replaceFirst(':id', n.entityId!);
+    if (n.entityId == null) return;
+    if (n.entityType == 'booking') {
+      final route =
+          AppRoutes.notificationBooking.replaceFirst(':id', n.entityId!);
       debugPrint('[NOTIF][Customer] navigating → $route');
       Navigator.of(context).pop();
-      router.push(route);
+      GoRouter.of(context).push(route);
+    } else if (n.entityType == 'service_faq' ||
+        n.entityType == 'customer_question' ||
+        n.notificationType == 'question_answered') {
+      final serviceId = n.entityId!;
+      final questionId = n.customerQuestionId;
+      final targetContext = Navigator.of(context).context;
+      Navigator.of(context).pop();
+      final node = await ref.read(catalogServiceProvider).fetchNode(serviceId);
+      if (node != null && targetContext.mounted) {
+        CatalogServiceDetailWebModal.show(
+          targetContext,
+          node,
+          initialCustomerQuestionId: questionId,
+        );
+      }
     }
   }
 

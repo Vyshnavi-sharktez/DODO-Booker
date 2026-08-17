@@ -6,7 +6,8 @@ import '../../../features/category/services/category_providers.dart';
 import '../../../models/category_model.dart';
 import '../../../models/service_model.dart';
 import '../../../models/subcategory_model.dart';
-import '../../../features/service/utils/service_detail_launcher.dart';
+import '../../catalog/models/catalog_node_model.dart';
+import '../../catalog/utils/catalog_launcher.dart';
 
 // ── Public entry point ────────────────────────────────────────────────────────
 
@@ -20,7 +21,7 @@ class ServiceSelectionModal {
         category: category,
         onServiceResolved: (service) {
           Navigator.of(dialogContext).pop();
-          openServiceDetail(context, service);
+          openCatalogNode(context, CatalogNodeModel.fromServiceModel(service));
         },
       ),
     );

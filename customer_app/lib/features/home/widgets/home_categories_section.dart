@@ -262,19 +262,7 @@ class _CardInfo extends StatelessWidget {
                 height: 1.25,
               ),
             ),
-            if (node.description?.isNotEmpty == true) ...[
-              const SizedBox(height: 4),
-              Text(
-                node.description!,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  fontSize: 10,
-                  color: AppColors.textHint,
-                  height: 1.2,
-                ),
-              ),
-            ],
+
             const Spacer(),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,

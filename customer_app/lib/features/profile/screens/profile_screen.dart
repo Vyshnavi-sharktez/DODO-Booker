@@ -10,8 +10,8 @@ import '../../../routes/app_router.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../../auth/utils/auth_modal_gate.dart';
 import '../../address/screens/address_screen.dart';
-import '../../wishlist/screens/wishlist_screen.dart';
 import 'settings_screen.dart';
+import '../../amc/screens/amc_plans_page.dart';
 import '../../bookings/utils/my_bookings_launcher.dart';
 import '../../warranties/screens/my_warranties_screen.dart';
 class ProfileScreen extends ConsumerWidget {
@@ -111,25 +111,6 @@ class _ProfileBody extends ConsumerWidget {
 
               _FloatingCard(
                 child: ProfileMenuTile(
-                  icon: Icons.favorite_rounded,
-                  iconColor: const Color(0xFFE91E63),
-                  title: 'Wishlist',
-                  subtitle: 'Services you have saved',
-                  onTap: () => _openResponsive(
-                    context,
-                    desktopModal: () => PageSheet.show(
-                      context,
-                      title: 'Wishlist',
-                      child: const WishlistScreen(inModal: true),
-                    ),
-                    mobileRoute: () => context.push(AppRoutes.wishlist),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 12),
-
-              _FloatingCard(
-                child: ProfileMenuTile(
                   icon: Icons.receipt_long_rounded,
                   iconColor: Colors.blue,
                   title: 'My Bookings',
@@ -146,7 +127,15 @@ class _ProfileBody extends ConsumerWidget {
                   iconColor: AppColors.primary,
                   title: 'AMC Plans',
                   subtitle: 'Your Annual Maintenance Contracts',
-                  onTap: () => context.push(AppRoutes.amcPlans),
+                  onTap: () => _openResponsive(
+                    context,
+                    desktopModal: () => PageSheet.show(
+                      context,
+                      title: 'My AMC Plans',
+                      child: const AmcPlansPage(inModal: true),
+                    ),
+                    mobileRoute: () => context.push(AppRoutes.amcPlans),
+                  ),
                 ),
               ),
 
@@ -158,9 +147,15 @@ class _ProfileBody extends ConsumerWidget {
                   iconColor: const Color(0xFF38A169),
                   title: 'My Warranties',
                   subtitle: 'View warranty certificates and claim tracking',
-                  onTap: () => Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => const MyWarrantiesScreen(),
+                  onTap: () => _openResponsive(
+                    context,
+                    desktopModal: () => PageSheet.show(
+                      context,
+                      title: 'My Warranties',
+                      child: const MyWarrantiesScreen(inModal: true),
+                    ),
+                    mobileRoute: () => Navigator.of(context).push(
+                      MaterialPageRoute(builder: (_) => const MyWarrantiesScreen()),
                     ),
                   ),
                 ),

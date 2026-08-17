@@ -24,6 +24,7 @@ import '../../loyalty/utils/loyalty_utils.dart';
 import '../../wishlist/widgets/heart_button.dart';
 import '../models/catalog_node_model.dart';
 import '../providers/catalog_providers.dart';
+import 'catalog_service_detail_web_modal.dart';
 import 'catalog_unavailability_widgets.dart';
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -795,15 +796,25 @@ class _ModalChildrenList extends StatelessWidget {
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
             itemCount: children.length,
             separatorBuilder: (_, _) => const SizedBox(height: 10),
-            itemBuilder: (ctx, i) => _ModalChildItem(
-              node: children[i],
-              parentNodeId: node.id,
-              onTap: () => CatalogNodeModal.open(
-                ctx,
-                children[i],
-                parentId: node.id,
-              ),
-            ),
+            itemBuilder: (ctx, i) {
+              final child = children[i];
+              return _ModalChildItem(
+                node: child,
+                parentNodeId: node.id,
+                onTap: () {
+                  if (child.isLeafBookable) {
+                    if (MediaQuery.of(ctx).size.width >= 768) {
+                      CatalogServiceDetailWebModal.show(ctx, child,
+                          parentId: node.id);
+                    } else {
+                      ctx.push('/catalog/${child.id}', extra: child);
+                    }
+                  } else {
+                    CatalogNodeModal.open(ctx, child, parentId: node.id);
+                  }
+                },
+              );
+            },
           ),
       ],
     );
@@ -929,18 +940,7 @@ class _ModalChildItemState extends State<_ModalChildItem> {
                           ],
                         ),
                       ],
-                      if (node.description?.isNotEmpty == true) ...[
-                        const SizedBox(height: 2),
-                        Text(
-                          node.description!,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            fontSize: 12,
-                            color: AppColors.textSecondary,
-                          ),
-                        ),
-                      ],
+
                       const SizedBox(height: 5),
                       Row(
                         children: [

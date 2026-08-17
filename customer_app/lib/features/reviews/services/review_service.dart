@@ -46,10 +46,10 @@ class ReviewService {
 
     if (bookingIds.isEmpty) return [];
 
-    // Step 2 — fetch reviews for those bookings
+    // Step 2 — fetch reviews for those bookings, joining customer name
     final data = await _client
         .from('customer_reviews')
-        .select('*')
+        .select('*, customers(full_name)')
         .inFilter('booking_id', bookingIds)
         .order('created_at', ascending: false);
 

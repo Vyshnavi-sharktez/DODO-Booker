@@ -1,6 +1,8 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../domain/models/service_addon.dart';
 
+const _nullSentinel = Object();
+
 class ServiceAddonsRepository {
   final SupabaseClient _supabase;
 
@@ -21,6 +23,7 @@ class ServiceAddonsRepository {
     String? description,
     required double price,
     required bool isActive,
+    String? serviceId,
   }) async {
     final data = await _supabase
         .from('addons')
@@ -30,6 +33,7 @@ class ServiceAddonsRepository {
             'description': description,
           'price': price,
           'is_active': isActive,
+          if (serviceId != null) 'service_id': serviceId,
         })
         .select()
         .single();
@@ -42,6 +46,7 @@ class ServiceAddonsRepository {
     String? description,
     required double price,
     required bool isActive,
+    Object? serviceId = _nullSentinel,
   }) async {
     final data = await _supabase
         .from('addons')
@@ -50,6 +55,8 @@ class ServiceAddonsRepository {
           'description': description,
           'price': price,
           'is_active': isActive,
+          // Explicitly write null to clear service_id when deselected.
+          'service_id': serviceId == _nullSentinel ? null : serviceId,
         })
         .eq('id', id)
         .select()

@@ -75,7 +75,8 @@ class CatalogService {
       final data = await _db
           .from('service_faqs')
           .select()
-          .eq('node_id', nodeId);
+          .eq('service_id', nodeId)
+          .order('sort_order', ascending: true);
       return (data as List)
           .map((e) => FaqModel.fromJson(e as Map<String, dynamic>))
           .toList();

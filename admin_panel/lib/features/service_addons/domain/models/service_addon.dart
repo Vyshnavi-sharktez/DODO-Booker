@@ -4,6 +4,7 @@ class ServiceAddon {
   final String? description;
   final double price;
   final bool isActive;
+  final String? serviceId;
   final DateTime? createdAt;
 
   const ServiceAddon({
@@ -12,6 +13,7 @@ class ServiceAddon {
     this.description,
     required this.price,
     required this.isActive,
+    this.serviceId,
     this.createdAt,
   });
 
@@ -22,6 +24,7 @@ class ServiceAddon {
       description: map['description'] as String?,
       price: (map['price'] as num?)?.toDouble() ?? 0.0,
       isActive: map['is_active'] as bool? ?? true,
+      serviceId: map['service_id'] as String?,
       createdAt: map['created_at'] != null
           ? DateTime.tryParse(map['created_at'] as String)
           : null,
@@ -33,6 +36,7 @@ class ServiceAddon {
     String? description,
     double? price,
     bool? isActive,
+    Object? serviceId = _sentinel,
   }) {
     return ServiceAddon(
       id: id,
@@ -40,7 +44,13 @@ class ServiceAddon {
       description: description ?? this.description,
       price: price ?? this.price,
       isActive: isActive ?? this.isActive,
+      serviceId: serviceId == _sentinel
+          ? this.serviceId
+          : serviceId as String?,
       createdAt: createdAt,
     );
   }
 }
+
+// Sentinel for copyWith optional nullable field.
+const _sentinel = Object();

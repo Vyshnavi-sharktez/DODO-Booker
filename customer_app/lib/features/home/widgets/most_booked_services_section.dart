@@ -367,20 +367,7 @@ class _CardInfo extends StatelessWidget {
               ),
             ),
 
-            // ── Description ───────────────────────────────────────────
-            if (hasDesc) ...[
-              const SizedBox(height: 3),
-              Text(
-                service.description!,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  fontSize: 11,
-                  color: cs.onSurfaceVariant,
-                  height: 1.35,
-                ),
-              ),
-            ],
+
 
             const Spacer(),
 

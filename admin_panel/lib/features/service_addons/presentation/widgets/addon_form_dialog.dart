@@ -1,14 +1,18 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/theme/app_theme.dart';
+import '../../../catalog_v2/application/providers/catalog_node_providers.dart';
+import '../../../catalog_v2/domain/models/catalog_node.dart';
 import '../../domain/models/service_addon.dart';
 
-class AddonFormDialog extends StatefulWidget {
+class AddonFormDialog extends ConsumerStatefulWidget {
   final ServiceAddon? existing;
   final Future<void> Function({
     required String name,
     String? description,
     required double price,
     required bool isActive,
+    String? serviceId,
   }) onSave;
 
   const AddonFormDialog({
@@ -18,14 +22,15 @@ class AddonFormDialog extends StatefulWidget {
   });
 
   @override
-  State<AddonFormDialog> createState() => _AddonFormDialogState();
+  ConsumerState<AddonFormDialog> createState() => _AddonFormDialogState();
 }
 
-class _AddonFormDialogState extends State<AddonFormDialog> {
+class _AddonFormDialogState extends ConsumerState<AddonFormDialog> {
   final _formKey = GlobalKey<FormState>();
   late final TextEditingController _name;
   late final TextEditingController _price;
   late bool _isActive;
+  String? _selectedServiceId;
   bool _saving = false;
 
   @override
@@ -37,6 +42,7 @@ class _AddonFormDialogState extends State<AddonFormDialog> {
       text: e != null ? e.price.toStringAsFixed(2) : '',
     );
     _isActive = e?.isActive ?? true;
+    _selectedServiceId = e?.serviceId;
   }
 
   @override
@@ -54,6 +60,7 @@ class _AddonFormDialogState extends State<AddonFormDialog> {
         name: _name.text.trim(),
         price: double.parse(_price.text.trim()),
         isActive: _isActive,
+        serviceId: _selectedServiceId,
       );
       if (mounted) Navigator.of(context).pop();
     } catch (e) {
@@ -73,6 +80,11 @@ class _AddonFormDialogState extends State<AddonFormDialog> {
   @override
   Widget build(BuildContext context) {
     final isEdit = widget.existing != null;
+    final nodesAsync = ref.watch(catalogNodeNotifierProvider);
+    final leafNodes = nodesAsync.valueOrNull
+            ?.where((n) => n.isBookable && n.childrenCount == 0)
+            .toList() ??
+        [];
 
     return Dialog(
       insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
@@ -83,7 +95,7 @@ class _AddonFormDialogState extends State<AddonFormDialog> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // ── Header ──────────────────────────────────────────────────────
+            // ── Header ────────────────────────────────────────────────────
             Container(
               padding: const EdgeInsets.fromLTRB(24, 20, 16, 20),
               decoration: BoxDecoration(
@@ -119,7 +131,7 @@ class _AddonFormDialogState extends State<AddonFormDialog> {
               ),
             ),
 
-            // ── Form ────────────────────────────────────────────────────────
+            // ── Form ──────────────────────────────────────────────────────
             Flexible(
               child: SingleChildScrollView(
                 padding: const EdgeInsets.all(24),
@@ -158,6 +170,16 @@ class _AddonFormDialogState extends State<AddonFormDialog> {
                           return null;
                         },
                       ),
+                      const SizedBox(height: 16),
+
+                      // Service assignment
+                      _ServiceSelector(
+                        leafNodes: leafNodes,
+                        selectedId: _selectedServiceId,
+                        loading: nodesAsync.isLoading,
+                        onChanged: (id) =>
+                            setState(() => _selectedServiceId = id),
+                      ),
                       const SizedBox(height: 20),
 
                       // Active toggle
@@ -176,11 +198,11 @@ class _AddonFormDialogState extends State<AddonFormDialog> {
               ),
             ),
 
-            // ── Footer ──────────────────────────────────────────────────────
+            // ── Footer ────────────────────────────────────────────────────
             Container(
               padding: const EdgeInsets.fromLTRB(24, 12, 24, 20),
-              decoration:
-                  BoxDecoration(border: Border(top: BorderSide(color: AppColors.border))),
+              decoration: BoxDecoration(
+                  border: Border(top: BorderSide(color: AppColors.border))),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
@@ -222,58 +244,78 @@ class _AddonFormDialogState extends State<AddonFormDialog> {
   }
 }
 
-// ── Shared helpers ─────────────────────────────────────────────────────────────
+// ── Service selector ──────────────────────────────────────────────────────────
 
-class _ContextRow extends StatelessWidget {
-  final String label;
-  final String name;
-  final IconData icon;
-
-  const _ContextRow({
-    required this.label,
-    required this.name,
-    required this.icon,
+class _ServiceSelector extends StatelessWidget {
+  const _ServiceSelector({
+    required this.leafNodes,
+    required this.selectedId,
+    required this.loading,
+    required this.onChanged,
   });
+
+  final List<CatalogNode> leafNodes;
+  final String? selectedId;
+  final bool loading;
+  final ValueChanged<String?> onChanged;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      decoration: BoxDecoration(
-        color: AppColors.primary.withValues(alpha: 0.05),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: AppColors.primary.withValues(alpha: 0.18)),
-      ),
-      child: Row(
-        children: [
-          Icon(icon, size: 16, color: AppColors.primary),
-          const SizedBox(width: 8),
-          Text(
-            '$label:',
-            style: TextStyle(
-              fontSize: 12,
-              color: AppColors.textSecondary,
-              fontWeight: FontWeight.w500,
-            ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Assign to Service',
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w500,
+            color: AppColors.textSecondary,
           ),
-          const SizedBox(width: 6),
-          Expanded(
-            child: Text(
-              name,
-              style: const TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-                color: AppColors.textPrimary,
+        ),
+        const SizedBox(height: 6),
+        loading
+            ? const SizedBox(
+                height: 48,
+                child: Center(
+                    child: CircularProgressIndicator(strokeWidth: 2)),
+              )
+            : DropdownButtonFormField<String?>(
+                value: selectedId,
+                isExpanded: true,
+                decoration: const InputDecoration(
+                  hintText: 'No service (unassigned)',
+                  contentPadding:
+                      EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                ),
+                items: [
+                  const DropdownMenuItem<String?>(
+                    value: null,
+                    child: Text('No service (unassigned)',
+                        style: TextStyle(color: AppColors.textSecondary)),
+                  ),
+                  ...leafNodes.map((n) => DropdownMenuItem<String?>(
+                        value: n.id,
+                        child: Text(
+                          n.parentName != null
+                              ? '${n.parentName} › ${n.name}'
+                              : n.name,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      )),
+                ],
+                onChanged: onChanged,
               ),
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-          Icon(Icons.lock_outline, size: 13, color: AppColors.textSecondary),
-        ],
-      ),
+        const SizedBox(height: 4),
+        Text(
+          'Customers see only the add-ons assigned to the service they are viewing.',
+          style: TextStyle(fontSize: 11, color: AppColors.textSecondary),
+        ),
+      ],
     );
   }
 }
+
+// ── Toggle row ────────────────────────────────────────────────────────────────
 
 class _ToggleRow extends StatelessWidget {
   final IconData icon;

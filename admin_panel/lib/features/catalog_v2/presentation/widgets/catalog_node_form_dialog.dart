@@ -343,6 +343,17 @@ class _CatalogNodeFormDialogState extends State<CatalogNodeFormDialog> {
                 ),
                 const SizedBox(height: 14),
                 TextFormField(
+                  controller: _description,
+                  decoration: const InputDecoration(
+                    labelText: 'Description',
+                    hintText: 'Describe this service for customers…',
+                    alignLabelWithHint: true,
+                  ),
+                  maxLines: 4,
+                  textCapitalization: TextCapitalization.sentences,
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
                   controller: _basePrice,
                   decoration: const InputDecoration(
                     labelText: 'Base Price (₹)',

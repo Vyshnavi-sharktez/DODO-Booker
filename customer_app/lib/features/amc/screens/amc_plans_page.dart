@@ -5,10 +5,34 @@ import '../providers/amc_plans_provider.dart';
 import '../screens/amc_contract_details_screen.dart';
 
 class AmcPlansPage extends StatelessWidget {
-  const AmcPlansPage({super.key});
+  final bool inModal;
+  const AmcPlansPage({super.key, this.inModal = false});
+
+  static const _tabs = [Tab(text: 'My Plans'), Tab(text: 'Pause & Resume')];
+  static const _tabViews = [_PlansTab(), _PauseResumeTab()];
 
   @override
   Widget build(BuildContext context) {
+    if (inModal) {
+      return DefaultTabController(
+        length: 2,
+        child: Column(
+          children: [
+            TabBar(
+              tabs: _tabs,
+              labelColor: AppColors.primary,
+              unselectedLabelColor: AppColors.textSecondary,
+              indicatorColor: AppColors.primary,
+              indicatorWeight: 2,
+              labelStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+            ),
+            const Divider(height: 1, color: AppColors.divider),
+            const Expanded(child: TabBarView(children: _tabViews)),
+          ],
+        ),
+      );
+    }
+
     return DefaultTabController(
       length: 2,
       child: Scaffold(
@@ -18,22 +42,14 @@ class AmcPlansPage extends StatelessWidget {
           backgroundColor: AppColors.primary,
           foregroundColor: Colors.white,
           bottom: const TabBar(
-            tabs: [
-              Tab(text: 'My Plans'),
-              Tab(text: 'Pause & Resume'),
-            ],
+            tabs: _tabs,
             indicatorColor: Colors.white,
             labelColor: Colors.white,
             unselectedLabelColor: Colors.white70,
             labelStyle: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
           ),
         ),
-        body: const TabBarView(
-          children: [
-            _PlansTab(),
-            _PauseResumeTab(),
-          ],
-        ),
+        body: const TabBarView(children: _tabViews),
       ),
     );
   }
