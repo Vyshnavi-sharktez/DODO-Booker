@@ -99,7 +99,7 @@ Urban Indian households are increasingly comfortable booking services digitally.
 
 **Pain points:** Irregular customer flow, unclear commission deductions, no platform-backed credibility signal.
 
-**Access model:** Authenticated app user. Single login per vendor organization (owner). Online/offline toggle governs dispatch eligibility.
+**Access model:** Authenticated on Android, iOS, and web/desktop. Single login per vendor organization (owner). Online/offline toggle governs dispatch eligibility.
 
 ---
 
@@ -151,7 +151,9 @@ Urban Indian households are increasingly comfortable booking services digitally.
 - Customer questions and admin answers (Q&A)
 - Admin-curated service showcase (before/after images)
 - GPS-based geofencing and customer cancellation audit
+- Vendor app on Android, iOS, and web/desktop
 - Vendor subscription plans (infrastructure; enforcement to be activated)
+- Admin audit log for important administrative and financial actions
 - Admin panel: full catalog, booking, vendor, customer, financial, SEO, and CMS management
 - Platform CMS: landing page sections, blogs, banners, static pages
 - SEO management: per-service metadata, location pages, sitemap, redirects
@@ -168,9 +170,7 @@ Urban Indian households are increasingly comfortable booking services digitally.
 - Automated refund processing via payment gateway
 - Bulk/segment push notifications to customers or vendors
 - Third-party SMS or push delivery (channel infrastructure exists but delivery is not confirmed active)
-- Audit logs for admin actions
 - Customer account deletion
-- Vendor app web version
 
 ---
 
@@ -204,7 +204,7 @@ Urban Indian households are increasingly comfortable booking services digitally.
 
 **FR-BK-5:** Customers must be able to select an optional addon at booking time. Addons must have their own price.
 
-**FR-BK-6:** Customers may select a preferred vendor if the service has preferred vendors configured. Selecting a preferred vendor adds a preferred-vendor fee to the booking.
+**FR-BK-6:** Customers may select a preferred vendor from vendors who are currently online and available at the time of booking. Selecting a preferred vendor adds a preferred-vendor fee to the booking.
 
 ---
 
@@ -221,6 +221,8 @@ Urban Indian households are increasingly comfortable booking services digitally.
 **FR-PAY-5:** Admin must be able to see why a vendor is ineligible for COD assignments (current balance and required minimum must both be visible on the vendor record).
 
 **FR-PAY-6:** Payment gateway credentials must be configurable by admin without a code change.
+
+**FR-PAY-7:** For COD bookings, the vendor must confirm in-app that cash has been collected from the customer. This confirmation must occur as part of the job completion flow and is required before the booking can transition to Completed. Admin must be able to view and reconcile all COD cash collections from the admin panel.
 
 ---
 
@@ -434,6 +436,8 @@ Urban Indian households are increasingly comfortable booking services digitally.
 
 **FR-ADM-5:** Admin must be able to send an individual notification to any customer or vendor.
 
+**FR-ADM-6:** Important administrative and financial actions must be individually logged. Logged actions include: manual wallet penalties, settlement approvals, vendor suspensions and reinstatements, and commission rule changes. Each log entry must record the acting admin, timestamp, action type, and relevant details. The audit log must be viewable by admins with the appropriate permission. Audit log entries are immutable.
+
 ---
 
 ## 6. Non-Functional Requirements
@@ -450,7 +454,7 @@ Urban Indian households are increasingly comfortable booking services digitally.
 
 **NFR-6 Scalability:** Adding a new city, service category, commission rule, or pricing configuration must require only admin data entry — no code deployment.
 
-**NFR-7 Audit Trail:** All wallet deductions must be individually recorded with type, amount, balance after, date, and reason. Manual penalties must additionally record the admin who applied them.
+**NFR-7 Audit Trail:** All wallet deductions must be individually recorded with type, amount, balance after, date, and reason. Manual penalties must additionally record the admin who applied them. Important administrative and financial actions must be individually logged with the acting admin, timestamp, action type, and relevant details. All audit log entries are append-only and cannot be edited or deleted.
 
 **NFR-8 Accessibility:** The customer app must be usable in both English and the target regional languages (language list to be defined before launch).
 
@@ -481,7 +485,8 @@ Urban Indian households are increasingly comfortable booking services digitally.
 6. Vendor completes the job.
 7. Vendor taps Complete and uploads an after-photo.
 8. Vendor requests the OTP from the customer and enters it.
-9. Booking is marked Completed. Vendor's commission is deducted from security bond.
+9. For COD bookings, vendor confirms in-app that cash has been collected.
+10. Booking is marked Completed. Vendor's commission is deducted from security bond.
 
 ### 7.3 Customer Claims a Warranty
 
@@ -552,7 +557,7 @@ Urban Indian households are increasingly comfortable booking services digitally.
 
 - Admin actively monitors the dispatch dashboard and intervenes when bookings exhaust all eligible vendors.
 - Vendors are responsible for maintaining their security-bond balance above the minimum to remain eligible for COD assignments. A vendor below the minimum can still receive non-COD bookings.
-- COD cash collection by vendors is handled operationally — the system records the booking outcome but does not enforce in-app cash confirmation (this is an open decision).
+- COD cash collection is confirmed by the vendor within the app as part of the job completion flow. Admin reconciles COD cash collections through the admin panel.
 - Warranty rework jobs are assigned to the original vendor where possible. If the original vendor is unavailable, admin assigns manually.
 
 ### 8.3 Technical Constraints (Without Implementation Detail)
@@ -576,36 +581,6 @@ These questions cannot be resolved from existing product requirements and confir
 
 ---
 
-**OPD-1: Vendor Authentication in Production**
-The current vendor login mechanism is a development placeholder — it does not support self-service vendor registration or real OTP delivery. What is the intended production mechanism? Self-service phone OTP via an SMS gateway? Password-based login with OTP reset? This must be decided before any vendor onboards to production.
-
----
-
-**OPD-2: Vendor Subscription Enforcement Activation**
-The subscription system infrastructure is built but is currently disabled. When should subscription enforcement be activated? And when it is enabled: does every vendor require a subscription to receive bookings, or is subscription optional with benefits as incentive?
-
----
-
-**OPD-3: COD Cash Collection Confirmation**
-When a COD job is completed, no in-app confirmation of cash receipt exists. Should vendors be required to confirm cash collection within the app before the booking is finalized? Or is the current model — admin manually records COD receipts — the intended long-term behavior?
-
----
-
-**OPD-4: Customer Cancellation Policy**
-There is currently no cancellation fee. Should customers be charged a cancellation fee? If yes: under what conditions (vendor already dispatched, vendor within geofence, within N hours of the booking slot)? Is the fee a fixed amount or a percentage of the booking value?
-
----
-
-**OPD-5: Preferred Vendor — Fallback Behavior**
-When a customer selects a preferred vendor and that vendor is unavailable or rejects the booking, what happens? Does the booking silently fall back to standard dispatch? Is the customer notified? Is the preferred vendor surcharge still applied if a different vendor is assigned? Can the customer choose to wait only for their preferred vendor?
-
----
-
-**OPD-6: Warranty Scope — Per-Service Configuration**
-Warranties are currently issued for every completed booking with no exceptions. Should admin be able to disable warranty issuance per service? Should the warranty duration be configurable per service (in addition to the global default)?
-
----
-
 **OPD-7: Refund Policy and Process**
 The platform collects payment but has no defined refund policy. Under what conditions can a customer receive a refund (cancellation window, service failure, warranty rejection)? Is a refund returned to the original payment method, or issued as platform credit? When a refund is approved, is the vendor's commission clawed back from their security bond?
 
@@ -616,23 +591,8 @@ The completion OTP has no expiry. Should it expire after a time limit (e.g. 30 m
 
 ---
 
-**OPD-9: Loyalty Redemption Rules**
-Is the current redemption model (1 point = ₹1, cap 20% of order) the confirmed long-term policy? Should any services be excluded from loyalty point redemption? Should per-service earning overrides also allow setting a service as non-redeemable?
-
----
-
-**OPD-10: Support Ticket System**
-No customer or vendor support ticket system exists. What are the expected channels (in-app ticket, email, WhatsApp)? What ticket categories should be exposed to customers vs. vendors? What are the SLA tiers? Can a warranty claim automatically create a support ticket?
-
----
-
 **OPD-11: Catalog V1 Deprecation**
 The admin panel contains a legacy service catalog that predates the current catalog system. Should it be removed? Does any existing service data need to be migrated to the current catalog before the legacy system is decommissioned?
-
----
-
-**OPD-12: Audit Logs for Admin Actions**
-Admin actions (manual penalty, settlement approval, vendor suspension, commission rule changes) currently leave no audit trail. Should all admin actions be logged? Who can view the audit log — super admin only, or all admins with a specific permission?
 
 ---
 
@@ -675,6 +635,8 @@ Admin actions (manual penalty, settlement approval, vendor suspension, commissio
 - [ ] A vendor with balance ≥ minimum can receive COD booking assignments.
 - [ ] A vendor with balance < minimum cannot receive COD booking assignments, even if they are online and active.
 - [ ] Admin can see a vendor's current balance and the minimum required balance when reviewing a vendor record.
+- [ ] For a COD booking, the vendor cannot mark the job as Completed without first confirming cash collection within the app.
+- [ ] Admin can view and reconcile all COD cash collection confirmations from the admin panel.
 
 ### 10.6 Settlements
 
@@ -715,6 +677,15 @@ Admin actions (manual penalty, settlement approval, vendor suspension, commissio
 - [ ] Changing the global commission rate takes effect on the next booking completion without a code deployment.
 - [ ] Changing the minimum security-bond balance takes effect on the next booking assignment attempt without a code deployment.
 - [ ] Adding a new admin role with specific permissions takes effect immediately for any admin user assigned that role.
+
+### 10.12 Admin Audit Log
+
+- [ ] Applying a manual penalty to a vendor's wallet creates an audit log entry recording the acting admin, timestamp, amount, and reason.
+- [ ] Approving a settlement creates an audit log entry.
+- [ ] Suspending or reinstating a vendor creates an audit log entry.
+- [ ] Changing a commission rule creates an audit log entry.
+- [ ] Audit log entries cannot be edited or deleted.
+- [ ] An admin with the appropriate permission can view the audit log; admins without that permission cannot access it.
 
 ---
 
