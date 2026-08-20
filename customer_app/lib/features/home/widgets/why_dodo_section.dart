@@ -1,3 +1,4 @@
+import 'dart:ui' show ImageFilter;
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../../core/constants/app_colors.dart';
@@ -25,34 +26,34 @@ class WhyDodoItem {
   }
 }
 
-// ── Default items (approved Phase 1 numbered design) ─────────────────────────
+// ── Default items ─────────────────────────────────────────────────────────────
 
 const _kDefaultItems = [
-  _TrustItem(
-    number: '01',
-    icon: Icons.verified_user_rounded,
+  _TrustGridItem(
+    icon: Icons.verified_user_outlined,
     title: 'Verified Professionals',
     description:
-        'Every service provider is background-checked and certified before joining our platform.',
-    circleColor: AppColors.primary,
-    circleTextColor: Colors.white,
+        'All professionals are verified, trained and experienced.',
+    hasDivider: true,
   ),
-  _TrustItem(
-    number: '02',
-    icon: Icons.receipt_long_rounded,
+  _TrustGridItem(
+    icon: Icons.sell_outlined,
     title: 'Transparent Pricing',
-    description:
-        'No hidden charges — what you see is what you pay. Get instant quotes upfront.',
-    circleColor: Color(0xFFD0CBC5),
-    circleTextColor: AppColors.primary,
+    description: 'No hidden charges. Know the price before you book.',
+    hasDivider: true,
   ),
-  _TrustItem(
-    number: '03',
-    icon: Icons.timer_rounded,
-    title: 'Reliable & On-Time',
-    description: 'We value your time. On-time, every time.',
-    circleColor: AppColors.gold,
-    circleTextColor: AppColors.primary,
+  _TrustGridItem(
+    icon: Icons.checklist_outlined,
+    title: 'Services for Every Need',
+    description:
+        'From cleaning to repairs, we have every service you need.',
+    hasDivider: false,
+  ),
+  _TrustGridItem(
+    icon: Icons.access_time_outlined,
+    title: 'On-Time & Reliable',
+    description: 'We value your time and ensure on-time service every time.',
+    hasDivider: false,
   ),
 ];
 
@@ -66,304 +67,406 @@ class WhyDodoSection extends StatelessWidget {
     this.items,
   });
 
-  /// Section heading. Defaults to 'Why Choose DODO Booker?'.
   final String? title;
-
-  /// Sub-heading. Defaults to the approved copy.
   final String? subtitle;
-
-  /// Trust items from CMS config. Falls back to hardcoded defaults when null.
   final List<WhyDodoItem>? items;
 
   @override
   Widget build(BuildContext context) {
-    final effectiveTitle = title ?? 'Why Choose DODO Booker?';
-    final effectiveSubtitle =
-        subtitle ?? 'Everything you need for a seamless home services experience.';
+    final effectiveTitle = title ?? 'Why People Choose DODO?';
 
-    // Build the _TrustItem list from CMS items or fall back to approved defaults.
-    // CMS items get auto-assigned numbered circles cycling through the approved palette.
-    final List<_TrustItem> trustItems;
+    final List<_TrustGridItem> gridItems;
     final cmsList = items;
     if (cmsList != null && cmsList.isNotEmpty) {
-      const bgs = [AppColors.primary, Color(0xFFD0CBC5), AppColors.gold];
-      const fgs = [Colors.white, AppColors.primary, AppColors.primary];
-      trustItems = [
+      gridItems = [
         for (int i = 0; i < cmsList.length; i++)
-          _TrustItem(
-            number: (i + 1).toString().padLeft(2, '0'),
+          _TrustGridItem(
             icon: cmsList[i].icon,
             title: cmsList[i].title,
             description: cmsList[i].description,
-            circleColor: bgs[i % bgs.length],
-            circleTextColor: fgs[i % fgs.length],
+            hasDivider: i < (cmsList.length ~/ 2),
           ),
       ];
     } else {
-      trustItems = _kDefaultItems;
+      gridItems = _kDefaultItems;
     }
 
-    final width = MediaQuery.of(context).size.width;
-    final isDesktop = width >= 768;
+    final w = MediaQuery.sizeOf(context).width;
+    final isDesktop = w >= 768;
+    final hPad = (w * 0.05).clamp(24.0, 64.0);
+    final vPad = isDesktop ? 96.0 : 64.0;
 
-    return Padding(
-      padding: EdgeInsets.symmetric(horizontal: isDesktop ? 24 : 16),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(20),
-        child: isDesktop
-            ? _DesktopLayout(
-                items: trustItems,
-                title: effectiveTitle,
-                subtitle: effectiveSubtitle,
-              )
-            : _MobileLayout(items: trustItems, title: effectiveTitle),
+    return ClipRect(
+      child: Stack(
+      children: [
+        // ── Background image: heavy blur + dark overlay ──────────────────
+        Positioned.fill(
+          child: ImageFiltered(
+            imageFilter: ImageFilter.blur(
+              sigmaX: 35,
+              sigmaY: 35,
+              tileMode: TileMode.clamp,
+            ),
+            child: Transform.scale(
+              scale: 1.2,
+              child: Image.asset(
+                'assets/images/hero-bg.png',
+                fit: BoxFit.cover,
+                color: Colors.black.withOpacity(0.25),
+                colorBlendMode: BlendMode.srcATop,
+                errorBuilder: (_, _, _) =>
+                    const ColoredBox(color: Color(0xFF111111)),
+              ),
+            ),
+          ),
+        ),
+        // ── Primary dark overlay (rgba(17,17,17,0.45)) ───────────────────
+        Positioned.fill(
+          child: ColoredBox(
+            color: const Color(0xFF111111).withOpacity(0.50),
+          ),
+        ),
+        // ── Content ──────────────────────────────────────────────────────
+        Padding(
+          padding: EdgeInsets.symmetric(horizontal: hPad, vertical: vPad),
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 1280),
+              child: isDesktop
+                  ? _DesktopLayout(
+                      items: gridItems,
+                      title: effectiveTitle,
+                    )
+                  : _MobileLayout(
+                      items: gridItems,
+                      title: effectiveTitle,
+                    ),
+            ),
+          ),
+        ),
+      ],
       ),
     );
   }
 }
 
-// ── Desktop two-column split ───────────────────────────────────────────────────
+// ── Desktop two-column layout ─────────────────────────────────────────────────
 
 class _DesktopLayout extends StatelessWidget {
-  final List<_TrustItem> items;
+  final List<_TrustGridItem> items;
   final String title;
-  final String subtitle;
 
-  const _DesktopLayout({
-    required this.items,
-    required this.title,
-    required this.subtitle,
-  });
+  const _DesktopLayout({required this.items, required this.title});
 
   @override
   Widget build(BuildContext context) {
-    return IntrinsicHeight(
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          // Left dark panel
-          Expanded(
-            flex: 40,
-            child: Container(
-              color: const Color(0xFF111111),
-              padding: const EdgeInsets.all(36),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Container(
-                    width: 36,
-                    height: 3,
-                    decoration: BoxDecoration(
-                      color: AppColors.gold,
-                      borderRadius: BorderRadius.circular(2),
-                    ),
+    final w = MediaQuery.sizeOf(context).width;
+    final gap = (w * 0.05).clamp(32.0, 64.0);
+
+    // Split title at "DODO?" to colorize
+    final goldenWord = 'DODO?';
+    final beforeGold = title.contains(goldenWord)
+        ? title.substring(0, title.indexOf(goldenWord))
+        : title;
+    final afterGold =
+        title.contains(goldenWord) ? goldenWord : '';
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // ── Left column ─────────────────────────────────────────────────
+        Expanded(
+          flex: 38,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Heading
+              Text.rich(
+                TextSpan(
+                  style: GoogleFonts.poppins(
+                    fontWeight: FontWeight.w800,
+                    fontSize: 36,
+                    color: Colors.white,
+                    height: 1.2,
                   ),
-                  const SizedBox(height: 20),
-                  Text(
-                    title,
-                    style: GoogleFonts.poppins(
-                      fontSize: 28,
-                      fontWeight: FontWeight.w700,
-                      color: Colors.white,
-                      height: 1.2,
-                      letterSpacing: -0.5,
+                  children: [
+                    TextSpan(text: beforeGold),
+                    TextSpan(
+                      text: afterGold,
+                      style: const TextStyle(color: AppColors.gold),
                     ),
-                  ),
-                  const SizedBox(height: 12),
-                  Text(
-                    subtitle,
-                    style: GoogleFonts.inter(
-                      fontSize: 13,
-                      color: Colors.white.withAlpha(160),
-                      height: 1.6,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          // Right white panel
-          Expanded(
-            flex: 60,
-            child: Container(
-              color: AppColors.surface,
-              padding: const EdgeInsets.fromLTRB(36, 36, 36, 36),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  for (int i = 0; i < items.length; i++) ...[
-                    _NumberedItem(item: items[i], isLast: i == items.length - 1),
                   ],
-                ],
+                ),
               ),
-            ),
+              const SizedBox(height: 20),
+              // Gold underline bar
+              Container(
+                width: 56,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: AppColors.gold,
+                  borderRadius: BorderRadius.circular(4),
+                ),
+              ),
+              const SizedBox(height: 28),
+              // Trust badge card
+              _TrustBadgeCard(),
+            ],
           ),
-        ],
-      ),
+        ),
+        SizedBox(width: gap),
+        // ── Right column: 2×2 grid ──────────────────────────────────────
+        Expanded(
+          flex: 62,
+          child: _TrustGrid(items: items),
+        ),
+      ],
     );
   }
 }
 
-// ── Mobile single-column ──────────────────────────────────────────────────────
+// ── Mobile single-column layout ───────────────────────────────────────────────
 
 class _MobileLayout extends StatelessWidget {
-  final List<_TrustItem> items;
+  final List<_TrustGridItem> items;
   final String title;
 
   const _MobileLayout({required this.items, required this.title});
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      color: AppColors.surface,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Dark header strip
-          Container(
-            width: double.infinity,
-            color: const Color(0xFF111111),
-            padding: const EdgeInsets.fromLTRB(22, 28, 22, 28),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Container(
-                  width: 28,
-                  height: 2.5,
-                  decoration: BoxDecoration(
-                    color: AppColors.gold,
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-                const SizedBox(height: 14),
-                Text(
-                  title,
-                  style: GoogleFonts.poppins(
-                    fontSize: 20,
-                    fontWeight: FontWeight.w700,
-                    color: Colors.white,
-                    height: 1.25,
-                    letterSpacing: -0.3,
-                  ),
-                ),
-              ],
+    final goldenWord = 'DODO?';
+    final beforeGold = title.contains(goldenWord)
+        ? title.substring(0, title.indexOf(goldenWord))
+        : title;
+    final afterGold = title.contains(goldenWord) ? goldenWord : '';
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text.rich(
+          TextSpan(
+            style: GoogleFonts.poppins(
+              fontWeight: FontWeight.w800,
+              fontSize: 28,
+              color: Colors.white,
+              height: 1.2,
             ),
+            children: [
+              TextSpan(text: beforeGold),
+              TextSpan(
+                text: afterGold,
+                style: const TextStyle(color: AppColors.gold),
+              ),
+            ],
           ),
-          // Numbered items
-          Padding(
-            padding: const EdgeInsets.all(22),
-            child: Column(
-              children: [
-                for (int i = 0; i < items.length; i++) ...[
-                  _NumberedItem(item: items[i], isLast: i == items.length - 1),
-                ],
-              ],
-            ),
+        ),
+        const SizedBox(height: 16),
+        Container(
+          width: 48,
+          height: 4,
+          decoration: BoxDecoration(
+            color: AppColors.gold,
+            borderRadius: BorderRadius.circular(4),
           ),
+        ),
+        const SizedBox(height: 24),
+        _TrustBadgeCard(),
+        const SizedBox(height: 32),
+        // Items in single column
+        for (int i = 0; i < items.length; i++) ...[
+          _TrustItemTile(item: items[i]),
+          if (i < items.length - 1)
+            const Divider(color: Color(0xFF2A2622), height: 32),
         ],
+      ],
+    );
+  }
+}
+
+// ── Trust badge card ──────────────────────────────────────────────────────────
+
+class _TrustBadgeCard extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 340),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 18),
+        decoration: BoxDecoration(
+          color: const Color(0xFF1A1714),
+          border: Border.all(color: const Color(0xFF2A2622)),
+          borderRadius: BorderRadius.circular(14),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 52,
+              height: 52,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(color: AppColors.gold, width: 1.5),
+              ),
+              child: const Icon(
+                Icons.verified_user_outlined,
+                color: AppColors.gold,
+                size: 22,
+              ),
+            ),
+            const SizedBox(width: 16),
+            Flexible(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Trusted by thousands',
+                    style: GoogleFonts.poppins(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                      color: Colors.white,
+                    ),
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    'for quality home services',
+                    style: GoogleFonts.inter(
+                      fontSize: 13,
+                      color: const Color(0xFF9A948C),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
 }
 
-// ── Numbered list item ────────────────────────────────────────────────────────
+// ── 2×2 Trust grid (desktop) ──────────────────────────────────────────────────
 
-class _NumberedItem extends StatelessWidget {
-  final _TrustItem item;
-  final bool isLast;
+class _TrustGrid extends StatelessWidget {
+  final List<_TrustGridItem> items;
 
-  const _NumberedItem({required this.item, required this.isLast});
+  const _TrustGrid({required this.items});
 
   @override
   Widget build(BuildContext context) {
-    return IntrinsicHeight(
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Number circle + vertical connector
-          Column(
+    final half = (items.length / 2).ceil();
+    final topRow = items.take(half).toList();
+    final bottomRow = items.skip(half).toList();
+    final colGap = 48.0;
+
+    return Column(
+      children: [
+        // Top row
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            for (int i = 0; i < topRow.length; i++) ...[
+              if (i > 0) SizedBox(width: colGap),
+              Expanded(
+                child: _TrustItemTile(item: topRow[i]),
+              ),
+            ],
+          ],
+        ),
+        // Divider between rows
+        if (topRow.any((e) => e.hasDivider))
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 28),
+            child: Divider(color: Color(0xFF2A2622), height: 1),
+          )
+        else
+          const SizedBox(height: 28),
+        // Bottom row
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            for (int i = 0; i < bottomRow.length; i++) ...[
+              if (i > 0) SizedBox(width: colGap),
+              Expanded(
+                child: _TrustItemTile(item: bottomRow[i]),
+              ),
+            ],
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+// ── Single trust item ─────────────────────────────────────────────────────────
+
+class _TrustItemTile extends StatelessWidget {
+  final _TrustGridItem item;
+
+  const _TrustItemTile({required this.item});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Gold-ring circle with icon
+        Container(
+          width: 52,
+          height: 52,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            border: Border.all(color: AppColors.gold, width: 1.5),
+          ),
+          child: Icon(
+            item.icon,
+            color: AppColors.gold,
+            size: 22,
+          ),
+        ),
+        const SizedBox(width: 18),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Container(
-                width: 40,
-                height: 40,
-                decoration: BoxDecoration(
-                  color: item.circleColor,
-                  shape: BoxShape.circle,
-                ),
-                alignment: Alignment.center,
-                child: Text(
-                  item.number,
-                  style: GoogleFonts.poppins(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700,
-                    color: item.circleTextColor,
-                  ),
+              const SizedBox(height: 4),
+              Text(
+                item.title,
+                style: GoogleFonts.poppins(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
+                  color: Colors.white,
                 ),
               ),
-              if (!isLast)
-                Expanded(
-                  child: Container(
-                    width: 1.5,
-                    color: AppColors.border,
-                    margin: const EdgeInsets.symmetric(vertical: 4),
-                  ),
+              const SizedBox(height: 5),
+              Text(
+                item.description,
+                style: GoogleFonts.inter(
+                  fontSize: 13,
+                  color: const Color(0xFF9A948C),
+                  height: 1.6,
                 ),
+              ),
             ],
           ),
-          const SizedBox(width: 16),
-          // Text content
-          Expanded(
-            child: Padding(
-              padding: EdgeInsets.only(bottom: isLast ? 0 : 24),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const SizedBox(height: 8),
-                  Text(
-                    item.title,
-                    style: GoogleFonts.poppins(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.textPrimary,
-                      height: 1.3,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    item.description,
-                    style: GoogleFonts.inter(
-                      fontSize: 12.5,
-                      color: AppColors.textSecondary,
-                      height: 1.55,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }
 
 // ── Internal data model ───────────────────────────────────────────────────────
 
-class _TrustItem {
-  final String number;
+class _TrustGridItem {
   final IconData icon;
   final String title;
   final String description;
-  final Color circleColor;
-  final Color circleTextColor;
+  final bool hasDivider;
 
-  const _TrustItem({
-    required this.number,
+  const _TrustGridItem({
     required this.icon,
     required this.title,
     required this.description,
-    required this.circleColor,
-    required this.circleTextColor,
+    required this.hasDivider,
   });
 }

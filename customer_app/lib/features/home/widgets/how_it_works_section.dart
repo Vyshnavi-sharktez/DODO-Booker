@@ -104,7 +104,7 @@ class HowItWorksSection extends StatelessWidget {
             effectiveTitle,
             textAlign: TextAlign.center,
             style: GoogleFonts.poppins(
-              fontSize: isDesktop ? 28 : 20,
+              fontSize: isDesktop ? 32 : 22,
               fontWeight: FontWeight.w700,
               color: AppColors.textPrimary,
               letterSpacing: -0.3,

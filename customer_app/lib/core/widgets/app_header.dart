@@ -440,7 +440,7 @@ class _ServicesDropdownPanel extends ConsumerWidget {
     final nodesAsync = ref.watch(rootCatalogNodesProvider);
 
     return Container(
-      width: 460,
+      width: 240,
       constraints: const BoxConstraints(maxHeight: 380),
       decoration: BoxDecoration(
         color: Colors.white,
@@ -494,16 +494,18 @@ class _ServicesDropdownPanel extends ConsumerWidget {
                 }
                 return SingleChildScrollView(
                   padding: const EdgeInsets.fromLTRB(14, 12, 14, 0),
-                  child: Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: active
-                        .map((n) => _ServiceChip(
-                              node: n,
-                              onTap: () {
-                                close();
-                                openCatalogNode(context, n);
-                              },
+                        .map((n) => Padding(
+                              padding: const EdgeInsets.only(bottom: 6),
+                              child: _ServiceChip(
+                                node: n,
+                                onTap: () {
+                                  close();
+                                  openCatalogNode(context, n);
+                                },
+                              ),
                             ))
                         .toList(),
                   ),
@@ -634,7 +636,6 @@ class _ServiceChipState extends State<_ServiceChip> {
         onTap: widget.onTap,
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 140),
-          constraints: const BoxConstraints(minWidth: 130, maxWidth: 200),
           padding:
               const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
           decoration: BoxDecoration(
@@ -721,25 +722,27 @@ class _CityGroup extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 6),
-          Wrap(
-            spacing: 6,
-            runSpacing: 5,
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: areas
-                .map((a) => Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 9, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: AppColors.surfaceVariant,
-                        borderRadius: BorderRadius.circular(6),
-                        border: Border.all(
-                            color: AppColors.border, width: 0.6),
-                      ),
-                      child: Text(
-                        a.name,
-                        style: const TextStyle(
-                          fontSize: 11.5,
-                          color: AppColors.textSecondary,
-                          fontWeight: FontWeight.w500,
+                .map((a) => Padding(
+                      padding: const EdgeInsets.only(bottom: 4),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 9, vertical: 5),
+                        decoration: BoxDecoration(
+                          color: AppColors.surfaceVariant,
+                          borderRadius: BorderRadius.circular(6),
+                          border: Border.all(
+                              color: AppColors.border, width: 0.6),
+                        ),
+                        child: Text(
+                          a.name,
+                          style: const TextStyle(
+                            fontSize: 11.5,
+                            color: AppColors.textSecondary,
+                            fontWeight: FontWeight.w500,
+                          ),
                         ),
                       ),
                     ))
@@ -763,17 +766,18 @@ class _PanelSkeleton extends StatelessWidget {
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
-      child: Wrap(
-        spacing: 8,
-        runSpacing: 8,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: List.generate(
           itemCount,
-          (_) => Container(
-            width: 120,
-            height: 38,
-            decoration: BoxDecoration(
-              color: AppColors.shimmerBase,
-              borderRadius: BorderRadius.circular(10),
+          (_) => Padding(
+            padding: const EdgeInsets.only(bottom: 6),
+            child: Container(
+              height: 38,
+              decoration: BoxDecoration(
+                color: AppColors.shimmerBase,
+                borderRadius: BorderRadius.circular(10),
+              ),
             ),
           ),
         ),

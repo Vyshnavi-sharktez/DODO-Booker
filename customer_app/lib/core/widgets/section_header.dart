@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import '../constants/app_colors.dart';
 
 class SectionHeader extends StatelessWidget {
@@ -13,7 +14,15 @@ class SectionHeader extends StatelessWidget {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text(title, style: theme.textTheme.titleLarge),
+        Text(
+          title,
+          style: GoogleFonts.poppins(
+            fontSize: 22,
+            fontWeight: FontWeight.w700,
+            color: theme.textTheme.titleLarge?.color,
+            letterSpacing: -0.2,
+          ),
+        ),
         if (onSeeAll != null)
           MouseRegion(
             cursor: SystemMouseCursors.click,

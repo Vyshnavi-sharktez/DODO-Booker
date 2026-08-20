@@ -237,7 +237,7 @@ class _ServiceCardState extends State<_ServiceCard> {
                           width: double.infinity,
                           padding: const EdgeInsets.symmetric(vertical: 5),
                           decoration: BoxDecoration(
-                            color: cs.primary,
+                            color: const Color(0xFF1A1714),
                             borderRadius: BorderRadius.circular(8),
                           ),
                           child: const Text(

@@ -5,7 +5,6 @@ import '../../booking/services/coupon_providers.dart';
 import '../models/landing_page_section.dart';
 import '../services/home_providers.dart';
 import '../services/landing_page_sections_provider.dart';
-import '../widgets/home_header_section.dart';
 import '../widgets/section_renderer.dart';
 
 class HomeScreen extends ConsumerWidget {
@@ -55,42 +54,41 @@ class HomeScreen extends ConsumerWidget {
   ) {
     final effectiveSections = sections ?? const <LandingPageSection>[];
 
+    // Pull the footer out so it can be anchored to the viewport bottom.
+    LandingPageSection? footerSection;
+    final bodySections = <LandingPageSection>[];
+    for (final s in effectiveSections) {
+      if (s.sectionType == 'footer') {
+        footerSection ??= s;
+      } else {
+        bodySections.add(s);
+      }
+    }
+
     return CustomScrollView(
       physics: const AlwaysScrollableScrollPhysics(),
       slivers: [
-        // ── Persistent nav header (always top — not a CMS section) ───────────
-        SliverToBoxAdapter(
-          child: ColoredBox(
-            color: const Color(0xFF111111),
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                final w = constraints.maxWidth;
-                final isDesktop = w >= 768;
-                final hPad = isDesktop ? (w >= 1024 ? 80.0 : 40.0) : 24.0;
-                final vPad = isDesktop ? 28.0 : 20.0;
-                return Padding(
-                  padding: EdgeInsets.fromLTRB(hPad, 0, hPad, 0),
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 1120),
-                    child: HomeHeaderSection(
-                      padding: EdgeInsets.only(top: vPad),
-                    ),
-                  ),
-                );
-              },
-            ),
-          ),
-        ),
-
         // ── Loading placeholder ───────────────────────────────────────────────
         if (sections == null)
           const SliverToBoxAdapter(child: SizedBox(height: 200)),
 
         // ── CMS sections rendered in exact display_order ──────────────────────
-        for (final section in effectiveSections)
+        for (final section in bodySections)
           ..._sectionSlivers(section),
 
-        const SliverToBoxAdapter(child: SizedBox(height: 32)),
+        // ── Footer: fills remaining viewport; footer anchored to bottom ───────
+        // When content is shorter than the viewport the footer sits flush at the
+        // bottom edge. When the page is taller it scrolls into view naturally.
+        SliverFillRemaining(
+          hasScrollBody: false,
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              if (footerSection != null)
+                SectionRenderer(section: footerSection),
+            ],
+          ),
+        ),
       ],
     );
   }

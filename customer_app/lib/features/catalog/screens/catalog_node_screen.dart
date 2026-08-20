@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 import '../../../core/constants/app_colors.dart';
 import '../../../core/utils/service_image_registry.dart';
@@ -24,22 +25,23 @@ import '../providers/catalog_providers.dart';
 import '../utils/catalog_launcher.dart';
 import '../widgets/catalog_unavailability_widgets.dart';
 
+// Design tokens — from handoff
+const _kInk = Color(0xFF1A1714);
+const _kMuted = Color(0xFF6E6A64);
+const _kMuted2 = Color(0xFF9A948C);
+const _kGold = Color(0xFFF4A81D);
+const _kGoldLink = Color(0xFFD98A0A);
+const _kBorder = Color(0xFFECE7DE);
+const _kBg = Color(0xFFFBF8F3);
+
 // ═══════════════════════════════════════════════════════════════════════════════
-// CatalogNodeScreen — generic screen for any catalog node at any depth.
-//
-// Behaviour matrix (data-driven, applies at every depth):
-//   hasChildren  (any)                → navigation list; booking never shown
-//   !hasChildren && isBookable        → full service-detail + sticky booking bar
-//   !hasChildren && !isBookable       → informational / Coming Soon state
+// CatalogNodeScreen
 // ═══════════════════════════════════════════════════════════════════════════════
 
 class CatalogNodeScreen extends ConsumerStatefulWidget {
   const CatalogNodeScreen({super.key, required this.node, this.parentNodeId});
 
   final CatalogNodeModel node;
-
-  /// The catalog_node.id of the parent through which this screen was reached.
-  /// Null for deep-link entry points where the path is unknown.
   final String? parentNodeId;
 
   @override
@@ -82,6 +84,9 @@ class _CatalogNodeScreenState extends ConsumerState<CatalogNodeScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final width = MediaQuery.sizeOf(context).width;
+    final isWeb = width >= 768;
+
     final children =
         ref.watch(catalogNodeChildrenProvider(node.id)).valueOrNull ?? [];
     final attrs = node.isLeafBookable
@@ -94,13 +99,11 @@ class _CatalogNodeScreenState extends ConsumerState<CatalogNodeScreen> {
         ? (ref.watch(catalogNodeFaqsProvider(node.id)).valueOrNull ?? [])
         : <FaqModel>[];
 
-    // Use the customer's default address coordinates for location restriction checks.
     final addresses = ref.watch(addressNotifierProvider).valueOrNull ?? [];
     final defaultAddress =
         addresses.where((a) => a.isDefault).firstOrNull ??
         (addresses.isNotEmpty ? addresses.first : null);
 
-    // Availability check — uses canonical parent as fallback for deep-link entry
     final availAsync = ref.watch(
       nodeAvailabilityProvider((
         nodeId: node.id,
@@ -121,30 +124,49 @@ class _CatalogNodeScreenState extends ConsumerState<CatalogNodeScreen> {
         : (node.basePrice ?? 0.0) + _priceAdjustment + addonsTotal;
     final hasAdjustment = _priceAdjustment > 0 || addonsTotal > 0;
 
-    // Category/navigation nodes always show a hero using the image registry
-    // fallback so every browse page has a themed image.
-    // Service-detail leaf nodes only show a hero when an explicit imageUrl
-    // has been set in the admin panel.
     final heroUrl = node.hasChildren
         ? ServiceImageRegistry.resolve(node.imageUrl, node.name)
         : node.imageUrl;
     final hasHero = node.hasChildren || (heroUrl != null && heroUrl.isNotEmpty);
 
+    // ── Web layout ───────────────────────────────────────────────────────────
+    if (isWeb) {
+      return _WebScaffold(
+        node: node,
+        heroUrl: heroUrl,
+        hasHero: hasHero,
+        children: children,
+        attrs: attrs,
+        addOns: addOns,
+        faqs: faqs,
+        displayPrice: displayPrice,
+        hasAdjustment: hasAdjustment,
+        isUnavailable: isUnavailable,
+        isEffectivelyHidden: isEffectivelyHidden,
+        avail: avail,
+        priceAdjustment: _priceAdjustment,
+        addonsTotal: addonsTotal,
+        parentNodeId: widget.parentNodeId,
+        selections: _selections,
+        selectedAddonIds: _selectedAddonIds,
+        selectedAmcPlan: _selectedAmcPlan,
+        onOptionSelected: _onOptionSelected,
+        onAddonToggled: _onAddonToggled,
+        onAmcPlanSelected: (plan) => setState(() => _selectedAmcPlan = plan),
+      );
+    }
+
+    // ── Mobile layout ────────────────────────────────────────────────────────
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: _kBg,
       extendBodyBehindAppBar: hasHero,
       appBar: hasHero
           ? AppBar(
               backgroundColor: Colors.transparent,
               elevation: 0,
               scrolledUnderElevation: 0,
-              foregroundColor: Colors.white,
               surfaceTintColor: Colors.transparent,
-              actions: [
-                if (node.isLeafBookable)
-                  HeartButton(serviceId: node.id, mini: false),
-                const SizedBox(width: 4),
-              ],
+              automaticallyImplyLeading: false,
             )
           : AppBar(
               title: Text(
@@ -152,11 +174,11 @@ class _CatalogNodeScreenState extends ConsumerState<CatalogNodeScreen> {
                 style: const TextStyle(
                   fontWeight: FontWeight.w700,
                   fontSize: 17,
-                  color: AppColors.textPrimary,
+                  color: _kInk,
                 ),
               ),
-              backgroundColor: AppColors.background,
-              foregroundColor: AppColors.textPrimary,
+              backgroundColor: _kBg,
+              foregroundColor: _kInk,
               elevation: 0,
               scrolledUnderElevation: 1,
               surfaceTintColor: Colors.transparent,
@@ -172,19 +194,37 @@ class _CatalogNodeScreenState extends ConsumerState<CatalogNodeScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // ── Hero image + floating info card (Stack, no SliverAppBar) ──
-                if (hasHero) ...[
-                  _HeroWithCard(
+                // ── Hero photo ─────────────────────────────────────────────
+                if (hasHero)
+                  _MobileHero(
                     imageUrl: heroUrl!,
+                    node: node,
+                    showHeart: node.isLeafBookable,
+                  ),
+
+                // ── Service content header ─────────────────────────────────
+                if (hasHero && node.isLeafBookable)
+                  _ServiceContentBlock(
                     node: node,
                     displayPrice: displayPrice,
                     hasAdjustment: hasAdjustment,
                   ),
-                  // Spacer: card extends 60 px below the Stack + 20 px gap.
-                  const SizedBox(height: 80),
-                ],
 
-                // ── No-hero: breadcrumb + info header ──────────────────────
+                // ── Category hero fallback header ──────────────────────────
+                if (hasHero && !node.isLeafBookable)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 20, 20, 4),
+                    child: Text(
+                      node.name,
+                      style: GoogleFonts.poppins(
+                        fontSize: 22,
+                        fontWeight: FontWeight.w700,
+                        color: _kInk,
+                      ),
+                    ),
+                  ),
+
+                // ── No-hero: breadcrumb + info header ─────────────────────
                 if (!hasHero) ...[
                   if (!node.isRoot)
                     _Breadcrumb(
@@ -208,36 +248,6 @@ class _CatalogNodeScreenState extends ConsumerState<CatalogNodeScreen> {
                         _onOptionSelected(attrId, optId, attrs),
                   ),
 
-                // ── Description ────────────────────────────────────────────
-                if (node.description?.isNotEmpty == true)
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(20, 24, 20, 0),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          node.isLeafBookable
-                              ? 'About this service'
-                              : node.name,
-                          style: const TextStyle(
-                            fontSize: 17,
-                            fontWeight: FontWeight.w700,
-                            color: AppColors.textPrimary,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          node.description!,
-                          style: const TextStyle(
-                            fontSize: 14,
-                            color: AppColors.textSecondary,
-                            height: 1.65,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-
                 // ── Children list ──────────────────────────────────────────
                 if (node.hasChildren)
                   (isUnavailable || isEffectivelyHidden)
@@ -248,33 +258,84 @@ class _CatalogNodeScreenState extends ConsumerState<CatalogNodeScreen> {
                       : _ChildrenSection(node: node, children: children),
 
                 // ── Add-ons ────────────────────────────────────────────────
-                if (node.isLeafBookable && addOns.isNotEmpty)
+                if (node.isLeafBookable && addOns.isNotEmpty) ...[
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 24, 20, 0),
+                    child: _SectionHeaderRow(
+                      title: 'Suggested Add-ons',
+                    ),
+                  ),
                   ServiceAddonSection(
                     addOns: addOns,
                     selectedIds: _selectedAddonIds,
                     onToggle: _onAddonToggled,
                   ),
+                ],
 
                 // ── AMC ────────────────────────────────────────────────────
-                if (node.isLeafBookable)
+                if (node.isLeafBookable) ...[
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 24, 20, 0),
+                    child: _SectionHeaderRow(title: 'AMC Plans'),
+                  ),
                   AmcSection(
                     serviceId: node.id,
                     selectedPlan: _selectedAmcPlan,
-                    onPlanSelected: (plan) => setState(() {
-                      _selectedAmcPlan = plan;
-                    }),
-                    regularPrice: node.basePrice != null && node.basePrice! > 0
-                        ? node.basePrice
-                        : null,
+                    onPlanSelected: (plan) =>
+                        setState(() => _selectedAmcPlan = plan),
+                    regularPrice:
+                        node.basePrice != null && node.basePrice! > 0
+                            ? node.basePrice
+                            : null,
                   ),
+                ],
 
-                // ── FAQs ───────────────────────────────────────────────────
-                if (node.isLeafBookable && faqs.isNotEmpty)
-                  FaqSection(faqs: faqs),
-
-                // ── Reviews ────────────────────────────────────────────────
-                if (node.isLeafBookable)
-                  ServiceReviewsSection(serviceId: node.id),
+                // ── Accordion: About / FAQs / Reviews ─────────────────────
+                if (node.isLeafBookable) ...[
+                  const SizedBox(height: 24),
+                  _AccordionSection(
+                    label: 'About this service',
+                    isFirst: true,
+                    child: node.description?.isNotEmpty == true
+                        ? Padding(
+                            padding: const EdgeInsets.fromLTRB(0, 8, 0, 14),
+                            child: Text(
+                              node.description!,
+                              style: const TextStyle(
+                                fontSize: 13,
+                                color: _kMuted,
+                                height: 1.6,
+                              ),
+                            ),
+                          )
+                        : const Padding(
+                            padding: EdgeInsets.fromLTRB(0, 8, 0, 14),
+                            child: Text(
+                              'No description available.',
+                              style: TextStyle(fontSize: 13, color: _kMuted2),
+                            ),
+                          ),
+                  ),
+                  _AccordionSection(
+                    label: 'FAQs',
+                    child: faqs.isNotEmpty
+                        ? FaqSection(faqs: faqs)
+                        : const Padding(
+                            padding: EdgeInsets.fromLTRB(0, 8, 0, 14),
+                            child: Text(
+                              'No FAQs yet.',
+                              style: TextStyle(fontSize: 13, color: _kMuted2),
+                            ),
+                          ),
+                  ),
+                  _AccordionSection(
+                    label: node.reviewCount > 0
+                        ? 'Reviews (${node.reviewCount})'
+                        : 'Reviews',
+                    isLast: true,
+                    child: ServiceReviewsSection(serviceId: node.id),
+                  ),
+                ],
 
                 // ── Coming Soon ────────────────────────────────────────────
                 if (!node.hasChildren && !node.isBookable)
@@ -287,7 +348,7 @@ class _CatalogNodeScreenState extends ConsumerState<CatalogNodeScreen> {
         ],
       ),
 
-      // ── Sticky cart bar / unavailability bar ────────────────────────────
+      // ── Sticky cart bar ──────────────────────────────────────────────────
       bottomNavigationBar: node.isLeafBookable
           ? (isUnavailable || isEffectivelyHidden)
                 ? CatalogUnavailabilityBar(
@@ -342,54 +403,440 @@ class CatalogNodeFetchScreen extends ConsumerWidget {
   }
 }
 
-// ── Hero + floating card (Stack-based overlap) ────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════════
+// Mobile hero photo (260px + status bar)
+// ═══════════════════════════════════════════════════════════════════════════════
 
-class _HeroWithCard extends StatelessWidget {
-  const _HeroWithCard({
+class _MobileHero extends StatelessWidget {
+  const _MobileHero({
     required this.imageUrl,
+    required this.node,
+    required this.showHeart,
+  });
+
+  final String imageUrl;
+  final CatalogNodeModel node;
+  final bool showHeart;
+
+  @override
+  Widget build(BuildContext context) {
+    final statusBarH = MediaQuery.of(context).padding.top;
+    final totalHeight = statusBarH + 260.0;
+
+    return SizedBox(
+      height: totalHeight,
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          _HeroImage(url: imageUrl),
+
+          // Back button
+          Positioned(
+            top: statusBarH + 16,
+            left: 16,
+            child: _CircleIconButton(
+              icon: Icons.arrow_back_rounded,
+              onTap: () => context.pop(),
+            ),
+          ),
+
+          // Heart button (white circle wrapper)
+          if (showHeart)
+            Positioned(
+              top: statusBarH + 16,
+              right: 16,
+              child: Container(
+                width: 36,
+                height: 36,
+                decoration: const BoxDecoration(
+                  color: Colors.white,
+                  shape: BoxShape.circle,
+                ),
+                child: Center(
+                  child: HeartButton(serviceId: node.id, mini: true),
+                ),
+              ),
+            ),
+
+          // Photo counter pill
+          Positioned(
+            bottom: 14,
+            right: 16,
+            child: Container(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
+              decoration: BoxDecoration(
+                color: const Color(0xFF1A1714).withAlpha(166),
+                borderRadius: BorderRadius.circular(100),
+              ),
+              child: const Text(
+                '1/6',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 11,
+                  height: 1.4,
+                ),
+              ),
+            ),
+          ),
+
+          // Dot indicators
+          Positioned(
+            bottom: 16,
+            left: 0,
+            right: 0,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Container(
+                  width: 16,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: _kGold,
+                    borderRadius: BorderRadius.circular(100),
+                  ),
+                ),
+                const SizedBox(width: 5),
+                Container(
+                  width: 4,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: Colors.white.withAlpha(180),
+                    borderRadius: BorderRadius.circular(100),
+                  ),
+                ),
+                const SizedBox(width: 5),
+                Container(
+                  width: 4,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: Colors.white.withAlpha(180),
+                    borderRadius: BorderRadius.circular(100),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CircleIconButton extends StatelessWidget {
+  const _CircleIconButton({required this.icon, required this.onTap});
+  final IconData icon;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 36,
+        height: 36,
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          shape: BoxShape.circle,
+        ),
+        child: Icon(icon, size: 18, color: _kInk),
+      ),
+    );
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Service content block (below hero photo on mobile)
+// category badge + title + rating + description + price row
+// ═══════════════════════════════════════════════════════════════════════════════
+
+class _ServiceContentBlock extends StatelessWidget {
+  const _ServiceContentBlock({
     required this.node,
     required this.displayPrice,
     required this.hasAdjustment,
   });
 
-  final String imageUrl;
   final CatalogNodeModel node;
   final double displayPrice;
   final bool hasAdjustment;
 
   @override
   Widget build(BuildContext context) {
-    // Include status bar + AppBar height so the image fills behind the
-    // transparent AppBar when extendBodyBehindAppBar is true.
-    final topInset = MediaQuery.of(context).padding.top + kToolbarHeight;
-    final heroHeight = topInset + 200.0;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 18, 20, 0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Category badge
+          if (node.parentName != null && node.parentName!.isNotEmpty) ...[
+            Container(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(
+                color: _kInk,
+                borderRadius: BorderRadius.circular(100),
+              ),
+              child: Text(
+                node.parentName!,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  height: 1.3,
+                ),
+              ),
+            ),
+            const SizedBox(height: 10),
+          ],
 
-    return Stack(
-      clipBehavior: Clip.none,
+          // Title
+          Text(
+            node.name,
+            style: GoogleFonts.poppins(
+              fontSize: 20,
+              fontWeight: FontWeight.w700,
+              color: _kInk,
+              height: 1.2,
+            ),
+          ),
+          const SizedBox(height: 6),
+
+          // Rating row
+          if (node.rating > 0 || node.estimatedDuration != null)
+            Row(
+              children: [
+                if (node.rating > 0) ...[
+                  const Text('★', style: TextStyle(color: _kGold, fontSize: 13)),
+                  const SizedBox(width: 4),
+                  Text(
+                    node.rating.toStringAsFixed(1),
+                    style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: _kInk,
+                    ),
+                  ),
+                  if (node.reviewCount > 0) ...[
+                    const SizedBox(width: 4),
+                    Text(
+                      '(${node.reviewCount} reviews)',
+                      style: const TextStyle(
+                        fontSize: 13,
+                        color: _kMuted2,
+                      ),
+                    ),
+                  ],
+                  const SizedBox(width: 12),
+                ],
+                if (node.estimatedDuration != null)
+                  Text(
+                    '${node.estimatedDuration} min',
+                    style: const TextStyle(
+                      fontSize: 12,
+                      color: _kMuted2,
+                    ),
+                  ),
+              ],
+            ),
+
+          // Description
+          if (node.description?.isNotEmpty == true) ...[
+            const SizedBox(height: 8),
+            Text(
+              node.description!,
+              style: const TextStyle(
+                fontSize: 13,
+                color: _kMuted,
+                height: 1.6,
+              ),
+            ),
+          ],
+
+          // Price row
+          if (node.basePrice != null) ...[
+            const SizedBox(height: 14),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.baseline,
+              textBaseline: TextBaseline.alphabetic,
+              children: [
+                const Text(
+                  'From',
+                  style: TextStyle(fontSize: 13, color: _kMuted2),
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  '₹${displayPrice.toInt()}',
+                  style: GoogleFonts.poppins(
+                    fontSize: 22,
+                    fontWeight: FontWeight.w800,
+                    color: _kInk,
+                    height: 1.0,
+                  ),
+                ),
+                if (hasAdjustment) ...[
+                  const SizedBox(width: 8),
+                  const Text(
+                    'incl. add-ons',
+                    style: TextStyle(fontSize: 12, color: _kMuted2),
+                  ),
+                ],
+              ],
+            ),
+          ],
+          const SizedBox(height: 4),
+        ],
+      ),
+    );
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Section header row: Poppins 700 15px + optional "View all →"
+// ═══════════════════════════════════════════════════════════════════════════════
+
+class _SectionHeaderRow extends StatelessWidget {
+  const _SectionHeaderRow({required this.title, this.onViewAll});
+  final String title;
+  final VoidCallback? onViewAll;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.baseline,
+      textBaseline: TextBaseline.alphabetic,
       children: [
-        SizedBox(
-          height: heroHeight,
-          width: double.infinity,
-          child: _HeroImage(url: imageUrl),
-        ),
-        // Card positioned so its bottom edge is 60 px below the Stack's
-        // bottom, creating a 60 px visible overlap into the hero image.
-        Positioned(
-          bottom: -60,
-          left: 16,
-          right: 16,
-          child: _FloatingInfoCard(
-            node: node,
-            displayPrice: displayPrice,
-            hasAdjustment: hasAdjustment,
+        Text(
+          title,
+          style: GoogleFonts.poppins(
+            fontSize: 15,
+            fontWeight: FontWeight.w700,
+            color: _kInk,
           ),
         ),
+        const Spacer(),
+        if (onViewAll != null)
+          GestureDetector(
+            onTap: onViewAll,
+            child: const Text(
+              'View all →',
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: _kGoldLink,
+              ),
+            ),
+          ),
       ],
     );
   }
 }
 
-// ── Hero image ────────────────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════════
+// Accordion section row
+// ═══════════════════════════════════════════════════════════════════════════════
+
+class _AccordionSection extends StatefulWidget {
+  const _AccordionSection({
+    required this.label,
+    required this.child,
+    this.isFirst = false,
+    this.isLast = false,
+    this.initiallyOpen = false,
+  });
+
+  final String label;
+  final Widget child;
+  final bool isFirst;
+  final bool isLast;
+  final bool initiallyOpen;
+
+  @override
+  State<_AccordionSection> createState() => _AccordionSectionState();
+}
+
+class _AccordionSectionState extends State<_AccordionSection> {
+  late bool _open;
+
+  @override
+  void initState() {
+    super.initState();
+    _open = widget.initiallyOpen;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Row
+          GestureDetector(
+            onTap: () => setState(() => _open = !_open),
+            behavior: HitTestBehavior.opaque,
+            child: Container(
+              padding: const EdgeInsets.symmetric(vertical: 14),
+              decoration: BoxDecoration(
+                border: Border(
+                  top: const BorderSide(color: _kBorder, width: 1),
+                  bottom: widget.isLast && !_open
+                      ? const BorderSide(color: _kBorder, width: 1)
+                      : BorderSide.none,
+                ),
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      widget.label,
+                      style: GoogleFonts.poppins(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: _kInk,
+                      ),
+                    ),
+                  ),
+                  AnimatedRotation(
+                    turns: _open ? 0.5 : 0.0,
+                    duration: const Duration(milliseconds: 180),
+                    child: const Text(
+                      '⌄',
+                      style: TextStyle(fontSize: 18, color: _kMuted2, height: 1),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+
+          // Expanded content
+          AnimatedCrossFade(
+            firstChild: const SizedBox.shrink(),
+            secondChild: Container(
+              decoration: widget.isLast
+                  ? const BoxDecoration(
+                      border: Border(
+                        bottom: BorderSide(color: _kBorder, width: 1),
+                      ),
+                    )
+                  : null,
+              child: widget.child,
+            ),
+            crossFadeState: _open
+                ? CrossFadeState.showSecond
+                : CrossFadeState.showFirst,
+            duration: const Duration(milliseconds: 200),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Hero image
+// ═══════════════════════════════════════════════════════════════════════════════
 
 class _HeroImage extends StatelessWidget {
   const _HeroImage({required this.url});
@@ -417,18 +864,17 @@ class _HeroImage extends StatelessWidget {
             ),
           ),
         ),
-        // Bottom gradient for AppBar title readability when scrolled
         Positioned(
           left: 0,
           right: 0,
           bottom: 0,
           child: Container(
-            height: 100,
+            height: 80,
             decoration: BoxDecoration(
               gradient: LinearGradient(
                 begin: Alignment.topCenter,
                 end: Alignment.bottomCenter,
-                colors: [Colors.transparent, Colors.black.withAlpha(100)],
+                colors: [Colors.transparent, Colors.black.withAlpha(80)],
               ),
             ),
           ),
@@ -438,187 +884,9 @@ class _HeroImage extends StatelessWidget {
   }
 }
 
-// ── Floating info card ────────────────────────────────────────────────────────
-
-class _FloatingInfoCard extends StatelessWidget {
-  const _FloatingInfoCard({
-    required this.node,
-    required this.displayPrice,
-    required this.hasAdjustment,
-  });
-
-  final CatalogNodeModel node;
-  final double displayPrice;
-  final bool hasAdjustment;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withAlpha(22),
-            blurRadius: 20,
-            spreadRadius: 0,
-            offset: const Offset(0, 6),
-          ),
-        ],
-      ),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 18, 20, 18),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Parent breadcrumb tag
-            if (!node.isRoot && node.parentName != null) ...[
-              Row(
-                children: [
-                  const Icon(
-                    Icons.chevron_left_rounded,
-                    size: 14,
-                    color: AppColors.textHint,
-                  ),
-                  const SizedBox(width: 2),
-                  Text(
-                    node.parentName!,
-                    style: const TextStyle(
-                      fontSize: 11,
-                      color: AppColors.textHint,
-                      fontWeight: FontWeight.w500,
-                      letterSpacing: 0.2,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 4),
-            ],
-
-            // Node name
-            Text(
-              node.name,
-              style: const TextStyle(
-                fontSize: 21,
-                fontWeight: FontWeight.w800,
-                color: AppColors.textPrimary,
-                height: 1.2,
-              ),
-            ),
-
-            // Meta row: rating + duration
-            if (node.rating > 0 || node.estimatedDuration != null) ...[
-              const SizedBox(height: 8),
-              Row(
-                children: [
-                  if (node.rating > 0) ...[
-                    const Icon(
-                      Icons.star_rounded,
-                      size: 14,
-                      color: AppColors.gold,
-                    ),
-                    const SizedBox(width: 3),
-                    Text(
-                      node.rating.toStringAsFixed(1),
-                      style: const TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                        color: AppColors.textPrimary,
-                      ),
-                    ),
-                    if (node.reviewCount > 0) ...[
-                      const SizedBox(width: 3),
-                      Text(
-                        '(${node.reviewCount})',
-                        style: const TextStyle(
-                          fontSize: 12,
-                          color: AppColors.textSecondary,
-                        ),
-                      ),
-                    ],
-                    const SizedBox(width: 12),
-                  ],
-                  if (node.estimatedDuration != null) ...[
-                    const Icon(
-                      Icons.schedule_rounded,
-                      size: 14,
-                      color: AppColors.textSecondary,
-                    ),
-                    const SizedBox(width: 4),
-                    Text(
-                      '${node.estimatedDuration} min',
-                      style: const TextStyle(
-                        fontSize: 12,
-                        color: AppColors.textSecondary,
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-            ],
-
-            // Price (service detail) or child count (category)
-            if (node.isLeafBookable && node.basePrice != null) ...[
-              const SizedBox(height: 12),
-              const Divider(height: 1, color: AppColors.divider),
-              const SizedBox(height: 12),
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.baseline,
-                textBaseline: TextBaseline.alphabetic,
-                children: [
-                  Text(
-                    '₹${displayPrice.toInt()}',
-                    style: const TextStyle(
-                      fontSize: 28,
-                      fontWeight: FontWeight.w800,
-                      color: AppColors.primary,
-                      height: 1.0,
-                    ),
-                  ),
-                  
-                  const SizedBox(width: 6),
-                  Text(
-                    hasAdjustment ? 'incl. adjustments' : 'onwards',
-                    style: const TextStyle(
-                      fontSize: 12,
-                      color: AppColors.textHint,
-                    ),
-                  ),
-                ],
-              ),
-            ] else if (node.hasChildren) ...[
-              const SizedBox(height: 10),
-              Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 4,
-                    ),
-                    decoration: BoxDecoration(
-                      color: AppColors.surfaceVariant,
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Text(
-                      '${node.childrenCount} ${node.childrenCount == 1 ? 'service' : 'services'} available',
-                      style: const TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w500,
-                        color: AppColors.textSecondary,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-// ── Breadcrumb ────────────────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════════
+// Breadcrumb (no-hero fallback)
+// ═══════════════════════════════════════════════════════════════════════════════
 
 class _Breadcrumb extends StatelessWidget {
   const _Breadcrumb({
@@ -642,7 +910,7 @@ class _Breadcrumb extends StatelessWidget {
               parentName,
               style: const TextStyle(
                 fontSize: 12,
-                color: AppColors.textSecondary,
+                color: _kMuted2,
                 fontWeight: FontWeight.w500,
               ),
             ),
@@ -652,7 +920,7 @@ class _Breadcrumb extends StatelessWidget {
             child: Icon(
               Icons.chevron_right_rounded,
               size: 14,
-              color: AppColors.textHint,
+              color: _kMuted2,
             ),
           ),
           Expanded(
@@ -662,7 +930,7 @@ class _Breadcrumb extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
               style: const TextStyle(
                 fontSize: 12,
-                color: AppColors.textPrimary,
+                color: _kInk,
                 fontWeight: FontWeight.w600,
               ),
             ),
@@ -673,7 +941,9 @@ class _Breadcrumb extends StatelessWidget {
   }
 }
 
-// ── Node info header (no-image fallback) ──────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════════
+// Node info header (no-image fallback path)
+// ═══════════════════════════════════════════════════════════════════════════════
 
 class _NodeInfoHeader extends StatelessWidget {
   const _NodeInfoHeader({
@@ -692,12 +962,31 @@ class _NodeInfoHeader extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          if (node.parentName != null && node.parentName!.isNotEmpty) ...[
+            Container(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(
+                color: _kInk,
+                borderRadius: BorderRadius.circular(100),
+              ),
+              child: Text(
+                node.parentName!,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+            const SizedBox(height: 10),
+          ],
           Text(
             node.name,
-            style: const TextStyle(
-              fontSize: 24,
-              fontWeight: FontWeight.w800,
-              color: AppColors.textPrimary,
+            style: GoogleFonts.poppins(
+              fontSize: 22,
+              fontWeight: FontWeight.w700,
+              color: _kInk,
               height: 1.2,
             ),
           ),
@@ -705,24 +994,21 @@ class _NodeInfoHeader extends StatelessWidget {
           Row(
             children: [
               if (node.rating > 0) ...[
-                const Icon(Icons.star_rounded, size: 15, color: AppColors.gold),
-                const SizedBox(width: 3),
+                const Text('★', style: TextStyle(color: _kGold, fontSize: 13)),
+                const SizedBox(width: 4),
                 Text(
                   node.rating.toStringAsFixed(1),
                   style: const TextStyle(
                     fontSize: 13,
                     fontWeight: FontWeight.w600,
-                    color: AppColors.textPrimary,
+                    color: _kInk,
                   ),
                 ),
                 if (node.reviewCount > 0) ...[
                   const SizedBox(width: 4),
                   Text(
                     '(${node.reviewCount})',
-                    style: const TextStyle(
-                      fontSize: 12,
-                      color: AppColors.textSecondary,
-                    ),
+                    style: const TextStyle(fontSize: 12, color: _kMuted2),
                   ),
                 ],
                 const SizedBox(width: 12),
@@ -731,42 +1017,43 @@ class _NodeInfoHeader extends StatelessWidget {
                 const Icon(
                   Icons.schedule_rounded,
                   size: 14,
-                  color: AppColors.textSecondary,
+                  color: _kMuted2,
                 ),
                 const SizedBox(width: 4),
                 Text(
                   '${node.estimatedDuration} min',
-                  style: const TextStyle(
-                    fontSize: 12,
-                    color: AppColors.textSecondary,
-                  ),
+                  style: const TextStyle(fontSize: 12, color: _kMuted2),
                 ),
               ],
             ],
           ),
           if (node.isLeafBookable && node.basePrice != null) ...[
-            const SizedBox(height: 12),
+            const SizedBox(height: 14),
             Row(
               crossAxisAlignment: CrossAxisAlignment.baseline,
               textBaseline: TextBaseline.alphabetic,
               children: [
+                const Text(
+                  'From',
+                  style: TextStyle(fontSize: 13, color: _kMuted2),
+                ),
+                const SizedBox(width: 8),
                 Text(
                   '₹${displayPrice.toInt()}',
-                  style: const TextStyle(
-                    fontSize: 28,
+                  style: GoogleFonts.poppins(
+                    fontSize: 22,
                     fontWeight: FontWeight.w800,
-                    color: AppColors.primary,
+                    color: _kInk,
                     height: 1.0,
                   ),
                 ),
-                const SizedBox(width: 6),
-                Text(
-                  hasAdjustment ? 'incl. adjustments' : 'onwards',
-                  style: const TextStyle(
-                    fontSize: 12,
-                    color: AppColors.textHint,
+                if (hasAdjustment) ...[
+                  const SizedBox(width: 8),
+                  const Text(
+                    'incl. add-ons',
+                    style: TextStyle(fontSize: 12, color: _kMuted2),
                   ),
-                ),
+                ],
               ],
             ),
           ],
@@ -776,7 +1063,9 @@ class _NodeInfoHeader extends StatelessWidget {
   }
 }
 
-// ── Children list section ─────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════════
+// Children list section (category navigation)
+// ═══════════════════════════════════════════════════════════════════════════════
 
 class _ChildrenSection extends StatelessWidget {
   const _ChildrenSection({required this.node, required this.children});
@@ -792,10 +1081,10 @@ class _ChildrenSection extends StatelessWidget {
           padding: const EdgeInsets.fromLTRB(20, 28, 20, 4),
           child: Text(
             node.isRoot ? 'All Services' : 'Browse ${node.name}',
-            style: const TextStyle(
+            style: GoogleFonts.poppins(
               fontSize: 17,
               fontWeight: FontWeight.w700,
-              color: AppColors.textPrimary,
+              color: _kInk,
             ),
           ),
         ),
@@ -805,7 +1094,7 @@ class _ChildrenSection extends StatelessWidget {
             padding: EdgeInsets.symmetric(horizontal: 20, vertical: 12),
             child: Text(
               'Loading…',
-              style: TextStyle(color: AppColors.textHint, fontSize: 13),
+              style: TextStyle(color: _kMuted2, fontSize: 13),
             ),
           )
         else
@@ -828,7 +1117,9 @@ class _ChildrenSection extends StatelessWidget {
   }
 }
 
-// ── Child list item (vertical card) ──────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════════
+// Child list item
+// ═══════════════════════════════════════════════════════════════════════════════
 
 class _ChildListItem extends StatefulWidget {
   const _ChildListItem({
@@ -838,9 +1129,6 @@ class _ChildListItem extends StatefulWidget {
   });
   final CatalogNodeModel node;
   final VoidCallback onTap;
-
-  /// The node.id of the parent through which this item is being displayed.
-  /// Drives path-scoped loyalty resolution for shared services.
   final String? parentNodeId;
 
   @override
@@ -876,7 +1164,7 @@ class _ChildListItemState extends State<_ChildListItem> {
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: AppColors.border, width: 0.8),
+          border: Border.all(color: _kBorder, width: 0.8),
           boxShadow: [
             BoxShadow(
               color: Colors.black.withAlpha(_pressed ? 8 : 14),
@@ -931,7 +1219,7 @@ class _ChildListItemState extends State<_ChildListItem> {
                         style: const TextStyle(
                           fontSize: 14,
                           fontWeight: FontWeight.w700,
-                          color: AppColors.textPrimary,
+                          color: _kInk,
                           height: 1.3,
                         ),
                       ),
@@ -965,23 +1253,22 @@ class _ChildListItemState extends State<_ChildListItem> {
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
                             fontSize: 12,
-                            color: AppColors.textSecondary,
+                            color: _kMuted,
                             height: 1.3,
                           ),
                         ),
                       ],
                       const SizedBox(height: 6),
-                      // Bottom row: price/options + duration
                       Row(
                         children: [
                           if (node.isLeafBookable &&
                               node.basePrice != null) ...[
                             Text(
                               '₹${node.basePrice!.toInt()}',
-                              style: const TextStyle(
+                              style: GoogleFonts.poppins(
                                 fontSize: 14,
                                 fontWeight: FontWeight.w800,
-                                color: AppColors.primary,
+                                color: _kInk,
                               ),
                             ),
                             const SizedBox(width: 4),
@@ -989,7 +1276,7 @@ class _ChildListItemState extends State<_ChildListItem> {
                               'onwards',
                               style: TextStyle(
                                 fontSize: 11,
-                                color: AppColors.textHint,
+                                color: _kMuted2,
                               ),
                             ),
                           ] else if (node.hasChildren)
@@ -998,7 +1285,7 @@ class _ChildListItemState extends State<_ChildListItem> {
                               style: const TextStyle(
                                 fontSize: 12,
                                 fontWeight: FontWeight.w500,
-                                color: AppColors.textSecondary,
+                                color: _kMuted,
                               ),
                             ),
                           if (node.estimatedDuration != null) ...[
@@ -1006,22 +1293,20 @@ class _ChildListItemState extends State<_ChildListItem> {
                             const Icon(
                               Icons.schedule_rounded,
                               size: 12,
-                              color: AppColors.textHint,
+                              color: _kMuted2,
                             ),
                             const SizedBox(width: 2),
                             Text(
                               '${node.estimatedDuration} min',
                               style: const TextStyle(
                                 fontSize: 11,
-                                color: AppColors.textHint,
+                                color: _kMuted2,
                               ),
                             ),
                           ],
                         ],
                       ),
 
-                      // Loyalty earn badge — uses catalog-scoped resolved config
-                      // so parent-level loyalty rules are inherited correctly.
                       if (node.isLeafBookable && node.loyaltyEarnEnabled)
                         Consumer(
                           builder: (_, ref, _) {
@@ -1073,7 +1358,7 @@ class _ChildListItemState extends State<_ChildListItem> {
                   child: const Icon(
                     Icons.chevron_right_rounded,
                     size: 20,
-                    color: AppColors.textSecondary,
+                    color: _kMuted,
                   ),
                 ),
               ),
@@ -1085,7 +1370,9 @@ class _ChildListItemState extends State<_ChildListItem> {
   }
 }
 
-// ── Loyalty earn badge ────────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════════
+// Loyalty earn badge
+// ═══════════════════════════════════════════════════════════════════════════════
 
 class _LoyaltyEarnBadge extends StatelessWidget {
   final int points;
@@ -1125,7 +1412,9 @@ class _LoyaltyEarnBadge extends StatelessWidget {
   }
 }
 
-// ── Coming Soon banner ────────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════════
+// Coming Soon banner
+// ═══════════════════════════════════════════════════════════════════════════════
 
 class _ComingSoonBanner extends StatelessWidget {
   const _ComingSoonBanner();
@@ -1142,25 +1431,25 @@ class _ComingSoonBanner extends StatelessWidget {
           borderRadius: BorderRadius.circular(18),
           border: Border.all(color: AppColors.gold.withAlpha(60)),
         ),
-        child: Column(
+        child: const Column(
           children: [
-            const Icon(Icons.schedule_rounded, size: 36, color: AppColors.gold),
-            const SizedBox(height: 12),
-            const Text(
+            Icon(Icons.schedule_rounded, size: 36, color: AppColors.gold),
+            SizedBox(height: 12),
+            Text(
               'Coming Soon',
               style: TextStyle(
                 fontSize: 17,
                 fontWeight: FontWeight.w700,
-                color: AppColors.textPrimary,
+                color: _kInk,
               ),
             ),
-            const SizedBox(height: 6),
-            const Text(
+            SizedBox(height: 6),
+            Text(
               'This service is not yet available for booking.\nCheck back soon.',
               textAlign: TextAlign.center,
               style: TextStyle(
                 fontSize: 13,
-                color: AppColors.textSecondary,
+                color: _kMuted,
                 height: 1.55,
               ),
             ),
@@ -1171,7 +1460,9 @@ class _ComingSoonBanner extends StatelessWidget {
   }
 }
 
-// ── Sticky cart bar ───────────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════════
+// Sticky booking bar — gold pill CTA
+// ═══════════════════════════════════════════════════════════════════════════════
 
 class _NodeBookingBar extends ConsumerWidget {
   const _NodeBookingBar({
@@ -1201,9 +1492,7 @@ class _NodeBookingBar extends ConsumerWidget {
   final int amcQuantity;
 
   void _addToCart(WidgetRef ref) {
-    ref
-        .read(cartProvider.notifier)
-        .addToCart(
+    ref.read(cartProvider.notifier).addToCart(
           node,
           priceAdjustment: amcPlan != null
               ? 0.0
@@ -1226,81 +1515,606 @@ class _NodeBookingBar extends ConsumerWidget {
         20,
         14 + MediaQuery.of(context).padding.bottom,
       ),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        border: const Border(
-          top: BorderSide(color: AppColors.border, width: 0.8),
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        border: Border(
+          top: BorderSide(color: _kBorder, width: 1),
         ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withAlpha(16),
-            blurRadius: 16,
-            offset: const Offset(0, -4),
-          ),
-        ],
       ),
       child: Row(
         children: [
+          // Price
           Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                '₹${displayPrice.toInt()}',
-                style: const TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.w800,
-                  color: AppColors.primary,
-                  height: 1.1,
-                ),
+              const Text(
+                'From',
+                style: TextStyle(fontSize: 10, color: _kMuted2),
               ),
               Text(
-                amcPlan != null
-                    ? 'AMC total · ${amcPlan!.numVisits} visits'
-                    : (priceAdjustment > 0 || addonsTotal > 0)
-                    ? 'incl. adjustments'
-                    : 'onwards',
-                style: const TextStyle(fontSize: 11, color: AppColors.textHint),
+                '₹${displayPrice.toInt()}',
+                style: GoogleFonts.poppins(
+                  fontSize: 17,
+                  fontWeight: FontWeight.w800,
+                  color: _kInk,
+                  height: 1.1,
+                ),
               ),
             ],
           ),
           const SizedBox(width: 12),
+
+          // Gold pill CTA
           Expanded(
-            child: inCart
-                ? FilledButton.icon(
-                    onPressed: () => openCart(context),
-                    icon: const Icon(Icons.shopping_cart_rounded, size: 18),
-                    label: const Text(
-                      'View Cart',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w700,
+            child: GestureDetector(
+              onTap: inCart ? () => openCart(context) : () => _addToCart(ref),
+              child: Container(
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                decoration: BoxDecoration(
+                  color: _kGold,
+                  borderRadius: BorderRadius.circular(100),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      inCart ? '🛒 View Cart' : '🛒 ${amcPlan != null ? 'Book Now' : 'Add to Cart'}',
+                      style: GoogleFonts.poppins(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: _kInk,
                       ),
                     ),
-                    style: FilledButton.styleFrom(
-                      minimumSize: const Size.fromHeight(48),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Web scaffold — modal-style card layout
+// ═══════════════════════════════════════════════════════════════════════════════
+
+class _WebScaffold extends ConsumerWidget {
+  const _WebScaffold({
+    required this.node,
+    required this.heroUrl,
+    required this.hasHero,
+    required this.children,
+    required this.attrs,
+    required this.addOns,
+    required this.faqs,
+    required this.displayPrice,
+    required this.hasAdjustment,
+    required this.isUnavailable,
+    required this.isEffectivelyHidden,
+    required this.avail,
+    required this.priceAdjustment,
+    required this.addonsTotal,
+    required this.parentNodeId,
+    required this.selections,
+    required this.selectedAddonIds,
+    required this.selectedAmcPlan,
+    required this.onOptionSelected,
+    required this.onAddonToggled,
+    required this.onAmcPlanSelected,
+  });
+
+  final CatalogNodeModel node;
+  final String? heroUrl;
+  final bool hasHero;
+  final List<CatalogNodeModel> children;
+  final List<ServiceAttributeModel> attrs;
+  final List<AddOnModel> addOns;
+  final List<FaqModel> faqs;
+  final double displayPrice;
+  final bool hasAdjustment;
+  final bool isUnavailable;
+  final bool isEffectivelyHidden;
+  final dynamic avail;
+  final double priceAdjustment;
+  final double addonsTotal;
+  final String? parentNodeId;
+  final Map<String, String> selections;
+  final Set<String> selectedAddonIds;
+  final AmcPlanModel? selectedAmcPlan;
+  final void Function(String, String, List<ServiceAttributeModel>)
+      onOptionSelected;
+  final void Function(String, bool) onAddonToggled;
+  final void Function(AmcPlanModel?) onAmcPlanSelected;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final cartItems = ref.watch(cartProvider);
+    final inCart = cartItems.any((item) => item.serviceId == node.id);
+
+    void addToCart() {
+      ref.read(cartProvider.notifier).addToCart(
+            node,
+            priceAdjustment: selectedAmcPlan != null
+                ? 0.0
+                : priceAdjustment + addonsTotal,
+            parentNodeId: parentNodeId,
+            amcPlan: selectedAmcPlan,
+            amcQuantity: 1,
+          );
+    }
+
+    return Scaffold(
+      backgroundColor: _kBg,
+      body: SafeArea(
+        child: SingleChildScrollView(
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 920),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 20, vertical: 24),
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(20),
+                    boxShadow: [
+                      BoxShadow(
+                        color:
+                            const Color(0xFF1A1714).withAlpha(90),
+                        blurRadius: 70,
+                        spreadRadius: -20,
+                        offset: const Offset(0, 30),
                       ),
-                    ),
-                  )
-                : FilledButton.icon(
-                    onPressed: () => _addToCart(ref),
-                    icon: const Icon(Icons.add_shopping_cart_rounded, size: 18),
-                    label: Text(
-                      amcPlan != null ? 'Book Now' : 'Add to Cart',
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w700,
+                    ],
+                  ),
+                  clipBehavior: Clip.antiAlias,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      // ── Header: photo | info ───────────────────────────────
+                      _WebHeader(
+                        node: node,
+                        heroUrl: heroUrl,
+                        hasHero: hasHero,
+                        displayPrice: displayPrice,
+                        hasAdjustment: hasAdjustment,
+                        onClose: () => context.pop(),
                       ),
-                    ),
-                    style: FilledButton.styleFrom(
-                      minimumSize: const Size.fromHeight(48),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
+
+                      // ── Attribute selection ────────────────────────────────
+                      if (node.isLeafBookable && attrs.isNotEmpty)
+                        Padding(
+                          padding:
+                              const EdgeInsets.fromLTRB(28, 20, 28, 0),
+                          child: ServiceAttributeSection(
+                            attrs: attrs,
+                            selections: selections,
+                            onChanged: (attrId, optId) =>
+                                onOptionSelected(attrId, optId, attrs),
+                          ),
+                        ),
+
+                      // ── Add-ons ────────────────────────────────────────────
+                      if (node.isLeafBookable && addOns.isNotEmpty) ...[
+                        Container(
+                          padding:
+                              const EdgeInsets.fromLTRB(28, 24, 28, 24),
+                          decoration: const BoxDecoration(
+                            border: Border(
+                              top: BorderSide(color: _kBorder),
+                              bottom: BorderSide(color: _kBorder),
+                            ),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              _SectionHeaderRow(title: 'Suggested Add-ons'),
+                              const SizedBox(height: 14),
+                              ServiceAddonSection(
+                                addOns: addOns,
+                                selectedIds: selectedAddonIds,
+                                onToggle: onAddonToggled,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+
+                      // ── AMC + About + FAQs + Reviews ───────────────────────
+                      Padding(
+                        padding:
+                            const EdgeInsets.fromLTRB(28, 24, 28, 0),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            if (node.isLeafBookable) ...[
+                              _SectionHeaderRow(title: 'AMC Plans'),
+                              const SizedBox(height: 14),
+                              AmcSection(
+                                serviceId: node.id,
+                                selectedPlan: selectedAmcPlan,
+                                onPlanSelected: onAmcPlanSelected,
+                                regularPrice: node.basePrice != null &&
+                                        node.basePrice! > 0
+                                    ? node.basePrice
+                                    : null,
+                              ),
+                              const SizedBox(height: 26),
+
+                              // About — flat text on web
+                              Text(
+                                'About this service',
+                                style: GoogleFonts.poppins(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w700,
+                                  color: _kInk,
+                                ),
+                              ),
+                              const SizedBox(height: 10),
+                              Text(
+                                node.description?.isNotEmpty == true
+                                    ? node.description!
+                                    : 'No description available.',
+                                style: const TextStyle(
+                                  fontSize: 13,
+                                  color: _kMuted,
+                                  height: 1.6,
+                                ),
+                                // maxWidth 640 handled by parent constraint
+                              ),
+                              const SizedBox(height: 18),
+
+                              // FAQs accordion
+                              _AccordionSection(
+                                label: 'FAQs',
+                                isFirst: true,
+                                child: faqs.isNotEmpty
+                                    ? FaqSection(faqs: faqs)
+                                    : const Padding(
+                                        padding: EdgeInsets.fromLTRB(
+                                            0, 8, 0, 14),
+                                        child: Text(
+                                          'No FAQs yet.',
+                                          style: TextStyle(
+                                            fontSize: 13,
+                                            color: _kMuted2,
+                                          ),
+                                        ),
+                                      ),
+                              ),
+
+                              // Reviews
+                              _AccordionSection(
+                                label: node.reviewCount > 0
+                                    ? 'Reviews (${node.reviewCount})'
+                                    : 'Reviews',
+                                isLast: true,
+                                child: ServiceReviewsSection(
+                                    serviceId: node.id),
+                              ),
+                              const SizedBox(height: 4),
+                            ],
+
+                            // Category navigation
+                            if (node.hasChildren)
+                              (isUnavailable || isEffectivelyHidden)
+                                  ? CatalogUnavailabilityBanner(
+                                      message: isUnavailable
+                                          ? avail?.message
+                                          : null,
+                                      isHidden: isEffectivelyHidden,
+                                    )
+                                  : _ChildrenSection(
+                                      node: node,
+                                      children: children,
+                                    ),
+
+                            if (!node.hasChildren && !node.isBookable)
+                              const _ComingSoonBanner(),
+                          ],
+                        ),
                       ),
+
+                      // ── Footer bar ─────────────────────────────────────────
+                      if (node.isLeafBookable)
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 28, vertical: 18),
+                          decoration: const BoxDecoration(
+                            border: Border(
+                              top: BorderSide(color: _kBorder),
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const Text(
+                                    'From',
+                                    style: TextStyle(
+                                        fontSize: 11, color: _kMuted2),
+                                  ),
+                                  Text(
+                                    '₹${displayPrice.toInt()}',
+                                    style: GoogleFonts.poppins(
+                                      fontSize: 20,
+                                      fontWeight: FontWeight.w800,
+                                      color: _kInk,
+                                      height: 1.1,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const Spacer(),
+                              GestureDetector(
+                                onTap: inCart
+                                    ? () => openCart(context)
+                                    : addToCart,
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 24, vertical: 13),
+                                  decoration: BoxDecoration(
+                                    color: _kGold,
+                                    borderRadius:
+                                        BorderRadius.circular(100),
+                                  ),
+                                  child: Text(
+                                    inCart
+                                        ? '🛒 View Cart'
+                                        : '🛒 ${selectedAmcPlan != null ? 'Book Now' : 'Add to Cart'}',
+                                    style: GoogleFonts.poppins(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w600,
+                                      color: _kInk,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Web header: photo panel | info panel
+// ═══════════════════════════════════════════════════════════════════════════════
+
+class _WebHeader extends StatelessWidget {
+  const _WebHeader({
+    required this.node,
+    required this.heroUrl,
+    required this.hasHero,
+    required this.displayPrice,
+    required this.hasAdjustment,
+    required this.onClose,
+  });
+
+  final CatalogNodeModel node;
+  final String? heroUrl;
+  final bool hasHero;
+  final double displayPrice;
+  final bool hasAdjustment;
+  final VoidCallback onClose;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(28),
+      decoration: const BoxDecoration(
+        border: Border(bottom: BorderSide(color: _kBorder)),
+      ),
+      child: Stack(
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Photo panel
+              if (hasHero && heroUrl != null)
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(14),
+                  child: SizedBox(
+                    width: 320,
+                    height: 220,
+                    child: Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        _HeroImage(url: heroUrl!),
+                        // Back button on photo
+                        Positioned(
+                          top: 12,
+                          left: 12,
+                          child: _CircleIconButton(
+                            icon: Icons.arrow_back_rounded,
+                            onTap: onClose,
+                          ),
+                        ),
+                        // Counter
+                        Positioned(
+                          bottom: 10,
+                          right: 12,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 8, vertical: 3),
+                            decoration: BoxDecoration(
+                              color:
+                                  const Color(0xFF1A1714).withAlpha(166),
+                              borderRadius: BorderRadius.circular(100),
+                            ),
+                            child: const Text(
+                              '1/6',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 10,
+                                height: 1.4,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
+                ),
+
+              const SizedBox(width: 28),
+
+              // Info panel
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.only(right: 40),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Category badge
+                      if (node.parentName?.isNotEmpty == true) ...[
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 10, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: _kInk,
+                            borderRadius: BorderRadius.circular(100),
+                          ),
+                          child: Text(
+                            node.parentName!,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                      ],
+
+                      // Title
+                      Text(
+                        node.name,
+                        style: GoogleFonts.poppins(
+                          fontSize: 24,
+                          fontWeight: FontWeight.w700,
+                          color: _kInk,
+                          height: 1.2,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+
+                      // Rating
+                      if (node.rating > 0 || node.estimatedDuration != null)
+                        Row(
+                          children: [
+                            if (node.rating > 0) ...[
+                              const Text('★',
+                                  style: TextStyle(
+                                      color: _kGold, fontSize: 13)),
+                              const SizedBox(width: 4),
+                              Text(
+                                node.rating.toStringAsFixed(1),
+                                style: const TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                  color: _kInk,
+                                ),
+                              ),
+                              if (node.reviewCount > 0) ...[
+                                const SizedBox(width: 4),
+                                Text(
+                                  '(${node.reviewCount} reviews)',
+                                  style: const TextStyle(
+                                    fontSize: 13,
+                                    color: _kMuted2,
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ],
+                        ),
+
+                      // Description
+                      if (node.description?.isNotEmpty == true) ...[
+                        const SizedBox(height: 8),
+                        Text(
+                          node.description!,
+                          style: const TextStyle(
+                            fontSize: 13,
+                            color: _kMuted,
+                            height: 1.6,
+                          ),
+                          maxLines: 4,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+
+                      // Price
+                      if (node.basePrice != null) ...[
+                        const SizedBox(height: 14),
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.baseline,
+                          textBaseline: TextBaseline.alphabetic,
+                          children: [
+                            const Text(
+                              'From',
+                              style:
+                                  TextStyle(fontSize: 13, color: _kMuted2),
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              '₹${displayPrice.toInt()}',
+                              style: GoogleFonts.poppins(
+                                fontSize: 24,
+                                fontWeight: FontWeight.w800,
+                                color: _kInk,
+                                height: 1.0,
+                              ),
+                            ),
+                            if (hasAdjustment) ...[
+                              const SizedBox(width: 8),
+                              const Text(
+                                'incl. add-ons',
+                                style: TextStyle(
+                                    fontSize: 12, color: _kMuted2),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+
+          // Close button (✕)
+          Positioned(
+            top: 0,
+            right: 0,
+            child: GestureDetector(
+              onTap: onClose,
+              child: Container(
+                width: 34,
+                height: 34,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF2EFE9),
+                  borderRadius: BorderRadius.circular(100),
+                ),
+                child: const Icon(Icons.close_rounded,
+                    size: 16, color: _kInk),
+              ),
+            ),
           ),
         ],
       ),

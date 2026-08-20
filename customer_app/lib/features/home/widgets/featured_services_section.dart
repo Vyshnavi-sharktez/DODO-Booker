@@ -393,7 +393,7 @@ class _CardInfo extends StatelessWidget {
                       vertical: 5,
                     ),
                     decoration: BoxDecoration(
-                      color: cs.primary,
+                      color: const Color(0xFF1A1714),
                       borderRadius: BorderRadius.circular(10),
                     ),
                     child: const Text(

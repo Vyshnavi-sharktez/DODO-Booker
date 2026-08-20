@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:ui' show ImageFilter;
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -20,6 +21,7 @@ class _PickedLocation {
 
 enum _CheckState {
   idle,
+  noLocationEntered,
   gettingLocation,
   checkingAvailability,
   serviceable,
@@ -37,11 +39,12 @@ extension _CheckStateX on _CheckState {
   String get webButtonLabel {
     switch (this) {
       case _CheckState.idle:
-        return 'Check Availability';
+      case _CheckState.noLocationEntered:
+        return 'Continue';
       case _CheckState.gettingLocation:
-        return 'Getting location...';
+        return 'Getting location…';
       case _CheckState.checkingAvailability:
-        return 'Checking availability...';
+        return 'Checking…';
       case _CheckState.serviceable:
         return 'We serve your area!';
       default:
@@ -54,9 +57,9 @@ extension _CheckStateX on _CheckState {
       case _CheckState.idle:
         return 'Check Availability';
       case _CheckState.gettingLocation:
-        return 'Getting location...';
+        return 'Getting location…';
       case _CheckState.checkingAvailability:
-        return 'Checking availability...';
+        return 'Checking availability…';
       case _CheckState.serviceable:
         return 'We serve your area!';
       default:
@@ -66,6 +69,8 @@ extension _CheckStateX on _CheckState {
 
   String? get statusMessage {
     switch (this) {
+      case _CheckState.noLocationEntered:
+        return 'Please enter a valid location.';
       case _CheckState.serviceable:
         return 'Great! We serve your area.';
       case _CheckState.notServiceable:
@@ -108,12 +113,9 @@ class _HeroSectionState extends State<HeroSection>
 
   _CheckState _checkState = _CheckState.idle;
 
-  // Manually picked location (from search, map, or live GPS). Null = use GPS on check.
   double? _pickedLat;
   double? _pickedLng;
   String? _pickedLabel;
-
-  // True while the pill's "Get Live Location" button is fetching GPS.
   bool _fetchingGps = false;
 
   @override
@@ -162,8 +164,6 @@ class _HeroSectionState extends State<HeroSection>
     });
   }
 
-  /// Fetches real-time GPS, reverse-geocodes it, and populates the location field.
-  /// Does NOT run the serviceability check — just fills the pill.
   Future<void> _fetchLiveLocation() async {
     if (_fetchingGps) return;
     setState(() => _fetchingGps = true);
@@ -208,17 +208,14 @@ class _HeroSectionState extends State<HeroSection>
   Future<void> _handleContinue() async {
     if (_checkState.isLoading) return;
 
-    // ── Path A: user picked a location manually ────────────────────────────
     if (_pickedLat != null && _pickedLng != null) {
       setState(() => _checkState = _CheckState.checkingAvailability);
       await _runServiceabilityCheck(_pickedLat!, _pickedLng!);
       return;
     }
 
-    // ── Path B: use real-time GPS ──────────────────────────────────────────
     setState(() => _checkState = _CheckState.gettingLocation);
 
-    // 1. GPS service enabled?
     try {
       final serviceEnabled = await Geolocator.isLocationServiceEnabled();
       if (!serviceEnabled) {
@@ -230,7 +227,6 @@ class _HeroSectionState extends State<HeroSection>
       return;
     }
 
-    // 2. Permission check / request
     try {
       var permission = await Geolocator.checkPermission();
       if (permission == LocationPermission.denied) {
@@ -246,7 +242,6 @@ class _HeroSectionState extends State<HeroSection>
       return;
     }
 
-    // 3. Get current position (10-second hard timeout)
     double lat, lng;
     try {
       final pos = await Geolocator.getCurrentPosition(
@@ -286,6 +281,19 @@ class _HeroSectionState extends State<HeroSection>
 
   void _resetCheck() => setState(() => _checkState = _CheckState.idle);
 
+  // Web-only continue: requires an explicit location pick; no GPS fallback.
+  Future<void> _handleWebContinue() async {
+    if (_checkState.isLoading) return;
+
+    if (_pickedLat == null || _pickedLng == null) {
+      setState(() => _checkState = _CheckState.noLocationEntered);
+      return;
+    }
+
+    setState(() => _checkState = _CheckState.checkingAvailability);
+    await _runServiceabilityCheck(_pickedLat!, _pickedLng!);
+  }
+
   @override
   Widget build(BuildContext context) {
     final width = MediaQuery.of(context).size.width;
@@ -296,7 +304,7 @@ class _HeroSectionState extends State<HeroSection>
               checkState: _checkState,
               pickedLabel: _pickedLabel,
               fetchingGps: _fetchingGps,
-              onContinue: _handleContinue,
+              onContinue: _handleWebContinue,
               onReset: _resetCheck,
               onLocationTap: _openLocationPicker,
               onClearLocation: _clearLocation,
@@ -337,40 +345,82 @@ class _WebHero extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final w = MediaQuery.of(context).size.width;
-    final hPad = w >= 1024 ? 80.0 : 40.0;
+    final hPad = w >= 1024 ? 32.0 : 20.0;
 
-    return Container(
-      width: double.infinity,
-      color: const Color(0xFF111111),
-      padding: const EdgeInsets.symmetric(vertical: 72),
-      child: Center(
-        child: Padding(
-          padding: EdgeInsets.symmetric(horizontal: hPad),
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 1120),
+    return ClipRect(
+      child: SizedBox(
+        height: 640,
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+          // ── Background: blurred image + dark overlay ────────────────────
+          Positioned.fill(
+            child: Transform.scale(
+              scale: 1.05,
+              child: ImageFiltered(
+                imageFilter: ImageFilter.blur(
+                  sigmaX: 3.0,
+                  sigmaY: 3.0,
+                  tileMode: TileMode.clamp,
+                ),
+                child: Image.asset(
+                  'assets/images/hero-bg.png',
+                  fit: BoxFit.cover,
+                  alignment: const Alignment(0.0, -0.5),
+                  color: Colors.black.withOpacity(0.52),
+                  colorBlendMode: BlendMode.srcATop,
+                  errorBuilder: (_, _, _) =>
+                      const ColoredBox(color: Color(0xFF111111)),
+                ),
+              ),
+            ),
+          ),
+          // ── Cinematic gradient: left very dark → right subtle ────────────
+          Positioned.fill(
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.centerLeft,
+                  end: Alignment.centerRight,
+                  stops: const [0.0, 0.55, 1.0],
+                  colors: [
+                    const Color(0xFF080808).withOpacity(0.92),
+                    const Color(0xFF080808).withOpacity(0.55),
+                    const Color(0xFF080808).withOpacity(0.18),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          // ── Content ─────────────────────────────────────────────────────
+          Padding(
+            padding: EdgeInsets.symmetric(horizontal: hPad, vertical: 72),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
                 Expanded(
                   flex: 55,
-                  child: _WebContent(
-                    checkState: checkState,
-                    pickedLabel: pickedLabel,
-                    fetchingGps: fetchingGps,
-                    onContinue: onContinue,
-                    onReset: onReset,
-                    onLocationTap: onLocationTap,
-                    onClearLocation: onClearLocation,
-                    onFetchLiveLocation: onFetchLiveLocation,
+                  child: Align(
+                    alignment: const Alignment(0, 0.3),
+                    child: _WebContent(
+                      checkState: checkState,
+                      pickedLabel: pickedLabel,
+                      fetchingGps: fetchingGps,
+                      onContinue: onContinue,
+                      onReset: onReset,
+                      onLocationTap: onLocationTap,
+                      onClearLocation: onClearLocation,
+                      onFetchLiveLocation: onFetchLiveLocation,
+                    ),
                   ),
                 ),
                 const SizedBox(width: 48),
                 Expanded(
                   flex: 45,
                   child: Align(
-                    alignment: Alignment.centerRight,
+                    alignment: Alignment.center,
                     child: ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: 360),
+                      constraints: const BoxConstraints(maxWidth: 400),
                       child: Image.asset(
                         'assets/images/dodo-mascot.png',
                         fit: BoxFit.contain,
@@ -382,7 +432,8 @@ class _WebHero extends StatelessWidget {
               ],
             ),
           ),
-        ),
+        ],
+      ),
       ),
     );
   }
@@ -433,55 +484,41 @@ class _WebContent extends StatelessWidget {
             ),
           ),
         ),
-        const SizedBox(height: 20),
+        const SizedBox(height: 8),
 
         // Headline
         Text.rich(
           TextSpan(
             style: GoogleFonts.poppins(
-              fontSize: 44,
               fontWeight: FontWeight.w800,
               color: Colors.white,
               height: 1.12,
               letterSpacing: -0.5,
+              fontSize: 44,
             ),
             children: const [
               TextSpan(text: 'Are you looking for\n'),
               TextSpan(
-                text: 'home services?',
+                text: 'home service?',
                 style: TextStyle(color: AppColors.gold),
               ),
             ],
           ),
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: 8),
 
         // Body
         Text(
           'Let us take care of it. Book a trusted professional in just a few taps.',
           style: GoogleFonts.inter(
             fontSize: 15,
-            color: const Color(0xFFB3ADA3),
+            color: const Color(0xFFD9D5CE),
             height: 1.6,
-          ),
-        ),
-        const SizedBox(height: 8),
-
-        // Hint
-        Text(
-          hasLocation
-              ? 'Location set — click Check Availability to confirm service.'
-              : "We'll show services for your location",
-          style: GoogleFonts.inter(
-            fontSize: 13,
-            color: hasLocation
-                ? AppColors.gold.withAlpha(200)
-                : const Color(0xFF7A756D),
           ),
         ),
         const SizedBox(height: 20),
 
-        // ── Location input pill (tappable) ──────────────────────────────────
+        // Location input pill
         ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 400),
           child: MouseRegion(
@@ -501,9 +538,10 @@ class _WebContent extends StatelessWidget {
                 decoration: BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(100),
-                  border: hasLocation
-                      ? Border.all(color: AppColors.gold, width: 1.5)
-                      : null,
+                  border: Border.all(
+                      color: hasLocation ? AppColors.gold : Colors.transparent,
+                      width: 1.5,
+                    ),
                 ),
                 child: Row(
                   children: [
@@ -519,8 +557,7 @@ class _WebContent extends StatelessWidget {
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
-                        pickedLabel ??
-                            'Enter your location or select from map',
+                        pickedLabel ?? 'Enter your location',
                         style: GoogleFonts.inter(
                           fontSize: 14,
                           color: hasLocation
@@ -532,12 +569,12 @@ class _WebContent extends StatelessWidget {
                     ),
                     const SizedBox(width: 6),
                     if (hasLocation)
-                      // Clear button
                       GestureDetector(
                         onTap: onClearLocation,
                         behavior: HitTestBehavior.opaque,
-                        child: Padding(
-                          padding: const EdgeInsets.all(5),
+                        child: SizedBox(
+                          width: 28,
+                          height: 28,
                           child: Icon(
                             Icons.close_rounded,
                             size: 15,
@@ -546,7 +583,6 @@ class _WebContent extends StatelessWidget {
                         ),
                       )
                     else
-                      // Get Live Location button
                       GestureDetector(
                         onTap: fetchingGps ? null : onFetchLiveLocation,
                         behavior: HitTestBehavior.opaque,
@@ -581,15 +617,28 @@ class _WebContent extends StatelessWidget {
             ),
           ),
         ),
-        const SizedBox(height: 14),
+        const SizedBox(height: 8),
 
-        // Status message (shown when a result is available)
-        if (checkState.hasMessage) ...[
-          _StatusMessage(checkState: checkState),
-          const SizedBox(height: 10),
-        ],
+        // Fixed-height slot — capped at 400px so the column width never grows
+        // when _StatusMessage (Row, mainAxisSize.max) appears.
+        SizedBox(
+          height: 20,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 400),
+            child: checkState.hasMessage
+                ? _StatusMessage(checkState: checkState)
+                : Text(
+                    "Let's check if we service your area",
+                    style: GoogleFonts.inter(
+                      fontSize: 13,
+                      color: const Color(0xFFB3ADA3),
+                    ),
+                  ),
+          ),
+        ),
+        const SizedBox(height: 16),
 
-        // Check Availability CTA
+        // Gold pill CTA
         _ContinueButton(
           checkState: checkState,
           onTap: onContinue,
@@ -600,7 +649,7 @@ class _WebContent extends StatelessWidget {
   }
 }
 
-// ── Continue button ───────────────────────────────────────────────────────────
+// ── Continue button (gold pill) ───────────────────────────────────────────────
 
 class _ContinueButton extends StatefulWidget {
   final _CheckState checkState;
@@ -622,7 +671,8 @@ class _ContinueButtonState extends State<_ContinueButton> {
 
   VoidCallback? get _effectiveTap {
     if (widget.checkState.isLoading || widget.checkState.isSuccess) return null;
-    if (widget.checkState == _CheckState.idle) return widget.onTap;
+    if (widget.checkState == _CheckState.idle ||
+        widget.checkState == _CheckState.noLocationEntered) return widget.onTap;
     return widget.onReset;
   }
 
@@ -642,11 +692,12 @@ class _ContinueButtonState extends State<_ContinueButton> {
           duration: const Duration(milliseconds: 150),
           padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 14),
           decoration: BoxDecoration(
-            color: _hovered && isActive
-                ? const Color(0xFF2A2622)
-                : const Color(0xFF1E1B17),
+            color: widget.checkState.isSuccess
+                ? const Color(0xFF4ADE80).withOpacity(0.9)
+                : _hovered && isActive
+                    ? AppColors.goldDeep
+                    : AppColors.gold,
             borderRadius: BorderRadius.circular(100),
-            border: Border.all(color: const Color(0xFF2A2622)),
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
@@ -657,7 +708,8 @@ class _ContinueButtonState extends State<_ContinueButton> {
                   height: 13,
                   child: CircularProgressIndicator(
                     strokeWidth: 1.5,
-                    valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                    valueColor:
+                        AlwaysStoppedAnimation<Color>(Color(0xFF1A1714)),
                   ),
                 ),
                 const SizedBox(width: 10),
@@ -667,11 +719,19 @@ class _ContinueButtonState extends State<_ContinueButton> {
                 style: GoogleFonts.poppins(
                   fontSize: 14,
                   fontWeight: FontWeight.w600,
-                  color: Colors.white.withAlpha(
-                    widget.checkState.isLoading ? 180 : 255,
-                  ),
+                  color: const Color(0xFF1A1714),
                 ),
               ),
+              if (!widget.checkState.isLoading) ...[
+                const SizedBox(width: 8),
+                const Text(
+                  '→',
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: Color(0xFF1A1714),
+                  ),
+                ),
+              ],
             ],
           ),
         ),
@@ -705,6 +765,8 @@ class _StatusMessage extends StatelessWidget {
         Flexible(
           child: Text(
             message,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
             style: GoogleFonts.inter(
               fontSize: 13,
               color: color,
@@ -820,8 +882,7 @@ class _LocationPickerSheetState extends State<_LocationPickerSheet> {
       MaterialPageRoute(builder: (_) => const MapPickerScreen()),
     );
     if (result != null && mounted) {
-      final label =
-          result.line1 ?? result.city ?? 'Selected location';
+      final label = result.line1 ?? result.city ?? 'Selected location';
       Navigator.of(context).pop(_PickedLocation(
         lat: result.latitude,
         lng: result.longitude,
@@ -848,7 +909,6 @@ class _LocationPickerSheetState extends State<_LocationPickerSheet> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // Drag handle
               Center(
                 child: Padding(
                   padding: const EdgeInsets.only(top: 12, bottom: 8),
@@ -862,8 +922,6 @@ class _LocationPickerSheetState extends State<_LocationPickerSheet> {
                   ),
                 ),
               ),
-
-              // Header row
               Padding(
                 padding: const EdgeInsets.fromLTRB(20, 4, 16, 12),
                 child: Row(
@@ -877,7 +935,6 @@ class _LocationPickerSheetState extends State<_LocationPickerSheet> {
                       ),
                     ),
                     const Spacer(),
-                    // Pick on Map CTA
                     TextButton.icon(
                       onPressed: _openMap,
                       icon: const Icon(Icons.map_outlined, size: 16),
@@ -895,8 +952,6 @@ class _LocationPickerSheetState extends State<_LocationPickerSheet> {
                   ],
                 ),
               ),
-
-              // Search field
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
                 child: Container(
@@ -952,10 +1007,7 @@ class _LocationPickerSheetState extends State<_LocationPickerSheet> {
                   ),
                 ),
               ),
-
               const Divider(height: 1),
-
-              // "Use my location" — always visible option
               ListTile(
                 onTap: _fetchingGps ? null : _useMyLocation,
                 leading: Container(
@@ -996,8 +1048,6 @@ class _LocationPickerSheetState extends State<_LocationPickerSheet> {
                 ),
               ),
               const Divider(height: 1),
-
-              // Search results list
               Flexible(
                 child: _results.isEmpty && !_searching
                     ? Padding(
@@ -1006,9 +1056,9 @@ class _LocationPickerSheetState extends State<_LocationPickerSheet> {
                         child: Column(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Icon(Icons.location_on_outlined,
+                            const Icon(Icons.location_on_outlined,
                                 size: 36,
-                                color: const Color(0xFFDDD8D2)),
+                                color: Color(0xFFDDD8D2)),
                             const SizedBox(height: 12),
                             Text(
                               _ctrl.text.isEmpty
@@ -1039,8 +1089,8 @@ class _LocationPickerSheetState extends State<_LocationPickerSheet> {
                             leading: Container(
                               width: 36,
                               height: 36,
-                              decoration: BoxDecoration(
-                                color: const Color(0xFFF5F2EE),
+                              decoration: const BoxDecoration(
+                                color: Color(0xFFF5F2EE),
                                 shape: BoxShape.circle,
                               ),
                               child: const Icon(
@@ -1075,7 +1125,6 @@ class _LocationPickerSheetState extends State<_LocationPickerSheet> {
                         },
                       ),
               ),
-
               SizedBox(height: MediaQuery.of(context).padding.bottom + 8),
             ],
           ),
@@ -1105,7 +1154,6 @@ class _MobileHero extends StatelessWidget {
       color: const Color(0xFF111111),
       child: Stack(
         children: [
-          // Watermark "SERV / ICE" in the background
           Positioned(
             top: 20,
             left: 20,
@@ -1122,14 +1170,11 @@ class _MobileHero extends StatelessWidget {
               ),
             ),
           ),
-
-          // Main content column
           Padding(
             padding: const EdgeInsets.fromLTRB(24, 28, 24, 36),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Logo row
                 Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
@@ -1154,8 +1199,6 @@ class _MobileHero extends StatelessWidget {
                   ],
                 ),
                 const SizedBox(height: 16),
-
-                // Mascot
                 Center(
                   child: ConstrainedBox(
                     constraints: const BoxConstraints(
@@ -1171,8 +1214,6 @@ class _MobileHero extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 20),
-
-                // Headline
                 Text.rich(
                   TextSpan(
                     style: GoogleFonts.poppins(
@@ -1191,8 +1232,6 @@ class _MobileHero extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 10),
-
-                // Body
                 Text(
                   'Let us take care of it. Book trusted professionals in just a few taps.',
                   style: GoogleFonts.inter(
@@ -1202,15 +1241,11 @@ class _MobileHero extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 28),
-
-                // Check Availability pill
                 _GetStartedButton(
                   checkState: checkState,
                   onTap: onGetStarted,
                   onReset: onReset,
                 ),
-
-                // Status message below button
                 if (checkState.hasMessage) ...[
                   const SizedBox(height: 14),
                   _StatusMessage(checkState: checkState),

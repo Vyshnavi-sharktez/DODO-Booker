@@ -1,44 +1,22 @@
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/scheduler.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:google_fonts/google_fonts.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/utils/service_image_registry.dart';
 import '../../../core/widgets/section_header.dart';
 import '../../../features/catalog/models/catalog_node_model.dart';
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Layout constants
-// ─────────────────────────────────────────────────────────────────────────────
+// ── Layout constants (standard card, same spec as sub_services) ───────────────
 
-const double _kGap    = 20.0;
-const double _kRadius = 20.0;
-const double _kInfoH  = 120.0;
+const double _kCardW  = 240.0;
+const double _kImgH   = 170.0;
+const double _kLabelH = 56.0;
+const double _kCardH  = _kImgH + _kLabelH;
+const double _kGap    = 16.0;
+const double _kRadius = 16.0;
 
-// Info-strip height budget breakdown (120px):
-//   padding top 10 + bottom 12 = 22px consumed by Padding
-//   Remaining 98px for Column children:
-//     name   2 lines × 13px × h1.25 ≈ 32.5px
-//     +4 gap  = 4px
-//     category 1 line × 10px × h1.2 ≈ 12px
-//     +3 gap  = 3px
-//     rating row                     ≈ 13px  (optional)
-//     Spacer fills the rest
-//     price + Book Now row           ≈ 22px
-//   Total with rating: 32.5+4+12+3+13+22 = 86.5px ≤ 98px ✓
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Responsive card dimensions
-// ─────────────────────────────────────────────────────────────────────────────
-
-({double w, double h}) _cardSize(double viewportW) {
-  if (viewportW < 600) return (w: 220.0, h: 300.0); // mobile  (~2 cards)
-  return (w: 260.0, h: 340.0);                       // desktop (~4 cards)
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Section
-// ─────────────────────────────────────────────────────────────────────────────
+// ── Section ───────────────────────────────────────────────────────────────────
 
 class TrendingServicesSection extends StatelessWidget {
   final AsyncValue<List<CatalogNodeModel>> asyncServices;
@@ -62,10 +40,7 @@ class TrendingServicesSection extends StatelessWidget {
       children: [
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 20),
-          child: SectionHeader(
-            title: title,
-            onSeeAll: onSeeAll,
-          ),
+          child: SectionHeader(title: title, onSeeAll: onSeeAll),
         ),
         const SizedBox(height: 20),
         asyncServices.when(
@@ -80,93 +55,210 @@ class TrendingServicesSection extends StatelessWidget {
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Horizontal snap carousel
-// ─────────────────────────────────────────────────────────────────────────────
+// ── Carousel ──────────────────────────────────────────────────────────────────
 
-class _Carousel extends StatefulWidget {
+class _Carousel extends StatelessWidget {
   final List<CatalogNodeModel> services;
   final ValueChanged<CatalogNodeModel> onServiceTap;
 
   const _Carousel({required this.services, required this.onServiceTap});
 
   @override
-  State<_Carousel> createState() => _CarouselState();
-}
-
-class _CarouselState extends State<_Carousel> {
-  final _ctrl = ScrollController();
-  double _currentCardW = 260;
-
-  void _snap() {
-    if (!_ctrl.hasClients) return;
-    final step = _currentCardW + _kGap;
-    final target = (_ctrl.offset / step).round() * step;
-    final clamped = target.clamp(0.0, _ctrl.position.maxScrollExtent);
-    if ((clamped - _ctrl.offset).abs() > 0.5) {
-      _ctrl.animateTo(
-        clamped,
-        duration: const Duration(milliseconds: 320),
-        curve: Curves.easeOutCubic,
-      );
-    }
-  }
-
-  @override
-  void dispose() {
-    _ctrl.dispose();
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final size = _cardSize(constraints.maxWidth);
-        _currentCardW = size.w;
-        final listH = size.h + 24; // 24px shadow breathing room
-
-        return NotificationListener<ScrollNotification>(
-          onNotification: (n) {
-            if (n is ScrollEndNotification) {
-              SchedulerBinding.instance
-                  .addPostFrameCallback((_) => _snap());
-            }
-            return false;
-          },
-          child: ScrollConfiguration(
-            behavior: _CarouselScrollBehavior(),
-            child: SizedBox(
-              height: listH,
-              child: ListView.builder(
-                controller: _ctrl,
-                scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
-                itemCount: widget.services.length,
-                itemBuilder: (_, i) {
-                  final node = widget.services[i];
-                  return Padding(
-                    padding: EdgeInsets.only(
-                      right: i < widget.services.length - 1 ? _kGap : 0,
-                    ),
-                    child: _ServiceCard(
-                      node: node,
-                      cardWidth: size.w,
-                      cardHeight: size.h,
-                      onTap: () => widget.onServiceTap(node),
-                    ),
-                  );
-                },
-              ),
+    return ScrollConfiguration(
+      behavior: _PointerScrollBehavior(),
+      child: SizedBox(
+        height: _kCardH + 16, // 16px shadow breathing room
+        child: ListView.builder(
+          scrollDirection: Axis.horizontal,
+          padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
+          itemCount: services.length,
+          itemBuilder: (_, i) => Padding(
+            padding: EdgeInsets.only(
+              right: i < services.length - 1 ? _kGap : 0,
+            ),
+            child: _ServiceCard(
+              node: services[i],
+              onTap: () => onServiceTap(services[i]),
             ),
           ),
-        );
-      },
+        ),
+      ),
     );
   }
 }
 
-class _CarouselScrollBehavior extends MaterialScrollBehavior {
+// ── Standard service card ─────────────────────────────────────────────────────
+
+class _ServiceCard extends StatefulWidget {
+  final CatalogNodeModel node;
+  final VoidCallback onTap;
+
+  const _ServiceCard({required this.node, required this.onTap});
+
+  @override
+  State<_ServiceCard> createState() => _ServiceCardState();
+}
+
+class _ServiceCardState extends State<_ServiceCard> {
+  bool _hovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final node = widget.node;
+    final url = ServiceImageRegistry.resolve(node.imageUrl, node.parentName);
+
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      child: GestureDetector(
+        onTap: widget.onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          curve: Curves.easeOut,
+          width: _kCardW,
+          height: _kCardH,
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(_kRadius),
+            border: Border.all(
+              color: _hovered
+                  ? AppColors.gold.withAlpha(140)
+                  : const Color(0xFFECE7DE),
+              width: 1,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withAlpha(_hovered ? 20 : 8),
+                blurRadius: _hovered ? 18 : 6,
+                offset: Offset(0, _hovered ? 6 : 2),
+              ),
+            ],
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(_kRadius - 1),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                // ── Image ────────────────────────────────────────────────
+                SizedBox(
+                  height: _kImgH,
+                  child: Image.network(
+                    url,
+                    fit: BoxFit.cover,
+                    width: double.infinity,
+                    loadingBuilder: (_, child, p) => p == null
+                        ? child
+                        : const ColoredBox(color: Color(0xFFF1ECE1)),
+                    errorBuilder: (_, _, _) => Container(
+                      color: const Color(0xFFF1ECE1),
+                      alignment: Alignment.center,
+                      child: const Icon(
+                        Icons.home_repair_service_rounded,
+                        size: 32,
+                        color: AppColors.gold,
+                      ),
+                    ),
+                  ),
+                ),
+                // ── Label strip ──────────────────────────────────────────
+                SizedBox(
+                  height: _kLabelH,
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          node.name,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: GoogleFonts.poppins(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: const Color(0xFF1A1714),
+                            height: 1.25,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Row(
+                          children: [
+                            // Price
+                            if (node.basePrice != null)
+                              Text(
+                                '₹${node.basePrice!.toInt()}',
+                                style: GoogleFonts.inter(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w700,
+                                  color: const Color(0xFF1A1714),
+                                ),
+                              ),
+                            if (node.basePrice != null && node.rating > 0)
+                              const SizedBox(width: 8),
+                            // Rating
+                            if (node.rating > 0) ...[
+                              const Icon(
+                                Icons.star_rounded,
+                                size: 12,
+                                color: AppColors.gold,
+                              ),
+                              const SizedBox(width: 2),
+                              Text(
+                                node.rating.toStringAsFixed(1),
+                                style: GoogleFonts.inter(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w600,
+                                  color: const Color(0xFF666666),
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ── Skeleton ──────────────────────────────────────────────────────────────────
+
+class _Skeleton extends StatelessWidget {
+  const _Skeleton();
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: _kCardH + 16,
+      child: ListView.builder(
+        scrollDirection: Axis.horizontal,
+        physics: const NeverScrollableScrollPhysics(),
+        padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
+        itemCount: 4,
+        itemBuilder: (_, i) => Container(
+          width: _kCardW,
+          height: _kCardH,
+          margin: EdgeInsets.only(right: i < 3 ? _kGap : 0),
+          decoration: BoxDecoration(
+            color: AppColors.shimmerBase,
+            borderRadius: BorderRadius.circular(_kRadius),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ── Scroll behavior ───────────────────────────────────────────────────────────
+
+class _PointerScrollBehavior extends MaterialScrollBehavior {
   @override
   Set<PointerDeviceKind> get dragDevices => {
         PointerDeviceKind.touch,
@@ -177,294 +269,4 @@ class _CarouselScrollBehavior extends MaterialScrollBehavior {
 
   @override
   Widget buildScrollbar(context, child, details) => child;
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Service card
-//
-// Layout:
-//   SizedBox(cardW × cardH)              ← hard outer bound
-//     AnimatedContainer(border, shadow)  ← hover decoration
-//       ClipRRect(radius: 18.5)          ← rounds content to match border
-//         Column
-//           Expanded   → _CardImage      ← fills (cardH - _kInfoH)
-//           SizedBox(_kInfoH) → _CardInfo ← always exactly 120px
-//
-// Card vs Book Now tap:
-//   Both navigate to the same destination (service details).
-//   A _navigating guard prevents double-push when nested GestureDetectors
-//   both resolve (inner wins per Flutter's arena, but guard is a safety net).
-// ─────────────────────────────────────────────────────────────────────────────
-
-class _ServiceCard extends StatefulWidget {
-  final CatalogNodeModel node;
-  final double cardWidth;
-  final double cardHeight;
-  final VoidCallback onTap;
-
-  const _ServiceCard({
-    required this.node,
-    required this.cardWidth,
-    required this.cardHeight,
-    required this.onTap,
-  });
-
-  @override
-  State<_ServiceCard> createState() => _ServiceCardState();
-}
-
-class _ServiceCardState extends State<_ServiceCard> {
-  bool _hovered = false;
-  bool _navigating = false;
-
-  void _navigate() {
-    if (_navigating) return;
-    _navigating = true;
-    widget.onTap();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) _navigating = false;
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return MouseRegion(
-      cursor: SystemMouseCursors.click,
-      onEnter: (_) => setState(() => _hovered = true),
-      onExit: (_) => setState(() => _hovered = false),
-      child: GestureDetector(
-        onTap: _navigate,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
-          curve: Curves.easeOut,
-          width: widget.cardWidth,
-          height: widget.cardHeight,
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(_kRadius),
-            border: Border.all(
-              color: const Color(0xFFEBEBEB),
-              width: 1,
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withAlpha(_hovered ? 26 : 14),
-                blurRadius: _hovered ? 22 : 10,
-                spreadRadius: 0,
-                offset: Offset(0, _hovered ? 8 : 4),
-              ),
-            ],
-          ),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(_kRadius - 1.5),
-            child: Column(
-              mainAxisSize: MainAxisSize.max,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Expanded(
-                  child: _CardImage(node: widget.node),
-                ),
-                SizedBox(
-                  height: _kInfoH,
-                  child: _CardInfo(
-                    node: widget.node,
-                    onBookNow: _navigate,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Card image
-// ─────────────────────────────────────────────────────────────────────────────
-
-class _CardImage extends StatelessWidget {
-  final CatalogNodeModel node;
-
-  const _CardImage({required this.node});
-
-  @override
-  Widget build(BuildContext context) {
-    final url = ServiceImageRegistry.resolve(
-      node.imageUrl,
-      node.parentName,
-    );
-
-    return Image.network(
-      url,
-      fit: BoxFit.cover,
-      width: double.infinity,
-      height: double.infinity,
-      loadingBuilder: (_, child, p) =>
-          p == null ? child : const ColoredBox(color: Color(0xFFEEEEEE)),
-      errorBuilder: (_, _, _) =>
-          const ColoredBox(color: Color(0xFFF0F0F0)),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Card info strip
-// ─────────────────────────────────────────────────────────────────────────────
-
-class _CardInfo extends StatelessWidget {
-  final CatalogNodeModel node;
-  final VoidCallback onBookNow;
-
-  const _CardInfo({required this.node, required this.onBookNow});
-
-  @override
-  Widget build(BuildContext context) {
-    return ColoredBox(
-      color: Colors.white,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
-        child: Column(
-          mainAxisSize: MainAxisSize.max,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              node.name,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w700,
-                color: Color(0xFF1A1A1A),
-                height: 1.25,
-              ),
-            ),
-            if (node.parentName != null) ...[
-              const SizedBox(height: 4),
-              Text(
-                node.parentName!,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  fontSize: 10,
-                  color: AppColors.textHint,
-                  height: 1.2,
-                ),
-              ),
-            ],
-            if (node.rating > 0) ...[
-              const SizedBox(height: 3),
-              Row(
-                children: [
-                  const Icon(
-                    Icons.star_rounded,
-                    size: 11,
-                    color: AppColors.gold,
-                  ),
-                  const SizedBox(width: 2),
-                  Text(
-                    node.rating.toStringAsFixed(1),
-                    style: const TextStyle(
-                      fontSize: 10,
-                      fontWeight: FontWeight.w600,
-                      color: Color(0xFF444444),
-                      height: 1.2,
-                    ),
-                  ),
-                  if (node.reviewCount > 0) ...[
-                    const SizedBox(width: 2),
-                    Text(
-                      '(${node.reviewCount})',
-                      style: const TextStyle(
-                        fontSize: 10,
-                        color: AppColors.textHint,
-                        height: 1.2,
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-            ],
-            const Spacer(),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                Text(
-                  '₹${(node.basePrice ?? 0).toInt()}',
-                  style: const TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w800,
-                    color: Color(0xFF1A1A1A),
-                    height: 1.2,
-                  ),
-                ),
-                GestureDetector(
-                  onTap: onBookNow,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 5,
-                    ),
-                    decoration: BoxDecoration(
-                      color: AppColors.textPrimary,
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: const Text(
-                      'Book Now',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
-                        letterSpacing: 0.2,
-                        height: 1.2,
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Loading skeleton
-// ─────────────────────────────────────────────────────────────────────────────
-
-class _Skeleton extends StatelessWidget {
-  const _Skeleton();
-
-  @override
-  Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final size = _cardSize(constraints.maxWidth);
-        final listH = size.h + 24;
-
-        return SizedBox(
-          height: listH,
-          child: ListView.builder(
-            scrollDirection: Axis.horizontal,
-            physics: const NeverScrollableScrollPhysics(),
-            padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
-            itemCount: 4,
-            itemBuilder: (_, i) => Container(
-              width: size.w,
-              height: size.h,
-              margin: EdgeInsets.only(right: i < 3 ? _kGap : 0),
-              decoration: BoxDecoration(
-                color: AppColors.shimmerBase,
-                borderRadius: BorderRadius.circular(_kRadius),
-              ),
-            ),
-          ),
-        );
-      },
-    );
-  }
 }

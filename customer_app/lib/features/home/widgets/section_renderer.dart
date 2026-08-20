@@ -29,7 +29,8 @@ class SectionRenderer extends StatelessWidget {
   const SectionRenderer({super.key, required this.section});
   final LandingPageSection section;
 
-  static bool isFullWidth(String sectionType) => sectionType == 'footer';
+  static bool isFullWidth(String sectionType) =>
+      sectionType == 'footer' || sectionType == 'why_dodo';
 
   @override
   Widget build(BuildContext context) {
