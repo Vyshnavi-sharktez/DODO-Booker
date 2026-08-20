@@ -179,7 +179,7 @@ class _BrandHeader extends StatelessWidget {
       children: [
         Image.asset(
           'assets/images/logo.png',
-          height: 88,
+          height: 56,
           fit: BoxFit.contain,
           filterQuality: FilterQuality.high,
           errorBuilder: (context, error, stack) => Container(

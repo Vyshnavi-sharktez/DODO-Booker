@@ -13,26 +13,48 @@ import '../../cart/utils/cart_launcher.dart';
 import '../../category/services/category_providers.dart';
 import '../../reviews/widgets/service_reviews_section.dart';
 import '../../service/widgets/faq_section.dart';
-import '../../service/widgets/service_addon_section.dart';
 import '../../service/widgets/service_attribute_section.dart';
 import '../../wishlist/widgets/heart_button.dart';
 import '../../loyalty/providers/loyalty_providers.dart';
 import '../../loyalty/utils/loyalty_utils.dart';
 import '../../address/services/address_providers.dart';
-import '../../amc/widgets/amc_section.dart';
+import '../../amc/providers/amc_provider.dart';
 import '../models/catalog_node_model.dart';
 import '../providers/catalog_providers.dart';
 import '../utils/catalog_launcher.dart';
 import '../widgets/catalog_unavailability_widgets.dart';
 
-// Design tokens — from handoff
+// ── Design tokens (from handoff) ──────────────────────────────────────────────
 const _kInk = Color(0xFF1A1714);
 const _kMuted = Color(0xFF6E6A64);
 const _kMuted2 = Color(0xFF9A948C);
 const _kGold = Color(0xFFF4A81D);
-const _kGoldLink = Color(0xFFD98A0A);
 const _kBorder = Color(0xFFECE7DE);
 const _kBg = Color(0xFFFBF8F3);
+const _kAmcPopularBg = Color(0xFFFDF2D9);
+
+// ── Striped placeholder painter (for image areas with no real photo) ──────────
+class _StripedBox extends StatelessWidget {
+  const _StripedBox({this.width, this.height});
+  final double? width;
+  final double? height;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: width,
+      height: height,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(10),
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFFEAE3D4), Color(0xFFE1DAC9)],
+        ),
+      ),
+    );
+  }
+}
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // CatalogNodeScreen
@@ -129,7 +151,7 @@ class _CatalogNodeScreenState extends ConsumerState<CatalogNodeScreen> {
         : node.imageUrl;
     final hasHero = node.hasChildren || (heroUrl != null && heroUrl.isNotEmpty);
 
-    // ── Web layout ───────────────────────────────────────────────────────────
+    // ── Web ──────────────────────────────────────────────────────────────────
     if (isWeb) {
       return _WebScaffold(
         node: node,
@@ -156,7 +178,7 @@ class _CatalogNodeScreenState extends ConsumerState<CatalogNodeScreen> {
       );
     }
 
-    // ── Mobile layout ────────────────────────────────────────────────────────
+    // ── Mobile ───────────────────────────────────────────────────────────────
     return Scaffold(
       backgroundColor: _kBg,
       extendBodyBehindAppBar: hasHero,
@@ -172,10 +194,7 @@ class _CatalogNodeScreenState extends ConsumerState<CatalogNodeScreen> {
               title: Text(
                 node.name,
                 style: const TextStyle(
-                  fontWeight: FontWeight.w700,
-                  fontSize: 17,
-                  color: _kInk,
-                ),
+                    fontWeight: FontWeight.w700, fontSize: 17, color: _kInk),
               ),
               backgroundColor: _kBg,
               foregroundColor: _kInk,
@@ -210,21 +229,20 @@ class _CatalogNodeScreenState extends ConsumerState<CatalogNodeScreen> {
                     hasAdjustment: hasAdjustment,
                   ),
 
-                // ── Category hero fallback header ──────────────────────────
+                // ── Category hero fallback ─────────────────────────────────
                 if (hasHero && !node.isLeafBookable)
                   Padding(
                     padding: const EdgeInsets.fromLTRB(20, 20, 20, 4),
                     child: Text(
                       node.name,
                       style: GoogleFonts.poppins(
-                        fontSize: 22,
-                        fontWeight: FontWeight.w700,
-                        color: _kInk,
-                      ),
+                          fontSize: 22,
+                          fontWeight: FontWeight.w700,
+                          color: _kInk),
                     ),
                   ),
 
-                // ── No-hero: breadcrumb + info header ─────────────────────
+                // ── No-hero path ───────────────────────────────────────────
                 if (!hasHero) ...[
                   if (!node.isRoot)
                     _Breadcrumb(
@@ -248,7 +266,7 @@ class _CatalogNodeScreenState extends ConsumerState<CatalogNodeScreen> {
                         _onOptionSelected(attrId, optId, attrs),
                   ),
 
-                // ── Children list ──────────────────────────────────────────
+                // ── Children (category navigation) ─────────────────────────
                 if (node.hasChildren)
                   (isUnavailable || isEffectivelyHidden)
                       ? CatalogUnavailabilityBanner(
@@ -257,38 +275,48 @@ class _CatalogNodeScreenState extends ConsumerState<CatalogNodeScreen> {
                         )
                       : _ChildrenSection(node: node, children: children),
 
-                // ── Add-ons ────────────────────────────────────────────────
+                // ── Suggested Add-ons ──────────────────────────────────────
                 if (node.isLeafBookable && addOns.isNotEmpty) ...[
                   Padding(
-                    padding: const EdgeInsets.fromLTRB(20, 24, 20, 0),
-                    child: _SectionHeaderRow(
-                      title: 'Suggested Add-ons',
-                    ),
+                    padding: const EdgeInsets.fromLTRB(20, 24, 20, 12),
+                    child: _SectionHeaderRow(title: 'Suggested Add-ons'),
                   ),
-                  ServiceAddonSection(
+                  _InlineAddonCards(
                     addOns: addOns,
                     selectedIds: _selectedAddonIds,
                     onToggle: _onAddonToggled,
+                    isWeb: false,
                   ),
                 ],
 
-                // ── AMC ────────────────────────────────────────────────────
-                if (node.isLeafBookable) ...[
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(20, 24, 20, 0),
-                    child: _SectionHeaderRow(title: 'AMC Plans'),
+                // ── AMC Plans ──────────────────────────────────────────────
+                if (node.isLeafBookable)
+                  Consumer(
+                    builder: (ctx, ref, _) {
+                      final plans =
+                          ref.watch(amcPlansProvider(node.id)).valueOrNull;
+                      if (plans == null || plans.isEmpty) {
+                        return const SizedBox.shrink();
+                      }
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Padding(
+                            padding: const EdgeInsets.fromLTRB(20, 24, 20, 12),
+                            child: _SectionHeaderRow(title: 'AMC Plans'),
+                          ),
+                          _InlineAmcPlans(
+                            serviceId: node.id,
+                            selectedPlan: _selectedAmcPlan,
+                            onPlanSelected: (plan) =>
+                                setState(() => _selectedAmcPlan = plan),
+                            regularPrice: node.basePrice,
+                            isWeb: false,
+                          ),
+                        ],
+                      );
+                    },
                   ),
-                  AmcSection(
-                    serviceId: node.id,
-                    selectedPlan: _selectedAmcPlan,
-                    onPlanSelected: (plan) =>
-                        setState(() => _selectedAmcPlan = plan),
-                    regularPrice:
-                        node.basePrice != null && node.basePrice! > 0
-                            ? node.basePrice
-                            : null,
-                  ),
-                ],
 
                 // ── Accordion: About / FAQs / Reviews ─────────────────────
                 if (node.isLeafBookable) ...[
@@ -296,38 +324,47 @@ class _CatalogNodeScreenState extends ConsumerState<CatalogNodeScreen> {
                   _AccordionSection(
                     label: 'About this service',
                     isFirst: true,
-                    child: node.description?.isNotEmpty == true
-                        ? Padding(
-                            padding: const EdgeInsets.fromLTRB(0, 8, 0, 14),
-                            child: Text(
-                              node.description!,
-                              style: const TextStyle(
-                                fontSize: 13,
-                                color: _kMuted,
-                                height: 1.6,
-                              ),
-                            ),
-                          )
-                        : const Padding(
-                            padding: EdgeInsets.fromLTRB(0, 8, 0, 14),
-                            child: Text(
-                              'No description available.',
-                              style: TextStyle(fontSize: 13, color: _kMuted2),
-                            ),
-                          ),
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(0, 4, 0, 14),
+                      child: Text(
+                        node.description?.isNotEmpty == true
+                            ? node.description!
+                            : 'No description available.',
+                        style: const TextStyle(
+                            fontSize: 13, color: _kMuted, height: 1.6),
+                      ),
+                    ),
                   ),
-                  _AccordionSection(
-                    label: 'FAQs',
-                    child: faqs.isNotEmpty
-                        ? FaqSection(faqs: faqs)
-                        : const Padding(
-                            padding: EdgeInsets.fromLTRB(0, 8, 0, 14),
-                            child: Text(
-                              'No FAQs yet.',
-                              style: TextStyle(fontSize: 13, color: _kMuted2),
-                            ),
-                          ),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 20, 20, 8),
+                    child: Text('FAQs',
+                        style: GoogleFonts.poppins(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w700,
+                            color: _kInk)),
                   ),
+                  if (faqs.isEmpty) ...[
+                    const Padding(
+                      padding: EdgeInsets.fromLTRB(20, 0, 20, 4),
+                      child: Text('No FAQs yet.',
+                          style: TextStyle(fontSize: 13, color: _kMuted)),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.only(left: 20, top: 2),
+                      child: AskQuestionLink(serviceId: node.id),
+                    ),
+                    const SizedBox(height: 8),
+                  ] else ...[
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
+                      child: FaqSection(faqs: faqs),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.only(left: 20, top: 6),
+                      child: AskQuestionLink(serviceId: node.id),
+                    ),
+                    const SizedBox(height: 8),
+                  ],
                   _AccordionSection(
                     label: node.reviewCount > 0
                         ? 'Reviews (${node.reviewCount})'
@@ -348,7 +385,7 @@ class _CatalogNodeScreenState extends ConsumerState<CatalogNodeScreen> {
         ],
       ),
 
-      // ── Sticky cart bar ──────────────────────────────────────────────────
+      // ── Sticky booking bar ────────────────────────────────────────────────
       bottomNavigationBar: node.isLeafBookable
           ? (isUnavailable || isEffectivelyHidden)
                 ? CatalogUnavailabilityBar(
@@ -404,7 +441,7 @@ class CatalogNodeFetchScreen extends ConsumerWidget {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// Mobile hero photo (260px + status bar)
+// Mobile hero: 260px photo + overlay buttons
 // ═══════════════════════════════════════════════════════════════════════════════
 
 class _MobileHero extends StatelessWidget {
@@ -421,26 +458,26 @@ class _MobileHero extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final statusBarH = MediaQuery.of(context).padding.top;
-    final totalHeight = statusBarH + 260.0;
+    final totalH = statusBarH + 260.0;
 
     return SizedBox(
-      height: totalHeight,
+      height: totalH,
       child: Stack(
         fit: StackFit.expand,
         children: [
           _HeroImage(url: imageUrl),
 
-          // Back button
+          // Back
           Positioned(
             top: statusBarH + 16,
             left: 16,
-            child: _CircleIconButton(
+            child: _CircleNavBtn(
               icon: Icons.arrow_back_rounded,
-              onTap: () => context.pop(),
+              onTap: () => Navigator.of(context).maybePop(),
             ),
           ),
 
-          // Heart button (white circle wrapper)
+          // Heart
           if (showHeart)
             Positioned(
               top: statusBarH + 16,
@@ -449,16 +486,13 @@ class _MobileHero extends StatelessWidget {
                 width: 36,
                 height: 36,
                 decoration: const BoxDecoration(
-                  color: Colors.white,
-                  shape: BoxShape.circle,
-                ),
+                    color: Colors.white, shape: BoxShape.circle),
                 child: Center(
-                  child: HeartButton(serviceId: node.id, mini: true),
-                ),
+                    child: HeartButton(serviceId: node.id, mini: true)),
               ),
             ),
 
-          // Photo counter pill
+          // Counter pill
           Positioned(
             bottom: 14,
             right: 16,
@@ -469,14 +503,9 @@ class _MobileHero extends StatelessWidget {
                 color: const Color(0xFF1A1714).withAlpha(166),
                 borderRadius: BorderRadius.circular(100),
               ),
-              child: const Text(
-                '1/6',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 11,
-                  height: 1.4,
-                ),
-              ),
+              child: const Text('1/6',
+                  style: TextStyle(
+                      color: Colors.white, fontSize: 11, height: 1.4)),
             ),
           ),
 
@@ -489,31 +518,25 @@ class _MobileHero extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Container(
-                  width: 16,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: _kGold,
-                    borderRadius: BorderRadius.circular(100),
-                  ),
-                ),
+                    width: 16,
+                    height: 4,
+                    decoration: BoxDecoration(
+                        color: _kGold,
+                        borderRadius: BorderRadius.circular(100))),
                 const SizedBox(width: 5),
                 Container(
-                  width: 4,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: Colors.white.withAlpha(180),
-                    borderRadius: BorderRadius.circular(100),
-                  ),
-                ),
+                    width: 4,
+                    height: 4,
+                    decoration: BoxDecoration(
+                        color: Colors.white.withAlpha(180),
+                        borderRadius: BorderRadius.circular(100))),
                 const SizedBox(width: 5),
                 Container(
-                  width: 4,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: Colors.white.withAlpha(180),
-                    borderRadius: BorderRadius.circular(100),
-                  ),
-                ),
+                    width: 4,
+                    height: 4,
+                    decoration: BoxDecoration(
+                        color: Colors.white.withAlpha(180),
+                        borderRadius: BorderRadius.circular(100))),
               ],
             ),
           ),
@@ -523,8 +546,8 @@ class _MobileHero extends StatelessWidget {
   }
 }
 
-class _CircleIconButton extends StatelessWidget {
-  const _CircleIconButton({required this.icon, required this.onTap});
+class _CircleNavBtn extends StatelessWidget {
+  const _CircleNavBtn({required this.icon, required this.onTap});
   final IconData icon;
   final VoidCallback onTap;
 
@@ -536,9 +559,7 @@ class _CircleIconButton extends StatelessWidget {
         width: 36,
         height: 36,
         decoration: const BoxDecoration(
-          color: Colors.white,
-          shape: BoxShape.circle,
-        ),
+            color: Colors.white, shape: BoxShape.circle),
         child: Icon(icon, size: 18, color: _kInk),
       ),
     );
@@ -546,8 +567,8 @@ class _CircleIconButton extends StatelessWidget {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// Service content block (below hero photo on mobile)
-// category badge + title + rating + description + price row
+// Service content block (below hero on mobile)
+// badge → title → rating → description → price row
 // ═══════════════════════════════════════════════════════════════════════════════
 
 class _ServiceContentBlock extends StatelessWidget {
@@ -569,121 +590,87 @@ class _ServiceContentBlock extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // Category badge
-          if (node.parentName != null && node.parentName!.isNotEmpty) ...[
+          if (node.parentName?.isNotEmpty == true) ...[
             Container(
               padding:
                   const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
               decoration: BoxDecoration(
-                color: _kInk,
-                borderRadius: BorderRadius.circular(100),
-              ),
-              child: Text(
-                node.parentName!,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600,
-                  height: 1.3,
-                ),
-              ),
+                  color: _kInk,
+                  borderRadius: BorderRadius.circular(100)),
+              child: Text(node.parentName!,
+                  style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      height: 1.3)),
             ),
             const SizedBox(height: 10),
           ],
 
           // Title
-          Text(
-            node.name,
-            style: GoogleFonts.poppins(
-              fontSize: 20,
-              fontWeight: FontWeight.w700,
-              color: _kInk,
-              height: 1.2,
-            ),
-          ),
+          Text(node.name,
+              style: GoogleFonts.poppins(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w700,
+                  color: _kInk,
+                  height: 1.2)),
           const SizedBox(height: 6),
 
           // Rating row
-          if (node.rating > 0 || node.estimatedDuration != null)
-            Row(
-              children: [
-                if (node.rating > 0) ...[
-                  const Text('★', style: TextStyle(color: _kGold, fontSize: 13)),
+          if (node.rating > 0)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 6),
+              child: Row(
+                children: [
+                  const Text('★',
+                      style: TextStyle(color: _kGold, fontSize: 13)),
                   const SizedBox(width: 4),
-                  Text(
-                    node.rating.toStringAsFixed(1),
-                    style: const TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                      color: _kInk,
-                    ),
-                  ),
+                  Text(node.rating.toStringAsFixed(1),
+                      style: const TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: _kInk)),
                   if (node.reviewCount > 0) ...[
                     const SizedBox(width: 4),
-                    Text(
-                      '(${node.reviewCount} reviews)',
-                      style: const TextStyle(
-                        fontSize: 13,
-                        color: _kMuted2,
-                      ),
-                    ),
+                    Text('(${node.reviewCount} reviews)',
+                        style: const TextStyle(
+                            fontSize: 13, color: _kMuted2)),
                   ],
-                  const SizedBox(width: 12),
                 ],
-                if (node.estimatedDuration != null)
-                  Text(
-                    '${node.estimatedDuration} min',
-                    style: const TextStyle(
-                      fontSize: 12,
-                      color: _kMuted2,
-                    ),
-                  ),
-              ],
+              ),
             ),
 
           // Description
           if (node.description?.isNotEmpty == true) ...[
-            const SizedBox(height: 8),
-            Text(
-              node.description!,
-              style: const TextStyle(
-                fontSize: 13,
-                color: _kMuted,
-                height: 1.6,
-              ),
-            ),
-          ],
-
-          // Price row
-          if (node.basePrice != null) ...[
+            Text(node.description!,
+                style: const TextStyle(
+                    fontSize: 13, color: _kMuted, height: 1.6)),
             const SizedBox(height: 14),
+          ] else
+            const SizedBox(height: 8),
+
+          // Price row: "From ₹X"
+          if (node.basePrice != null)
             Row(
               crossAxisAlignment: CrossAxisAlignment.baseline,
               textBaseline: TextBaseline.alphabetic,
               children: [
-                const Text(
-                  'From',
-                  style: TextStyle(fontSize: 13, color: _kMuted2),
-                ),
+                const Text('From',
+                    style: TextStyle(fontSize: 13, color: _kMuted2)),
                 const SizedBox(width: 8),
-                Text(
-                  '₹${displayPrice.toInt()}',
-                  style: GoogleFonts.poppins(
-                    fontSize: 22,
-                    fontWeight: FontWeight.w800,
-                    color: _kInk,
-                    height: 1.0,
-                  ),
-                ),
+                Text('₹${displayPrice.toInt()}',
+                    style: GoogleFonts.poppins(
+                        fontSize: 22,
+                        fontWeight: FontWeight.w800,
+                        color: _kInk,
+                        height: 1.0)),
                 if (hasAdjustment) ...[
                   const SizedBox(width: 8),
-                  const Text(
-                    'incl. add-ons',
-                    style: TextStyle(fontSize: 12, color: _kMuted2),
-                  ),
+                  const Text('incl. add-ons',
+                      style: TextStyle(fontSize: 12, color: _kMuted2)),
                 ],
               ],
             ),
-          ],
           const SizedBox(height: 4),
         ],
       ),
@@ -692,13 +679,12 @@ class _ServiceContentBlock extends StatelessWidget {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// Section header row: Poppins 700 15px + optional "View all →"
+// Section header row
 // ═══════════════════════════════════════════════════════════════════════════════
 
 class _SectionHeaderRow extends StatelessWidget {
-  const _SectionHeaderRow({required this.title, this.onViewAll});
+  const _SectionHeaderRow({required this.title});
   final String title;
-  final VoidCallback? onViewAll;
 
   @override
   Widget build(BuildContext context) {
@@ -706,34 +692,461 @@ class _SectionHeaderRow extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.baseline,
       textBaseline: TextBaseline.alphabetic,
       children: [
-        Text(
-          title,
-          style: GoogleFonts.poppins(
-            fontSize: 15,
-            fontWeight: FontWeight.w700,
-            color: _kInk,
-          ),
-        ),
-        const Spacer(),
-        if (onViewAll != null)
-          GestureDetector(
-            onTap: onViewAll,
-            child: const Text(
-              'View all →',
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-                color: _kGoldLink,
-              ),
-            ),
-          ),
+        Text(title,
+            style: GoogleFonts.poppins(
+                fontSize: 15, fontWeight: FontWeight.w700, color: _kInk)),
       ],
     );
   }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// Accordion section row
+// Inline add-on cards
+// Mobile: horizontal scroll, 110px cards with image-top design
+// Web: 4-column grid with thumbnail-left design
+// ═══════════════════════════════════════════════════════════════════════════════
+
+class _InlineAddonCards extends StatelessWidget {
+  const _InlineAddonCards({
+    required this.addOns,
+    required this.selectedIds,
+    required this.onToggle,
+    required this.isWeb,
+  });
+
+  final List<AddOnModel> addOns;
+  final Set<String> selectedIds;
+  final void Function(String, bool) onToggle;
+  final bool isWeb;
+
+  @override
+  Widget build(BuildContext context) {
+    if (isWeb) {
+      return Column(
+        children: addOns
+            .map((a) => _AddonWebRow(
+                  addOn: a,
+                  isSelected: selectedIds.contains(a.id),
+                  onToggle: (sel) => onToggle(a.id, sel),
+                ))
+            .toList(),
+      );
+    }
+
+    return SizedBox(
+      height: 210,
+      child: ListView.separated(
+        padding: const EdgeInsets.symmetric(horizontal: 20),
+        scrollDirection: Axis.horizontal,
+        itemCount: addOns.length,
+        separatorBuilder: (_, _) => const SizedBox(width: 12),
+        itemBuilder: (_, i) => _AddonMobileCard(
+          addOn: addOns[i],
+          isSelected: selectedIds.contains(addOns[i].id),
+          onToggle: (sel) => onToggle(addOns[i].id, sel),
+        ),
+      ),
+    );
+  }
+}
+
+// Mobile add-on card: 110px wide, image top
+class _AddonMobileCard extends StatefulWidget {
+  const _AddonMobileCard({
+    required this.addOn,
+    required this.isSelected,
+    required this.onToggle,
+  });
+
+  final AddOnModel addOn;
+  final bool isSelected;
+  final ValueChanged<bool> onToggle;
+
+  @override
+  State<_AddonMobileCard> createState() => _AddonMobileCardState();
+}
+
+class _AddonMobileCardState extends State<_AddonMobileCard> {
+  @override
+  Widget build(BuildContext context) {
+    final sel = widget.isSelected;
+    return GestureDetector(
+      onTap: () => widget.onToggle(!sel),
+      child: SizedBox(
+        width: 160,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Image area
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 150),
+              height: 120,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(10),
+                border: sel
+                    ? Border.all(color: _kGold, width: 1.5)
+                    : Border.all(color: _kBorder, width: 0.8),
+                color: sel
+                    ? const Color(0xFFFDF2D9)
+                    : const Color(0xFFEAE3D4),
+                gradient: sel
+                    ? null
+                    : const LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: [Color(0xFFF1ECE1), Color(0xFFEAE3D4)],
+                      ),
+              ),
+              child: sel
+                  ? const Center(
+                      child: Icon(Icons.check_rounded,
+                          color: _kGold, size: 28))
+                  : null,
+            ),
+            const SizedBox(height: 6),
+
+            // Name
+            Text(
+              widget.addOn.name,
+              style: const TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  color: _kInk,
+                  height: 1.3),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+            const SizedBox(height: 4),
+
+            // Price + toggle button
+            Row(
+              children: [
+                Text(
+                  '₹${widget.addOn.price.toInt()}',
+                  style: const TextStyle(fontSize: 11, color: _kMuted),
+                ),
+                const Spacer(),
+                GestureDetector(
+                  onTap: () => widget.onToggle(!sel),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 150),
+                    width: 20,
+                    height: 20,
+                    decoration: BoxDecoration(
+                      color: sel ? _kGold : const Color(0xFFECE7DE),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Center(
+                      child: Icon(
+                        sel ? Icons.check_rounded : Icons.add_rounded,
+                        size: 12,
+                        color: sel ? Colors.white : _kInk,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// Web add-on row: [thumbnail 44px | name+price | "+" button]
+class _AddonWebRow extends StatelessWidget {
+  const _AddonWebRow({
+    required this.addOn,
+    required this.isSelected,
+    required this.onToggle,
+  });
+
+  final AddOnModel addOn;
+  final bool isSelected;
+  final ValueChanged<bool> onToggle;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 14),
+      child: Row(
+        children: [
+          // Thumbnail
+          Container(
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(10),
+              gradient: const LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [Color(0xFFF1ECE1), Color(0xFFEAE3D4)],
+              ),
+            ),
+          ),
+          const SizedBox(width: 10),
+
+          // Name + price
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(addOn.name,
+                    style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: _kInk),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis),
+                Text('₹${addOn.price.toInt()}',
+                    style: const TextStyle(fontSize: 12, color: _kMuted)),
+              ],
+            ),
+          ),
+          const SizedBox(width: 10),
+
+          // "+" button
+          GestureDetector(
+            onTap: () => onToggle(!isSelected),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 150),
+              width: 22,
+              height: 22,
+              decoration: BoxDecoration(
+                color: isSelected ? _kGold : const Color(0xFFECE7DE),
+                shape: BoxShape.circle,
+              ),
+              child: Center(
+                child: Icon(
+                  isSelected ? Icons.check_rounded : Icons.add_rounded,
+                  size: 13,
+                  color: isSelected ? Colors.white : _kInk,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Inline AMC plan cards (replaces bottom-sheet trigger)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+class _InlineAmcPlans extends ConsumerWidget {
+  const _InlineAmcPlans({
+    required this.serviceId,
+    required this.selectedPlan,
+    required this.onPlanSelected,
+    this.regularPrice,
+    required this.isWeb,
+  });
+
+  final String serviceId;
+  final AmcPlanModel? selectedPlan;
+  final void Function(AmcPlanModel?) onPlanSelected;
+  final double? regularPrice;
+  final bool isWeb;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final amcAsync = ref.watch(amcPlansProvider(serviceId));
+
+    return amcAsync.when(
+      loading: () => const SizedBox.shrink(),
+      error: (_, _) => const SizedBox.shrink(),
+      data: (plans) {
+        if (plans.isEmpty) return const SizedBox.shrink();
+
+        final padding = isWeb
+            ? const EdgeInsets.symmetric(horizontal: 0)
+            : const EdgeInsets.symmetric(horizontal: 20);
+
+        return Padding(
+          padding: padding,
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: plans
+                .take(2)
+                .map((plan) {
+                  final isSelected = selectedPlan?.id == plan.id;
+                  final isFirst = plans.indexOf(plan) == 0;
+                  return [
+                    Expanded(
+                      child: _AmcPlanCard(
+                        plan: plan,
+                        isSelected: isSelected,
+                        isPopular: isFirst,
+                        onTap: () =>
+                            onPlanSelected(isSelected ? null : plan),
+                      ),
+                    ),
+                    if (plan != plans.take(2).last)
+                      const SizedBox(width: 12),
+                  ];
+                })
+                .expand((w) => w)
+                .toList(),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _AmcPlanCard extends StatelessWidget {
+  const _AmcPlanCard({
+    required this.plan,
+    required this.isSelected,
+    required this.isPopular,
+    required this.onTap,
+  });
+
+  final AmcPlanModel plan;
+  final bool isSelected;
+  final bool isPopular;
+  final VoidCallback onTap;
+
+  List<String> get _features {
+    final f = <String>[
+      '✓ ${plan.numVisits} ${plan.numVisits == 1 ? 'Visit' : 'Visits'} / ${plan.packageDurationLabel}',
+      '✓ ${plan.serviceIntervalLabel} schedule',
+    ];
+    if (plan.discountValue > 0) {
+      if (plan.discountType == 'percentage') {
+        f.add('✓ ${plan.discountValue.toInt()}% off on repairs');
+      } else {
+        f.add('✓ ₹${plan.discountValue.toInt()} discount');
+      }
+    }
+    return f;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          AnimatedContainer(
+            duration: const Duration(milliseconds: 200),
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: isSelected ? _kAmcPopularBg : Colors.white,
+              borderRadius: BorderRadius.circular(14),
+              border: isSelected
+                  ? Border.all(color: _kGold, width: 1.5)
+                  : Border.all(color: _kBorder, width: 1),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Space for "Popular" badge
+                if (isPopular) const SizedBox(height: 4),
+
+                // Title + selection indicator
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: Text(plan.planName,
+                          style: GoogleFonts.poppins(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w700,
+                              color: _kInk)),
+                    ),
+                    const SizedBox(width: 8),
+                    isSelected
+                        ? Container(
+                            width: 18,
+                            height: 18,
+                            decoration: const BoxDecoration(
+                                color: _kInk, shape: BoxShape.circle),
+                            child: const Icon(Icons.check_rounded,
+                                size: 10, color: Colors.white),
+                          )
+                        : Container(
+                            width: 18,
+                            height: 18,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              border:
+                                  Border.all(color: _kBorder, width: 1.5),
+                            ),
+                          ),
+                  ],
+                ),
+
+                // Features
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: _features
+                        .map((f) => Text(f,
+                            style: const TextStyle(
+                                fontSize: 11,
+                                color: _kMuted,
+                                height: 1.7)))
+                        .toList(),
+                  ),
+                ),
+
+                // Price
+                RichText(
+                  text: TextSpan(
+                    children: [
+                      TextSpan(
+                        text: '₹${plan.finalPrice.toInt()}',
+                        style: GoogleFonts.poppins(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w700,
+                            color: _kInk),
+                      ),
+                      TextSpan(
+                        text: ' / ${plan.packageDurationLabel}',
+                        style: const TextStyle(
+                            fontSize: 11,
+                            color: _kMuted2,
+                            fontWeight: FontWeight.w400),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          // "Popular" badge
+          if (isPopular)
+            Positioned(
+              top: -9,
+              left: 14,
+              child: Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                    color: _kGold,
+                    borderRadius: BorderRadius.circular(100)),
+                child: const Text('Popular',
+                    style: TextStyle(
+                        fontSize: 9,
+                        fontWeight: FontWeight.w700,
+                        color: _kInk)),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Accordion section
 // ═══════════════════════════════════════════════════════════════════════════════
 
 class _AccordionSection extends StatefulWidget {
@@ -742,27 +1155,19 @@ class _AccordionSection extends StatefulWidget {
     required this.child,
     this.isFirst = false,
     this.isLast = false,
-    this.initiallyOpen = false,
   });
 
   final String label;
   final Widget child;
   final bool isFirst;
   final bool isLast;
-  final bool initiallyOpen;
 
   @override
   State<_AccordionSection> createState() => _AccordionSectionState();
 }
 
 class _AccordionSectionState extends State<_AccordionSection> {
-  late bool _open;
-
-  @override
-  void initState() {
-    super.initState();
-    _open = widget.initiallyOpen;
-  }
+  bool _open = false;
 
   @override
   Widget build(BuildContext context) {
@@ -771,7 +1176,6 @@ class _AccordionSectionState extends State<_AccordionSection> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Row
           GestureDetector(
             onTap: () => setState(() => _open = !_open),
             behavior: HitTestBehavior.opaque,
@@ -788,44 +1192,36 @@ class _AccordionSectionState extends State<_AccordionSection> {
               child: Row(
                 children: [
                   Expanded(
-                    child: Text(
-                      widget.label,
-                      style: GoogleFonts.poppins(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                        color: _kInk,
-                      ),
-                    ),
+                    child: Text(widget.label,
+                        style: GoogleFonts.poppins(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w700,
+                            color: _kInk)),
                   ),
                   AnimatedRotation(
                     turns: _open ? 0.5 : 0.0,
                     duration: const Duration(milliseconds: 180),
-                    child: const Text(
-                      '⌄',
-                      style: TextStyle(fontSize: 18, color: _kMuted2, height: 1),
-                    ),
+                    child: const Text('⌄',
+                        style: TextStyle(
+                            fontSize: 18, color: _kMuted2, height: 1)),
                   ),
                 ],
               ),
             ),
           ),
-
-          // Expanded content
           AnimatedCrossFade(
+            alignment: Alignment.topLeft,
             firstChild: const SizedBox.shrink(),
             secondChild: Container(
               decoration: widget.isLast
                   ? const BoxDecoration(
                       border: Border(
-                        bottom: BorderSide(color: _kBorder, width: 1),
-                      ),
-                    )
+                          bottom: BorderSide(color: _kBorder, width: 1)))
                   : null,
               child: widget.child,
             ),
-            crossFadeState: _open
-                ? CrossFadeState.showSecond
-                : CrossFadeState.showFirst,
+            crossFadeState:
+                _open ? CrossFadeState.showSecond : CrossFadeState.showFirst,
             duration: const Duration(milliseconds: 200),
           ),
         ],
@@ -850,19 +1246,9 @@ class _HeroImage extends StatelessWidget {
         Image.network(
           url,
           fit: BoxFit.cover,
-          width: double.infinity,
-          height: double.infinity,
           loadingBuilder: (_, child, p) =>
-              p == null ? child : const ColoredBox(color: Color(0xFFEEEEEE)),
-          errorBuilder: (_, _, _) => Container(
-            color: AppColors.goldLight,
-            alignment: Alignment.center,
-            child: const Icon(
-              Icons.home_repair_service_rounded,
-              size: 48,
-              color: AppColors.gold,
-            ),
-          ),
+              p == null ? child : const ColoredBox(color: Color(0xFFEAE3D4)),
+          errorBuilder: (_, _, _) => const _StripedBox(),
         ),
         Positioned(
           left: 0,
@@ -885,7 +1271,7 @@ class _HeroImage extends StatelessWidget {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// Breadcrumb (no-hero fallback)
+// Breadcrumb (no-hero path)
 // ═══════════════════════════════════════════════════════════════════════════════
 
 class _Breadcrumb extends StatelessWidget {
@@ -906,34 +1292,24 @@ class _Breadcrumb extends StatelessWidget {
         children: [
           GestureDetector(
             onTap: onParentTap,
-            child: Text(
-              parentName,
-              style: const TextStyle(
-                fontSize: 12,
-                color: _kMuted2,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
+            child: Text(parentName,
+                style: const TextStyle(
+                    fontSize: 12,
+                    color: _kMuted2,
+                    fontWeight: FontWeight.w500)),
           ),
           const Padding(
             padding: EdgeInsets.symmetric(horizontal: 6),
-            child: Icon(
-              Icons.chevron_right_rounded,
-              size: 14,
-              color: _kMuted2,
-            ),
+            child: Icon(Icons.chevron_right_rounded, size: 14, color: _kMuted2),
           ),
           Expanded(
-            child: Text(
-              nodeName,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                fontSize: 12,
-                color: _kInk,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
+            child: Text(nodeName,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                    fontSize: 12,
+                    color: _kInk,
+                    fontWeight: FontWeight.w600)),
           ),
         ],
       ),
@@ -942,7 +1318,7 @@ class _Breadcrumb extends StatelessWidget {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// Node info header (no-image fallback path)
+// Node info header (no-hero path)
 // ═══════════════════════════════════════════════════════════════════════════════
 
 class _NodeInfoHeader extends StatelessWidget {
@@ -962,101 +1338,71 @@ class _NodeInfoHeader extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (node.parentName != null && node.parentName!.isNotEmpty) ...[
+          if (node.parentName?.isNotEmpty == true) ...[
             Container(
               padding:
                   const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
               decoration: BoxDecoration(
-                color: _kInk,
-                borderRadius: BorderRadius.circular(100),
-              ),
-              child: Text(
-                node.parentName!,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
+                  color: _kInk,
+                  borderRadius: BorderRadius.circular(100)),
+              child: Text(node.parentName!,
+                  style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600)),
             ),
             const SizedBox(height: 10),
           ],
-          Text(
-            node.name,
-            style: GoogleFonts.poppins(
-              fontSize: 22,
-              fontWeight: FontWeight.w700,
-              color: _kInk,
-              height: 1.2,
-            ),
-          ),
+          Text(node.name,
+              style: GoogleFonts.poppins(
+                  fontSize: 22,
+                  fontWeight: FontWeight.w700,
+                  color: _kInk,
+                  height: 1.2)),
           const SizedBox(height: 8),
-          Row(
-            children: [
-              if (node.rating > 0) ...[
-                const Text('★', style: TextStyle(color: _kGold, fontSize: 13)),
-                const SizedBox(width: 4),
-                Text(
-                  node.rating.toStringAsFixed(1),
-                  style: const TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    color: _kInk,
-                  ),
-                ),
-                if (node.reviewCount > 0) ...[
+          if (node.rating > 0)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: Row(
+                children: [
+                  const Text('★',
+                      style: TextStyle(color: _kGold, fontSize: 13)),
                   const SizedBox(width: 4),
-                  Text(
-                    '(${node.reviewCount})',
-                    style: const TextStyle(fontSize: 12, color: _kMuted2),
-                  ),
+                  Text(node.rating.toStringAsFixed(1),
+                      style: const TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: _kInk)),
+                  if (node.reviewCount > 0) ...[
+                    const SizedBox(width: 4),
+                    Text('(${node.reviewCount})',
+                        style: const TextStyle(
+                            fontSize: 12, color: _kMuted2)),
+                  ],
                 ],
-                const SizedBox(width: 12),
-              ],
-              if (node.estimatedDuration != null) ...[
-                const Icon(
-                  Icons.schedule_rounded,
-                  size: 14,
-                  color: _kMuted2,
-                ),
-                const SizedBox(width: 4),
-                Text(
-                  '${node.estimatedDuration} min',
-                  style: const TextStyle(fontSize: 12, color: _kMuted2),
-                ),
-              ],
-            ],
-          ),
-          if (node.isLeafBookable && node.basePrice != null) ...[
-            const SizedBox(height: 14),
+              ),
+            ),
+          if (node.isLeafBookable && node.basePrice != null)
             Row(
               crossAxisAlignment: CrossAxisAlignment.baseline,
               textBaseline: TextBaseline.alphabetic,
               children: [
-                const Text(
-                  'From',
-                  style: TextStyle(fontSize: 13, color: _kMuted2),
-                ),
+                const Text('From',
+                    style: TextStyle(fontSize: 13, color: _kMuted2)),
                 const SizedBox(width: 8),
-                Text(
-                  '₹${displayPrice.toInt()}',
-                  style: GoogleFonts.poppins(
-                    fontSize: 22,
-                    fontWeight: FontWeight.w800,
-                    color: _kInk,
-                    height: 1.0,
-                  ),
-                ),
+                Text('₹${displayPrice.toInt()}',
+                    style: GoogleFonts.poppins(
+                        fontSize: 22,
+                        fontWeight: FontWeight.w800,
+                        color: _kInk,
+                        height: 1.0)),
                 if (hasAdjustment) ...[
                   const SizedBox(width: 8),
-                  const Text(
-                    'incl. add-ons',
-                    style: TextStyle(fontSize: 12, color: _kMuted2),
-                  ),
+                  const Text('incl. add-ons',
+                      style: TextStyle(fontSize: 12, color: _kMuted2)),
                 ],
               ],
             ),
-          ],
         ],
       ),
     );
@@ -1064,7 +1410,7 @@ class _NodeInfoHeader extends StatelessWidget {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// Children list section (category navigation)
+// Children section (category navigation)
 // ═══════════════════════════════════════════════════════════════════════════════
 
 class _ChildrenSection extends StatelessWidget {
@@ -1082,20 +1428,14 @@ class _ChildrenSection extends StatelessWidget {
           child: Text(
             node.isRoot ? 'All Services' : 'Browse ${node.name}',
             style: GoogleFonts.poppins(
-              fontSize: 17,
-              fontWeight: FontWeight.w700,
-              color: _kInk,
-            ),
+                fontSize: 17, fontWeight: FontWeight.w700, color: _kInk),
           ),
         ),
-
         if (children.isEmpty)
           const Padding(
             padding: EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-            child: Text(
-              'Loading…',
-              style: TextStyle(color: _kMuted2, fontSize: 13),
-            ),
+            child: Text('Loading…',
+                style: TextStyle(color: _kMuted2, fontSize: 13)),
           )
         else
           ListView.separated(
@@ -1107,19 +1447,17 @@ class _ChildrenSection extends StatelessWidget {
             itemBuilder: (ctx, i) => _ChildListItem(
               node: children[i],
               parentNodeId: node.id,
-              onTap: () => openCatalogNode(ctx, children[i], parentId: node.id),
+              onTap: () =>
+                  openCatalogNode(ctx, children[i], parentId: node.id),
             ),
           ),
-
         const SizedBox(height: 8),
       ],
     );
   }
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// Child list item
-// ═══════════════════════════════════════════════════════════════════════════════
+// ── Child list item ───────────────────────────────────────────────────────────
 
 class _ChildListItem extends StatefulWidget {
   const _ChildListItem({
@@ -1169,7 +1507,6 @@ class _ChildListItemState extends State<_ChildListItem> {
             BoxShadow(
               color: Colors.black.withAlpha(_pressed ? 8 : 14),
               blurRadius: _pressed ? 4 : 12,
-              spreadRadius: 0,
               offset: Offset(0, _pressed ? 1 : 4),
             ),
           ],
@@ -1177,9 +1514,7 @@ class _ChildListItemState extends State<_ChildListItem> {
         child: ClipRRect(
           borderRadius: BorderRadius.circular(15),
           child: Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              // Thumbnail
               SizedBox(
                 width: 90,
                 height: 90,
@@ -1192,70 +1527,41 @@ class _ChildListItemState extends State<_ChildListItem> {
                   errorBuilder: (_, _, _) => Container(
                     color: AppColors.goldLight,
                     alignment: Alignment.center,
-                    child: const Icon(
-                      Icons.home_repair_service_rounded,
-                      size: 28,
-                      color: AppColors.gold,
-                    ),
+                    child: const Icon(Icons.home_repair_service_rounded,
+                        size: 28, color: AppColors.gold),
                   ),
                 ),
               ),
-
-              // Info
               Expanded(
                 child: Padding(
                   padding: const EdgeInsets.symmetric(
-                    horizontal: 14,
-                    vertical: 14,
-                  ),
+                      horizontal: 14, vertical: 14),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Text(
-                        node.name,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w700,
-                          color: _kInk,
-                          height: 1.3,
-                        ),
-                      ),
-                      if (node.relAvailabilityStatus == 'unavailable') ...[
-                        const SizedBox(height: 3),
-                        Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: const [
-                            Icon(
-                              Icons.pause_circle_outline_rounded,
-                              size: 11,
-                              color: Color(0xFFF59E0B),
-                            ),
-                            SizedBox(width: 3),
-                            Text(
-                              'Temporarily unavailable',
-                              style: TextStyle(
-                                fontSize: 10,
-                                fontWeight: FontWeight.w600,
-                                color: Color(0xFFF59E0B),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                      if (node.description?.isNotEmpty == true) ...[
-                        const SizedBox(height: 3),
-                        Text(
-                          node.description!,
-                          maxLines: 1,
+                      Text(node.name,
+                          maxLines: 2,
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
-                            fontSize: 12,
-                            color: _kMuted,
-                            height: 1.3,
-                          ),
+                              fontSize: 14,
+                              fontWeight: FontWeight.w700,
+                              color: _kInk,
+                              height: 1.3)),
+                      if (node.relAvailabilityStatus == 'unavailable') ...[
+                        const SizedBox(height: 3),
+                        const Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.pause_circle_outline_rounded,
+                                size: 11, color: Color(0xFFF59E0B)),
+                            SizedBox(width: 3),
+                            Text('Temporarily unavailable',
+                                style: TextStyle(
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w600,
+                                    color: Color(0xFFF59E0B))),
+                          ],
                         ),
                       ],
                       const SizedBox(height: 6),
@@ -1263,50 +1569,34 @@ class _ChildListItemState extends State<_ChildListItem> {
                         children: [
                           if (node.isLeafBookable &&
                               node.basePrice != null) ...[
-                            Text(
-                              '₹${node.basePrice!.toInt()}',
-                              style: GoogleFonts.poppins(
-                                fontSize: 14,
-                                fontWeight: FontWeight.w800,
-                                color: _kInk,
-                              ),
-                            ),
+                            Text('₹${node.basePrice!.toInt()}',
+                                style: GoogleFonts.poppins(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w800,
+                                    color: _kInk)),
                             const SizedBox(width: 4),
-                            const Text(
-                              'onwards',
-                              style: TextStyle(
-                                fontSize: 11,
-                                color: _kMuted2,
-                              ),
-                            ),
+                            const Text('onwards',
+                                style: TextStyle(
+                                    fontSize: 11, color: _kMuted2)),
                           ] else if (node.hasChildren)
                             Text(
                               '${node.childrenCount} ${node.childrenCount == 1 ? 'option' : 'options'}',
                               style: const TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w500,
-                                color: _kMuted,
-                              ),
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w500,
+                                  color: _kMuted),
                             ),
                           if (node.estimatedDuration != null) ...[
                             const SizedBox(width: 8),
-                            const Icon(
-                              Icons.schedule_rounded,
-                              size: 12,
-                              color: _kMuted2,
-                            ),
+                            const Icon(Icons.schedule_rounded,
+                                size: 12, color: _kMuted2),
                             const SizedBox(width: 2),
-                            Text(
-                              '${node.estimatedDuration} min',
-                              style: const TextStyle(
-                                fontSize: 11,
-                                color: _kMuted2,
-                              ),
-                            ),
+                            Text('${node.estimatedDuration} min',
+                                style: const TextStyle(
+                                    fontSize: 11, color: _kMuted2)),
                           ],
                         ],
                       ),
-
                       if (node.isLeafBookable && node.loyaltyEarnEnabled)
                         Consumer(
                           builder: (_, ref, _) {
@@ -1344,22 +1634,16 @@ class _ChildListItemState extends State<_ChildListItem> {
                   ),
                 ),
               ),
-
-              // Arrow
               Padding(
                 padding: const EdgeInsets.only(right: 14),
                 child: Container(
                   width: 32,
                   height: 32,
                   decoration: BoxDecoration(
-                    color: AppColors.surfaceVariant,
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: const Icon(
-                    Icons.chevron_right_rounded,
-                    size: 20,
-                    color: _kMuted,
-                  ),
+                      color: AppColors.surfaceVariant,
+                      borderRadius: BorderRadius.circular(10)),
+                  child: const Icon(Icons.chevron_right_rounded,
+                      size: 20, color: _kMuted),
                 ),
               ),
             ],
@@ -1370,9 +1654,7 @@ class _ChildListItemState extends State<_ChildListItem> {
   }
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// Loyalty earn badge
-// ═══════════════════════════════════════════════════════════════════════════════
+// ── Loyalty earn badge ────────────────────────────────────────────────────────
 
 class _LoyaltyEarnBadge extends StatelessWidget {
   final int points;
@@ -1390,22 +1672,16 @@ class _LoyaltyEarnBadge extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(
-            Icons.workspace_premium_rounded,
-            size: 10,
-            color: AppColors.gold,
-          ),
+          const Icon(Icons.workspace_premium_rounded,
+              size: 10, color: AppColors.gold),
           const SizedBox(width: 3),
-          Text(
-            'Earn $points Loyalty Points',
-            style: const TextStyle(
-              fontSize: 9,
-              fontWeight: FontWeight.w700,
-              color: AppColors.gold,
-              height: 1.2,
-              letterSpacing: 0.1,
-            ),
-          ),
+          Text('Earn $points Loyalty Points',
+              style: const TextStyle(
+                  fontSize: 9,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.gold,
+                  height: 1.2,
+                  letterSpacing: 0.1)),
         ],
       ),
     );
@@ -1413,7 +1689,7 @@ class _LoyaltyEarnBadge extends StatelessWidget {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// Coming Soon banner
+// Coming Soon
 // ═══════════════════════════════════════════════════════════════════════════════
 
 class _ComingSoonBanner extends StatelessWidget {
@@ -1425,7 +1701,8 @@ class _ComingSoonBanner extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(20, 32, 20, 8),
       child: Container(
         width: double.infinity,
-        padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 20),
+        padding:
+            const EdgeInsets.symmetric(vertical: 24, horizontal: 20),
         decoration: BoxDecoration(
           color: AppColors.goldLight,
           borderRadius: BorderRadius.circular(18),
@@ -1435,23 +1712,17 @@ class _ComingSoonBanner extends StatelessWidget {
           children: [
             Icon(Icons.schedule_rounded, size: 36, color: AppColors.gold),
             SizedBox(height: 12),
-            Text(
-              'Coming Soon',
-              style: TextStyle(
-                fontSize: 17,
-                fontWeight: FontWeight.w700,
-                color: _kInk,
-              ),
-            ),
+            Text('Coming Soon',
+                style: TextStyle(
+                    fontSize: 17,
+                    fontWeight: FontWeight.w700,
+                    color: _kInk)),
             SizedBox(height: 6),
             Text(
               'This service is not yet available for booking.\nCheck back soon.',
               textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 13,
-                color: _kMuted,
-                height: 1.55,
-              ),
+              style:
+                  TextStyle(fontSize: 13, color: _kMuted, height: 1.55),
             ),
           ],
         ),
@@ -1494,9 +1765,8 @@ class _NodeBookingBar extends ConsumerWidget {
   void _addToCart(WidgetRef ref) {
     ref.read(cartProvider.notifier).addToCart(
           node,
-          priceAdjustment: amcPlan != null
-              ? 0.0
-              : priceAdjustment + addonsTotal,
+          priceAdjustment:
+              amcPlan != null ? 0.0 : priceAdjustment + addonsTotal,
           parentNodeId: parentNodeId,
           amcPlan: amcPlan,
           amcQuantity: amcQuantity,
@@ -1505,21 +1775,15 @@ class _NodeBookingBar extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final cartItems = ref.watch(cartProvider);
-    final inCart = cartItems.any((item) => item.serviceId == node.id);
+    final inCart =
+        ref.watch(cartProvider).any((i) => i.serviceId == node.id);
 
     return Container(
       padding: EdgeInsets.fromLTRB(
-        20,
-        14,
-        20,
-        14 + MediaQuery.of(context).padding.bottom,
-      ),
+          20, 14, 20, 14 + MediaQuery.of(context).padding.bottom),
       decoration: const BoxDecoration(
         color: Colors.white,
-        border: Border(
-          top: BorderSide(color: _kBorder, width: 1),
-        ),
+        border: Border(top: BorderSide(color: _kBorder, width: 1)),
       ),
       child: Row(
         children: [
@@ -1528,19 +1792,14 @@ class _NodeBookingBar extends ConsumerWidget {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text(
-                'From',
-                style: TextStyle(fontSize: 10, color: _kMuted2),
-              ),
-              Text(
-                '₹${displayPrice.toInt()}',
-                style: GoogleFonts.poppins(
-                  fontSize: 17,
-                  fontWeight: FontWeight.w800,
-                  color: _kInk,
-                  height: 1.1,
-                ),
-              ),
+              const Text('From',
+                  style: TextStyle(fontSize: 10, color: _kMuted2)),
+              Text('₹${displayPrice.toInt()}',
+                  style: GoogleFonts.poppins(
+                      fontSize: 17,
+                      fontWeight: FontWeight.w800,
+                      color: _kInk,
+                      height: 1.1)),
             ],
           ),
           const SizedBox(width: 12),
@@ -1550,23 +1809,20 @@ class _NodeBookingBar extends ConsumerWidget {
             child: GestureDetector(
               onTap: inCart ? () => openCart(context) : () => _addToCart(ref),
               child: Container(
-                padding: const EdgeInsets.symmetric(vertical: 12),
+                padding: const EdgeInsets.symmetric(vertical: 13),
                 decoration: BoxDecoration(
-                  color: _kGold,
-                  borderRadius: BorderRadius.circular(100),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text(
-                      inCart ? '🛒 View Cart' : '🛒 ${amcPlan != null ? 'Book Now' : 'Add to Cart'}',
-                      style: GoogleFonts.poppins(
+                    color: _kGold,
+                    borderRadius: BorderRadius.circular(100)),
+                child: Center(
+                  child: Text(
+                    inCart
+                        ? '🛒  View Cart'
+                        : '🛒  ${amcPlan != null ? 'Book Now' : 'Add to Cart'}',
+                    style: GoogleFonts.poppins(
                         fontSize: 13,
                         fontWeight: FontWeight.w600,
-                        color: _kInk,
-                      ),
-                    ),
-                  ],
+                        color: _kInk),
+                  ),
                 ),
               ),
             ),
@@ -1578,7 +1834,7 @@ class _NodeBookingBar extends ConsumerWidget {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// Web scaffold — modal-style card layout
+// Web scaffold — modal card layout
 // ═══════════════════════════════════════════════════════════════════════════════
 
 class _WebScaffold extends ConsumerWidget {
@@ -1631,8 +1887,8 @@ class _WebScaffold extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final cartItems = ref.watch(cartProvider);
-    final inCart = cartItems.any((item) => item.serviceId == node.id);
+    final inCart =
+        ref.watch(cartProvider).any((i) => i.serviceId == node.id);
 
     void addToCart() {
       ref.read(cartProvider.notifier).addToCart(
@@ -1662,8 +1918,7 @@ class _WebScaffold extends ConsumerWidget {
                     borderRadius: BorderRadius.circular(20),
                     boxShadow: [
                       BoxShadow(
-                        color:
-                            const Color(0xFF1A1714).withAlpha(90),
+                        color: const Color(0xFF1A1714).withAlpha(90),
                         blurRadius: 70,
                         spreadRadius: -20,
                         offset: const Offset(0, 30),
@@ -1681,7 +1936,7 @@ class _WebScaffold extends ConsumerWidget {
                         hasHero: hasHero,
                         displayPrice: displayPrice,
                         hasAdjustment: hasAdjustment,
-                        onClose: () => context.pop(),
+                        onClose: () => Navigator.of(context).maybePop(),
                       ),
 
                       // ── Attribute selection ────────────────────────────────
@@ -1692,16 +1947,15 @@ class _WebScaffold extends ConsumerWidget {
                           child: ServiceAttributeSection(
                             attrs: attrs,
                             selections: selections,
-                            onChanged: (attrId, optId) =>
-                                onOptionSelected(attrId, optId, attrs),
+                            onChanged: (a, o) =>
+                                onOptionSelected(a, o, attrs),
                           ),
                         ),
 
                       // ── Add-ons ────────────────────────────────────────────
-                      if (node.isLeafBookable && addOns.isNotEmpty) ...[
+                      if (node.isLeafBookable && addOns.isNotEmpty)
                         Container(
-                          padding:
-                              const EdgeInsets.fromLTRB(28, 24, 28, 24),
+                          padding: const EdgeInsets.fromLTRB(28, 24, 28, 24),
                           decoration: const BoxDecoration(
                             border: Border(
                               top: BorderSide(color: _kBorder),
@@ -1713,7 +1967,8 @@ class _WebScaffold extends ConsumerWidget {
                             children: [
                               _SectionHeaderRow(title: 'Suggested Add-ons'),
                               const SizedBox(height: 14),
-                              ServiceAddonSection(
+                              // 4-col grid
+                              _WebAddonsGrid(
                                 addOns: addOns,
                                 selectedIds: selectedAddonIds,
                                 onToggle: onAddonToggled,
@@ -1721,72 +1976,79 @@ class _WebScaffold extends ConsumerWidget {
                             ],
                           ),
                         ),
-                      ],
 
                       // ── AMC + About + FAQs + Reviews ───────────────────────
                       Padding(
-                        padding:
-                            const EdgeInsets.fromLTRB(28, 24, 28, 0),
+                        padding: const EdgeInsets.fromLTRB(28, 24, 28, 0),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            if (node.isLeafBookable) ...[
-                              _SectionHeaderRow(title: 'AMC Plans'),
-                              const SizedBox(height: 14),
-                              AmcSection(
-                                serviceId: node.id,
-                                selectedPlan: selectedAmcPlan,
-                                onPlanSelected: onAmcPlanSelected,
-                                regularPrice: node.basePrice != null &&
-                                        node.basePrice! > 0
-                                    ? node.basePrice
-                                    : null,
+                            if (node.isLeafBookable)
+                              Consumer(
+                                builder: (ctx, ref, _) {
+                                  final plans = ref
+                                      .watch(amcPlansProvider(node.id))
+                                      .valueOrNull;
+                                  if (plans == null || plans.isEmpty) {
+                                    return const SizedBox.shrink();
+                                  }
+                                  return Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      _SectionHeaderRow(title: 'AMC Plans'),
+                                      const SizedBox(height: 12),
+                                      _InlineAmcPlans(
+                                        serviceId: node.id,
+                                        selectedPlan: selectedAmcPlan,
+                                        onPlanSelected: onAmcPlanSelected,
+                                        regularPrice: node.basePrice,
+                                        isWeb: true,
+                                      ),
+                                      const SizedBox(height: 26),
+                                    ],
+                                  );
+                                },
                               ),
-                              const SizedBox(height: 26),
 
-                              // About — flat text on web
-                              Text(
-                                'About this service',
-                                style: GoogleFonts.poppins(
-                                  fontSize: 15,
-                                  fontWeight: FontWeight.w700,
-                                  color: _kInk,
-                                ),
-                              ),
+                            if (node.isLeafBookable) ...[
+                              // About — flat on web
+                              Text('About this service',
+                                  style: GoogleFonts.poppins(
+                                      fontSize: 15,
+                                      fontWeight: FontWeight.w700,
+                                      color: _kInk)),
                               const SizedBox(height: 10),
                               Text(
                                 node.description?.isNotEmpty == true
                                     ? node.description!
                                     : 'No description available.',
                                 style: const TextStyle(
-                                  fontSize: 13,
-                                  color: _kMuted,
-                                  height: 1.6,
-                                ),
-                                // maxWidth 640 handled by parent constraint
+                                    fontSize: 13,
+                                    color: _kMuted,
+                                    height: 1.6),
                               ),
                               const SizedBox(height: 18),
 
-                              // FAQs accordion
-                              _AccordionSection(
-                                label: 'FAQs',
-                                isFirst: true,
-                                child: faqs.isNotEmpty
-                                    ? FaqSection(faqs: faqs)
-                                    : const Padding(
-                                        padding: EdgeInsets.fromLTRB(
-                                            0, 8, 0, 14),
-                                        child: Text(
-                                          'No FAQs yet.',
-                                          style: TextStyle(
-                                            fontSize: 13,
-                                            color: _kMuted2,
-                                          ),
-                                        ),
-                                      ),
-                              ),
-
-                              // Reviews
+                              Text('FAQs',
+                                  style: GoogleFonts.poppins(
+                                      fontSize: 15,
+                                      fontWeight: FontWeight.w700,
+                                      color: _kInk)),
+                              const SizedBox(height: 12),
+                              if (faqs.isEmpty) ...[
+                                const Text('No FAQs yet.',
+                                    style: TextStyle(
+                                        fontSize: 13, color: _kMuted)),
+                                const SizedBox(height: 6),
+                                AskQuestionLink(serviceId: node.id),
+                                const SizedBox(height: 8),
+                              ] else ...[
+                                FaqSection(faqs: faqs),
+                                const SizedBox(height: 6),
+                                AskQuestionLink(serviceId: node.id),
+                                const SizedBox(height: 12),
+                              ],
                               _AccordionSection(
                                 label: node.reviewCount > 0
                                     ? 'Reviews (${node.reviewCount})'
@@ -1798,7 +2060,6 @@ class _WebScaffold extends ConsumerWidget {
                               const SizedBox(height: 4),
                             ],
 
-                            // Category navigation
                             if (node.hasChildren)
                               (isUnavailable || isEffectivelyHidden)
                                   ? CatalogUnavailabilityBanner(
@@ -1824,30 +2085,25 @@ class _WebScaffold extends ConsumerWidget {
                           padding: const EdgeInsets.symmetric(
                               horizontal: 28, vertical: 18),
                           decoration: const BoxDecoration(
-                            border: Border(
-                              top: BorderSide(color: _kBorder),
-                            ),
+                            border:
+                                Border(top: BorderSide(color: _kBorder)),
                           ),
                           child: Row(
                             children: [
                               Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
+                                crossAxisAlignment:
+                                    CrossAxisAlignment.start,
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
-                                  const Text(
-                                    'From',
-                                    style: TextStyle(
-                                        fontSize: 11, color: _kMuted2),
-                                  ),
-                                  Text(
-                                    '₹${displayPrice.toInt()}',
-                                    style: GoogleFonts.poppins(
-                                      fontSize: 20,
-                                      fontWeight: FontWeight.w800,
-                                      color: _kInk,
-                                      height: 1.1,
-                                    ),
-                                  ),
+                                  const Text('From',
+                                      style: TextStyle(
+                                          fontSize: 11, color: _kMuted2)),
+                                  Text('₹${displayPrice.toInt()}',
+                                      style: GoogleFonts.poppins(
+                                          fontSize: 20,
+                                          fontWeight: FontWeight.w800,
+                                          color: _kInk,
+                                          height: 1.1)),
                                 ],
                               ),
                               const Spacer(),
@@ -1859,19 +2115,17 @@ class _WebScaffold extends ConsumerWidget {
                                   padding: const EdgeInsets.symmetric(
                                       horizontal: 24, vertical: 13),
                                   decoration: BoxDecoration(
-                                    color: _kGold,
-                                    borderRadius:
-                                        BorderRadius.circular(100),
-                                  ),
+                                      color: _kGold,
+                                      borderRadius:
+                                          BorderRadius.circular(100)),
                                   child: Text(
                                     inCart
-                                        ? '🛒 View Cart'
-                                        : '🛒 ${selectedAmcPlan != null ? 'Book Now' : 'Add to Cart'}',
+                                        ? '🛒  View Cart'
+                                        : '🛒  ${selectedAmcPlan != null ? 'Book Now' : 'Add to Cart'}',
                                     style: GoogleFonts.poppins(
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.w600,
-                                      color: _kInk,
-                                    ),
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w600,
+                                        color: _kInk),
                                   ),
                                 ),
                               ),
@@ -1887,6 +2141,116 @@ class _WebScaffold extends ConsumerWidget {
         ),
       ),
     );
+  }
+}
+
+// ── Web 4-column add-ons grid ─────────────────────────────────────────────────
+
+class _WebAddonsGrid extends StatelessWidget {
+  const _WebAddonsGrid({
+    required this.addOns,
+    required this.selectedIds,
+    required this.onToggle,
+  });
+
+  final List<AddOnModel> addOns;
+  final Set<String> selectedIds;
+  final void Function(String, bool) onToggle;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(builder: (_, constraints) {
+      const cols = 4;
+      const gap = 16.0;
+      final itemW = (constraints.maxWidth - gap * (cols - 1)) / cols;
+
+      final rows = <List<AddOnModel>>[];
+      for (var i = 0; i < addOns.length; i += cols) {
+        rows.add(addOns.sublist(
+            i, i + cols > addOns.length ? addOns.length : i + cols));
+      }
+
+      return Column(
+        children: rows.map((row) {
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 16),
+            child: Row(
+              children: row.asMap().entries.map((e) {
+                final a = e.value;
+                final isSelected = selectedIds.contains(a.id);
+                return [
+                  SizedBox(
+                    width: itemW,
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 44,
+                          height: 44,
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(10),
+                            gradient: const LinearGradient(
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                              colors: [
+                                Color(0xFFF1ECE1),
+                                Color(0xFFEAE3D4)
+                              ],
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(a.name,
+                                  style: const TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w600,
+                                      color: _kInk),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis),
+                              Text('₹${a.price.toInt()}',
+                                  style: const TextStyle(
+                                      fontSize: 12, color: _kMuted)),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        GestureDetector(
+                          onTap: () => onToggle(a.id, !isSelected),
+                          child: AnimatedContainer(
+                            duration: const Duration(milliseconds: 150),
+                            width: 22,
+                            height: 22,
+                            decoration: BoxDecoration(
+                              color: isSelected
+                                  ? _kGold
+                                  : const Color(0xFFECE7DE),
+                              shape: BoxShape.circle,
+                            ),
+                            child: Center(
+                              child: Icon(
+                                isSelected
+                                    ? Icons.check_rounded
+                                    : Icons.add_rounded,
+                                size: 13,
+                                color: isSelected ? Colors.white : _kInk,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  if (e.key < row.length - 1) const SizedBox(width: gap),
+                ];
+              }).expand((w) => w).toList(),
+            ),
+          );
+        }).toList(),
+      );
+    });
   }
 }
 
@@ -1916,8 +2280,7 @@ class _WebHeader extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(28),
       decoration: const BoxDecoration(
-        border: Border(bottom: BorderSide(color: _kBorder)),
-      ),
+          border: Border(bottom: BorderSide(color: _kBorder))),
       child: Stack(
         children: [
           Row(
@@ -1934,16 +2297,13 @@ class _WebHeader extends StatelessWidget {
                       fit: StackFit.expand,
                       children: [
                         _HeroImage(url: heroUrl!),
-                        // Back button on photo
                         Positioned(
                           top: 12,
                           left: 12,
-                          child: _CircleIconButton(
-                            icon: Icons.arrow_back_rounded,
-                            onTap: onClose,
-                          ),
+                          child: _CircleNavBtn(
+                              icon: Icons.arrow_back_rounded,
+                              onTap: onClose),
                         ),
-                        // Counter
                         Positioned(
                           bottom: 10,
                           right: 12,
@@ -1951,146 +2311,112 @@ class _WebHeader extends StatelessWidget {
                             padding: const EdgeInsets.symmetric(
                                 horizontal: 8, vertical: 3),
                             decoration: BoxDecoration(
-                              color:
-                                  const Color(0xFF1A1714).withAlpha(166),
+                              color: const Color(0xFF1A1714).withAlpha(166),
                               borderRadius: BorderRadius.circular(100),
                             ),
-                            child: const Text(
-                              '1/6',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 10,
-                                height: 1.4,
-                              ),
-                            ),
+                            child: const Text('1/6',
+                                style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 10,
+                                    height: 1.4)),
                           ),
                         ),
                       ],
                     ),
                   ),
+                )
+              else
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(14),
+                  child: const _StripedBox(width: 320, height: 220),
                 ),
 
               const SizedBox(width: 28),
 
-              // Info panel
+              // Info
               Expanded(
                 child: Padding(
-                  padding: const EdgeInsets.only(right: 40),
+                  padding: const EdgeInsets.only(right: 44),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // Category badge
                       if (node.parentName?.isNotEmpty == true) ...[
                         Container(
                           padding: const EdgeInsets.symmetric(
                               horizontal: 10, vertical: 4),
                           decoration: BoxDecoration(
-                            color: _kInk,
-                            borderRadius: BorderRadius.circular(100),
-                          ),
-                          child: Text(
-                            node.parentName!,
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 11,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
+                              color: _kInk,
+                              borderRadius: BorderRadius.circular(100)),
+                          child: Text(node.parentName!,
+                              style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w600)),
                         ),
                         const SizedBox(height: 10),
                       ],
-
-                      // Title
-                      Text(
-                        node.name,
-                        style: GoogleFonts.poppins(
-                          fontSize: 24,
-                          fontWeight: FontWeight.w700,
-                          color: _kInk,
-                          height: 1.2,
-                        ),
-                      ),
+                      Text(node.name,
+                          style: GoogleFonts.poppins(
+                              fontSize: 24,
+                              fontWeight: FontWeight.w700,
+                              color: _kInk,
+                              height: 1.2)),
                       const SizedBox(height: 8),
-
-                      // Rating
-                      if (node.rating > 0 || node.estimatedDuration != null)
-                        Row(
-                          children: [
-                            if (node.rating > 0) ...[
+                      if (node.rating > 0)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 8),
+                          child: Row(
+                            children: [
                               const Text('★',
-                                  style: TextStyle(
-                                      color: _kGold, fontSize: 13)),
+                                  style:
+                                      TextStyle(color: _kGold, fontSize: 13)),
                               const SizedBox(width: 4),
-                              Text(
-                                node.rating.toStringAsFixed(1),
-                                style: const TextStyle(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w600,
-                                  color: _kInk,
-                                ),
-                              ),
+                              Text(node.rating.toStringAsFixed(1),
+                                  style: const TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w600,
+                                      color: _kInk)),
                               if (node.reviewCount > 0) ...[
                                 const SizedBox(width: 4),
-                                Text(
-                                  '(${node.reviewCount} reviews)',
-                                  style: const TextStyle(
-                                    fontSize: 13,
-                                    color: _kMuted2,
-                                  ),
-                                ),
+                                Text('(${node.reviewCount} reviews)',
+                                    style: const TextStyle(
+                                        fontSize: 13, color: _kMuted2)),
                               ],
                             ],
-                          ],
-                        ),
-
-                      // Description
-                      if (node.description?.isNotEmpty == true) ...[
-                        const SizedBox(height: 8),
-                        Text(
-                          node.description!,
-                          style: const TextStyle(
-                            fontSize: 13,
-                            color: _kMuted,
-                            height: 1.6,
                           ),
-                          maxLines: 4,
-                          overflow: TextOverflow.ellipsis,
                         ),
-                      ],
-
-                      // Price
-                      if (node.basePrice != null) ...[
-                        const SizedBox(height: 14),
+                      if (node.description?.isNotEmpty == true)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 14),
+                          child: Text(node.description!,
+                              style: const TextStyle(
+                                  fontSize: 13, color: _kMuted, height: 1.6),
+                              maxLines: 4,
+                              overflow: TextOverflow.ellipsis),
+                        ),
+                      if (node.basePrice != null)
                         Row(
                           crossAxisAlignment: CrossAxisAlignment.baseline,
                           textBaseline: TextBaseline.alphabetic,
                           children: [
-                            const Text(
-                              'From',
-                              style:
-                                  TextStyle(fontSize: 13, color: _kMuted2),
-                            ),
+                            const Text('From',
+                                style: TextStyle(
+                                    fontSize: 13, color: _kMuted2)),
                             const SizedBox(width: 8),
-                            Text(
-                              '₹${displayPrice.toInt()}',
-                              style: GoogleFonts.poppins(
-                                fontSize: 24,
-                                fontWeight: FontWeight.w800,
-                                color: _kInk,
-                                height: 1.0,
-                              ),
-                            ),
+                            Text('₹${displayPrice.toInt()}',
+                                style: GoogleFonts.poppins(
+                                    fontSize: 24,
+                                    fontWeight: FontWeight.w800,
+                                    color: _kInk,
+                                    height: 1.0)),
                             if (hasAdjustment) ...[
                               const SizedBox(width: 8),
-                              const Text(
-                                'incl. add-ons',
-                                style: TextStyle(
-                                    fontSize: 12, color: _kMuted2),
-                              ),
+                              const Text('incl. add-ons',
+                                  style: TextStyle(
+                                      fontSize: 12, color: _kMuted2)),
                             ],
                           ],
                         ),
-                      ],
                     ],
                   ),
                 ),
@@ -2098,7 +2424,7 @@ class _WebHeader extends StatelessWidget {
             ],
           ),
 
-          // Close button (✕)
+          // Close ✕
           Positioned(
             top: 0,
             right: 0,
@@ -2108,9 +2434,8 @@ class _WebHeader extends StatelessWidget {
                 width: 34,
                 height: 34,
                 decoration: BoxDecoration(
-                  color: const Color(0xFFF2EFE9),
-                  borderRadius: BorderRadius.circular(100),
-                ),
+                    color: const Color(0xFFF2EFE9),
+                    borderRadius: BorderRadius.circular(100)),
                 child: const Icon(Icons.close_rounded,
                     size: 16, color: _kInk),
               ),

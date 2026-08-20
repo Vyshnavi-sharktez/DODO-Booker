@@ -569,7 +569,7 @@ class _BrandColumn extends StatelessWidget {
       children: [
         Image.asset(
           'assets/images/logo.png',
-          height: 52,
+          height: 40,
           fit: BoxFit.contain,
           errorBuilder: (_, _, _) => Container(
             width: 44,

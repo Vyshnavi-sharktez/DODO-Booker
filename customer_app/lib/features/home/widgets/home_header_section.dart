@@ -115,8 +115,8 @@ class _Logo extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         Container(
-          width: 38,
-          height: 38,
+          width: 32,
+          height: 32,
           decoration: BoxDecoration(
             color: const Color(0xFF1E1B17),
             border: Border.all(color: const Color(0xFF2A2622)),

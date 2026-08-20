@@ -75,7 +75,8 @@ class CatalogService {
       final data = await _db
           .from('service_faqs')
           .select()
-          .eq('node_id', nodeId);
+          .eq('service_id', nodeId)
+          .order('sort_order', ascending: true);
       return (data as List)
           .map((e) => FaqModel.fromJson(e as Map<String, dynamic>))
           .toList();
@@ -83,6 +84,59 @@ class CatalogService {
       debugPrint('[CatalogService] fetchFaqsForNode($nodeId) error: $e');
       return [];
     }
+  }
+
+  /// Answered customer questions for a node, mapped to FaqModel for display.
+  Future<List<FaqModel>> fetchAnsweredQuestionsForNode(String nodeId) async {
+    if (!_ready) return [];
+    try {
+      final data = await _db
+          .from('customer_questions')
+          .select('id, question, answer')
+          .eq('service_id', nodeId)
+          .eq('status', 'answered')
+          .order('answered_at', ascending: true);
+      return (data as List)
+          .map((e) => FaqModel.fromJson(e as Map<String, dynamic>))
+          .toList();
+    } catch (e) {
+      debugPrint('[CatalogService] fetchAnsweredQuestionsForNode($nodeId) error: $e');
+      return [];
+    }
+  }
+
+  /// Submits a customer question for a service and notifies admins.
+  Future<void> submitQuestion({
+    required String serviceId,
+    String? parentNodeId,
+    required String customerId,
+    String? customerName,
+    String? customerPhone,
+    required String question,
+  }) async {
+    if (!_ready) return;
+    await _db.from('customer_questions').insert({
+      'service_id': serviceId,
+      if (parentNodeId != null) 'parent_node_id': parentNodeId,
+      'customer_id': customerId,
+      if (customerName != null) 'customer_name': customerName,
+      if (customerPhone != null) 'customer_phone': customerPhone,
+      'question': question,
+      'status': 'pending',
+    });
+    // Notify all admins in real-time.
+    final preview =
+        question.length > 80 ? '${question.substring(0, 80)}…' : question;
+    final who = customerName?.isNotEmpty == true ? customerName! : 'A customer';
+    await _db.from('notifications').insert({
+      'user_type': 'admin',
+      'title': 'New Customer Question',
+      'message': '$who asked: "$preview"',
+      'notification_type': 'new_customer_question',
+      'is_read': false,
+      'entity_type': 'customer_question',
+      'entity_id': serviceId,
+    });
   }
 
   /// Checks the effective availability of [nodeId] accessed via [parentId].

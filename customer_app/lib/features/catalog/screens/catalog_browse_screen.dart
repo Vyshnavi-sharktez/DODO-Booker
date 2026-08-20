@@ -145,7 +145,7 @@ class _CatalogBrowseScreenState extends ConsumerState<CatalogBrowseScreen> {
                           gridDelegate:
                               SliverGridDelegateWithFixedCrossAxisCount(
                             crossAxisCount: cols,
-                            childAspectRatio: 0.75,
+                            mainAxisExtent: 260,
                             crossAxisSpacing: 14,
                             mainAxisSpacing: 14,
                           ),
@@ -177,7 +177,7 @@ class _CatalogBrowseScreenState extends ConsumerState<CatalogBrowseScreen> {
         ),
         gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
           crossAxisCount: cols,
-          childAspectRatio: 0.75,
+          mainAxisExtent: 260,
           crossAxisSpacing: 14,
           mainAxisSpacing: 14,
         ),

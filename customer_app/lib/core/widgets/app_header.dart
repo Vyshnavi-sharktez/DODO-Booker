@@ -1201,7 +1201,7 @@ class _DodoBrand extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final w = MediaQuery.sizeOf(context).width;
-    final h = w >= 1024 ? 72.0 : w >= 768 ? 62.0 : 50.0;
+    final h = w >= 1024 ? 44.0 : w >= 768 ? 36.0 : 30.0;
     return Image.asset(
       'assets/images/logo.png',
       height: h,
@@ -1276,6 +1276,7 @@ class _NotifButtonState extends ConsumerState<_NotifButton> {
 
   @override
   Widget build(BuildContext context) {
+    if (!ref.watch(isAuthenticatedProvider)) return const SizedBox.shrink();
     final unread = ref.watch(unreadCountProvider);
     return MouseRegion(
       cursor: SystemMouseCursors.click,

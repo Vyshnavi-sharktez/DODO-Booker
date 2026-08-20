@@ -4,6 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../features/auth/application/providers/auth_provider.dart';
 import '../../features/bookings/application/providers/bookings_providers.dart';
 import '../../features/bookings/application/providers/dispatch_providers.dart';
+import '../../features/customer_questions/application/providers/customer_questions_providers.dart';
 import '../../features/notifications/application/providers/notifications_providers.dart';
 import '../../features/vendors/application/providers/vendors_providers.dart';
 
@@ -62,6 +63,14 @@ class AdminRealtimeSync {
           table: 'notifications',
           callback: (_) => _refreshNotifications(),
         )
+        // Customer submits a question → refresh any open questions panels
+        // and update the notification badge in real-time.
+        .onPostgresChanges(
+          event: PostgresChangeEvent.insert,
+          schema: 'public',
+          table: 'customer_questions',
+          callback: (_) => _refreshCustomerQuestions(),
+        )
         .subscribe();
   }
 
@@ -75,6 +84,10 @@ class AdminRealtimeSync {
 
   void _refreshNotifications() {
     _ref.read(notificationsNotifierProvider.notifier).refresh();
+  }
+
+  void _refreshCustomerQuestions() {
+    _ref.invalidate(customerQuestionsNotifierProvider);
   }
 
   /// Called by the lifecycle observer on admin panel resume after a long pause.

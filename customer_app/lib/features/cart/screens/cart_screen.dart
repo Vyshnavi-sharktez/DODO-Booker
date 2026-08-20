@@ -663,7 +663,7 @@ class _CheckoutBar extends ConsumerWidget {
                       ? () async {
                           final ok = await requireAuth(context, ref);
                           if (ok && context.mounted) {
-                            context.go('/cart/checkout');
+                            context.push('/cart/checkout');
                           }
                         }
                       : null,

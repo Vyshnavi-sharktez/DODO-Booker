@@ -9,6 +9,7 @@ class NotificationModel {
   final DateTime createdAt;
   final String? entityType;
   final String? entityId;
+  final String? parentNodeId;
 
   const NotificationModel({
     required this.id,
@@ -21,6 +22,7 @@ class NotificationModel {
     required this.createdAt,
     this.entityType,
     this.entityId,
+    this.parentNodeId,
   });
 
   factory NotificationModel.fromJson(Map<String, dynamic> json) {
@@ -35,6 +37,7 @@ class NotificationModel {
       createdAt: DateTime.parse(json['created_at'] as String),
       entityType: json['entity_type'] as String?,
       entityId: json['entity_id'] as String?,
+      parentNodeId: json['parent_node_id'] as String?,
     );
   }
 }

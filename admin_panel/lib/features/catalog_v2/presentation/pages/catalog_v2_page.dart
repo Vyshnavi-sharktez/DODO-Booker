@@ -8,6 +8,7 @@ import '../../domain/models/catalog_node.dart';
 import '../../../service_scheduling/presentation/widgets/service_scheduling_dialog.dart';
 import '../../../catalog_configs/presentation/widgets/catalog_node_config_dialog.dart';
 import '../../../amc_plans/presentation/widgets/node_amc_plans_dialog.dart';
+import '../../../service_faqs/presentation/widgets/node_faqs_dialog.dart';
 import '../../../service_availability_areas/application/providers/service_availability_areas_providers.dart';
 import '../widgets/catalog_node_availability_dialog.dart';
 import '../widgets/catalog_node_form_dialog.dart';
@@ -440,6 +441,12 @@ class _CatalogV2PageState extends ConsumerState<CatalogV2Page> {
     );
   }
 
+  // ── FAQs ──────────────────────────────────────────────────────────────────────
+
+  void _openFaqs(CatalogNode node) {
+    NodeFaqsDialog.show(context, node);
+  }
+
   // ── AMC Plans ─────────────────────────────────────────────────────────────────
 
   void _openAmcPlans(CatalogNode node) {
@@ -471,6 +478,7 @@ class _CatalogV2PageState extends ConsumerState<CatalogV2Page> {
       onOpenScheduling: _openScheduling,
       onOpenConfig: _openConfigPanel,
       onOpenAmcPlans: _openAmcPlans,
+      onOpenFaqs: _openFaqs,
     );
 
     return Scaffold(

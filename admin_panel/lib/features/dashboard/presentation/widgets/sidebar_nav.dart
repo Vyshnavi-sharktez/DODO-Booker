@@ -292,13 +292,13 @@ class _SidebarBrand extends StatelessWidget {
       child: Row(
         children: [
           Container(
-            width: 36,
-            height: 36,
+            width: 28,
+            height: 28,
             decoration: BoxDecoration(
               color: Colors.white,
-              borderRadius: BorderRadius.circular(10),
+              borderRadius: BorderRadius.circular(8),
             ),
-            padding: const EdgeInsets.all(4),
+            padding: const EdgeInsets.all(3),
             child: Image.asset(
               'assets/images/logo.png',
               fit: BoxFit.contain,

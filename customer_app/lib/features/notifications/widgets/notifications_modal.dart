@@ -4,6 +4,8 @@ import 'package:go_router/go_router.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/widgets/app_modal_dialog.dart';
 import '../../../routes/app_router.dart';
+import '../../catalog/providers/catalog_providers.dart';
+import '../../catalog/utils/catalog_launcher.dart';
 import '../models/notification_model.dart';
 import '../services/notification_providers.dart';
 
@@ -39,17 +41,31 @@ class _NotificationsModalState extends ConsumerState<NotificationsModal> {
     }
   }
 
-  void _handleTap(NotificationModel n) {
+  Future<void> _handleTap(NotificationModel n) async {
     debugPrint('[NOTIF][Customer] tapped — entity_type=${n.entityType}, entity_id=${n.entityId}');
     _markRead(n);
+    final router = GoRouter.of(context);
+
     if (n.entityType == 'booking' && n.entityId != null) {
-      // Capture the router BEFORE pop — after pop() this widget is unmounted
-      // and context.go() on a stale context silently no-ops.
-      final router = GoRouter.of(context);
+      // Capture the router BEFORE pop — after pop() this widget is unmounted.
       final route = AppRoutes.notificationBooking.replaceFirst(':id', n.entityId!);
       debugPrint('[NOTIF][Customer] navigating → $route');
       Navigator.of(context).pop();
       router.push(route);
+    } else if (n.notificationType == 'question_answered' && n.entityId != null) {
+      // Use the same flow as tapping a service card: fetch the node then open
+      // the CatalogNodeModal, so the service opens identically to normal navigation.
+      // parentNodeId is stored on the notification so we re-open the exact
+      // service+parent instance that generated the question.
+      final nodeId = n.entityId!;
+      final node = await ref.read(catalogServiceProvider).fetchNode(nodeId);
+      if (node == null || !mounted) return;
+      // Root navigator context stays valid after the dialog pops.
+      final navCtx = router.routerDelegate.navigatorKey.currentContext;
+      Navigator.of(context).pop();
+      if (navCtx != null && navCtx.mounted) {
+        openCatalogNode(navCtx, node, parentId: n.parentNodeId);
+      }
     }
   }
 

@@ -25,10 +25,15 @@ final catalogNodeChildrenProvider =
   return ref.read(catalogServiceProvider).fetchChildren(parentId);
 });
 
-/// FAQs for a catalog node (queried by node_id).
+/// FAQs for a catalog node: static service_faqs + answered customer_questions.
 final catalogNodeFaqsProvider =
-    FutureProvider.family<List<FaqModel>, String>((ref, nodeId) {
-  return ref.read(catalogServiceProvider).fetchFaqsForNode(nodeId);
+    FutureProvider.family<List<FaqModel>, String>((ref, nodeId) async {
+  final service = ref.read(catalogServiceProvider);
+  final results = await Future.wait([
+    service.fetchFaqsForNode(nodeId),
+    service.fetchAnsweredQuestionsForNode(nodeId),
+  ]);
+  return [...results[0], ...results[1]];
 });
 
 /// Effective availability of a node for a given parent context.
