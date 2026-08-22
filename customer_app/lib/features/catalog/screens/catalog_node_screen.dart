@@ -5,6 +5,7 @@ import 'package:google_fonts/google_fonts.dart';
 
 import '../../../core/constants/app_colors.dart';
 import '../../../core/utils/service_image_registry.dart';
+import '../../../core/widgets/horizontal_carousel.dart';
 import '../../../models/faq_model.dart';
 import '../../../models/service_attribute_model.dart';
 import '../../../models/addon_model.dart';
@@ -118,7 +119,11 @@ class _CatalogNodeScreenState extends ConsumerState<CatalogNodeScreen> {
         ? (ref.watch(allActiveAddonsProvider).valueOrNull ?? [])
         : <AddOnModel>[];
     final faqs = node.isLeafBookable
-        ? (ref.watch(catalogNodeFaqsProvider(node.id)).valueOrNull ?? [])
+        ? (ref
+                .watch(catalogNodeFaqsProvider(
+                    (nodeId: node.id, parentNodeId: widget.parentNodeId)))
+                .valueOrNull ??
+            [])
         : <FaqModel>[];
 
     final addresses = ref.watch(addressNotifierProvider).valueOrNull ?? [];
@@ -351,7 +356,7 @@ class _CatalogNodeScreenState extends ConsumerState<CatalogNodeScreen> {
                     ),
                     Padding(
                       padding: const EdgeInsets.only(left: 20, top: 2),
-                      child: AskQuestionLink(serviceId: node.id),
+                      child: AskQuestionLink(serviceId: node.id, parentId: widget.parentNodeId),
                     ),
                     const SizedBox(height: 8),
                   ] else ...[
@@ -361,7 +366,7 @@ class _CatalogNodeScreenState extends ConsumerState<CatalogNodeScreen> {
                     ),
                     Padding(
                       padding: const EdgeInsets.only(left: 20, top: 6),
-                      child: AskQuestionLink(serviceId: node.id),
+                      child: AskQuestionLink(serviceId: node.id, parentId: widget.parentNodeId),
                     ),
                     const SizedBox(height: 8),
                   ],
@@ -553,7 +558,9 @@ class _CircleNavBtn extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      child: GestureDetector(
       onTap: onTap,
       child: Container(
         width: 36,
@@ -562,6 +569,7 @@ class _CircleNavBtn extends StatelessWidget {
             color: Colors.white, shape: BoxShape.circle),
         child: Icon(icon, size: 18, color: _kInk),
       ),
+    ),
     );
   }
 }
@@ -733,14 +741,14 @@ class _InlineAddonCards extends StatelessWidget {
       );
     }
 
-    return SizedBox(
+    return HorizontalCarousel(
       height: 210,
-      child: ListView.separated(
-        padding: const EdgeInsets.symmetric(horizontal: 20),
-        scrollDirection: Axis.horizontal,
-        itemCount: addOns.length,
-        separatorBuilder: (_, _) => const SizedBox(width: 12),
-        itemBuilder: (_, i) => _AddonMobileCard(
+      itemCount: addOns.length,
+      scrollStep: 3 * (160.0 + 12.0),
+      padding: const EdgeInsets.symmetric(horizontal: 20),
+      itemBuilder: (_, i) => Padding(
+        padding: EdgeInsets.only(right: i < addOns.length - 1 ? 12 : 0),
+        child: _AddonMobileCard(
           addOn: addOns[i],
           isSelected: selectedIds.contains(addOns[i].id),
           onToggle: (sel) => onToggle(addOns[i].id, sel),
@@ -770,7 +778,9 @@ class _AddonMobileCardState extends State<_AddonMobileCard> {
   @override
   Widget build(BuildContext context) {
     final sel = widget.isSelected;
-    return GestureDetector(
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      child: GestureDetector(
       onTap: () => widget.onToggle(!sel),
       child: SizedBox(
         width: 160,
@@ -826,7 +836,9 @@ class _AddonMobileCardState extends State<_AddonMobileCard> {
                   style: const TextStyle(fontSize: 11, color: _kMuted),
                 ),
                 const Spacer(),
-                GestureDetector(
+                MouseRegion(
+                  cursor: SystemMouseCursors.click,
+                  child: GestureDetector(
                   onTap: () => widget.onToggle(!sel),
                   child: AnimatedContainer(
                     duration: const Duration(milliseconds: 150),
@@ -845,11 +857,13 @@ class _AddonMobileCardState extends State<_AddonMobileCard> {
                     ),
                   ),
                 ),
+                ),
               ],
             ),
           ],
         ),
       ),
+    ),
     );
   }
 }
@@ -907,7 +921,9 @@ class _AddonWebRow extends StatelessWidget {
           const SizedBox(width: 10),
 
           // "+" button
-          GestureDetector(
+          MouseRegion(
+            cursor: SystemMouseCursors.click,
+            child: GestureDetector(
             onTap: () => onToggle(!isSelected),
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 150),
@@ -925,6 +941,7 @@ class _AddonWebRow extends StatelessWidget {
                 ),
               ),
             ),
+          ),
           ),
         ],
       ),
@@ -1027,7 +1044,9 @@ class _AmcPlanCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      child: GestureDetector(
       onTap: onTap,
       child: Stack(
         clipBehavior: Clip.none,
@@ -1141,6 +1160,7 @@ class _AmcPlanCard extends StatelessWidget {
             ),
         ],
       ),
+    ),
     );
   }
 }
@@ -1176,7 +1196,9 @@ class _AccordionSectionState extends State<_AccordionSection> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          GestureDetector(
+          MouseRegion(
+            cursor: SystemMouseCursors.click,
+            child: GestureDetector(
             onTap: () => setState(() => _open = !_open),
             behavior: HitTestBehavior.opaque,
             child: Container(
@@ -1208,6 +1230,7 @@ class _AccordionSectionState extends State<_AccordionSection> {
                 ],
               ),
             ),
+          ),
           ),
           AnimatedCrossFade(
             alignment: Alignment.topLeft,
@@ -1290,13 +1313,16 @@ class _Breadcrumb extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
       child: Row(
         children: [
-          GestureDetector(
+          MouseRegion(
+            cursor: SystemMouseCursors.click,
+            child: GestureDetector(
             onTap: onParentTap,
             child: Text(parentName,
                 style: const TextStyle(
                     fontSize: 12,
                     color: _kMuted2,
                     fontWeight: FontWeight.w500)),
+          ),
           ),
           const Padding(
             padding: EdgeInsets.symmetric(horizontal: 6),
@@ -1491,7 +1517,9 @@ class _ChildListItemState extends State<_ChildListItem> {
     final node = widget.node;
     final imageUrl = ServiceImageRegistry.resolve(node.imageUrl, node.name);
 
-    return GestureDetector(
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      child: GestureDetector(
       onTap: _navigate,
       onTapDown: (_) => setState(() => _pressed = true),
       onTapUp: (_) => setState(() => _pressed = false),
@@ -1650,6 +1678,7 @@ class _ChildListItemState extends State<_ChildListItem> {
           ),
         ),
       ),
+    ),
     );
   }
 }
@@ -1806,7 +1835,9 @@ class _NodeBookingBar extends ConsumerWidget {
 
           // Gold pill CTA
           Expanded(
-            child: GestureDetector(
+            child: MouseRegion(
+              cursor: SystemMouseCursors.click,
+              child: GestureDetector(
               onTap: inCart ? () => openCart(context) : () => _addToCart(ref),
               child: Container(
                 padding: const EdgeInsets.symmetric(vertical: 13),
@@ -1826,6 +1857,7 @@ class _NodeBookingBar extends ConsumerWidget {
                 ),
               ),
             ),
+          ),
           ),
         ],
       ),
@@ -2041,12 +2073,12 @@ class _WebScaffold extends ConsumerWidget {
                                     style: TextStyle(
                                         fontSize: 13, color: _kMuted)),
                                 const SizedBox(height: 6),
-                                AskQuestionLink(serviceId: node.id),
+                                AskQuestionLink(serviceId: node.id, parentId: parentNodeId),
                                 const SizedBox(height: 8),
                               ] else ...[
                                 FaqSection(faqs: faqs),
                                 const SizedBox(height: 6),
-                                AskQuestionLink(serviceId: node.id),
+                                AskQuestionLink(serviceId: node.id, parentId: parentNodeId),
                                 const SizedBox(height: 12),
                               ],
                               _AccordionSection(
@@ -2107,7 +2139,9 @@ class _WebScaffold extends ConsumerWidget {
                                 ],
                               ),
                               const Spacer(),
-                              GestureDetector(
+                              MouseRegion(
+                                cursor: SystemMouseCursors.click,
+                                child: GestureDetector(
                                 onTap: inCart
                                     ? () => openCart(context)
                                     : addToCart,
@@ -2128,6 +2162,7 @@ class _WebScaffold extends ConsumerWidget {
                                         color: _kInk),
                                   ),
                                 ),
+                              ),
                               ),
                             ],
                           ),
@@ -2217,7 +2252,9 @@ class _WebAddonsGrid extends StatelessWidget {
                           ),
                         ),
                         const SizedBox(width: 8),
-                        GestureDetector(
+                        MouseRegion(
+                          cursor: SystemMouseCursors.click,
+                          child: GestureDetector(
                           onTap: () => onToggle(a.id, !isSelected),
                           child: AnimatedContainer(
                             duration: const Duration(milliseconds: 150),
@@ -2239,6 +2276,7 @@ class _WebAddonsGrid extends StatelessWidget {
                               ),
                             ),
                           ),
+                        ),
                         ),
                       ],
                     ),
@@ -2428,7 +2466,9 @@ class _WebHeader extends StatelessWidget {
           Positioned(
             top: 0,
             right: 0,
-            child: GestureDetector(
+            child: MouseRegion(
+              cursor: SystemMouseCursors.click,
+              child: GestureDetector(
               onTap: onClose,
               child: Container(
                 width: 34,
@@ -2439,6 +2479,7 @@ class _WebHeader extends StatelessWidget {
                 child: const Icon(Icons.close_rounded,
                     size: 16, color: _kInk),
               ),
+            ),
             ),
           ),
         ],

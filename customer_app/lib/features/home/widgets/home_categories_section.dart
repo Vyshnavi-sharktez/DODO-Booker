@@ -1,9 +1,9 @@
-import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/utils/service_image_registry.dart';
+import '../../../core/widgets/horizontal_carousel.dart';
 import '../../../core/widgets/section_header.dart';
 import '../../../features/catalog/models/catalog_node_model.dart';
 
@@ -65,22 +65,16 @@ class _Carousel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ScrollConfiguration(
-      behavior: _PointerScrollBehavior(),
-      child: SizedBox(
-        height: _kCardH + 20,
-        child: ListView.builder(
-          scrollDirection: Axis.horizontal,
-          padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
-          itemCount: nodes.length,
-          itemBuilder: (_, i) => Padding(
-            padding:
-                EdgeInsets.only(right: i < nodes.length - 1 ? _kGap : 0),
-            child: _ServiceCard(
-              node: nodes[i],
-              onTap: () => onSelect(nodes[i]),
-            ),
-          ),
+    return HorizontalCarousel(
+      height: _kCardH + 20,
+      itemCount: nodes.length,
+      scrollStep: 3 * (_kCardW + _kGap),
+      padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
+      itemBuilder: (_, i) => Padding(
+        padding: EdgeInsets.only(right: i < nodes.length - 1 ? _kGap : 0),
+        child: _ServiceCard(
+          node: nodes[i],
+          onTap: () => onSelect(nodes[i]),
         ),
       ),
     );
@@ -287,19 +281,4 @@ class _Skeleton extends StatelessWidget {
       ),
     );
   }
-}
-
-// ── Scroll behavior ───────────────────────────────────────────────────────────
-
-class _PointerScrollBehavior extends MaterialScrollBehavior {
-  @override
-  Set<PointerDeviceKind> get dragDevices => {
-        PointerDeviceKind.touch,
-        PointerDeviceKind.mouse,
-        PointerDeviceKind.trackpad,
-        PointerDeviceKind.stylus,
-      };
-
-  @override
-  Widget buildScrollbar(context, child, details) => child;
 }

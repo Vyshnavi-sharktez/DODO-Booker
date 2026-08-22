@@ -6,13 +6,25 @@ import '../../application/providers/customer_questions_providers.dart';
 import '../../domain/models/customer_question.dart';
 
 class CustomerQuestionsPanel extends ConsumerWidget {
-  const CustomerQuestionsPanel({super.key, required this.node});
+  const CustomerQuestionsPanel({
+    super.key,
+    required this.node,
+    this.parentNodeId,
+  });
 
   final CatalogNode node;
 
+  /// When set, only customer questions submitted from this parent context are
+  /// shown. Pass null to show all questions for the service (global view).
+  final String? parentNodeId;
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final key = (serviceId: node.id, serviceName: node.name);
+    final key = (
+      serviceId: node.id,
+      serviceName: node.name,
+      parentNodeId: parentNodeId,
+    );
     final questionsAsync = ref.watch(customerQuestionsNotifierProvider(key));
     final notifier =
         ref.read(customerQuestionsNotifierProvider(key).notifier);

@@ -8,15 +8,23 @@ import '../../domain/models/service_faq.dart';
 import 'faq_form_dialog.dart';
 
 class NodeFaqsDialog extends ConsumerStatefulWidget {
-  const NodeFaqsDialog({super.key, required this.node});
+  const NodeFaqsDialog({super.key, required this.node, this.parentId});
 
   final CatalogNode node;
 
-  static Future<void> show(BuildContext context, CatalogNode node) {
+  /// The parent node ID from which this service was opened in the catalog tree.
+  /// Used to scope customer questions to this specific parent context.
+  final String? parentId;
+
+  static Future<void> show(
+    BuildContext context,
+    CatalogNode node, {
+    String? parentId,
+  }) {
     return showDialog(
       context: context,
       barrierDismissible: true,
-      builder: (_) => NodeFaqsDialog(node: node),
+      builder: (_) => NodeFaqsDialog(node: node, parentId: parentId),
     );
   }
 
@@ -191,7 +199,7 @@ class _NodeFaqsDialogState extends ConsumerState<NodeFaqsDialog>
                   ),
 
                   // ── Tab 2: Customer Questions ───────────────────────
-                  CustomerQuestionsPanel(node: node),
+                  CustomerQuestionsPanel(node: node, parentNodeId: widget.parentId),
                 ],
               ),
             ),

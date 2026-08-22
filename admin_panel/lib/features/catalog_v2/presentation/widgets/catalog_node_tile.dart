@@ -48,7 +48,8 @@ class NodeCallbacks {
   final void Function(CatalogNode node) onOpenAmcPlans;
 
   /// Opens the FAQs & Customer Questions dialog for this bookable leaf node.
-  final void Function(CatalogNode node) onOpenFaqs;
+  /// [parentIdContext] scopes customer questions to this parent relationship.
+  final void Function(CatalogNode node, String? parentIdContext) onOpenFaqs;
 }
 
 /// Renders a single catalog item row and recursively renders its children
@@ -297,7 +298,7 @@ class CatalogNodeTile extends StatelessWidget {
                     icon: const Icon(Icons.quiz_rounded, size: 17),
                     tooltip: 'FAQs',
                     color: AppColors.primary,
-                    onPressed: () => callbacks.onOpenFaqs(node),
+                    onPressed: () => callbacks.onOpenFaqs(node, parentIdContext),
                   ),
 
                 // Module config (Tax / Loyalty / Scheduling / Commission)

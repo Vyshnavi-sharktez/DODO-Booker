@@ -8,6 +8,8 @@ import '../../../../features/notifications/application/providers/notifications_p
 import '../../../../features/notifications/domain/models/app_notification.dart';
 import '../../../bookings/application/providers/bookings_providers.dart';
 import '../../../bookings/presentation/widgets/booking_details_dialog.dart';
+import '../../../catalog_v2/application/providers/catalog_node_providers.dart';
+import '../../../service_faqs/presentation/widgets/node_faqs_dialog.dart';
 
 final _timeFmt = DateFormat('dd MMM, h:mm a');
 
@@ -126,8 +128,10 @@ class _NotificationsPanelDialogState
           .read(notificationsNotifierProvider.notifier)
           .toggleRead(n.id, currentIsRead: n.isRead);
     }
+
+    final router = GoRouter.of(context);
+
     if (n.entityType == 'booking' || n.notificationType == 'vendor_accepted') {
-      final router = GoRouter.of(context);
       Navigator.of(context).pop();
       if (n.entityId != null) {
         final bookings = ref.read(bookingsNotifierProvider).valueOrNull ?? [];
@@ -141,10 +145,56 @@ class _NotificationsPanelDialogState
         }
       }
       router.go('/dashboard/bookings');
-    } else if (n.entityType == 'amc_scheduling_request') {
-      final router = GoRouter.of(context);
+      return;
+    }
+
+    if (n.entityType == 'amc_scheduling_request') {
       Navigator.of(context).pop();
       router.go('/dashboard/amc-scheduling-requests');
+      return;
+    }
+
+    if (n.entityType == 'customer_question' && n.entityId != null) {
+      final allNodes =
+          ref.read(catalogNodeNotifierProvider).valueOrNull ?? [];
+      final serviceNode =
+          allNodes.where((nd) => nd.id == n.entityId).firstOrNull;
+      final navKey = router.routerDelegate.navigatorKey;
+      Navigator.of(context).pop();
+      router.go('/dashboard/catalog');
+      if (serviceNode != null) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          final ctx = navKey.currentContext;
+          if (ctx != null) {
+            NodeFaqsDialog.show(ctx, serviceNode, parentId: n.parentNodeId);
+          }
+        });
+      }
+      return;
+    }
+
+    if (n.entityType == 'service_warranty') {
+      Navigator.of(context).pop();
+      router.go('/dashboard/warranty-claims');
+      return;
+    }
+
+    if (n.entityType == 'amc_contract') {
+      Navigator.of(context).pop();
+      router.go('/dashboard/bookings');
+      return;
+    }
+
+    if (n.entityType == 'amc_resume_request') {
+      Navigator.of(context).pop();
+      router.go('/dashboard/amc-scheduling-requests');
+      return;
+    }
+
+    if (n.notificationType == 'subscription_purchased') {
+      Navigator.of(context).pop();
+      router.go('/dashboard/vendor-subscriptions');
+      return;
     }
   }
 

@@ -1,6 +1,7 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../constants/app_colors.dart';
 import 'app_modal_dialog.dart';
@@ -17,7 +18,9 @@ import '../../features/catalog/providers/catalog_providers.dart';
 import '../../features/catalog/models/catalog_node_model.dart';
 import '../../features/catalog/utils/catalog_launcher.dart';
 import '../../features/service_areas/providers/service_areas_providers.dart';
+import '../../features/wishlist/screens/wishlist_screen.dart';
 import 'nav_search.dart';
+import 'page_sheet.dart';
 
 /// Persistent DODO BOOKER header. Implements [PreferredSizeWidget].
 class AppHeader extends ConsumerWidget implements PreferredSizeWidget {
@@ -33,7 +36,7 @@ class AppHeader extends ConsumerWidget implements PreferredSizeWidget {
   });
 
   @override
-  Size get preferredSize => const Size.fromHeight(84);
+  Size get preferredSize => const Size.fromHeight(64);
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -66,7 +69,7 @@ class AppHeader extends ConsumerWidget implements PreferredSizeWidget {
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 250),
                 curve: Curves.easeOut,
-                height: 84,
+                height: 64,
                 decoration: BoxDecoration(
                   color: const Color(0xFF111111),
                   border: Border(
@@ -162,6 +165,8 @@ class _DesktopRow extends StatelessWidget {
         // Utility
         const _LoyaltyPill(),
         const SizedBox(width: 8),
+        const _WishlistButton(),
+        const SizedBox(width: 8),
         _NotifButton(onTap: () {
           debugPrint(
               '[DODO][Notif] tap fired — ${DateTime.now().millisecondsSinceEpoch}ms');
@@ -226,6 +231,8 @@ class _WideRow extends StatelessWidget {
         // Utility
         const _LoyaltyPill(),
         const SizedBox(width: 8),
+        const _WishlistButton(),
+        const SizedBox(width: 8),
         _NotifButton(onTap: () {
           debugPrint(
               '[DODO][Notif] tap fired — ${DateTime.now().millisecondsSinceEpoch}ms');
@@ -278,6 +285,8 @@ class _MobileRow extends StatelessWidget {
         const NavSearchButton(),
         const SizedBox(width: 4),
         const _CartButton(),
+        const SizedBox(width: 4),
+        const _WishlistButton(),
         const SizedBox(width: 4),
         _NotifButton(onTap: () {
           debugPrint(
@@ -1164,7 +1173,7 @@ class _DownloadAppButtonState extends State<_DownloadAppButton> {
         onTap: () => PwaInstallDialog.show(context),
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 150),
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
           decoration: BoxDecoration(
             color: _hovered ? AppColors.goldDeep : AppColors.gold,
             borderRadius: BorderRadius.circular(100),
@@ -1201,7 +1210,7 @@ class _DodoBrand extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final w = MediaQuery.sizeOf(context).width;
-    final h = w >= 1024 ? 44.0 : w >= 768 ? 36.0 : 30.0;
+    final h = w >= 1024 ? 34.0 : w >= 768 ? 28.0 : 24.0;
     return Image.asset(
       'assets/images/logo.png',
       height: h,
@@ -1286,13 +1295,13 @@ class _NotifButtonState extends ConsumerState<_NotifButton> {
         onTap: widget.onTap,
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 150),
-          width: 40,
-          height: 40,
+          width: 34,
+          height: 34,
           decoration: BoxDecoration(
             color: _hovered
                 ? Colors.white.withAlpha(28)
                 : Colors.white.withAlpha(14),
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(10),
             border: Border.all(
               color: _hovered
                   ? Colors.white.withAlpha(80)
@@ -1319,6 +1328,64 @@ class _NotifButtonState extends ConsumerState<_NotifButton> {
                   ),
                 ),
             ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Wishlist button
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _WishlistButton extends ConsumerStatefulWidget {
+  const _WishlistButton();
+
+  @override
+  ConsumerState<_WishlistButton> createState() => _WishlistButtonState();
+}
+
+class _WishlistButtonState extends ConsumerState<_WishlistButton> {
+  bool _hovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    if (!ref.watch(isAuthenticatedProvider)) return const SizedBox.shrink();
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      child: GestureDetector(
+        onTap: () {
+          if (MediaQuery.sizeOf(context).width >= 768) {
+            PageSheet.show(context,
+                title: 'Wishlist',
+                child: const WishlistScreen(inModal: true));
+          } else {
+            context.push('/wishlist');
+          }
+        },
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 150),
+          width: 34,
+          height: 34,
+          decoration: BoxDecoration(
+            color: _hovered
+                ? Colors.white.withAlpha(28)
+                : Colors.white.withAlpha(14),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(
+              color: _hovered
+                  ? Colors.white.withAlpha(80)
+                  : Colors.white.withAlpha(35),
+              width: 0.8,
+            ),
+          ),
+          child: Icon(
+            Icons.favorite_border_rounded,
+            size: 20,
+            color: _hovered ? AppColors.gold : Colors.white.withAlpha(220),
           ),
         ),
       ),
@@ -1354,13 +1421,13 @@ class _CartButtonState extends ConsumerState<_CartButton> {
         },
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 150),
-          width: 40,
-          height: 40,
+          width: 34,
+          height: 34,
           decoration: BoxDecoration(
             color: _hovered
                 ? Colors.white.withAlpha(28)
                 : Colors.white.withAlpha(14),
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(10),
             border: Border.all(
               color: _hovered
                   ? Colors.white.withAlpha(80)
@@ -1471,8 +1538,8 @@ class _HeaderIconBtnState extends State<_HeaderIconBtn> {
         onTap: widget.onTap,
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 150),
-          width: 38,
-          height: 38,
+          width: 34,
+          height: 34,
           decoration: BoxDecoration(
             color: _hovered
                 ? Colors.white.withAlpha(28)
@@ -1529,8 +1596,8 @@ class _ProfileAvatarState extends ConsumerState<_ProfileAvatar> {
         onTap: isAuth ? widget.onTap : () => requireAuth(context, ref),
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 150),
-          width: 40,
-          height: 40,
+          width: 34,
+          height: 34,
           decoration: BoxDecoration(
             color: AppColors.textPrimary,
             shape: BoxShape.circle,

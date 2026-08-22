@@ -132,7 +132,11 @@ class _CatalogNodeModalState extends ConsumerState<CatalogNodeModal> {
         ? (ref.watch(allActiveAddonsProvider).valueOrNull ?? [])
         : <AddOnModel>[];
     final faqs = node.isLeafBookable
-        ? (ref.watch(catalogNodeFaqsProvider(node.id)).valueOrNull ?? [])
+        ? (ref
+                .watch(catalogNodeFaqsProvider(
+                    (nodeId: node.id, parentNodeId: widget.parentNodeId)))
+                .valueOrNull ??
+            [])
         : <FaqModel>[];
 
     final addresses = ref.watch(addressNotifierProvider).valueOrNull ?? [];
@@ -595,15 +599,18 @@ class _CloseCircle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        width: 32,
-        height: 32,
-        decoration: BoxDecoration(
-            color: const Color(0xFFF2EFE9),
-            borderRadius: BorderRadius.circular(100)),
-        child: const Icon(Icons.close_rounded, size: 16, color: _kInk),
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      child: GestureDetector(
+        onTap: onTap,
+        child: Container(
+          width: 32,
+          height: 32,
+          decoration: BoxDecoration(
+              color: const Color(0xFFF2EFE9),
+              borderRadius: BorderRadius.circular(100)),
+          child: const Icon(Icons.close_rounded, size: 16, color: _kInk),
+        ),
       ),
     );
   }
@@ -615,15 +622,18 @@ class _BackCircle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        width: 32,
-        height: 32,
-        decoration: BoxDecoration(
-            color: const Color(0xFFF2EFE9),
-            borderRadius: BorderRadius.circular(100)),
-        child: const Icon(Icons.arrow_back_rounded, size: 16, color: _kInk),
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      child: GestureDetector(
+        onTap: onTap,
+        child: Container(
+          width: 32,
+          height: 32,
+          decoration: BoxDecoration(
+              color: const Color(0xFFF2EFE9),
+              borderRadius: BorderRadius.circular(100)),
+          child: const Icon(Icons.arrow_back_rounded, size: 16, color: _kInk),
+        ),
       ),
     );
   }
@@ -870,9 +880,11 @@ class _AddonCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: () => onToggle(!isSelected),
-      child: SizedBox(
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      child: GestureDetector(
+        onTap: () => onToggle(!isSelected),
+        child: SizedBox(
         width: 160,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -948,21 +960,24 @@ class _AddonCard extends StatelessWidget {
                   style: const TextStyle(fontSize: 11, color: _kMuted),
                 ),
                 const Spacer(),
-                GestureDetector(
-                  onTap: () => onToggle(!isSelected),
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 150),
-                    width: 22,
-                    height: 22,
-                    decoration: BoxDecoration(
-                      color: isSelected ? _kInk : const Color(0xFFECE7DE),
-                      shape: BoxShape.circle,
-                    ),
-                    child: Center(
-                      child: Icon(
-                        isSelected ? Icons.check_rounded : Icons.add_rounded,
-                        size: 13,
-                        color: isSelected ? Colors.white : _kInk,
+                MouseRegion(
+                  cursor: SystemMouseCursors.click,
+                  child: GestureDetector(
+                    onTap: () => onToggle(!isSelected),
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 150),
+                      width: 22,
+                      height: 22,
+                      decoration: BoxDecoration(
+                        color: isSelected ? _kInk : const Color(0xFFECE7DE),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Center(
+                        child: Icon(
+                          isSelected ? Icons.check_rounded : Icons.add_rounded,
+                          size: 13,
+                          color: isSelected ? Colors.white : _kInk,
+                        ),
                       ),
                     ),
                   ),
@@ -972,7 +987,8 @@ class _AddonCard extends StatelessWidget {
           ],
         ),
       ),
-    );
+    ),
+  );
   }
 }
 
@@ -1053,12 +1069,14 @@ class _AmcPlanCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Stack(
-        clipBehavior: Clip.none,
-        children: [
-          AnimatedContainer(
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      child: GestureDetector(
+        onTap: onTap,
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            AnimatedContainer(
             duration: const Duration(milliseconds: 200),
             padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
@@ -1158,6 +1176,7 @@ class _AmcPlanCard extends StatelessWidget {
               ),
             ),
         ],
+        ),
       ),
     );
   }
@@ -1195,7 +1214,9 @@ class _AccordionSectionState extends State<_AccordionSection> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          GestureDetector(
+          MouseRegion(
+            cursor: SystemMouseCursors.click,
+            child: GestureDetector(
             onTap: () => setState(() => _open = !_open),
             behavior: HitTestBehavior.opaque,
             child: Container(
@@ -1227,6 +1248,7 @@ class _AccordionSectionState extends State<_AccordionSection> {
                 ],
               ),
             ),
+          ),
           ),
           AnimatedCrossFade(
             alignment: Alignment.topLeft,
@@ -1328,7 +1350,9 @@ class _ModalChildItemState extends State<_ModalChildItem> {
     final node = widget.node;
     final imageUrl = ServiceImageRegistry.resolve(node.imageUrl, node.name);
 
-    return GestureDetector(
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      child: GestureDetector(
       onTap: _navigate,
       onTapDown: (_) => setState(() => _pressed = true),
       onTapUp: (_) => setState(() => _pressed = false),
@@ -1489,6 +1513,7 @@ class _ModalChildItemState extends State<_ModalChildItem> {
           ),
         ),
       ),
+    ),
     );
   }
 }
@@ -1679,7 +1704,9 @@ class _ModalBookingBar extends ConsumerWidget {
 
           // Gold pill CTA
           Expanded(
-            child: GestureDetector(
+            child: MouseRegion(
+              cursor: SystemMouseCursors.click,
+              child: GestureDetector(
               onTap: inCart
                   ? () => openCart(context)
                   : () => _addToCart(context, ref),
@@ -1702,6 +1729,7 @@ class _ModalBookingBar extends ConsumerWidget {
                 ),
               ),
             ),
+          ),
           ),
         ],
       ),

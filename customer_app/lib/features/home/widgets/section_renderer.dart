@@ -62,8 +62,8 @@ class _HeroRenderer extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return HeroSection(
-      onBookNow: () => context.push('/categories'),
-      onExplore: () => context.push('/categories'),
+      onBookNow: () => context.push('/search'),
+      onExplore: () => context.push('/search'),
     );
   }
 }
@@ -80,7 +80,6 @@ class _ServiceGridRenderer extends ConsumerWidget {
     return HomeCategoriesSection(
       asyncCategories: nodes,
       onCategorySelected: (n) => openCatalogNode(context, n),
-      onSeeAll: () => context.push('/categories'),
     );
   }
 }
@@ -98,7 +97,6 @@ class _SubServicesRenderer extends ConsumerWidget {
       asyncServices: services,
       title: section.config['title'] as String? ?? 'Sub Services',
       onServiceTap: (n) => openCatalogNode(context, n),
-      onSeeAll: () => context.push('/categories'),
     );
   }
 }
@@ -173,7 +171,6 @@ class _PopularNearYouRenderer extends ConsumerWidget {
       asyncServices: services,
       title: section.config['title'] as String? ?? 'Popular Near You',
       onServiceTap: (n) => openCatalogNode(context, n),
-      onSeeAll: () => context.push('/categories'),
     );
   }
 }

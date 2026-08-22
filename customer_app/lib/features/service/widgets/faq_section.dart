@@ -43,6 +43,7 @@ class _FaqItemState extends State<_FaqItem> {
         const Divider(height: 1, thickness: 0.8, color: AppColors.border),
         InkWell(
           onTap: () => setState(() => _expanded = !_expanded),
+          mouseCursor: SystemMouseCursors.click,
           splashColor: Colors.transparent,
           highlightColor: Colors.transparent,
           child: Padding(
@@ -106,14 +107,17 @@ class AskQuestionLink extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    return GestureDetector(
-      onTap: () => _onAsk(context, ref),
-      child: const Text(
-        'Have a question? Ask us →',
-        style: TextStyle(
-          fontSize: 13,
-          color: AppColors.textPrimary,
-          fontWeight: FontWeight.w700,
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      child: GestureDetector(
+        onTap: () => _onAsk(context, ref),
+        child: const Text(
+          'Have a question? Ask us →',
+          style: TextStyle(
+            fontSize: 13,
+            color: AppColors.textPrimary,
+            fontWeight: FontWeight.w700,
+          ),
         ),
       ),
     );

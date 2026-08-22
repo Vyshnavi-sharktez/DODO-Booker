@@ -53,18 +53,21 @@ class _NotificationsModalState extends ConsumerState<NotificationsModal> {
       Navigator.of(context).pop();
       router.push(route);
     } else if (n.notificationType == 'question_answered' && n.entityId != null) {
-      // Use the same flow as tapping a service card: fetch the node then open
-      // the CatalogNodeModal, so the service opens identically to normal navigation.
-      // parentNodeId is stored on the notification so we re-open the exact
-      // service+parent instance that generated the question.
       final nodeId = n.entityId!;
-      final node = await ref.read(catalogServiceProvider).fetchNode(nodeId);
-      if (node == null || !mounted) return;
-      // Root navigator context stays valid after the dialog pops.
+      // When the notification carries a parent context, fetch both the service
+      // node and the parent so the modal badge shows the correct parent name
+      // rather than catalog_nodes_view's canonical first parent.
+      final service = n.parentNodeId != null
+          ? await ref
+              .read(catalogServiceProvider)
+              .fetchNodeWithParent(nodeId, n.parentNodeId!)
+          : await ref.read(catalogServiceProvider).fetchNode(nodeId);
+      if (service == null || !mounted) return;
       final navCtx = router.routerDelegate.navigatorKey.currentContext;
       Navigator.of(context).pop();
       if (navCtx != null && navCtx.mounted) {
-        openCatalogNode(navCtx, node, parentId: n.parentNodeId);
+        openCatalogNode(navCtx, service,
+            parentId: n.parentNodeId ?? service.parentId);
       }
     }
   }

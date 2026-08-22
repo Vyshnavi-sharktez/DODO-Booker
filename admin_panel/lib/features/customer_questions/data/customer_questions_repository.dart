@@ -6,12 +6,18 @@ class CustomerQuestionsRepository {
 
   const CustomerQuestionsRepository(this._db);
 
-  Future<List<CustomerQuestion>> fetchForService(String serviceId) async {
-    final data = await _db
+  Future<List<CustomerQuestion>> fetchForService(
+    String serviceId, {
+    String? parentNodeId,
+  }) async {
+    var query = _db
         .from('customer_questions')
         .select()
-        .eq('service_id', serviceId)
-        .order('created_at', ascending: false);
+        .eq('service_id', serviceId);
+    if (parentNodeId != null) {
+      query = query.eq('parent_node_id', parentNodeId);
+    }
+    final data = await query.order('created_at', ascending: false);
     return (data as List)
         .map((e) => CustomerQuestion.fromJson(e as Map<String, dynamic>))
         .toList();

@@ -10,6 +10,7 @@ class AppNotification {
   final DateTime? createdAt;
   final String? entityType;
   final String? entityId;
+  final String? parentNodeId;
 
   const AppNotification({
     required this.id,
@@ -22,6 +23,7 @@ class AppNotification {
     this.createdAt,
     this.entityType,
     this.entityId,
+    this.parentNodeId,
   });
 
   factory AppNotification.fromMap(Map<String, dynamic> map) {
@@ -38,6 +40,7 @@ class AppNotification {
           : null,
       entityType: map['entity_type'] as String?,
       entityId: map['entity_id'] as String?,
+      parentNodeId: map['parent_node_id'] as String?,
     );
   }
 
@@ -53,6 +56,7 @@ class AppNotification {
       createdAt: createdAt,
       entityType: entityType,
       entityId: entityId,
+      parentNodeId: parentNodeId,
     );
   }
 }

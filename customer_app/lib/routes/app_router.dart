@@ -6,7 +6,6 @@ import '../features/auth/screens/otp_screen.dart';
 import '../features/booking/screens/booking_screen.dart';
 import '../features/address/screens/address_screen.dart';
 import '../features/catalog/models/catalog_node_model.dart';
-import '../features/catalog/screens/catalog_browse_screen.dart';
 import '../features/catalog/screens/catalog_node_screen.dart';
 import '../features/category/screens/subcategory_screen.dart';
 import '../features/service/screens/services_screen.dart';
@@ -61,7 +60,6 @@ class AppRoutes {
   static const String myBookings = '/my-bookings';
   static const String amcPlans = '/amc-plans';
   static const String profile = '/profile';
-  static const String categories = '/categories';
   static const String serviceAreas = '/service-areas';
   static const String contact = '/contact';
   static const String help = '/help';
@@ -222,13 +220,6 @@ final appRouter = GoRouter(
         initialQuery:
             state.extra is String ? state.extra as String : '',
       ),
-    ),
-
-    // /categories now shows root catalog nodes (replaced CategoryScreen).
-    // Legacy CategoryScreen import removed; Phase 5 deletes it entirely.
-    GoRoute(
-      path: AppRoutes.categories,
-      builder: (context, state) => const CatalogBrowseScreen(),
     ),
 
     // Home category card → services filtered to that category

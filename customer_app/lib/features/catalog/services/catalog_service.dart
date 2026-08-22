@@ -49,6 +49,25 @@ class CatalogService {
     }
   }
 
+  /// Fetches a node and resolves its displayed parent name from the given
+  /// parentId instead of catalog_nodes_view's canonical first parent.
+  /// Use this when a specific parent context is known (e.g. notification tap).
+  Future<CatalogNodeModel?> fetchNodeWithParent(
+      String nodeId, String parentId) async {
+    if (!_ready) return null;
+    try {
+      final results = await Future.wait([fetchNode(nodeId), fetchNode(parentId)]);
+      final node = results[0];
+      final parent = results[1];
+      if (node == null) return null;
+      if (parent == null) return node;
+      return node.copyWith(parentName: parent.name);
+    } catch (e) {
+      debugPrint('[CatalogService] fetchNodeWithParent($nodeId, $parentId) error: $e');
+      return null;
+    }
+  }
+
   /// Active direct children of [parentId], ordered by sort_order.
   /// Uses the get_catalog_node_children() DB function which joins
   /// through the catalog_node_relationships table.
@@ -86,16 +105,25 @@ class CatalogService {
     }
   }
 
-  /// Answered customer questions for a node, mapped to FaqModel for display.
-  Future<List<FaqModel>> fetchAnsweredQuestionsForNode(String nodeId) async {
+  /// Answered customer questions for a node, scoped to [parentNodeId].
+  /// Only questions asked within the same parent context are returned, so a
+  /// shared sub-service (e.g. "AC Cleaning") shows distinct Q&A sets under
+  /// "Home Cleaning" vs "AC Services".
+  Future<List<FaqModel>> fetchAnsweredQuestionsForNode(
+      String nodeId, String? parentNodeId) async {
     if (!_ready) return [];
     try {
-      final data = await _db
+      var query = _db
           .from('customer_questions')
           .select('id, question, answer')
           .eq('service_id', nodeId)
-          .eq('status', 'answered')
-          .order('answered_at', ascending: true);
+          .eq('status', 'answered');
+      if (parentNodeId != null) {
+        query = query.eq('parent_node_id', parentNodeId);
+      } else {
+        query = query.filter('parent_node_id', 'is', null);
+      }
+      final data = await query.order('answered_at', ascending: true);
       return (data as List)
           .map((e) => FaqModel.fromJson(e as Map<String, dynamic>))
           .toList();

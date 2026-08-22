@@ -25,13 +25,18 @@ final catalogNodeChildrenProvider =
   return ref.read(catalogServiceProvider).fetchChildren(parentId);
 });
 
-/// FAQs for a catalog node: static service_faqs + answered customer_questions.
+/// FAQs for a catalog node scoped to a parent context.
+/// Static service_faqs are global to the node; answered customer_questions are
+/// scoped to (nodeId, parentNodeId) so a shared sub-service shows distinct Q&A
+/// sets under each parent.
+typedef _FaqsKey = ({String nodeId, String? parentNodeId});
+
 final catalogNodeFaqsProvider =
-    FutureProvider.family<List<FaqModel>, String>((ref, nodeId) async {
+    FutureProvider.family<List<FaqModel>, _FaqsKey>((ref, key) async {
   final service = ref.read(catalogServiceProvider);
   final results = await Future.wait([
-    service.fetchFaqsForNode(nodeId),
-    service.fetchAnsweredQuestionsForNode(nodeId),
+    service.fetchFaqsForNode(key.nodeId),
+    service.fetchAnsweredQuestionsForNode(key.nodeId, key.parentNodeId),
   ]);
   return [...results[0], ...results[1]];
 });

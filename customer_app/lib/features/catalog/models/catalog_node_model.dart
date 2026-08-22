@@ -94,6 +94,36 @@ class CatalogNodeModel {
   /// (a node with children is a navigation category, not a bookable service).
   bool get isLeafBookable => isBookable && !hasChildren;
 
+  CatalogNodeModel copyWith({String? parentName}) {
+    return CatalogNodeModel(
+      id: id,
+      parentIds: parentIds,
+      parentName: parentName ?? this.parentName,
+      name: name,
+      slug: slug,
+      description: description,
+      imageUrl: imageUrl,
+      iconKey: iconKey,
+      sortOrder: sortOrder,
+      isActive: isActive,
+      isFeatured: isFeatured,
+      isBookable: isBookable,
+      basePrice: basePrice,
+      estimatedDuration: estimatedDuration,
+      minimumOrderAmount: minimumOrderAmount,
+      rating: rating,
+      reviewCount: reviewCount,
+      childrenCount: childrenCount,
+      availabilityStatus: availabilityStatus,
+      unavailabilityMessage: unavailabilityMessage,
+      relAvailabilityStatus: relAvailabilityStatus,
+      loyaltyEarnEnabled: loyaltyEarnEnabled,
+      loyaltyEarnRule: loyaltyEarnRule,
+      loyaltyFixedPoints: loyaltyFixedPoints,
+      loyaltyEarnPer100: loyaltyEarnPer100,
+    );
+  }
+
   factory CatalogNodeModel.fromServiceModel(ServiceModel s) =>
       CatalogNodeModel(
         id: s.id,

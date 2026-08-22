@@ -13,16 +13,19 @@ class CustomerQuestionsNotifier
   final CustomerQuestionsRepository _repo;
   final String _serviceId;
   final String _serviceName;
+  final String? _parentNodeId;
 
-  CustomerQuestionsNotifier(this._repo, this._serviceId, this._serviceName)
+  CustomerQuestionsNotifier(
+      this._repo, this._serviceId, this._serviceName, this._parentNodeId)
       : super(const AsyncValue.loading()) {
     _load();
   }
 
   Future<void> _load() async {
     state = const AsyncValue.loading();
-    state =
-        await AsyncValue.guard(() => _repo.fetchForService(_serviceId));
+    state = await AsyncValue.guard(
+      () => _repo.fetchForService(_serviceId, parentNodeId: _parentNodeId),
+    );
   }
 
   Future<void> refresh() => _load();
@@ -43,7 +46,7 @@ class CustomerQuestionsNotifier
   }
 }
 
-typedef _Key = ({String serviceId, String serviceName});
+typedef _Key = ({String serviceId, String serviceName, String? parentNodeId});
 
 final customerQuestionsNotifierProvider = StateNotifierProvider.family<
     CustomerQuestionsNotifier, AsyncValue<List<CustomerQuestion>>, _Key>(
@@ -51,5 +54,6 @@ final customerQuestionsNotifierProvider = StateNotifierProvider.family<
     ref.watch(customerQuestionsRepositoryProvider),
     key.serviceId,
     key.serviceName,
+    key.parentNodeId,
   ),
 );

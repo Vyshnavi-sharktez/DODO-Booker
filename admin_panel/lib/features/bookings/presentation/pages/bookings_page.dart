@@ -1510,11 +1510,35 @@ class _BookingRow extends StatelessWidget {
           ),
 
           // Total Amount
-          _Cell(
-            _currency.format(booking.totalAmount),
+          SizedBox(
             width: _wTotal,
-            align: TextAlign.right,
-            bold: true,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  _currency.format(booking.totalAmount),
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.textPrimary,
+                  ),
+                  textAlign: TextAlign.right,
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  booking.isCod ? 'Cash' : 'Online',
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: booking.isCod
+                        ? AppColors.textSecondary
+                        : AppColors.primary,
+                    fontWeight: FontWeight.w500,
+                  ),
+                  textAlign: TextAlign.right,
+                ),
+              ],
+            ),
           ),
 
           // Rating

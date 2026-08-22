@@ -99,4 +99,16 @@ class BookingsRepositoryImpl implements IBookingsRepository {
         notificationType: notificationType,
         entityId: entityId,
       );
+
+  @override
+  Future<void> confirmCodCashCollection({
+    required String bookingId,
+    required bool cashCollected,
+    String? notCollectedReason,
+  }) =>
+      _datasource.confirmCodCashCollection(
+        bookingId: bookingId,
+        cashCollected: cashCollected,
+        notCollectedReason: notCollectedReason,
+      );
 }

@@ -63,14 +63,14 @@ class _DesktopNav extends StatelessWidget {
       children: [
         const _Logo(),
         const SizedBox(width: 28),
-        _NavLink(label: 'Services ▾', onTap: () => context.push('/categories')),
+        _NavLink(label: 'Services ▾', onTap: () => context.push('/search')),
         const SizedBox(width: 24),
         _NavLink(label: 'Service Areas ▾', onTap: () {}),
         const SizedBox(width: 16),
         Flexible(
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 400, minWidth: 160),
-            child: _SearchPill(onTap: () => context.push('/categories')),
+            child: _SearchPill(onTap: () => context.push('/search')),
           ),
         ),
         const SizedBox(width: 16),

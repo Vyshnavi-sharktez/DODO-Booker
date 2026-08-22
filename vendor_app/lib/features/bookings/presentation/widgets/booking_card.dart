@@ -9,6 +9,7 @@ import '../../domain/models/booking_item.dart';
 import '../../../auth/presentation/providers/auth_controller.dart';
 import '../providers/bookings_provider.dart';
 import 'booking_status_badge.dart';
+import 'cod_cash_confirmation_dialog.dart';
 import 'dispatch_countdown_timer.dart';
 import 'reject_dialog.dart';
 import 'service_photo_sheet.dart';
@@ -351,6 +352,10 @@ class _BookingCardState extends ConsumerState<BookingCard> {
       debugPrint('[OTP][VERIFY] ✓ OTP accepted — updating status to completed');
       _applyStatusUpdate('completed');
 
+      if (_booking.isCod) {
+        Future.microtask(() => _showCodCashConfirmationDialog());
+      }
+
       final completedBy = _isDodoBooking ? 'DODO Team ($_vendorName)' : 'Vendor $_vendorName';
       final titleAdmin = _booking.isWarrantyRework ? 'Warranty Rework Completed' : 'Booking Completed';
       final msgAdmin = _booking.isWarrantyRework
@@ -393,6 +398,23 @@ class _BookingCardState extends ConsumerState<BookingCard> {
     } finally {
       if (mounted) setState(() => _verifying = false);
     }
+  }
+
+  // ── COD Cash Collection ───────────────────────────────────────────────────
+
+  Future<void> _showCodCashConfirmationDialog() async {
+    if (!mounted) return;
+    final collected = await CodCashConfirmationDialog.show(
+      context,
+      bookingId: _booking.id,
+    );
+    if (collected == null || !mounted) return;
+    setState(() {
+      _localBooking = _booking.copyWith(
+        codCashCollected: collected,
+        codConfirmedAt: DateTime.now(),
+      );
+    });
   }
 
   // ── Reject Service ────────────────────────────────────────────────────────
@@ -1015,6 +1037,15 @@ class _BookingCardState extends ConsumerState<BookingCard> {
                     ),
                   ],
                 ),
+              ),
+            ],
+
+            // ── COD Cash Collection Status (completed COD bookings) ────
+            if (_booking.status == 'completed' && _booking.isCod) ...[
+              const SizedBox(height: 12),
+              _CodStatusBanner(
+                booking: _booking,
+                onConfirm: _showCodCashConfirmationDialog,
               ),
             ],
 
@@ -1814,6 +1845,112 @@ class _VVisitRow extends StatelessWidget {
                 color: statusColor,
                 letterSpacing: 0.2,
               ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── COD status banner ─────────────────────────────────────────────────────────
+
+class _CodStatusBanner extends StatelessWidget {
+  const _CodStatusBanner({required this.booking, required this.onConfirm});
+
+  final Booking booking;
+  final VoidCallback onConfirm;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    if (booking.codConfirmedAt != null) {
+      final collected = booking.codCashCollected ?? false;
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(
+          color: (collected ? AppColors.success : AppColors.error)
+              .withValues(alpha: 0.08),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(
+            color: (collected ? AppColors.success : AppColors.error)
+                .withValues(alpha: 0.3),
+          ),
+        ),
+        child: Row(
+          children: [
+            Icon(
+              collected
+                  ? Icons.check_circle_outline_rounded
+                  : Icons.cancel_outlined,
+              size: 16,
+              color: collected ? AppColors.success : AppColors.error,
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    collected ? 'Cash Collected' : 'Cash Not Collected',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      color: collected ? AppColors.success : AppColors.error,
+                    ),
+                  ),
+                  if (!collected &&
+                      (booking.codNotCollectedReason?.isNotEmpty ?? false))
+                    Text(
+                      booking.codNotCollectedReason!,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    // Pending confirmation
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: AppColors.warning.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: AppColors.warning.withValues(alpha: 0.3)),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.payments_outlined,
+              size: 16, color: AppColors.warning),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              'Cash collection not yet confirmed',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: AppColors.warning,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          TextButton(
+            onPressed: onConfirm,
+            style: TextButton.styleFrom(
+              foregroundColor: AppColors.warning,
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              minimumSize: Size.zero,
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            ),
+            child: const Text(
+              'Confirm',
+              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
             ),
           ),
         ],

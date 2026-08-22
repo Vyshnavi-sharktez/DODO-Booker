@@ -10,12 +10,126 @@ import '../../bookings/services/bookings_providers.dart';
 import 'warranty_details_screen.dart';
 
 class MyWarrantiesScreen extends ConsumerWidget {
-  const MyWarrantiesScreen({super.key});
+  final bool inModal;
+  const MyWarrantiesScreen({super.key, this.inModal = false});
+
+  static const _tabBar = TabBar(
+    isScrollable: true,
+    tabAlignment: TabAlignment.start,
+    labelColor: AppColors.primary,
+    unselectedLabelColor: AppColors.textSecondary,
+    indicatorColor: AppColors.primary,
+    indicatorWeight: 3,
+    labelStyle: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+    tabs: [
+      Tab(text: 'Active'),
+      Tab(text: 'Claims in Progress'),
+      Tab(text: 'Resolved'),
+      Tab(text: 'Expired'),
+    ],
+  );
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final warrantiesAsync = ref.watch(customerWarrantiesProvider);
     final bookingsAsync = ref.watch(myBookingsProvider);
+
+    Widget body = warrantiesAsync.when(
+      data: (allWarranties) {
+        final activeList = allWarranties.where((w) => w.isActive && !w.isClaimed && !w.isApproved && !w.isResolved && w.reworkBookingId == null).toList();
+        final inProgressList = allWarranties.where((w) => w.isClaimed || w.isApproved || w.isReworkAccepted || w.isReworkInProgress).toList();
+        final resolvedList = allWarranties.where((w) => w.isResolved).toList();
+        final expiredList = allWarranties.where((w) => w.isExpired || w.isRejected).toList();
+
+        final bookingsMap = <String, MyBookingModel>{};
+        if (bookingsAsync.valueOrNull != null) {
+          for (final b in bookingsAsync.valueOrNull!) {
+            bookingsMap[b.id] = b;
+          }
+        }
+
+        return TabBarView(
+          children: [
+            _WarrantyTabContent(
+              warranties: activeList,
+              bookingsMap: bookingsMap,
+              emptyTitle: 'No Active Warranties',
+              emptySubtitle: 'Completed service warranties with active coverage will appear here.',
+              emptyIcon: Icons.shield_outlined,
+              onRefresh: () async => ref.invalidate(customerWarrantiesProvider),
+            ),
+            _WarrantyTabContent(
+              warranties: inProgressList,
+              bookingsMap: bookingsMap,
+              emptyTitle: 'No Active Claims',
+              emptySubtitle: 'Warranty claims undergoing review or rework execution will be tracked here.',
+              emptyIcon: Icons.rate_review_outlined,
+              onRefresh: () async => ref.invalidate(customerWarrantiesProvider),
+            ),
+            _WarrantyTabContent(
+              warranties: resolvedList,
+              bookingsMap: bookingsMap,
+              emptyTitle: 'No Resolved Claims',
+              emptySubtitle: 'Warranty claims that have been fully serviced and completed will appear here.',
+              emptyIcon: Icons.verified_user_outlined,
+              onRefresh: () async => ref.invalidate(customerWarrantiesProvider),
+            ),
+            _WarrantyTabContent(
+              warranties: expiredList,
+              bookingsMap: bookingsMap,
+              emptyTitle: 'No Expired Warranties',
+              emptySubtitle: 'Expired warranties or rejected claims will be archived here.',
+              emptyIcon: Icons.history_rounded,
+              onRefresh: () async => ref.invalidate(customerWarrantiesProvider),
+            ),
+          ],
+        );
+      },
+      loading: () => const Center(
+        child: CircularProgressIndicator(color: AppColors.primary),
+      ),
+      error: (err, stack) => Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.error_outline_rounded, size: 48, color: AppColors.error),
+              const SizedBox(height: 12),
+              Text(
+                'Unable to load warranties',
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                err.toString(),
+                style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 16),
+              FilledButton(
+                onPressed: () => ref.invalidate(customerWarrantiesProvider),
+                style: FilledButton.styleFrom(backgroundColor: AppColors.primary),
+                child: const Text('Retry'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    if (inModal) {
+      return DefaultTabController(
+        length: 4,
+        child: Column(
+          children: [
+            _tabBar,
+            const Divider(height: 1, color: AppColors.divider),
+            Expanded(child: body),
+          ],
+        ),
+      );
+    }
 
     return DefaultTabController(
       length: 4,
@@ -26,105 +140,9 @@ class MyWarrantiesScreen extends ConsumerWidget {
           elevation: 0,
           backgroundColor: Colors.white,
           surfaceTintColor: Colors.transparent,
-          bottom: const TabBar(
-            isScrollable: true,
-            tabAlignment: TabAlignment.start,
-            labelColor: AppColors.primary,
-            unselectedLabelColor: AppColors.textSecondary,
-            indicatorColor: AppColors.primary,
-            indicatorWeight: 3,
-            labelStyle: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-            tabs: [
-              Tab(text: 'Active'),
-              Tab(text: 'Claims in Progress'),
-              Tab(text: 'Resolved'),
-              Tab(text: 'Expired'),
-            ],
-          ),
+          bottom: _tabBar,
         ),
-        body: warrantiesAsync.when(
-          data: (allWarranties) {
-            final activeList = allWarranties.where((w) => w.isActive && !w.isClaimed && !w.isApproved && !w.isResolved && w.reworkBookingId == null).toList();
-            final inProgressList = allWarranties.where((w) => w.isClaimed || w.isApproved || w.isReworkAccepted || w.isReworkInProgress).toList();
-            final resolvedList = allWarranties.where((w) => w.isResolved).toList();
-            final expiredList = allWarranties.where((w) => w.isExpired || w.isRejected).toList();
-
-            final bookingsMap = <String, MyBookingModel>{};
-            if (bookingsAsync.valueOrNull != null) {
-              for (final b in bookingsAsync.valueOrNull!) {
-                bookingsMap[b.id] = b;
-              }
-            }
-
-            return TabBarView(
-              children: [
-                _WarrantyTabContent(
-                  warranties: activeList,
-                  bookingsMap: bookingsMap,
-                  emptyTitle: 'No Active Warranties',
-                  emptySubtitle: 'Completed service warranties with active coverage will appear here.',
-                  emptyIcon: Icons.shield_outlined,
-                  onRefresh: () async => ref.invalidate(customerWarrantiesProvider),
-                ),
-                _WarrantyTabContent(
-                  warranties: inProgressList,
-                  bookingsMap: bookingsMap,
-                  emptyTitle: 'No Active Claims',
-                  emptySubtitle: 'Warranty claims undergoing review or rework execution will be tracked here.',
-                  emptyIcon: Icons.rate_review_outlined,
-                  onRefresh: () async => ref.invalidate(customerWarrantiesProvider),
-                ),
-                _WarrantyTabContent(
-                  warranties: resolvedList,
-                  bookingsMap: bookingsMap,
-                  emptyTitle: 'No Resolved Claims',
-                  emptySubtitle: 'Warranty claims that have been fully serviced and completed will appear here.',
-                  emptyIcon: Icons.verified_user_outlined,
-                  onRefresh: () async => ref.invalidate(customerWarrantiesProvider),
-                ),
-                _WarrantyTabContent(
-                  warranties: expiredList,
-                  bookingsMap: bookingsMap,
-                  emptyTitle: 'No Expired Warranties',
-                  emptySubtitle: 'Expired warranties or rejected claims will be archived here.',
-                  emptyIcon: Icons.history_rounded,
-                  onRefresh: () async => ref.invalidate(customerWarrantiesProvider),
-                ),
-              ],
-            );
-          },
-          loading: () => const Center(
-            child: CircularProgressIndicator(color: AppColors.primary),
-          ),
-          error: (err, stack) => Center(
-            child: Padding(
-              padding: const EdgeInsets.all(24),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const Icon(Icons.error_outline_rounded, size: 48, color: AppColors.error),
-                  const SizedBox(height: 12),
-                  Text(
-                    'Unable to load warranties',
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    err.toString(),
-                    style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 16),
-                  FilledButton(
-                    onPressed: () => ref.invalidate(customerWarrantiesProvider),
-                    style: FilledButton.styleFrom(backgroundColor: AppColors.primary),
-                    child: const Text('Retry'),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
+        body: body,
       ),
     );
   }

@@ -197,9 +197,11 @@ class _AddonCard extends StatelessWidget {
     final hasDesc =
         addOn.description != null && addOn.description!.isNotEmpty;
 
-    return GestureDetector(
-      onTap: () => onToggle(!isSelected),
-      child: AnimatedContainer(
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      child: GestureDetector(
+        onTap: () => onToggle(!isSelected),
+        child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
         curve: Curves.easeInOut,
         width: cardWidth,
@@ -286,7 +288,8 @@ class _AddonCard extends StatelessWidget {
           ],
         ),
       ),
-    );
+    ),
+  );
   }
 }
 

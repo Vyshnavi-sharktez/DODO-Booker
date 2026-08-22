@@ -443,8 +443,8 @@ class _CatalogV2PageState extends ConsumerState<CatalogV2Page> {
 
   // ── FAQs ──────────────────────────────────────────────────────────────────────
 
-  void _openFaqs(CatalogNode node) {
-    NodeFaqsDialog.show(context, node);
+  void _openFaqs(CatalogNode node, String? parentIdContext) {
+    NodeFaqsDialog.show(context, node, parentId: parentIdContext);
   }
 
   // ── AMC Plans ─────────────────────────────────────────────────────────────────
