@@ -3,10 +3,10 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/widgets/app_modal_dialog.dart';
-import '../../../core/widgets/page_sheet.dart';
 import '../../../models/booking_item.dart';
 import '../../../models/my_booking_model.dart';
-import '../../booking/modals/rebook_flow_modal.dart';
+import '../../catalog/providers/catalog_providers.dart';
+import '../../catalog/utils/catalog_launcher.dart';
 import '../services/bookings_providers.dart';
 import '../widgets/booking_status_timeline.dart';
 import '../../notifications/services/notification_providers.dart';
@@ -226,12 +226,15 @@ class _BookingDetailsScreenState extends ConsumerState<BookingDetailsScreen> {
     }
   }
 
-  void _rebook(MyBookingModel b) {
-    PageSheet.show(
-      context,
-      title: 'Rebook Service',
-      child: RebookFlowModal(booking: b),
-    );
+  Future<void> _rebook(MyBookingModel b) async {
+    final parentNodeId =
+        b.items.isNotEmpty ? b.items.first.catalogParentNodeId : null;
+    final catalogService = ref.read(catalogServiceProvider);
+    final node = parentNodeId != null
+        ? await catalogService.fetchNodeWithParent(b.serviceId, parentNodeId)
+        : await catalogService.fetchNode(b.serviceId);
+    if (node == null || !mounted) return;
+    openCatalogNode(context, node, parentId: parentNodeId ?? node.parentId);
   }
 
   Future<void> _openReviewModal(MyBookingModel b) async {

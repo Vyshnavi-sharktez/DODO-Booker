@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
+import '../../catalog/services/catalog_service.dart';
+import '../../catalog/utils/catalog_launcher.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/utils/service_image_registry.dart';
 import '../../../core/widgets/section_header.dart';
@@ -169,8 +170,19 @@ class _BookingCard extends StatelessWidget {
                         alignment: Alignment.centerRight,
                         child: GestureDetector(
                           behavior: HitTestBehavior.opaque,
-                          onTap: () => context
-                              .push('/service-detail/${booking.serviceId}'),
+                          onTap: () async {
+                            final parentNodeId = booking.items.isNotEmpty
+                                ? booking.items.first.catalogParentNodeId
+                                : null;
+                            final node = parentNodeId != null
+                                ? await CatalogService().fetchNodeWithParent(
+                                    booking.serviceId, parentNodeId)
+                                : await CatalogService()
+                                    .fetchNode(booking.serviceId);
+                            if (node == null || !context.mounted) return;
+                            openCatalogNode(context, node,
+                                parentId: parentNodeId ?? node.parentId);
+                          },
                           child: Container(
                             padding: const EdgeInsets.symmetric(
                                 horizontal: 14, vertical: 5),
