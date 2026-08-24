@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import '../../../features/catalog/utils/catalog_launcher.dart';
+import '../../../features/catalog/models/catalog_node_model.dart';
+import '../../../routes/app_router.dart';
 import '../../booking/services/coupon_providers.dart';
 import '../models/landing_page_section.dart';
 import '../services/home_providers.dart';
@@ -18,6 +19,17 @@ import 'special_offers_section.dart';
 import 'sub_services_section.dart';
 import 'trending_services_section.dart';
 import 'why_dodo_section.dart';
+
+// ── Navigation helper ─────────────────────────────────────────────────────────
+
+/// Navigate to the Category Explorer, passing the full node so the screen can
+/// resolve the correct root ancestor (handles L2 and L3+ hierarchy depths).
+void _openExplorer(BuildContext context, CatalogNodeModel node) {
+  context.push(
+    AppRoutes.categoryExplorer,
+    extra: <String, dynamic>{'node': node},
+  );
+}
 
 // ── Public entry point ────────────────────────────────────────────────────────
 
@@ -79,7 +91,7 @@ class _ServiceGridRenderer extends ConsumerWidget {
     final nodes = ref.watch(featuredCatalogNodesProvider);
     return HomeCategoriesSection(
       asyncCategories: nodes,
-      onCategorySelected: (n) => openCatalogNode(context, n),
+      onCategorySelected: (n) => _openExplorer(context, n),
     );
   }
 }
@@ -96,7 +108,7 @@ class _SubServicesRenderer extends ConsumerWidget {
     return SubServicesSection(
       asyncServices: services,
       title: section.config['title'] as String? ?? 'Sub Services',
-      onServiceTap: (n) => openCatalogNode(context, n),
+      onServiceTap: (n) => _openExplorer(context, n),
     );
   }
 }
@@ -170,7 +182,7 @@ class _PopularNearYouRenderer extends ConsumerWidget {
     return TrendingServicesSection(
       asyncServices: services,
       title: section.config['title'] as String? ?? 'Popular Near You',
-      onServiceTap: (n) => openCatalogNode(context, n),
+      onServiceTap: (n) => _openExplorer(context, n),
     );
   }
 }

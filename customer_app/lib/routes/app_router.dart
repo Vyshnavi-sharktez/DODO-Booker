@@ -7,6 +7,7 @@ import '../features/booking/screens/booking_screen.dart';
 import '../features/address/screens/address_screen.dart';
 import '../features/catalog/models/catalog_node_model.dart';
 import '../features/catalog/screens/catalog_node_screen.dart';
+import '../features/catalog/screens/category_explorer_screen.dart';
 import '../features/category/screens/subcategory_screen.dart';
 import '../features/service/screens/services_screen.dart';
 import '../features/service/screens/category_services_screen.dart';
@@ -46,6 +47,8 @@ class AppRoutes {
   static const String services = '/services/:subcategoryId';
   static const String serviceDetail = '/service-detail/:serviceId';
   static const String categoryServices = '/category-services/:categoryId';
+
+  static const String categoryExplorer = '/category-explorer';
 
   static const String booking = '/booking';
   static const String bookingSuccess = '/booking-success';
@@ -93,6 +96,21 @@ final appRouter = GoRouter(
         }
         // Deep-link fallback: fetch node by ID from the server.
         return CatalogNodeFetchScreen(nodeId: nodeId);
+      },
+    ),
+
+    GoRoute(
+      path: AppRoutes.categoryExplorer,
+      builder: (context, state) {
+        final extra = state.extra as Map<String, dynamic>?;
+        final node = extra?['node'] as CatalogNodeModel?;
+        final categoryId = extra != null ? extra['categoryId'] as String? : null;
+        final subId = extra != null ? extra['subId'] as String? : null;
+        return CategoryExplorerScreen(
+          initialCategoryId: node == null ? categoryId : null,
+          initialSubId: node == null ? subId : null,
+          initialNode: node,
+        );
       },
     ),
 
