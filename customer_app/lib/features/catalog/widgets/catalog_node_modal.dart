@@ -213,17 +213,7 @@ class _CatalogNodeModalState extends ConsumerState<CatalogNodeModal> {
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        // ── Header block ─────────────────────────────────────
-                        _ModalHeader(
-                          node: node,
-                          heroUrl: hasHero ? heroUrl : null,
-                          displayPrice: displayPrice,
-                          hasAdjustment: hasAdjustment,
-                          isWeb: isWeb,
-                          onClose: () => Navigator.of(context).pop(),
-                        ),
-
-                        // ── Scrollable content ────────────────────────────────
+                        // ── Scrollable content (header + body scroll together) ─
                         Flexible(
                           child: ScrollConfiguration(
                             behavior: ScrollConfiguration.of(context)
@@ -234,6 +224,16 @@ class _CatalogNodeModalState extends ConsumerState<CatalogNodeModal> {
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
+                                  // ── Header block ────────────────────────────
+                                  _ModalHeader(
+                                    node: node,
+                                    heroUrl: hasHero ? heroUrl : null,
+                                    displayPrice: displayPrice,
+                                    hasAdjustment: hasAdjustment,
+                                    isWeb: isWeb,
+                                    onClose: () => Navigator.of(context).pop(),
+                                  ),
+
                                   // Attribute selection
                                   if (node.isLeafBookable && attrs.isNotEmpty)
                                     Padding(
@@ -319,26 +319,71 @@ class _CatalogNodeModalState extends ConsumerState<CatalogNodeModal> {
                                       },
                                     ),
 
-                                  // About — accordion
+                                  // About — always visible
                                   if (node.isLeafBookable)
-                                    _AccordionSection(
-                                      label: 'About this service',
-                                      isFirst: true,
-                                      padH: 20,
-                                      child: Padding(
-                                        padding: const EdgeInsets.fromLTRB(
-                                            0, 4, 0, 14),
-                                        child: Text(
-                                          node.description?.isNotEmpty == true
-                                              ? node.description!
-                                              : 'No description available.',
-                                          style: const TextStyle(
-                                              fontSize: 13,
-                                              color: _kMuted,
-                                              height: 1.6),
-                                        ),
+                                    Padding(
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 20),
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(
+                                                vertical: 14),
+                                            decoration: const BoxDecoration(
+                                              border: Border(
+                                                  top: BorderSide(
+                                                      color: _kBorder,
+                                                      width: 1)),
+                                            ),
+                                            child: Text('About this service',
+                                                style: GoogleFonts.poppins(
+                                                    fontSize: 15,
+                                                    fontWeight: FontWeight.w700,
+                                                    color: _kInk)),
+                                          ),
+                                          Padding(
+                                            padding: const EdgeInsets.fromLTRB(
+                                                0, 4, 0, 14),
+                                            child: Text(
+                                              node.description?.isNotEmpty ==
+                                                      true
+                                                  ? node.description!
+                                                  : 'No description available.',
+                                              style: const TextStyle(
+                                                  fontSize: 13,
+                                                  color: _kMuted,
+                                                  height: 1.6),
+                                            ),
+                                          ),
+                                        ],
                                       ),
                                     ),
+
+                                  // What's Included
+                                  if (node.isLeafBookable &&
+                                      node.includedItems.isNotEmpty)
+                                    _ModalIncludedSection(
+                                        items: node.includedItems),
+
+                                  // What's Excluded
+                                  if (node.isLeafBookable &&
+                                      node.excludedItems.isNotEmpty)
+                                    _ModalExcludedSection(
+                                        items: node.excludedItems),
+
+                                  // Before & After
+                                  if (node.isLeafBookable &&
+                                      node.beforeAfterPairs.isNotEmpty)
+                                    _ModalBeforeAfterSection(
+                                        pairs: node.beforeAfterPairs),
+
+                                  // Customer Content blocks
+                                  if (node.isLeafBookable &&
+                                      node.contentBlocks.isNotEmpty)
+                                    _ModalContentBlocksSection(
+                                        blocks: node.contentBlocks),
 
                                   // FAQs — inline list (always shown for leaf bookable)
                                   if (node.isLeafBookable)
@@ -379,16 +424,41 @@ class _CatalogNodeModalState extends ConsumerState<CatalogNodeModal> {
                                       ),
                                     ),
 
-                                  // Reviews — accordion
+                                  // Reviews — always visible
                                   if (node.isLeafBookable)
-                                    _AccordionSection(
-                                      label: node.reviewCount > 0
-                                          ? 'Reviews (${node.reviewCount})'
-                                          : 'Reviews',
-                                      isLast: true,
-                                      padH: 20,
-                                      child: ServiceReviewsSection(
-                                          serviceId: node.id),
+                                    Padding(
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 20),
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(
+                                                vertical: 14),
+                                            decoration: const BoxDecoration(
+                                              border: Border(
+                                                  top: BorderSide(
+                                                      color: _kBorder,
+                                                      width: 1)),
+                                            ),
+                                            child: Text(
+                                              node.reviewCount > 0
+                                                  ? 'Reviews (${node.reviewCount})'
+                                                  : 'Reviews',
+                                              style: GoogleFonts.poppins(
+                                                  fontSize: 15,
+                                                  fontWeight: FontWeight.w700,
+                                                  color: _kInk),
+                                            ),
+                                          ),
+                                          ServiceReviewsSection(
+                                              serviceId: node.id,
+                                              showHeader: false,
+                                              flat: true),
+                                          const SizedBox(height: 14),
+                                        ],
+                                      ),
                                     ),
 
                                   // Coming Soon
@@ -1733,6 +1803,260 @@ class _ModalBookingBar extends ConsumerWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Inline content sections (modal-local; screen uses its own copies)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+class _ModalIncludedSection extends StatelessWidget {
+  const _ModalIncludedSection({required this.items});
+  final List<String> items;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 20, 20, 4),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text("What's Included",
+              style: GoogleFonts.poppins(
+                  fontSize: 15, fontWeight: FontWeight.w700, color: _kInk)),
+          const SizedBox(height: 10),
+          ...items.map(
+            (item) => Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Padding(
+                    padding: EdgeInsets.only(top: 2),
+                    child: Icon(Icons.check_circle_rounded,
+                        size: 15, color: Color(0xFF22C55E)),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(item,
+                        style: const TextStyle(
+                            fontSize: 13, color: _kInk, height: 1.5)),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ModalExcludedSection extends StatelessWidget {
+  const _ModalExcludedSection({required this.items});
+  final List<String> items;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 16, 20, 4),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text("What's Excluded",
+              style: GoogleFonts.poppins(
+                  fontSize: 15, fontWeight: FontWeight.w700, color: _kInk)),
+          const SizedBox(height: 10),
+          ...items.map(
+            (item) => Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Padding(
+                    padding: EdgeInsets.only(top: 2),
+                    child: Icon(Icons.cancel_rounded,
+                        size: 15, color: Color(0xFFEF4444)),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(item,
+                        style: const TextStyle(
+                            fontSize: 13, color: _kMuted, height: 1.5)),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ModalBeforeAfterSection extends StatelessWidget {
+  const _ModalBeforeAfterSection({required this.pairs});
+  final List<Map<String, String>> pairs;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 16, 20, 4),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Before & After',
+              style: GoogleFonts.poppins(
+                  fontSize: 15, fontWeight: FontWeight.w700, color: _kInk)),
+          const SizedBox(height: 12),
+          ...pairs.map((pair) {
+            final beforeUrl = pair['before_url'] ?? '';
+            final afterUrl = pair['after_url'] ?? '';
+            if (beforeUrl.isEmpty && afterUrl.isEmpty) {
+              return const SizedBox.shrink();
+            }
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (beforeUrl.isNotEmpty)
+                    Expanded(
+                        child: _ModalBAPhoto(url: beforeUrl, label: 'Before')),
+                  if (beforeUrl.isNotEmpty && afterUrl.isNotEmpty)
+                    const SizedBox(width: 8),
+                  if (afterUrl.isNotEmpty)
+                    Expanded(
+                        child: _ModalBAPhoto(url: afterUrl, label: 'After')),
+                ],
+              ),
+            );
+          }),
+        ],
+      ),
+    );
+  }
+}
+
+class _ModalBAPhoto extends StatelessWidget {
+  const _ModalBAPhoto({required this.url, required this.label});
+  final String url;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(14),
+      child: AspectRatio(
+        aspectRatio: 4 / 3,
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            Image.network(
+              url,
+              fit: BoxFit.cover,
+              loadingBuilder: (_, child, p) =>
+                  p == null ? child : const ColoredBox(color: Color(0xFFEAE3D4)),
+              errorBuilder: (_, _, _) => Container(
+                color: const Color(0xFFF1ECE1),
+                alignment: Alignment.center,
+                child: const Icon(Icons.broken_image_outlined,
+                    color: _kMuted2, size: 28),
+              ),
+            ),
+            Positioned(
+              top: 0,
+              left: 0,
+              right: 0,
+              child: Container(
+                padding: const EdgeInsets.fromLTRB(10, 8, 10, 20),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      Colors.black.withAlpha(160),
+                      Colors.transparent,
+                    ],
+                  ),
+                ),
+                child: Text(
+                  label,
+                  style: const TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      color: Colors.white,
+                      letterSpacing: 0.5),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ModalContentBlocksSection extends StatelessWidget {
+  const _ModalContentBlocksSection({required this.blocks});
+  final List<Map<String, dynamic>> blocks;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 16, 20, 4),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: blocks.map<Widget>((block) => _buildBlock(block)).toList(),
+      ),
+    );
+  }
+
+  Widget _buildBlock(Map<String, dynamic> block) {
+    final type = (block['type'] as String?) ?? 'text';
+    final text = ((block['text'] as String?) ?? '').trim();
+    final imageUrl = ((block['image_url'] as String?) ?? '').trim();
+
+    Widget imageWidget(String url) => ClipRRect(
+          borderRadius: BorderRadius.circular(12),
+          child: Image.network(
+            url,
+            width: double.infinity,
+            fit: BoxFit.cover,
+            loadingBuilder: (_, child, p) =>
+                p == null ? child : const ColoredBox(color: Color(0xFFEAE3D4)),
+            errorBuilder: (_, _, _) => const SizedBox.shrink(),
+          ),
+        );
+
+    Widget? content;
+
+    if (type == 'image') {
+      if (imageUrl.isEmpty) return const SizedBox.shrink();
+      content = imageWidget(imageUrl);
+    } else if (type == 'image_text') {
+      if (imageUrl.isEmpty && text.isEmpty) return const SizedBox.shrink();
+      content = Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (imageUrl.isNotEmpty) imageWidget(imageUrl),
+          if (imageUrl.isNotEmpty && text.isNotEmpty) const SizedBox(height: 10),
+          if (text.isNotEmpty)
+            Text(text,
+                style:
+                    const TextStyle(fontSize: 13, color: _kMuted, height: 1.6)),
+        ],
+      );
+    } else {
+      if (text.isEmpty) return const SizedBox.shrink();
+      content = Text(text,
+          style: const TextStyle(fontSize: 13, color: _kMuted, height: 1.6));
+    }
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16),
+      child: content,
     );
   }
 }

@@ -324,8 +324,6 @@ class _Sidebar extends StatelessWidget {
               ),
               const SizedBox(height: 2),
             ],
-            const Divider(color: _kBorderColor, height: 28),
-            _MoreCategoriesRow(),
           ],
         ),
       ),
@@ -885,12 +883,12 @@ class _ServiceCardState extends State<_ServiceCard> {
             color: Colors.white,
             borderRadius: BorderRadius.circular(16),
             border: Border.all(
-              color: _hovered ? _kTextDark : _kBorderColor,
+              color: _hovered ? const Color(0xFFFFD21F) : _kBorderColor,
             ),
             boxShadow: _hovered
                 ? [
                     const BoxShadow(
-                      color: Color(0x73111111),
+                      color: Color(0x40FFD21F),
                       blurRadius: 28,
                       offset: Offset(0, 12),
                       spreadRadius: -20,

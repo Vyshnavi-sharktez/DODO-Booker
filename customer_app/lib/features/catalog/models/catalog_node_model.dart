@@ -51,6 +51,16 @@ class CatalogNodeModel {
   final int? loyaltyFixedPoints;
   final int? loyaltyEarnPer100;
 
+  // ── Per-node content fields ───────────────────────────────────────────────
+  final List<String> includedItems;
+  final List<String> excludedItems;
+  /// Each entry is {'before_url': '...', 'after_url': '...'}.
+  final List<Map<String, String>> beforeAfterPairs;
+
+  /// Flexible content blocks shown on the service page.
+  /// Each entry: {'id', 'type': 'text'|'image'|'image_text', 'text'?, 'image_url'?}.
+  final List<Map<String, dynamic>> contentBlocks;
+
   const CatalogNodeModel({
     required this.id,
     this.parentIds = const [],
@@ -77,6 +87,10 @@ class CatalogNodeModel {
     this.loyaltyEarnRule = 'global',
     this.loyaltyFixedPoints,
     this.loyaltyEarnPer100,
+    this.includedItems = const [],
+    this.excludedItems = const [],
+    this.beforeAfterPairs = const [],
+    this.contentBlocks = const [],
   });
 
   bool get hasChildren => childrenCount > 0;
@@ -121,6 +135,10 @@ class CatalogNodeModel {
       loyaltyEarnRule: loyaltyEarnRule,
       loyaltyFixedPoints: loyaltyFixedPoints,
       loyaltyEarnPer100: loyaltyEarnPer100,
+      includedItems: includedItems,
+      excludedItems: excludedItems,
+      beforeAfterPairs: beforeAfterPairs,
+      contentBlocks: contentBlocks,
     );
   }
 
@@ -174,6 +192,23 @@ class CatalogNodeModel {
       loyaltyEarnRule: (map['loyalty_earn_rule'] as String?) ?? 'global',
       loyaltyFixedPoints: map['loyalty_fixed_points'] as int?,
       loyaltyEarnPer100: map['loyalty_earn_per_100'] as int?,
+      includedItems: (map['included_items'] as List<dynamic>?)
+              ?.map((e) => e.toString())
+              .toList() ??
+          [],
+      excludedItems: (map['excluded_items'] as List<dynamic>?)
+              ?.map((e) => e.toString())
+              .toList() ??
+          [],
+      beforeAfterPairs: (map['before_after_pairs'] as List<dynamic>?)
+              ?.map((e) => Map<String, String>.from(
+                  (e as Map).map((k, v) => MapEntry(k.toString(), v.toString()))))
+              .toList() ??
+          [],
+      contentBlocks: (map['content_blocks'] as List<dynamic>?)
+              ?.map((e) => Map<String, dynamic>.from(e as Map))
+              .toList() ??
+          [],
     );
   }
 }

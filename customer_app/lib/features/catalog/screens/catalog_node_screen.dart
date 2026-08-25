@@ -323,6 +323,22 @@ class _CatalogNodeScreenState extends ConsumerState<CatalogNodeScreen> {
                     },
                   ),
 
+                // ── What's Included ───────────────────────────────────────
+                if (node.isLeafBookable && node.includedItems.isNotEmpty)
+                  _IncludedSection(items: node.includedItems),
+
+                // ── What's Excluded ───────────────────────────────────────
+                if (node.isLeafBookable && node.excludedItems.isNotEmpty)
+                  _ExcludedSection(items: node.excludedItems),
+
+                // ── Before & After ────────────────────────────────────────
+                if (node.isLeafBookable && node.beforeAfterPairs.isNotEmpty)
+                  _BeforeAfterSection(pairs: node.beforeAfterPairs),
+
+                // ── Customer Content blocks ───────────────────────────────
+                if (node.isLeafBookable && node.contentBlocks.isNotEmpty)
+                  _ContentBlocksSection(blocks: node.contentBlocks),
+
                 // ── Accordion: About / FAQs / Reviews ─────────────────────
                 if (node.isLeafBookable) ...[
                   const SizedBox(height: 24),
@@ -375,7 +391,7 @@ class _CatalogNodeScreenState extends ConsumerState<CatalogNodeScreen> {
                         ? 'Reviews (${node.reviewCount})'
                         : 'Reviews',
                     isLast: true,
-                    child: ServiceReviewsSection(serviceId: node.id),
+                    child: ServiceReviewsSection(serviceId: node.id, showHeader: false),
                   ),
                 ],
 
@@ -2062,6 +2078,18 @@ class _WebScaffold extends ConsumerWidget {
                               ),
                               const SizedBox(height: 18),
 
+                              if (node.includedItems.isNotEmpty)
+                                _IncludedSection(items: node.includedItems),
+                              if (node.excludedItems.isNotEmpty)
+                                _ExcludedSection(items: node.excludedItems),
+                              if (node.beforeAfterPairs.isNotEmpty)
+                                _BeforeAfterSection(
+                                    pairs: node.beforeAfterPairs),
+
+                              if (node.contentBlocks.isNotEmpty)
+                                _ContentBlocksSection(
+                                    blocks: node.contentBlocks),
+
                               Text('FAQs',
                                   style: GoogleFonts.poppins(
                                       fontSize: 15,
@@ -2087,7 +2115,7 @@ class _WebScaffold extends ConsumerWidget {
                                     : 'Reviews',
                                 isLast: true,
                                 child: ServiceReviewsSection(
-                                    serviceId: node.id),
+                                    serviceId: node.id, showHeader: false),
                               ),
                               const SizedBox(height: 4),
                             ],
@@ -2289,6 +2317,262 @@ class _WebAddonsGrid extends StatelessWidget {
         }).toList(),
       );
     });
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// What's Included
+// ═══════════════════════════════════════════════════════════════════════════════
+
+class _IncludedSection extends StatelessWidget {
+  const _IncludedSection({required this.items});
+  final List<String> items;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 24, 20, 4),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text("What's Included",
+              style: GoogleFonts.poppins(
+                  fontSize: 15, fontWeight: FontWeight.w700, color: _kInk)),
+          const SizedBox(height: 10),
+          ...items.map(
+            (item) => Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Padding(
+                    padding: EdgeInsets.only(top: 2),
+                    child: Icon(Icons.check_circle_rounded,
+                        size: 15, color: Color(0xFF22C55E)),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(item,
+                        style: const TextStyle(
+                            fontSize: 13, color: _kInk, height: 1.5)),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// What's Excluded
+// ═══════════════════════════════════════════════════════════════════════════════
+
+class _ExcludedSection extends StatelessWidget {
+  const _ExcludedSection({required this.items});
+  final List<String> items;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 16, 20, 4),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text("What's Excluded",
+              style: GoogleFonts.poppins(
+                  fontSize: 15, fontWeight: FontWeight.w700, color: _kInk)),
+          const SizedBox(height: 10),
+          ...items.map(
+            (item) => Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Padding(
+                    padding: EdgeInsets.only(top: 2),
+                    child: Icon(Icons.cancel_rounded,
+                        size: 15, color: Color(0xFFEF4444)),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(item,
+                        style: const TextStyle(
+                            fontSize: 13, color: _kMuted, height: 1.5)),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Before & After — 2-column image pairs
+// ═══════════════════════════════════════════════════════════════════════════════
+
+class _BeforeAfterSection extends StatelessWidget {
+  const _BeforeAfterSection({required this.pairs});
+  final List<Map<String, String>> pairs;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 16, 20, 4),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Before & After',
+              style: GoogleFonts.poppins(
+                  fontSize: 15, fontWeight: FontWeight.w700, color: _kInk)),
+          const SizedBox(height: 12),
+          ...pairs.map((pair) {
+            final beforeUrl = pair['before_url'] ?? '';
+            final afterUrl = pair['after_url'] ?? '';
+            if (beforeUrl.isEmpty && afterUrl.isEmpty) return const SizedBox.shrink();
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: Row(
+                children: [
+                  if (beforeUrl.isNotEmpty)
+                    Expanded(child: _BAPhoto(url: beforeUrl, label: 'Before')),
+                  if (beforeUrl.isNotEmpty && afterUrl.isNotEmpty)
+                    const SizedBox(width: 8),
+                  if (afterUrl.isNotEmpty)
+                    Expanded(child: _BAPhoto(url: afterUrl, label: 'After')),
+                ],
+              ),
+            );
+          }),
+        ],
+      ),
+    );
+  }
+}
+
+class _BAPhoto extends StatelessWidget {
+  const _BAPhoto({required this.url, required this.label});
+  final String url;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(10),
+      child: Stack(
+        children: [
+          SizedBox(
+            height: 150,
+            width: double.infinity,
+            child: Image.network(
+              url,
+              fit: BoxFit.cover,
+              loadingBuilder: (_, child, p) =>
+                  p == null ? child : const ColoredBox(color: Color(0xFFEAE3D4)),
+              errorBuilder: (_, _, _) => Container(
+                color: const Color(0xFFF1ECE1),
+                alignment: Alignment.center,
+                child: const Icon(Icons.broken_image_outlined,
+                    color: _kMuted2, size: 28),
+              ),
+            ),
+          ),
+          Positioned(
+            bottom: 0,
+            left: 0,
+            right: 0,
+            child: Container(
+              padding: const EdgeInsets.symmetric(vertical: 6),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [Colors.transparent, Colors.black.withAlpha(150)],
+                ),
+              ),
+              child: Center(
+                child: Text(
+                  label,
+                  style: const TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      color: Colors.white,
+                      letterSpacing: 0.5),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ContentBlocksSection extends StatelessWidget {
+  const _ContentBlocksSection({required this.blocks});
+  final List<Map<String, dynamic>> blocks;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 16, 20, 4),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: blocks.map<Widget>(_buildBlock).toList(),
+      ),
+    );
+  }
+
+  Widget _buildBlock(Map<String, dynamic> block) {
+    final type = (block['type'] as String?) ?? 'text';
+    final text = ((block['text'] as String?) ?? '').trim();
+    final imageUrl = ((block['image_url'] as String?) ?? '').trim();
+
+    Widget imageWidget(String url) => ClipRRect(
+          borderRadius: BorderRadius.circular(12),
+          child: Image.network(
+            url,
+            width: double.infinity,
+            fit: BoxFit.cover,
+            loadingBuilder: (_, child, p) =>
+                p == null ? child : const ColoredBox(color: Color(0xFFEAE3D4)),
+            errorBuilder: (_, _, _) => const SizedBox.shrink(),
+          ),
+        );
+
+    Widget? content;
+
+    if (type == 'image') {
+      if (imageUrl.isEmpty) return const SizedBox.shrink();
+      content = imageWidget(imageUrl);
+    } else if (type == 'image_text') {
+      if (imageUrl.isEmpty && text.isEmpty) return const SizedBox.shrink();
+      content = Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (imageUrl.isNotEmpty) imageWidget(imageUrl),
+          if (imageUrl.isNotEmpty && text.isNotEmpty) const SizedBox(height: 10),
+          if (text.isNotEmpty)
+            Text(text,
+                style:
+                    const TextStyle(fontSize: 13, color: _kMuted, height: 1.6)),
+        ],
+      );
+    } else {
+      if (text.isEmpty) return const SizedBox.shrink();
+      content = Text(text,
+          style: const TextStyle(fontSize: 13, color: _kMuted, height: 1.6));
+    }
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16),
+      child: content,
+    );
   }
 }
 
