@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -23,7 +24,9 @@ import '../../amc/providers/amc_provider.dart';
 import '../models/catalog_node_model.dart';
 import '../providers/catalog_providers.dart';
 import '../utils/catalog_launcher.dart';
+import '../widgets/catalog_node_modal.dart';
 import '../widgets/catalog_unavailability_widgets.dart';
+import 'category_explorer_screen.dart';
 
 // ── Design tokens (from handoff) ──────────────────────────────────────────────
 const _kInk = Color(0xFF1A1714);
@@ -435,30 +438,60 @@ class _CatalogNodeScreenState extends ConsumerState<CatalogNodeScreen> {
 // Deep-link recovery
 // ═══════════════════════════════════════════════════════════════════════════════
 
-class CatalogNodeFetchScreen extends ConsumerWidget {
+class CatalogNodeFetchScreen extends ConsumerStatefulWidget {
   const CatalogNodeFetchScreen({super.key, required this.nodeId});
   final String nodeId;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final async = ref.watch(catalogNodeProvider(nodeId));
-    return async.when(
-      loading: () =>
-          const Scaffold(body: Center(child: CircularProgressIndicator())),
-      error: (_, _) => Scaffold(
-        appBar: AppBar(),
-        body: const Center(child: Text('Service not found.')),
-      ),
-      data: (node) {
-        if (node == null) {
-          return Scaffold(
-            appBar: AppBar(),
-            body: const Center(child: Text('Service not found.')),
-          );
-        }
-        return CatalogNodeScreen(node: node);
-      },
-    );
+  ConsumerState<CatalogNodeFetchScreen> createState() =>
+      _CatalogNodeFetchScreenState();
+}
+
+class _CatalogNodeFetchScreenState
+    extends ConsumerState<CatalogNodeFetchScreen> {
+  bool _modalOpened = false;
+  CatalogNodeModel? _node;
+
+  @override
+  Widget build(BuildContext context) {
+    final async = ref.watch(catalogNodeProvider(widget.nodeId));
+
+    // Mobile: keep existing full-screen behavior unchanged.
+    if (!kIsWeb) {
+      return async.when(
+        loading: () =>
+            const Scaffold(body: Center(child: CircularProgressIndicator())),
+        error: (_, _) => Scaffold(
+          appBar: AppBar(),
+          body: const Center(child: Text('Service not found.')),
+        ),
+        data: (node) {
+          if (node == null) {
+            return Scaffold(
+              appBar: AppBar(),
+              body: const Center(child: Text('Service not found.')),
+            );
+          }
+          return CatalogNodeScreen(node: node);
+        },
+      );
+    }
+
+    // Web: once node loads, show its category explorer as background and open
+    // the catalog modal on top. AppNavigation is shown only during the brief load.
+    if (!_modalOpened && async.hasValue && async.value != null) {
+      _node = async.value;
+      _modalOpened = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) CatalogNodeModal.open(context, _node!);
+      });
+    }
+
+    if (_node != null) {
+      return CategoryExplorerScreen(initialNode: _node);
+    }
+
+    return const Scaffold(body: Center(child: CircularProgressIndicator()));
   }
 }
 
