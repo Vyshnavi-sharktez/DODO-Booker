@@ -29,12 +29,14 @@ class AllAddonsNotifier extends StateNotifier<AsyncValue<List<ServiceAddon>>> {
     String? description,
     required double price,
     required bool isActive,
+    String? serviceId,
   }) async {
     await _repo.create(
       name: name,
       description: description,
       price: price,
       isActive: isActive,
+      serviceId: serviceId,
     );
     await _load();
   }
@@ -45,9 +47,16 @@ class AllAddonsNotifier extends StateNotifier<AsyncValue<List<ServiceAddon>>> {
     String? description,
     required double price,
     required bool isActive,
+    String? serviceId,
   }) async {
-    await _repo.update(id,
-        name: name, description: description, price: price, isActive: isActive);
+    await _repo.update(
+      id,
+      name: name,
+      description: description,
+      price: price,
+      isActive: isActive,
+      serviceId: serviceId,
+    );
     await _load();
   }
 

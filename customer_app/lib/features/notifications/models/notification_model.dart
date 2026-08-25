@@ -10,6 +10,7 @@ class NotificationModel {
   final String? entityType;
   final String? entityId;
   final String? parentNodeId;
+  final String? customerQuestionId;
 
   const NotificationModel({
     required this.id,
@@ -23,6 +24,7 @@ class NotificationModel {
     this.entityType,
     this.entityId,
     this.parentNodeId,
+    this.customerQuestionId,
   });
 
   factory NotificationModel.fromJson(Map<String, dynamic> json) {
@@ -38,6 +40,7 @@ class NotificationModel {
       entityType: json['entity_type'] as String?,
       entityId: json['entity_id'] as String?,
       parentNodeId: json['parent_node_id'] as String?,
+      customerQuestionId: json['customer_question_id'] as String?,
     );
   }
 }

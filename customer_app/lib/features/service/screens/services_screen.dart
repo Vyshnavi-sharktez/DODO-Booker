@@ -5,7 +5,8 @@ import '../../../models/subcategory_model.dart';
 import '../../../models/service_model.dart';
 import '../services/service_providers.dart';
 import '../widgets/service_card.dart';
-import '../utils/service_detail_launcher.dart';
+import '../../catalog/models/catalog_node_model.dart';
+import '../../catalog/utils/catalog_launcher.dart';
 
 class ServicesScreen extends ConsumerStatefulWidget {
   final SubcategoryModel subcategory;
@@ -120,7 +121,7 @@ class _ServicesScreenState extends ConsumerState<ServicesScreen> {
                     itemCount: filtered.length,
                     itemBuilder: (_, i) => ServiceCard(
                       service: filtered[i],
-                      onTap: () => openServiceDetail(context, filtered[i]),
+                      onTap: () => openCatalogNode(context, CatalogNodeModel.fromServiceModel(filtered[i])),
                       searchQuery: _query,
                     ),
                   ),

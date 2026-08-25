@@ -20,6 +20,7 @@ class NodeCallbacks {
     required this.onOpenConfig,
     required this.onOpenAmcPlans,
     required this.onOpenFaqs,
+    required this.onOpenShowcaseImages,
   });
 
   final void Function(CatalogNode parent) onAddChild;
@@ -50,6 +51,9 @@ class NodeCallbacks {
   /// Opens the FAQs & Customer Questions dialog for this bookable leaf node.
   /// [parentIdContext] scopes customer questions to this parent relationship.
   final void Function(CatalogNode node, String? parentIdContext) onOpenFaqs;
+
+  /// Opens the showcase photos dialog for this bookable leaf node.
+  final void Function(CatalogNode node) onOpenShowcaseImages;
 }
 
 /// Renders a single catalog item row and recursively renders its children
@@ -299,6 +303,15 @@ class CatalogNodeTile extends StatelessWidget {
                     tooltip: 'FAQs',
                     color: AppColors.primary,
                     onPressed: () => callbacks.onOpenFaqs(node, parentIdContext),
+                  ),
+
+                // Showcase Photos — bookable leaf nodes only
+                if (!hasChildren && node.isBookable)
+                  IconButton(
+                    icon: const Icon(Icons.photo_library_rounded, size: 17),
+                    tooltip: 'Showcase Photos',
+                    color: AppColors.primary,
+                    onPressed: () => callbacks.onOpenShowcaseImages(node),
                   ),
 
                 // Module config (Tax / Loyalty / Scheduling / Commission)

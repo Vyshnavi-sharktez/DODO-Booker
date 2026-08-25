@@ -136,6 +136,7 @@ class _CardInfo extends StatelessWidget {
                 height: 1.25,
               ),
             ),
+
             const SizedBox(height: 8),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,

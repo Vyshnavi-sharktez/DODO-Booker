@@ -10,7 +10,6 @@ import '../../../routes/app_router.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../../auth/utils/auth_modal_gate.dart';
 import '../../address/screens/address_screen.dart';
-import '../../wishlist/screens/wishlist_screen.dart';
 import 'settings_screen.dart';
 import '../../amc/screens/amc_plans_page.dart';
 import '../../bookings/utils/my_bookings_launcher.dart';
@@ -108,25 +107,6 @@ class _ProfileBody extends ConsumerWidget {
                 ),
               ),
 
-              const SizedBox(height: 12),
-
-              _FloatingCard(
-                child: ProfileMenuTile(
-                  icon: Icons.favorite_rounded,
-                  iconColor: const Color(0xFFE91E63),
-                  title: 'Wishlist',
-                  subtitle: 'Services you have saved',
-                  onTap: () => _openResponsive(
-                    context,
-                    desktopModal: () => PageSheet.show(
-                      context,
-                      title: 'Wishlist',
-                      child: const WishlistScreen(inModal: true),
-                    ),
-                    mobileRoute: () => context.push(AppRoutes.wishlist),
-                  ),
-                ),
-              ),
               const SizedBox(height: 12),
 
               _FloatingCard(

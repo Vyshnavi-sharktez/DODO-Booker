@@ -41,6 +41,11 @@ final allActiveAddonsProvider = FutureProvider<List<AddOnModel>>((ref) {
   return ref.read(categoryServiceProvider).fetchAllActiveAddons();
 });
 
+final serviceAddonsProvider =
+    FutureProvider.family<List<AddOnModel>, String>((ref, serviceId) {
+  return ref.read(categoryServiceProvider).fetchAddonsForService(serviceId);
+});
+
 final serviceAttributesProvider =
     FutureProvider.family<List<ServiceAttributeModel>, String>(
   (ref, serviceId) {

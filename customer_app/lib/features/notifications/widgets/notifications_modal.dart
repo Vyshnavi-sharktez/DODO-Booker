@@ -5,7 +5,7 @@ import '../../../core/constants/app_colors.dart';
 import '../../../core/widgets/app_modal_dialog.dart';
 import '../../../routes/app_router.dart';
 import '../../catalog/providers/catalog_providers.dart';
-import '../../catalog/utils/catalog_launcher.dart';
+import '../../catalog/widgets/catalog_service_detail_web_modal.dart';
 import '../models/notification_model.dart';
 import '../services/notification_providers.dart';
 
@@ -42,32 +42,30 @@ class _NotificationsModalState extends ConsumerState<NotificationsModal> {
   }
 
   Future<void> _handleTap(NotificationModel n) async {
-    debugPrint('[NOTIF][Customer] tapped — entity_type=${n.entityType}, entity_id=${n.entityId}');
+    debugPrint(
+        '[NOTIF][Customer] tapped — entity_type=${n.entityType}, entity_id=${n.entityId}, customer_question_id=${n.customerQuestionId}');
     _markRead(n);
-    final router = GoRouter.of(context);
-
-    if (n.entityType == 'booking' && n.entityId != null) {
-      // Capture the router BEFORE pop — after pop() this widget is unmounted.
-      final route = AppRoutes.notificationBooking.replaceFirst(':id', n.entityId!);
+    if (n.entityId == null) return;
+    if (n.entityType == 'booking') {
+      final route =
+          AppRoutes.notificationBooking.replaceFirst(':id', n.entityId!);
       debugPrint('[NOTIF][Customer] navigating → $route');
       Navigator.of(context).pop();
-      router.push(route);
-    } else if (n.notificationType == 'question_answered' && n.entityId != null) {
-      final nodeId = n.entityId!;
-      // When the notification carries a parent context, fetch both the service
-      // node and the parent so the modal badge shows the correct parent name
-      // rather than catalog_nodes_view's canonical first parent.
-      final service = n.parentNodeId != null
-          ? await ref
-              .read(catalogServiceProvider)
-              .fetchNodeWithParent(nodeId, n.parentNodeId!)
-          : await ref.read(catalogServiceProvider).fetchNode(nodeId);
-      if (service == null || !mounted) return;
-      final navCtx = router.routerDelegate.navigatorKey.currentContext;
+      GoRouter.of(context).push(route);
+    } else if (n.entityType == 'service_faq' ||
+        n.entityType == 'customer_question' ||
+        n.notificationType == 'question_answered') {
+      final serviceId = n.entityId!;
+      final questionId = n.customerQuestionId;
+      final targetContext = Navigator.of(context).context;
       Navigator.of(context).pop();
-      if (navCtx != null && navCtx.mounted) {
-        openCatalogNode(navCtx, service,
-            parentId: n.parentNodeId ?? service.parentId);
+      final node = await ref.read(catalogServiceProvider).fetchNode(serviceId);
+      if (node != null && targetContext.mounted) {
+        CatalogServiceDetailWebModal.show(
+          targetContext,
+          node,
+          initialCustomerQuestionId: questionId,
+        );
       }
     }
   }

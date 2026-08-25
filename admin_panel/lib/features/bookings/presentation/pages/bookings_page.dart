@@ -1794,39 +1794,91 @@ class _StatusBadge extends StatelessWidget {
   Widget build(BuildContext context) {
     final (label, color, bg) = booking.statusConfig;
 
-    return FittedBox(
-      fit: BoxFit.scaleDown,
-      alignment: Alignment.centerLeft,
-      child: Container(
-        padding:
-            const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
-        decoration: BoxDecoration(
-          color: bg,
-          borderRadius: BorderRadius.circular(20),
-          border:
-              Border.all(color: color.withValues(alpha: 0.3)),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 6,
-              height: 6,
-              decoration:
-                  BoxDecoration(color: color, shape: BoxShape.circle),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        FittedBox(
+          fit: BoxFit.scaleDown,
+          alignment: Alignment.centerLeft,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
+            decoration: BoxDecoration(
+              color: bg,
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: color.withValues(alpha: 0.3)),
             ),
-            const SizedBox(width: 5),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 11,
-                color: color,
-                fontWeight: FontWeight.w600,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 6,
+                  height: 6,
+                  decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+                ),
+                const SizedBox(width: 5),
+                Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: color,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        if (booking.isCod) ...[
+          const SizedBox(height: 3),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
+              decoration: BoxDecoration(
+                color: booking.status == 'completed'
+                    ? (booking.codConfirmedAt == null
+                        ? const Color(0xFFFEEBC8)
+                        : (booking.codCashCollected == true
+                            ? const Color(0xFFF0FFF4)
+                            : const Color(0xFFFFF5F5)))
+                    : const Color(0xFFEDF2F7),
+                borderRadius: BorderRadius.circular(4),
+                border: Border.all(
+                  color: booking.status == 'completed'
+                      ? (booking.codConfirmedAt == null
+                          ? const Color(0xFFFBD38D)
+                          : (booking.codCashCollected == true
+                              ? const Color(0xFFC6F6D5)
+                              : const Color(0xFFFEB2B2)))
+                      : const Color(0xFFCBD5E0),
+                ),
+              ),
+              child: Text(
+                booking.status == 'completed'
+                    ? (booking.codConfirmedAt == null
+                        ? 'COD: Pending'
+                        : (booking.codCashCollected == true
+                            ? 'COD: Cash Collected'
+                            : 'COD: Not Collected'))
+                    : 'COD',
+                style: TextStyle(
+                  fontSize: 9,
+                  fontWeight: FontWeight.bold,
+                  color: booking.status == 'completed'
+                      ? (booking.codConfirmedAt == null
+                          ? const Color(0xFFC05621)
+                          : (booking.codCashCollected == true
+                              ? const Color(0xFF2F855A)
+                              : const Color(0xFFC53030)))
+                      : const Color(0xFF4A5568),
+                ),
               ),
             ),
-          ],
-        ),
-      ),
+          ),
+        ],
+      ],
     );
   }
 }

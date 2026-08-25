@@ -1,4 +1,6 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../models/faq_model.dart';
 import '../models/catalog_node_model.dart';
@@ -62,3 +64,48 @@ final nodeAvailabilityProvider = FutureProvider.family<
         lng: params.lng,
       ),
 );
+
+/// Admin-curated before/after showcase images for a service.
+/// Only images explicitly selected by Admin appear here.
+/// Two-step query: avoids PostgREST FK-join caching issues for the anon role.
+final serviceShowcaseImagesProvider = FutureProvider.autoDispose
+    .family<List<Map<String, dynamic>>, String>((ref, serviceId) async {
+  final client = Supabase.instance.client;
+
+  // Step 1: ordered booking_image_ids for this catalog node.
+  final showcaseRows = await client
+      .from('service_showcase_images')
+      .select('booking_image_id, sort_order')
+      .eq('catalog_node_id', serviceId)
+      .order('sort_order');
+
+  debugPrint('[Showcase] serviceId=$serviceId  rows=${showcaseRows.length}');
+  if (showcaseRows.isEmpty) return [];
+
+  final orderedIds =
+      showcaseRows.map((r) => r['booking_image_id'] as String).toList();
+
+  // Step 2: fetch image data from booking_images (avoids PostgREST FK-join for anon).
+  final imageRows = await client
+      .from('booking_images')
+      .select('id, image_url, image_type')
+      .inFilter('id', orderedIds);
+
+  debugPrint('[Showcase] booking_images fetched=${imageRows.length}');
+
+  final byId = <String, Map<String, dynamic>>{
+    for (final r in imageRows) r['id'] as String: r,
+  };
+
+  return orderedIds.map((id) {
+    final img = byId[id];
+    if (img == null) {
+      debugPrint('[Showcase] WARNING: booking_image_id=$id not in booking_images');
+      return null;
+    }
+    return <String, dynamic>{
+      'image_url': img['image_url'] as String,
+      'image_type': img['image_type'] as String,
+    };
+  }).whereType<Map<String, dynamic>>().toList();
+});
