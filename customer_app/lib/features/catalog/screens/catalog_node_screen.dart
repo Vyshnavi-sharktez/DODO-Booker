@@ -214,6 +214,7 @@ class _CatalogNodeScreenState extends ConsumerState<CatalogNodeScreen> {
             ),
       body: CustomScrollView(
         slivers: [
+          const SliverToBoxAdapter(child: SizedBox(height: 16)),
           SliverToBoxAdapter(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -1858,7 +1859,7 @@ class _NodeBookingBar extends ConsumerWidget {
               child: Container(
                 padding: const EdgeInsets.symmetric(vertical: 13),
                 decoration: BoxDecoration(
-                    color: _kGold,
+                    color: _kInk,
                     borderRadius: BorderRadius.circular(100)),
                 child: Center(
                   child: Text(
@@ -1868,7 +1869,7 @@ class _NodeBookingBar extends ConsumerWidget {
                     style: GoogleFonts.poppins(
                         fontSize: 13,
                         fontWeight: FontWeight.w600,
-                        color: _kInk),
+                        color: Colors.white),
                   ),
                 ),
               ),
@@ -2177,7 +2178,7 @@ class _WebScaffold extends ConsumerWidget {
                                   padding: const EdgeInsets.symmetric(
                                       horizontal: 24, vertical: 13),
                                   decoration: BoxDecoration(
-                                      color: _kGold,
+                                      color: _kInk,
                                       borderRadius:
                                           BorderRadius.circular(100)),
                                   child: Text(
@@ -2187,7 +2188,7 @@ class _WebScaffold extends ConsumerWidget {
                                     style: GoogleFonts.poppins(
                                         fontSize: 14,
                                         fontWeight: FontWeight.w600,
-                                        color: _kInk),
+                                        color: Colors.white),
                                   ),
                                 ),
                               ),

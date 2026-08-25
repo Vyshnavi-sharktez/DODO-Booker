@@ -43,10 +43,18 @@ class CatalogNodeModal extends ConsumerStatefulWidget {
     super.key,
     required this.node,
     this.parentNodeId,
+    this.inline = false,
+    this.onBack,
   });
 
   final CatalogNodeModel node;
   final String? parentNodeId;
+
+  /// When true, renders as an inline widget filling the available space
+  /// (no blurred backdrop, no dialog wrapper). [onBack] is called by the
+  /// back/close buttons instead of popping the navigator.
+  final bool inline;
+  final VoidCallback? onBack;
 
   static Future<void> open(
     BuildContext context,
@@ -164,15 +172,242 @@ class _CatalogNodeModalState extends ConsumerState<CatalogNodeModal> {
     final heroUrl = ServiceImageRegistry.resolve(node.imageUrl, node.name);
     final hasHero = heroUrl.isNotEmpty;
 
+    // Inline uses onBack; dialog uses Navigator.pop
+    final onClose = widget.inline
+        ? (widget.onBack ?? () {})
+        : () => Navigator.of(context).pop();
+
+    // ── Shared scroll content (used by both inline and dialog) ───────────────
+    final scrollChildren = <Widget>[
+      _ModalHeader(
+        node: node,
+        heroUrl: hasHero ? heroUrl : null,
+        displayPrice: displayPrice,
+        hasAdjustment: hasAdjustment,
+        isWeb: isWeb,
+        onClose: onClose,
+      ),
+
+      if (node.isLeafBookable && attrs.isNotEmpty)
+        Padding(
+          padding: EdgeInsets.symmetric(horizontal: isWeb ? 28 : 20),
+          child: ServiceAttributeSection(
+            attrs: attrs,
+            selections: _selections,
+            onChanged: (a, o) => _onOptionSelected(a, o, attrs),
+          ),
+        ),
+
+      if (node.hasChildren)
+        (isUnavailable || isEffectivelyHidden)
+            ? CatalogUnavailabilityBanner(
+                message: isUnavailable ? avail?.message : null,
+                isHidden: isEffectivelyHidden,
+              )
+            : _ModalChildrenList(node: node, children: children),
+
+      if (node.isLeafBookable && addOns.isNotEmpty) ...[
+        Padding(
+          padding: const EdgeInsets.fromLTRB(20, 24, 20, 12),
+          child: const _SectionLabel(text: 'Suggested Add-ons'),
+        ),
+        _AddonCardScroll(
+          addOns: addOns,
+          selectedIds: _selectedAddonIds,
+          onToggle: _onAddonToggled,
+        ),
+        const _HRule(),
+      ],
+
+      if (node.isLeafBookable)
+        Consumer(
+          builder: (ctx, aRef, _) {
+            final plans = aRef.watch(amcPlansProvider(node.id)).valueOrNull;
+            if (plans == null || plans.isEmpty) return const SizedBox.shrink();
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Padding(
+                  padding: EdgeInsets.fromLTRB(isWeb ? 28 : 20, 18, isWeb ? 28 : 20, 12),
+                  child: const _SectionLabel(text: 'AMC Plans'),
+                ),
+                Padding(
+                  padding: EdgeInsets.symmetric(horizontal: isWeb ? 28 : 20),
+                  child: _InlineAmcPlans(
+                    serviceId: node.id,
+                    selectedPlan: _selectedAmcPlan,
+                    onPlanSelected: (plan) =>
+                        setState(() => _selectedAmcPlan = plan),
+                    regularPrice: node.basePrice,
+                  ),
+                ),
+                const _HRule(),
+              ],
+            );
+          },
+        ),
+
+      if (node.isLeafBookable)
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                decoration: const BoxDecoration(
+                  border: Border(top: BorderSide(color: _kBorder, width: 1)),
+                ),
+                child: Text('About this service',
+                    style: GoogleFonts.poppins(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
+                        color: _kInk)),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(0, 4, 0, 14),
+                child: Text(
+                  node.description?.isNotEmpty == true
+                      ? node.description!
+                      : 'No description available.',
+                  style: const TextStyle(
+                      fontSize: 13, color: _kMuted, height: 1.6),
+                ),
+              ),
+            ],
+          ),
+        ),
+
+      if (node.isLeafBookable && node.includedItems.isNotEmpty)
+        _ModalIncludedSection(items: node.includedItems),
+
+      if (node.isLeafBookable && node.excludedItems.isNotEmpty)
+        _ModalExcludedSection(items: node.excludedItems),
+
+      if (node.isLeafBookable && node.beforeAfterPairs.isNotEmpty)
+        _ModalBeforeAfterSection(pairs: node.beforeAfterPairs),
+
+      if (node.isLeafBookable && node.contentBlocks.isNotEmpty)
+        _ModalContentBlocksSection(blocks: node.contentBlocks),
+
+      if (node.isLeafBookable)
+        Padding(
+          padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Text('FAQs',
+                    style: GoogleFonts.poppins(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
+                        color: _kInk)),
+              ),
+              if (faqs.isEmpty) ...[
+                const Text('No FAQs yet.',
+                    style: TextStyle(fontSize: 13, color: _kMuted)),
+                const SizedBox(height: 6),
+                AskQuestionLink(serviceId: node.id, parentId: widget.parentNodeId),
+              ] else ...[
+                FaqSection(faqs: faqs),
+                const SizedBox(height: 6),
+                AskQuestionLink(serviceId: node.id, parentId: widget.parentNodeId),
+              ],
+              const SizedBox(height: 8),
+            ],
+          ),
+        ),
+
+      if (node.isLeafBookable)
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                decoration: const BoxDecoration(
+                  border: Border(top: BorderSide(color: _kBorder, width: 1)),
+                ),
+                child: Text(
+                  node.reviewCount > 0
+                      ? 'Reviews (${node.reviewCount})'
+                      : 'Reviews',
+                  style: GoogleFonts.poppins(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700,
+                      color: _kInk),
+                ),
+              ),
+              ServiceReviewsSection(
+                  serviceId: node.id, showHeader: false, flat: true),
+              const SizedBox(height: 14),
+            ],
+          ),
+        ),
+
+      if (!node.hasChildren && !node.isBookable) const _ModalComingSoon(),
+    ];
+
+    // ── Shared booking bar ───────────────────────────────────────────────────
+    Widget? bookingBar;
+    if (node.isLeafBookable) {
+      bookingBar = (isUnavailable || isEffectivelyHidden)
+          ? CatalogUnavailabilityBar(
+              message: isUnavailable ? avail?.message : null,
+            )
+          : _ModalBookingBar(
+              node: node,
+              displayPrice: displayPrice,
+              priceAdjustment: _priceAdjustment,
+              addonsTotal: addonsTotal,
+              parentNodeId: widget.parentNodeId,
+              attrs: attrs,
+              selections: _selections,
+              addOns: addOns,
+              selectedAddonIds: _selectedAddonIds,
+              amcPlan: _selectedAmcPlan,
+              amcQuantity: 1,
+              isWeb: isWeb,
+            );
+    }
+
+    // ── Inline mode: fill middle column, no backdrop ─────────────────────────
+    if (widget.inline) {
+      return Container(
+        color: _kBg,
+        child: Column(
+          children: [
+            Expanded(
+              child: ScrollConfiguration(
+                behavior: ScrollConfiguration.of(context)
+                    .copyWith(scrollbars: false),
+                child: SingleChildScrollView(
+                  padding: EdgeInsets.only(
+                      bottom: node.isLeafBookable ? 6 : 24),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: scrollChildren,
+                  ),
+                ),
+              ),
+            ),
+            if (bookingBar != null) bookingBar,
+          ],
+        ),
+      );
+    }
+
+    // ── Dialog mode: blurred backdrop + centered card ────────────────────────
     final maxModalW = isWeb ? 860.0 : 520.0;
     final maxModalH = MediaQuery.sizeOf(context).height * (isWeb ? 0.90 : 0.94);
 
     return Stack(
       children: [
-        // ── Blurred dimmed backdrop ──────────────────────────────────────────
         Positioned.fill(
           child: GestureDetector(
-            onTap: () => Navigator.of(context).pop(),
+            onTap: onClose,
             behavior: HitTestBehavior.opaque,
             child: BackdropFilter(
               filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
@@ -181,7 +416,6 @@ class _CatalogNodeModalState extends ConsumerState<CatalogNodeModal> {
           ),
         ),
 
-        // ── Modal card ───────────────────────────────────────────────────────
         SafeArea(
           child: Center(
             child: ConstrainedBox(
@@ -213,7 +447,6 @@ class _CatalogNodeModalState extends ConsumerState<CatalogNodeModal> {
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        // ── Scrollable content (header + body scroll together) ─
                         Flexible(
                           child: ScrollConfiguration(
                             behavior: ScrollConfiguration.of(context)
@@ -223,274 +456,12 @@ class _CatalogNodeModalState extends ConsumerState<CatalogNodeModal> {
                                   bottom: node.isLeafBookable ? 6 : 24),
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  // ── Header block ────────────────────────────
-                                  _ModalHeader(
-                                    node: node,
-                                    heroUrl: hasHero ? heroUrl : null,
-                                    displayPrice: displayPrice,
-                                    hasAdjustment: hasAdjustment,
-                                    isWeb: isWeb,
-                                    onClose: () => Navigator.of(context).pop(),
-                                  ),
-
-                                  // Attribute selection
-                                  if (node.isLeafBookable && attrs.isNotEmpty)
-                                    Padding(
-                                      padding: EdgeInsets.symmetric(
-                                          horizontal: isWeb ? 28 : 20),
-                                      child: ServiceAttributeSection(
-                                        attrs: attrs,
-                                        selections: _selections,
-                                        onChanged: (a, o) =>
-                                            _onOptionSelected(a, o, attrs),
-                                      ),
-                                    ),
-
-                                  // Children list (category)
-                                  if (node.hasChildren)
-                                    (isUnavailable || isEffectivelyHidden)
-                                        ? CatalogUnavailabilityBanner(
-                                            message: isUnavailable
-                                                ? avail?.message
-                                                : null,
-                                            isHidden: isEffectivelyHidden,
-                                          )
-                                        : _ModalChildrenList(
-                                            node: node,
-                                            children: children,
-                                          ),
-
-                                  // Add-ons
-                                  if (node.isLeafBookable &&
-                                      addOns.isNotEmpty) ...[
-                                    Padding(
-                                      padding: const EdgeInsets.fromLTRB(
-                                          20, 24, 20, 12),
-                                      child: const _SectionLabel(
-                                          text: 'Suggested Add-ons'),
-                                    ),
-                                    _AddonCardScroll(
-                                      addOns: addOns,
-                                      selectedIds: _selectedAddonIds,
-                                      onToggle: _onAddonToggled,
-                                    ),
-                                    const _HRule(),
-                                  ],
-
-                                  // AMC plans
-                                  if (node.isLeafBookable)
-                                    Consumer(
-                                      builder: (ctx, aRef, _) {
-                                        final plans = aRef
-                                            .watch(amcPlansProvider(node.id))
-                                            .valueOrNull;
-                                        if (plans == null || plans.isEmpty) {
-                                          return const SizedBox.shrink();
-                                        }
-                                        return Column(
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.start,
-                                          children: [
-                                            Padding(
-                                              padding: EdgeInsets.fromLTRB(
-                                                  isWeb ? 28 : 20,
-                                                  18,
-                                                  isWeb ? 28 : 20,
-                                                  12),
-                                              child: const _SectionLabel(
-                                                  text: 'AMC Plans'),
-                                            ),
-                                            Padding(
-                                              padding: EdgeInsets.symmetric(
-                                                  horizontal: isWeb ? 28 : 20),
-                                              child: _InlineAmcPlans(
-                                                serviceId: node.id,
-                                                selectedPlan: _selectedAmcPlan,
-                                                onPlanSelected: (plan) =>
-                                                    setState(() =>
-                                                        _selectedAmcPlan = plan),
-                                                regularPrice: node.basePrice,
-                                              ),
-                                            ),
-                                            const _HRule(),
-                                          ],
-                                        );
-                                      },
-                                    ),
-
-                                  // About — always visible
-                                  if (node.isLeafBookable)
-                                    Padding(
-                                      padding: const EdgeInsets.symmetric(
-                                          horizontal: 20),
-                                      child: Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        children: [
-                                          Container(
-                                            padding: const EdgeInsets.symmetric(
-                                                vertical: 14),
-                                            decoration: const BoxDecoration(
-                                              border: Border(
-                                                  top: BorderSide(
-                                                      color: _kBorder,
-                                                      width: 1)),
-                                            ),
-                                            child: Text('About this service',
-                                                style: GoogleFonts.poppins(
-                                                    fontSize: 15,
-                                                    fontWeight: FontWeight.w700,
-                                                    color: _kInk)),
-                                          ),
-                                          Padding(
-                                            padding: const EdgeInsets.fromLTRB(
-                                                0, 4, 0, 14),
-                                            child: Text(
-                                              node.description?.isNotEmpty ==
-                                                      true
-                                                  ? node.description!
-                                                  : 'No description available.',
-                                              style: const TextStyle(
-                                                  fontSize: 13,
-                                                  color: _kMuted,
-                                                  height: 1.6),
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-
-                                  // What's Included
-                                  if (node.isLeafBookable &&
-                                      node.includedItems.isNotEmpty)
-                                    _ModalIncludedSection(
-                                        items: node.includedItems),
-
-                                  // What's Excluded
-                                  if (node.isLeafBookable &&
-                                      node.excludedItems.isNotEmpty)
-                                    _ModalExcludedSection(
-                                        items: node.excludedItems),
-
-                                  // Before & After
-                                  if (node.isLeafBookable &&
-                                      node.beforeAfterPairs.isNotEmpty)
-                                    _ModalBeforeAfterSection(
-                                        pairs: node.beforeAfterPairs),
-
-                                  // Customer Content blocks
-                                  if (node.isLeafBookable &&
-                                      node.contentBlocks.isNotEmpty)
-                                    _ModalContentBlocksSection(
-                                        blocks: node.contentBlocks),
-
-                                  // FAQs — inline list (always shown for leaf bookable)
-                                  if (node.isLeafBookable)
-                                    Padding(
-                                      padding: const EdgeInsets.fromLTRB(
-                                          20, 20, 20, 0),
-                                      child: Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        children: [
-                                          Padding(
-                                            padding: const EdgeInsets.only(
-                                                bottom: 8),
-                                            child: Text('FAQs',
-                                                style: GoogleFonts.poppins(
-                                                    fontSize: 15,
-                                                    fontWeight: FontWeight.w700,
-                                                    color: _kInk)),
-                                          ),
-                                          if (faqs.isEmpty) ...[
-                                            const Text('No FAQs yet.',
-                                                style: TextStyle(
-                                                    fontSize: 13,
-                                                    color: _kMuted)),
-                                            const SizedBox(height: 6),
-                                            AskQuestionLink(
-                                                serviceId: node.id,
-                                                parentId: widget.parentNodeId),
-                                          ] else ...[
-                                            FaqSection(faqs: faqs),
-                                            const SizedBox(height: 6),
-                                            AskQuestionLink(
-                                                serviceId: node.id,
-                                                parentId: widget.parentNodeId),
-                                          ],
-                                          const SizedBox(height: 8),
-                                        ],
-                                      ),
-                                    ),
-
-                                  // Reviews — always visible
-                                  if (node.isLeafBookable)
-                                    Padding(
-                                      padding: const EdgeInsets.symmetric(
-                                          horizontal: 20),
-                                      child: Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        children: [
-                                          Container(
-                                            padding: const EdgeInsets.symmetric(
-                                                vertical: 14),
-                                            decoration: const BoxDecoration(
-                                              border: Border(
-                                                  top: BorderSide(
-                                                      color: _kBorder,
-                                                      width: 1)),
-                                            ),
-                                            child: Text(
-                                              node.reviewCount > 0
-                                                  ? 'Reviews (${node.reviewCount})'
-                                                  : 'Reviews',
-                                              style: GoogleFonts.poppins(
-                                                  fontSize: 15,
-                                                  fontWeight: FontWeight.w700,
-                                                  color: _kInk),
-                                            ),
-                                          ),
-                                          ServiceReviewsSection(
-                                              serviceId: node.id,
-                                              showHeader: false,
-                                              flat: true),
-                                          const SizedBox(height: 14),
-                                        ],
-                                      ),
-                                    ),
-
-                                  // Coming Soon
-                                  if (!node.hasChildren && !node.isBookable)
-                                    const _ModalComingSoon(),
-                                ],
+                                children: scrollChildren,
                               ),
                             ),
                           ),
                         ),
-
-                        // ── Booking bar ───────────────────────────────────────
-                        if (node.isLeafBookable)
-                          (isUnavailable || isEffectivelyHidden)
-                              ? CatalogUnavailabilityBar(
-                                  message:
-                                      isUnavailable ? avail?.message : null,
-                                )
-                              : _ModalBookingBar(
-                                  node: node,
-                                  displayPrice: displayPrice,
-                                  priceAdjustment: _priceAdjustment,
-                                  addonsTotal: addonsTotal,
-                                  parentNodeId: widget.parentNodeId,
-                                  attrs: attrs,
-                                  selections: _selections,
-                                  addOns: addOns,
-                                  selectedAddonIds: _selectedAddonIds,
-                                  amcPlan: _selectedAmcPlan,
-                                  amcQuantity: 1,
-                                  isWeb: isWeb,
-                                ),
+                        if (bookingBar != null) bookingBar,
                       ],
                     ),
                   ),
@@ -1743,26 +1714,28 @@ class _ModalBookingBar extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final inCart =
-        ref.watch(cartProvider).any((i) => i.serviceId == node.id);
+    final cartItems = ref.watch(cartProvider);
+    final matches = cartItems.where((i) => i.serviceId == node.id);
+    final cartItem = matches.isEmpty ? null : matches.first;
+    final inCart = cartItem != null;
+    final qty = cartItem?.quantity ?? 1;
+    final shownPrice = cartItem != null ? cartItem.unitPrice * qty : displayPrice;
 
     return Container(
-      padding: EdgeInsets.fromLTRB(
-          isWeb ? 28 : 20, 14, isWeb ? 28 : 20, 16),
+      padding: EdgeInsets.fromLTRB(isWeb ? 28 : 20, 14, isWeb ? 28 : 20, 16),
       decoration: const BoxDecoration(
         color: Colors.white,
         border: Border(top: BorderSide(color: _kBorder, width: 1)),
       ),
       child: Row(
         children: [
-          // Price
+          // Price (updates with quantity when in cart)
           Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text('From',
-                  style: TextStyle(fontSize: 10, color: _kMuted2)),
-              Text('₹${displayPrice.toInt()}',
+              const Text('From', style: TextStyle(fontSize: 10, color: _kMuted2)),
+              Text('₹${shownPrice.toInt()}',
                   style: GoogleFonts.poppins(
                       fontSize: isWeb ? 20 : 17,
                       fontWeight: FontWeight.w800,
@@ -1770,38 +1743,119 @@ class _ModalBookingBar extends ConsumerWidget {
                       height: 1.1)),
             ],
           ),
-          const SizedBox(width: 14),
 
-          // Gold pill CTA
-          Expanded(
-            child: MouseRegion(
-              cursor: SystemMouseCursors.click,
-              child: GestureDetector(
-              onTap: inCart
-                  ? () => openCart(context)
-                  : () => _addToCart(context, ref),
-              child: Container(
-                padding: EdgeInsets.symmetric(
-                    vertical: isWeb ? 13 : 12),
-                decoration: BoxDecoration(
-                    color: _kInk,
-                    borderRadius: BorderRadius.circular(100)),
-                child: Center(
-                  child: Text(
-                    inCart
-                        ? '🛒  View Cart'
-                        : '🛒  ${amcPlan != null ? 'Book Now' : 'Add to Cart'}',
-                    style: GoogleFonts.poppins(
-                        fontSize: isWeb ? 14 : 13,
-                        fontWeight: FontWeight.w600,
-                        color: Colors.white),
+          if (inCart) ...[
+            const Spacer(),
+            // Quantity control + Done — all forced to the same height via
+            // IntrinsicHeight so icon-less text buttons align with Done.
+            IntrinsicHeight(
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _QtyBtn(
+                    label: '−',
+                    onTap: () => ref.read(cartProvider.notifier).updateQuantity(node.id, qty - 1),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 10),
+                    child: Center(
+                      child: Text('$qty',
+                          style: GoogleFonts.poppins(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                              color: _kInk)),
+                    ),
+                  ),
+                  _QtyBtn(
+                    label: '+',
+                    onTap: () => ref.read(cartProvider.notifier).updateQuantity(node.id, qty + 1),
+                  ),
+                  const SizedBox(width: 8),
+                  // Done — exact same styling as _FilledBtn (View Details)
+                  MouseRegion(
+                    cursor: SystemMouseCursors.click,
+                    child: GestureDetector(
+                      onTap: () => Navigator.of(context).pop(),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(vertical: 9, horizontal: 20),
+                        decoration: BoxDecoration(
+                            color: _kInk,
+                            borderRadius: BorderRadius.circular(100)),
+                        child: Center(
+                          child: Text('Done',
+                              style: GoogleFonts.inter(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.white)),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ] else ...[
+            const SizedBox(width: 14),
+            // Add to Cart / Book Now pill
+            Expanded(
+              child: MouseRegion(
+                cursor: SystemMouseCursors.click,
+                child: GestureDetector(
+                  onTap: () => _addToCart(context, ref),
+                  child: Container(
+                    padding: EdgeInsets.symmetric(vertical: isWeb ? 13 : 12),
+                    decoration: BoxDecoration(
+                        color: _kInk, borderRadius: BorderRadius.circular(100)),
+                    child: Center(
+                      child: Text(
+                        '🛒  ${amcPlan != null ? 'Book Now' : 'Add to Cart'}',
+                        style: GoogleFonts.poppins(
+                            fontSize: isWeb ? 14 : 13,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.white),
+                      ),
+                    ),
                   ),
                 ),
               ),
             ),
-          ),
-          ),
+          ],
         ],
+      ),
+    );
+  }
+}
+
+// ─── Compact quantity button ──────────────────────────────────────────────────
+
+class _QtyBtn extends StatelessWidget {
+  final String label;
+  final VoidCallback? onTap;
+
+  const _QtyBtn({required this.label, this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      child: GestureDetector(
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 9, horizontal: 14),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(100),
+            border: Border.all(color: const Color(0xFFD0C9BC)),
+            color: Colors.white,
+          ),
+          child: Center(
+            child: Text(label,
+                style: GoogleFonts.inter(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: _kInk)),
+          ),
+        ),
       ),
     );
   }

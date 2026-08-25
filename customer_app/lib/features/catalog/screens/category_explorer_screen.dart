@@ -6,6 +6,9 @@ import '../../../core/utils/icon_registry.dart';
 import '../../../core/utils/service_image_registry.dart';
 import '../../../core/widgets/app_header.dart';
 import '../../../routes/app_router.dart';
+import '../../cart/models/cart_item.dart';
+import '../../cart/providers/cart_provider.dart';
+import '../../cart/utils/cart_launcher.dart';
 import '../models/catalog_node_model.dart';
 import '../providers/catalog_providers.dart';
 import '../utils/catalog_launcher.dart';
@@ -13,13 +16,15 @@ import 'package:go_router/go_router.dart';
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
-const double _kSidebarWidth = 280.0;
-const double _kBreakpoint   = 900.0;
-const Color  _kBorderColor  = Color(0xFFE5E5E5);
-const Color  _kBgRight      = Color(0xFFF7F7F7);
-const Color  _kTextDark     = Color(0xFF111111);
-const Color  _kTextMid      = Color(0xFF333333);
-const Color  _kTextMuted    = Color(0xFF6B6B6B);
+const double _kSidebarWidth    = 280.0;
+const double _kCartPanelWidth  = 300.0;
+const double _kBreakpoint      = 900.0;
+const double _kContentMaxWidth = 1280.0;
+const Color  _kBorderColor     = Color(0xFFE5E5E5);
+const Color  _kBgRight         = Color(0xFFF7F7F7);
+const Color  _kTextDark        = Color(0xFF111111);
+const Color  _kTextMid         = Color(0xFF333333);
+const Color  _kTextMuted       = Color(0xFF6B6B6B);
 
 // ── Screen ───────────────────────────────────────────────────────────────────
 
@@ -159,7 +164,7 @@ class _CategoryExplorerScreenState
       _activeCategoryId = id;
       _activeSubId = null;
       _browseNodeId = null;
-      _browseHistory.clear(); // root change resets all browse history
+      _browseHistory.clear();
     });
   }
 
@@ -168,9 +173,6 @@ class _CategoryExplorerScreenState
     setState(() => _activeSubId = id);
   }
 
-  // Called when the user clicks Browse on any card.
-  // Pushes the current state onto the history stack before changing, so the
-  // back button can restore the exact previous level at any depth.
   void _setBrowseNode(String id) {
     _browseHistory.add((nodeId: _browseNodeId, subId: _activeSubId));
     setState(() {
@@ -179,8 +181,6 @@ class _CategoryExplorerScreenState
     });
   }
 
-  // Back logic: if browse history exists, restore the previous browse state.
-  // Otherwise pop the route to return to wherever the user navigated from.
   void _goBack(BuildContext context) {
     if (_browseHistory.isNotEmpty) {
       final prev = _browseHistory.removeLast();
@@ -196,6 +196,7 @@ class _CategoryExplorerScreenState
   @override
   Widget build(BuildContext context) {
     final rootsAsync = ref.watch(rootCatalogNodesProvider);
+    final cartItems = ref.watch(cartProvider);
     final w = MediaQuery.sizeOf(context).width;
     final isDesktop = w >= _kBreakpoint;
 
@@ -228,30 +229,57 @@ class _CategoryExplorerScreenState
                 .name;
 
             if (isDesktop) {
-              return Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  SizedBox(
-                    width: _kSidebarWidth,
-                    child: _Sidebar(
-                      roots: activeRoots,
-                      activeCategoryId: catId,
-                      onSelect: _selectCategory,
+              final hasCart = cartItems.isNotEmpty;
+              return LayoutBuilder(
+                builder: (context, constraints) {
+                  final contentWidth = constraints.maxWidth < _kContentMaxWidth
+                      ? constraints.maxWidth
+                      : _kContentMaxWidth;
+                  return Align(
+                    alignment: Alignment.topCenter,
+                    child: SizedBox(
+                      width: contentWidth,
+                      height: constraints.maxHeight,
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // Left: Categories
+                          SizedBox(
+                            width: _kSidebarWidth,
+                            child: _Sidebar(
+                              roots: activeRoots,
+                              activeCategoryId: catId,
+                              onSelect: _selectCategory,
+                            ),
+                          ),
+                          const VerticalDivider(width: 1, color: _kBorderColor),
+
+                          // Middle: Catalog listing (service detail opens as floating modal)
+                          Expanded(
+                            child: _RightPane(
+                              categoryId: catId,
+                              categoryName: catName,
+                              browseNodeId: _browseNodeId,
+                              activeSubId: _activeSubId,
+                              onSubSelected: _selectSub,
+                              onBrowseNode: _setBrowseNode,
+                              onBack: () => _goBack(context),
+                            ),
+                          ),
+
+                          // Right: Cart panel (only when cart has items)
+                          if (hasCart) ...[
+                            const VerticalDivider(width: 1, color: _kBorderColor),
+                            SizedBox(
+                              width: _kCartPanelWidth,
+                              child: const _CartPanel(),
+                            ),
+                          ],
+                        ],
+                      ),
                     ),
-                  ),
-                  const VerticalDivider(width: 1, color: _kBorderColor),
-                  Expanded(
-                    child: _RightPane(
-                      categoryId: catId,
-                      categoryName: catName,
-                      browseNodeId: _browseNodeId,
-                      activeSubId: _activeSubId,
-                      onSubSelected: _selectSub,
-                      onBrowseNode: _setBrowseNode,
-                      onBack: () => _goBack(context),
-                    ),
-                  ),
-                ],
+                  );
+                },
               );
             }
 
@@ -664,6 +692,25 @@ class _RightPaneContent extends ConsumerWidget {
                   child: Center(child: Text('Could not load services'))),
               data: (cards) {
                 if (cards.isEmpty) return const _SliverEmpty();
+                final isDesktop = MediaQuery.sizeOf(context).width >= _kBreakpoint;
+                if (isDesktop) {
+                  return SliverList(
+                    delegate: SliverChildBuilderDelegate(
+                      (ctx, i) => Padding(
+                        padding: EdgeInsets.only(
+                            bottom: i < cards.length - 1 ? 14 : 0),
+                        child: _DesktopListCard(
+                          node: cards[i],
+                          parentId: sub?.id ?? categoryId,
+                          onBrowse: cards[i].hasChildren
+                              ? () => onBrowseNode(cards[i].id)
+                              : null,
+                        ),
+                      ),
+                      childCount: cards.length,
+                    ),
+                  );
+                }
                 return SliverGrid(
                   gridDelegate:
                       const SliverGridDelegateWithMaxCrossAxisExtent(
@@ -832,7 +879,264 @@ class _SubChip extends StatelessWidget {
   }
 }
 
-// ── Service card ──────────────────────────────────────────────────────────────
+// ── Desktop list card (single-column, full-width, web/desktop only) ──────────
+
+class _DesktopListCard extends ConsumerWidget {
+  final CatalogNodeModel node;
+  final String parentId;
+  final VoidCallback? onBrowse;
+
+  const _DesktopListCard({
+    required this.node,
+    required this.parentId,
+    this.onBrowse,
+  });
+
+  void _addToCart(WidgetRef ref) {
+    ref.read(cartProvider.notifier).addToCart(node, parentNodeId: parentId);
+  }
+
+  String _formatReviews(int count) {
+    if (count >= 1000) return '${(count / 1000).toStringAsFixed(count % 1000 == 0 ? 0 : 1)}K';
+    return '$count';
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final imageUrl = ServiceImageRegistry.resolve(node.imageUrl, node.name);
+    final isBrowsable = onBrowse != null;
+
+    final cartItems = ref.watch(cartProvider);
+    final cartMatch = cartItems.where((i) => i.serviceId == node.id);
+    final cartItem = cartMatch.isEmpty ? null : cartMatch.first;
+    final inCart = cartItem != null;
+    final qty = cartItem?.quantity ?? 0;
+
+    return Container(
+      clipBehavior: Clip.antiAlias,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: _kBorderColor),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // ── Hero image ────────────────────────────────────────────────────
+          AspectRatio(
+            aspectRatio: 16 / 7,
+            child: Image.network(
+              imageUrl,
+              fit: BoxFit.cover,
+              errorBuilder: (_, __, ___) => Container(
+                color: const Color(0xFFEFEFEF),
+                child: Center(
+                  child: Icon(
+                    IconRegistry.resolve(node.iconKey, node.name),
+                    size: 52,
+                    color: _kTextMuted,
+                  ),
+                ),
+              ),
+            ),
+          ),
+
+          // ── Content ───────────────────────────────────────────────────────
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Name + Rating inline + Add button
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    Expanded(
+                      child: Row(
+                        children: [
+                          Flexible(
+                            child: Text(
+                              node.name,
+                              style: GoogleFonts.poppins(
+                                fontSize: 17,
+                                fontWeight: FontWeight.w700,
+                                color: _kTextDark,
+                                height: 1.3,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          if (node.rating > 0) ...[
+                            const SizedBox(width: 10),
+                            const Icon(Icons.star_rounded,
+                                size: 14, color: AppColors.gold),
+                            const SizedBox(width: 3),
+                            Text(
+                              node.rating.toStringAsFixed(1),
+                              style: GoogleFonts.inter(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w700,
+                                color: _kTextDark,
+                              ),
+                            ),
+                            const SizedBox(width: 3),
+                            Text(
+                              '(${_formatReviews(node.reviewCount)})',
+                              style: GoogleFonts.inter(
+                                  fontSize: 12, color: _kTextMuted),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                    if (!isBrowsable) ...[
+                      const SizedBox(width: 14),
+                      if (inCart)
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            _CardQtyBtn(
+                              label: '−',
+                              onTap: () => ref
+                                  .read(cartProvider.notifier)
+                                  .updateQuantity(node.id, qty - 1),
+                            ),
+                            Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 10),
+                              child: Text(
+                                '$qty',
+                                style: GoogleFonts.poppins(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
+                                  color: _kTextDark,
+                                ),
+                              ),
+                            ),
+                            _CardQtyBtn(
+                              label: '+',
+                              onTap: () => ref
+                                  .read(cartProvider.notifier)
+                                  .updateQuantity(node.id, qty + 1),
+                            ),
+                          ],
+                        )
+                      else
+                        MouseRegion(
+                          cursor: SystemMouseCursors.click,
+                          child: GestureDetector(
+                            onTap: () => _addToCart(ref),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 20, vertical: 8),
+                              decoration: BoxDecoration(
+                                color: _kTextDark,
+                                borderRadius: BorderRadius.circular(100),
+                              ),
+                              child: Text(
+                                'Add',
+                                style: GoogleFonts.inter(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.white,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                    ],
+                  ],
+                ),
+
+                // Price
+                if (node.basePrice != null) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    'Starts at ₹${node.basePrice!.toStringAsFixed(0)}',
+                    style: GoogleFonts.poppins(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                      color: _kTextDark,
+                    ),
+                  ),
+                ] else if (isBrowsable) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    '${node.childrenCount} options',
+                    style: GoogleFonts.inter(
+                        fontSize: 13, color: _kTextMuted),
+                  ),
+                ],
+
+                // Divider
+                const SizedBox(height: 14),
+                const Divider(height: 1, thickness: 1, color: _kBorderColor),
+                const SizedBox(height: 12),
+
+                // Description
+                if (node.description?.isNotEmpty == true)
+                  Text(
+                    node.description!,
+                    style: GoogleFonts.inter(
+                        fontSize: 13, color: _kTextMuted, height: 1.6),
+                    maxLines: 4,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+
+                // "View details" gold text link / Browse button
+                const SizedBox(height: 10),
+                isBrowsable
+                    ? Align(
+                        alignment: Alignment.centerRight,
+                        child: MouseRegion(
+                          cursor: SystemMouseCursors.click,
+                          child: GestureDetector(
+                            onTap: onBrowse!,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 20, vertical: 8),
+                              decoration: BoxDecoration(
+                                color: _kTextDark,
+                                borderRadius: BorderRadius.circular(100),
+                              ),
+                              child: Text(
+                                'Browse →',
+                                style: GoogleFonts.inter(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.white,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      )
+                    : MouseRegion(
+                        cursor: SystemMouseCursors.click,
+                        child: GestureDetector(
+                          onTap: () => openCatalogNode(context, node,
+                              parentId: parentId),
+                          child: Text(
+                            'View details',
+                            style: GoogleFonts.inter(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                              color: AppColors.gold,
+                            ),
+                          ),
+                        ),
+                      ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Service card (mobile grid) ────────────────────────────────────────────────
 
 class _ServiceCard extends StatefulWidget {
   final CatalogNodeModel node;
@@ -854,7 +1158,6 @@ class _ServiceCard extends StatefulWidget {
 class _ServiceCardState extends State<_ServiceCard> {
   bool _hovered = false;
 
-  /// Called when the whole card is tapped.
   void _cardTap(BuildContext context) {
     if (widget.onBrowse != null) {
       widget.onBrowse!();
@@ -863,7 +1166,6 @@ class _ServiceCardState extends State<_ServiceCard> {
     }
   }
 
-  /// Called only by leaf-service action buttons (View Details / Add to cart).
   void _openModal(BuildContext context) {
     openCatalogNode(context, widget.node, parentId: widget.parentId);
   }
@@ -1067,6 +1369,42 @@ class _ActionRow extends StatelessWidget {
 }
 
 
+// ── Quantity button for desktop service cards ─────────────────────────────────
+
+class _CardQtyBtn extends StatelessWidget {
+  final String label;
+  final VoidCallback onTap;
+  const _CardQtyBtn({required this.label, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      child: GestureDetector(
+        onTap: onTap,
+        child: Container(
+          width: 32,
+          height: 32,
+          decoration: const BoxDecoration(
+            color: _kTextDark,
+            shape: BoxShape.circle,
+          ),
+          child: Center(
+            child: Text(
+              label,
+              style: GoogleFonts.inter(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+                color: Colors.white,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _FilledBtn extends StatefulWidget {
   final String label;
   final VoidCallback onTap;
@@ -1136,6 +1474,171 @@ class _SliverEmpty extends StatelessWidget {
             style: GoogleFonts.inter(fontSize: 14, color: _kTextMuted),
           ),
         ),
+      ),
+    );
+  }
+}
+
+// ── Desktop cart panel (right column) ────────────────────────────────────────
+
+class _CartPanel extends ConsumerWidget {
+  const _CartPanel();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final items = ref.watch(cartProvider);
+    final total = items.fold(0.0, (sum, i) => sum + i.totalPrice);
+
+    return Container(
+      color: Colors.white,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // Header
+          Container(
+            padding: const EdgeInsets.fromLTRB(20, 24, 20, 16),
+            decoration: const BoxDecoration(
+              border: Border(bottom: BorderSide(color: _kBorderColor)),
+            ),
+            child: Text(
+              'Cart (${items.length})',
+              style: GoogleFonts.poppins(
+                fontSize: 16,
+                fontWeight: FontWeight.w700,
+                color: _kTextDark,
+              ),
+            ),
+          ),
+
+          // Items list
+          Expanded(
+            child: ListView.separated(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+              itemCount: items.length,
+              separatorBuilder: (_, _) => const SizedBox(height: 10),
+              itemBuilder: (ctx, i) => _CartPanelItem(item: items[i]),
+            ),
+          ),
+
+          // Footer: total + CTA
+          Container(
+            padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
+            decoration: const BoxDecoration(
+              border: Border(top: BorderSide(color: _kBorderColor)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      'Total',
+                      style: GoogleFonts.inter(
+                          fontSize: 13, color: _kTextMuted),
+                    ),
+                    Text(
+                      '₹${total.toInt()}',
+                      style: GoogleFonts.poppins(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                        color: _kTextDark,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 14),
+                MouseRegion(
+                  cursor: SystemMouseCursors.click,
+                  child: GestureDetector(
+                    onTap: () => openCart(context),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(vertical: 13),
+                      decoration: BoxDecoration(
+                        color: _kTextDark,
+                        borderRadius: BorderRadius.circular(100),
+                      ),
+                      child: Center(
+                        child: Text(
+                          'View Cart',
+                          style: GoogleFonts.poppins(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CartPanelItem extends ConsumerWidget {
+  final CartItem item;
+  const _CartPanelItem({required this.item});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF7F7F7),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  item.serviceName,
+                  style: GoogleFonts.inter(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: _kTextDark,
+                  ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  item.isAmc
+                      ? '₹${item.unitPrice.toInt()} (AMC)'
+                      : '₹${item.unitPrice.toInt()} × ${item.quantity}',
+                  style:
+                      GoogleFonts.inter(fontSize: 12, color: _kTextMuted),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          MouseRegion(
+            cursor: SystemMouseCursors.click,
+            child: GestureDetector(
+              onTap: () =>
+                  ref.read(cartProvider.notifier).removeFromCart(item.serviceId),
+              child: Container(
+                width: 28,
+                height: 28,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFEEEEEE),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(Icons.close_rounded,
+                    size: 14, color: _kTextMid),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
