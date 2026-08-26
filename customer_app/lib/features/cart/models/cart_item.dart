@@ -1,4 +1,7 @@
+import '../../../models/addon_model.dart';
+
 class CartItem {
+  final String bookingId;
   final String serviceId;
   final String serviceName;
   final String? imageUrl;
@@ -36,8 +39,10 @@ class CartItem {
   final int amcQuantity;
   final bool amcIsRenewal;
   final String? amcPreviousContractId;
+  final List<SelectedAddon> addons;
 
   const CartItem({
+    required this.bookingId,
     required this.serviceId,
     required this.serviceName,
     this.imageUrl,
@@ -61,10 +66,13 @@ class CartItem {
     this.amcQuantity = 1,
     this.amcIsRenewal = false,
     this.amcPreviousContractId,
+    this.addons = const [],
   });
 
   CartItem copyWith({
     int? quantity,
+    double? unitPrice,
+    List<SelectedAddon>? addons,
     String? parentNodeId,
     bool? isAmc,
     String? amcPlanName,
@@ -84,11 +92,13 @@ class CartItem {
     String? amcPreviousContractId,
   }) =>
       CartItem(
+        bookingId: bookingId,
         serviceId: serviceId,
         serviceName: serviceName,
         imageUrl: imageUrl,
-        unitPrice: unitPrice,
+        unitPrice: unitPrice ?? this.unitPrice,
         quantity: quantity ?? this.quantity,
+        addons: addons ?? this.addons,
         minimumOrderAmount: minimumOrderAmount,
         parentNodeId: parentNodeId ?? this.parentNodeId,
         isAmc: isAmc ?? this.isAmc,
@@ -114,6 +124,7 @@ class CartItem {
   double get totalPrice => unitPrice * quantity;
 
   Map<String, dynamic> toJson() => {
+        'bookingId': bookingId,
         'serviceId': serviceId,
         'serviceName': serviceName,
         'imageUrl': imageUrl,
@@ -139,10 +150,15 @@ class CartItem {
         if (amcQuantity != 1) 'amcQuantity': amcQuantity,
         if (amcIsRenewal) 'amcIsRenewal': true,
         if (amcPreviousContractId != null) 'amcPreviousContractId': amcPreviousContractId,
+        if (addons.isNotEmpty)
+          'addons': addons.map((a) => a.toJson()).toList(),
       };
 
-  factory CartItem.fromJson(Map<String, dynamic> json) => CartItem(
-        serviceId: json['serviceId'] as String,
+  factory CartItem.fromJson(Map<String, dynamic> json) {
+    final serviceId = json['serviceId'] as String;
+    return CartItem(
+        bookingId: json['bookingId'] as String? ?? '${serviceId}_${DateTime.now().millisecondsSinceEpoch}',
+        serviceId: serviceId,
         serviceName: json['serviceName'] as String,
         imageUrl: json['imageUrl'] as String?,
         unitPrice: (json['unitPrice'] as num).toDouble(),
@@ -165,5 +181,10 @@ class CartItem {
         amcQuantity: (json['amcQuantity'] as num?)?.toInt() ?? 1,
         amcIsRenewal: json['amcIsRenewal'] as bool? ?? false,
         amcPreviousContractId: json['amcPreviousContractId'] as String?,
+        addons: (json['addons'] as List<dynamic>?)
+                ?.map((e) => SelectedAddon.fromJson(e as Map<String, dynamic>))
+                .toList() ??
+            const [],
       );
+  }
 }

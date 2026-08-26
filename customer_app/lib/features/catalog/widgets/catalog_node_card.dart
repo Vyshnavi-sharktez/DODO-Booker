@@ -137,6 +137,35 @@ class _CardInfo extends StatelessWidget {
               ),
             ),
 
+            // Loyalty earn badge — directly below name, before price
+            if (node.isLeafBookable && node.loyaltyEarnEnabled)
+              Consumer(
+                builder: (_, ref, _) {
+                  final settings =
+                      ref.watch(loyaltySettingsProvider).valueOrNull;
+                  if (settings == null ||
+                      !settings.isEnabled ||
+                      !settings.earnEnabled) {
+                    return const SizedBox.shrink();
+                  }
+                  final cfgAsync = ref.watch(resolvedLoyaltyConfigProvider((
+                    serviceId: node.id,
+                    parentNodeId: node.parentId,
+                  )));
+                  if (!cfgAsync.hasValue) return const SizedBox.shrink();
+                  final pts = computeLoyaltyPoints(
+                    cfgAsync.valueOrNull,
+                    settings,
+                    node.basePrice ?? 0,
+                  );
+                  if (pts <= 0) return const SizedBox.shrink();
+                  return Padding(
+                    padding: const EdgeInsets.only(top: 5),
+                    child: LoyaltyEarnBadge(points: pts),
+                  );
+                },
+              ),
+
             const SizedBox(height: 8),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -189,36 +218,6 @@ class _CardInfo extends StatelessWidget {
                 ),
               ],
             ),
-
-            // Loyalty earn badge — uses the catalog-scoped resolved config so
-            // parent-level loyalty rules (e.g. "Fixed 100 pts") are inherited.
-            if (node.isLeafBookable && node.loyaltyEarnEnabled)
-              Consumer(
-                builder: (_, ref, _) {
-                  final settings =
-                      ref.watch(loyaltySettingsProvider).valueOrNull;
-                  if (settings == null ||
-                      !settings.isEnabled ||
-                      !settings.earnEnabled) {
-                    return const SizedBox.shrink();
-                  }
-                  final cfgAsync = ref.watch(resolvedLoyaltyConfigProvider((
-                    serviceId: node.id,
-                    parentNodeId: node.parentId,
-                  )));
-                  if (!cfgAsync.hasValue) return const SizedBox.shrink();
-                  final pts = computeLoyaltyPoints(
-                    cfgAsync.valueOrNull,
-                    settings,
-                    node.basePrice ?? 0,
-                  );
-                  if (pts <= 0) return const SizedBox.shrink();
-                  return Padding(
-                    padding: const EdgeInsets.only(top: 5),
-                    child: _LoyaltyEarnBadge(points: pts),
-                  );
-                },
-              ),
           ],
         ),
       ),
@@ -228,29 +227,29 @@ class _CardInfo extends StatelessWidget {
 
 // ── Loyalty earn badge ────────────────────────────────────────────────────────
 
-class _LoyaltyEarnBadge extends StatelessWidget {
+class LoyaltyEarnBadge extends StatelessWidget {
   final int points;
-  const _LoyaltyEarnBadge({required this.points});
+  const LoyaltyEarnBadge({required this.points});
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
       decoration: BoxDecoration(
         color: AppColors.gold.withAlpha(22),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: AppColors.gold.withAlpha(60), width: 0.5),
+        border: Border.all(color: AppColors.gold.withAlpha(80), width: 1),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           const Icon(Icons.workspace_premium_rounded,
-              size: 10, color: AppColors.gold),
-          const SizedBox(width: 3),
+              size: 14, color: AppColors.gold),
+          const SizedBox(width: 5),
           Text(
-            'Earn $points Loyalty Points',
+            'Earn $points loyalty points (₹$points)',
             style: const TextStyle(
-              fontSize: 9,
+              fontSize: 12,
               fontWeight: FontWeight.w700,
               color: AppColors.gold,
               height: 1.2,

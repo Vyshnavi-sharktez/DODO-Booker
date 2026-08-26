@@ -39,6 +39,12 @@ class SelectedAddon {
         'addon_name': addonName,
         'addon_price': addonPrice,
       };
+
+  factory SelectedAddon.fromJson(Map<String, dynamic> json) => SelectedAddon(
+        addonId: json['addon_id'] as String,
+        addonName: json['addon_name'] as String,
+        addonPrice: (json['addon_price'] as num).toDouble(),
+      );
 }
 
 /// Builds [SelectedAddon] list from the full catalog and a set of selected IDs.

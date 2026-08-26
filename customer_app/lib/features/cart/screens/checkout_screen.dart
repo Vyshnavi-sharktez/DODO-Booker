@@ -1594,14 +1594,14 @@ class _PriceSummary extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Earn $earnedPoints DODO Points',
+                        'Earn $earnedPoints loyalty points (₹$earnedPoints)',
                         style: tt.bodySmall?.copyWith(
                           color: const Color(0xFFB8860B),
-                          fontWeight: FontWeight.w600,
+                          fontWeight: FontWeight.w700,
                         ),
                       ),
                       Text(
-                        'Complete this booking to receive your points.',
+                        'Added to your wallet after booking.',
                         style: tt.labelSmall?.copyWith(
                           color: const Color(0xFFB8860B).withAlpha(180),
                         ),

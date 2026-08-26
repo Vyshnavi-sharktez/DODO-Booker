@@ -6,7 +6,48 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../models/cart_item.dart';
 import '../../../features/catalog/models/catalog_node_model.dart';
 import '../../../features/amc/models/amc_plan_model.dart';
+import '../../../models/addon_model.dart';
 import '../services/cart_sync_service.dart';
+
+/// Composite key for merging cart items by catalog occurrence (serviceId + parentNodeId).
+String _cartMergeKey(String serviceId, String? parentNodeId) =>
+    '$serviceId|${parentNodeId ?? ''}';
+
+/// Returns the first CartItem whose configuration exactly matches the given
+/// parameters, or null if no match exists.
+///
+/// Parent scoping: when [parentNodeId] is non-null, only items whose own
+/// parentNodeId matches (or is null — backward-compatible for legacy items
+/// stored without parentNodeId) are considered.
+CartItem? findMatchingCartItem(
+  List<CartItem> items, {
+  required String serviceId,
+  required bool isAmc,
+  String? amcPlanId,
+  required Set<String> addonIds,
+  required double effectiveBasePrice,
+  String? parentNodeId,
+}) {
+  for (final item in items) {
+    if (item.serviceId != serviceId) continue;
+    if (item.isAmc != isAmc) continue;
+    // Skip items that belong to a different known catalog occurrence.
+    if (parentNodeId != null &&
+        item.parentNodeId != null &&
+        item.parentNodeId != parentNodeId) continue;
+    if (isAmc) {
+      if (item.amcPlanId == amcPlanId) return item;
+    } else {
+      final itemAddonIds = item.addons.map((a) => a.addonId).toSet();
+      if (itemAddonIds.length != addonIds.length) continue;
+      if (!itemAddonIds.containsAll(addonIds)) continue;
+      final itemEffBase = item.unitPrice - totalAddonsPrice(item.addons);
+      if ((itemEffBase - effectiveBasePrice).abs() > 0.01) continue;
+      return item;
+    }
+  }
+  return null;
+}
 
 class CartNotifier extends StateNotifier<List<CartItem>> {
   static const _storageKey = 'dodo_cart_v1';
@@ -52,24 +93,30 @@ class CartNotifier extends StateNotifier<List<CartItem>> {
     final remoteItems = await _sync.fetchAll();
     if (remoteItems.isEmpty && state.isEmpty) return;
 
+    // Key by (serviceId, parentNodeId) so shared-node occurrences stay separate.
     final merged = <String, CartItem>{
-      for (final item in state) item.serviceId: item,
+      for (final item in state)
+        _cartMergeKey(item.serviceId, item.parentNodeId): item,
     };
 
-    // Remote wins for business data; local parentNodeId and AMC metadata are
-    // preserved because CartSyncService never stores or returns them.
+    // Remote wins for business data; local AMC metadata is preserved because
+    // CartSyncService does not store AMC fields. parentNodeId is authoritative
+    // from the remote row (it now persists parent_node_id).
     for (final remote in remoteItems) {
-      final local = merged[remote.serviceId];
-      debugPrint('[DODO][CartSync][loadFromRemote] merging serviceId=${remote.serviceId}  '
+      final key = _cartMergeKey(remote.serviceId, remote.parentNodeId);
+      final local = merged[key];
+      debugPrint('[DODO][CartSync][loadFromRemote] merging key=$key  '
           'local.parentNodeId=${local?.parentNodeId}  remote.parentNodeId=${remote.parentNodeId}');
-      merged[remote.serviceId] = CartItem(
+      merged[key] = CartItem(
+        bookingId: local?.bookingId ??
+            '${remote.serviceId}_${remote.parentNodeId ?? ''}_${DateTime.now().millisecondsSinceEpoch}',
         serviceId: remote.serviceId,
         serviceName: remote.serviceName,
         imageUrl: remote.imageUrl ?? local?.imageUrl,
         unitPrice: remote.unitPrice,
         quantity: remote.quantity,
         minimumOrderAmount: remote.minimumOrderAmount ?? local?.minimumOrderAmount,
-        parentNodeId: local?.parentNodeId ?? remote.parentNodeId,
+        parentNodeId: remote.parentNodeId ?? local?.parentNodeId,
         isAmc: local?.isAmc ?? false,
         amcPlanName: local?.amcPlanName,
         amcRecurrenceInterval: local?.amcRecurrenceInterval,
@@ -90,9 +137,11 @@ class CartNotifier extends StateNotifier<List<CartItem>> {
     }
 
     // Local-only items: push to remote
-    final remoteIds = {for (final r in remoteItems) r.serviceId};
+    final remoteKeys = {
+      for (final r in remoteItems) _cartMergeKey(r.serviceId, r.parentNodeId)
+    };
     for (final local in state) {
-      if (!remoteIds.contains(local.serviceId)) {
+      if (!remoteKeys.contains(_cartMergeKey(local.serviceId, local.parentNodeId))) {
         unawaited(_sync.upsertItem(local));
       }
     }
@@ -111,89 +160,104 @@ class CartNotifier extends StateNotifier<List<CartItem>> {
     int amcQuantity = 1,
     bool amcIsRenewal = false,
     String? amcPreviousContractId,
+    List<SelectedAddon> addons = const [],
   }) {
     debugPrint('[DODO][CartSync][1] addToCart() entered — serviceId=${service.id} name=${service.name} parentNodeId=$parentNodeId isAmc=${amcPlan != null}');
-    final idx = state.indexWhere((item) => item.serviceId == service.id);
-    if (idx >= 0) {
-      debugPrint('[DODO][CartSync][1a] existing item found at idx=$idx  '
-          'old parentNodeId=${state[idx].parentNodeId}  new parentNodeId=$parentNodeId');
-      state = [
-        for (int i = 0; i < state.length; i++)
-          if (i == idx)
-            state[i].copyWith(
-              quantity: state[i].quantity + 1,
-              parentNodeId: parentNodeId,
-              isAmc: amcPlan != null,
-              amcPlanName: amcPlan?.planName,
-              amcRecurrenceInterval: amcPlan?.serviceIntervalLabel,
-              amcPlanId: amcPlan?.id,
-              amcPricePerVisit: amcPlan?.pricePerVisit,
-              amcNumVisits: amcPlan?.numVisits,
-              amcOriginalTotal: amcPlan?.originalTotal,
-              amcDiscountType: amcPlan?.discountType,
-              amcDiscountValue: amcPlan?.discountValue,
-              amcDiscountAmount: amcPlan?.discountAmount,
-              amcFinalPrice: amcPlan?.finalPrice,
-              amcPackageDuration: amcPlan?.packageDuration,
-              amcServiceInterval: amcPlan?.serviceInterval,
-              amcQuantity: amcPlan != null ? amcQuantity : 1,
-              amcIsRenewal: amcIsRenewal,
-              amcPreviousContractId: amcPreviousContractId,
-            )
-          else
-            state[i],
-      ];
-    } else {
-      final unitPrice = amcPlan != null
-          ? amcPlan.finalPrice * amcQuantity
-          : (service.basePrice ?? 0.0) + priceAdjustment;
-      state = [
-        ...state,
-        CartItem(
-          serviceId: service.id,
-          serviceName: service.name,
-          imageUrl: service.imageUrl,
-          unitPrice: unitPrice,
-          quantity: 1,
-          minimumOrderAmount: amcPlan != null ? null : service.minimumOrderAmount,
-          parentNodeId: parentNodeId,
-          isAmc: amcPlan != null,
-          amcPlanName: amcPlan?.planName,
-          amcRecurrenceInterval: amcPlan?.serviceIntervalLabel,
-          amcPlanId: amcPlan?.id,
-          amcPricePerVisit: amcPlan?.pricePerVisit,
-          amcNumVisits: amcPlan?.numVisits,
-          amcOriginalTotal: amcPlan?.originalTotal,
-          amcDiscountType: amcPlan?.discountType,
-          amcDiscountValue: amcPlan?.discountValue,
-          amcDiscountAmount: amcPlan?.discountAmount,
-          amcFinalPrice: amcPlan?.finalPrice,
-          amcPackageDuration: amcPlan?.packageDuration,
-          amcServiceInterval: amcPlan?.serviceInterval,
-          amcQuantity: amcPlan != null ? amcQuantity : 1,
-          amcIsRenewal: amcIsRenewal,
-          amcPreviousContractId: amcPreviousContractId,
-        ),
-      ];
+    final isAmc = amcPlan != null;
+    final unitPrice = isAmc
+        ? amcPlan.finalPrice * amcQuantity
+        : (service.basePrice ?? 0.0) + priceAdjustment;
+
+    // Merge into the existing CartItem if the configuration is identical.
+    final addonIds = addons.map((a) => a.addonId).toSet();
+    final effectiveBase = isAmc ? 0.0 : unitPrice - totalAddonsPrice(addons);
+    final existing = findMatchingCartItem(
+      state,
+      serviceId: service.id,
+      isAmc: isAmc,
+      amcPlanId: amcPlan?.id,
+      addonIds: addonIds,
+      effectiveBasePrice: effectiveBase,
+      parentNodeId: parentNodeId,
+    );
+    if (existing != null) {
+      updateQuantity(existing.bookingId, existing.quantity + 1);
+      return;
     }
+
+    final bookingId = '${service.id}_${DateTime.now().millisecondsSinceEpoch}';
+    final newItem = CartItem(
+      bookingId: bookingId,
+      serviceId: service.id,
+      serviceName: service.name,
+      imageUrl: service.imageUrl,
+      unitPrice: unitPrice,
+      quantity: 1,
+      minimumOrderAmount: isAmc ? null : service.minimumOrderAmount,
+      parentNodeId: parentNodeId,
+      isAmc: isAmc,
+      amcPlanName: amcPlan?.planName,
+      amcRecurrenceInterval: amcPlan?.serviceIntervalLabel,
+      amcPlanId: amcPlan?.id,
+      amcPricePerVisit: amcPlan?.pricePerVisit,
+      amcNumVisits: amcPlan?.numVisits,
+      amcOriginalTotal: amcPlan?.originalTotal,
+      amcDiscountType: amcPlan?.discountType,
+      amcDiscountValue: amcPlan?.discountValue,
+      amcDiscountAmount: amcPlan?.discountAmount,
+      amcFinalPrice: amcPlan?.finalPrice,
+      amcPackageDuration: amcPlan?.packageDuration,
+      amcServiceInterval: amcPlan?.serviceInterval,
+      amcQuantity: isAmc ? amcQuantity : 1,
+      amcIsRenewal: amcIsRenewal,
+      amcPreviousContractId: amcPreviousContractId,
+      addons: addons,
+    );
+    state = [...state, newItem];
     _save();
-    unawaited(_sync.upsertItem(state.firstWhere((i) => i.serviceId == service.id)));
+    unawaited(_sync.upsertItem(newItem));
   }
 
-  void removeFromCart(String serviceId) {
-    state = state.where((item) => item.serviceId != serviceId).toList();
+  void removeFromCart(String bookingId) {
+    final item = state.firstWhere((i) => i.bookingId == bookingId,
+        orElse: () => throw StateError('bookingId not found: $bookingId'));
+    final serviceId = item.serviceId;
+    final parentNodeId = item.parentNodeId;
+    state = state.where((i) => i.bookingId != bookingId).toList();
     _save();
-    unawaited(_sync.deleteItem(serviceId));
+    // Delete the remote row only when no other local item shares the same
+    // catalog occurrence (serviceId + parentNodeId).
+    if (!state.any((i) =>
+        i.serviceId == serviceId && i.parentNodeId == parentNodeId)) {
+      unawaited(_sync.deleteItem(serviceId, parentNodeId));
+    }
   }
 
-  void updateQuantity(String serviceId, int quantity) {
+  void updateAddons(
+    String bookingId,
+    List<SelectedAddon> addons,
+    double newUnitPrice,
+  ) {
+    state = [
+      for (final item in state)
+        if (item.bookingId == bookingId)
+          item.copyWith(unitPrice: newUnitPrice, addons: addons)
+        else
+          item,
+    ];
+    _save();
+    final updated = state.firstWhere((i) => i.bookingId == bookingId);
+    unawaited(_sync.upsertItem(updated));
+  }
+
+  void updateQuantity(String bookingId, int quantity) {
     if (quantity <= 0) {
-      removeFromCart(serviceId);
+      removeFromCart(bookingId);
       return;
     }
     state = [
       for (final item in state)
-        if (item.serviceId == serviceId)
+        if (item.bookingId == bookingId)
           item.copyWith(
             quantity: quantity,
             amcQuantity: item.isAmc && item.amcIsRenewal ? quantity : null,
@@ -201,7 +265,7 @@ class CartNotifier extends StateNotifier<List<CartItem>> {
         else item,
     ];
     _save();
-    final updated = state.firstWhere((i) => i.serviceId == serviceId);
+    final updated = state.firstWhere((i) => i.bookingId == bookingId);
     unawaited(_sync.upsertItem(updated));
   }
 

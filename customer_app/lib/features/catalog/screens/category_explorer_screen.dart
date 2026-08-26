@@ -12,6 +12,9 @@ import '../../cart/utils/cart_launcher.dart';
 import '../models/catalog_node_model.dart';
 import '../providers/catalog_providers.dart';
 import '../utils/catalog_launcher.dart';
+import '../widgets/catalog_node_card.dart';
+import '../../loyalty/providers/loyalty_providers.dart';
+import '../../loyalty/utils/loyalty_utils.dart';
 import 'package:go_router/go_router.dart';
 
 // ── Constants ────────────────────────────────────────────────────────────────
@@ -907,7 +910,9 @@ class _DesktopListCard extends ConsumerWidget {
     final isBrowsable = onBrowse != null;
 
     final cartItems = ref.watch(cartProvider);
-    final cartMatch = cartItems.where((i) => i.serviceId == node.id);
+    final cartMatch = cartItems.where((i) =>
+        i.serviceId == node.id &&
+        (i.parentNodeId == null || i.parentNodeId == parentId));
     final cartItem = cartMatch.isEmpty ? null : cartMatch.first;
     final inCart = cartItem != null;
     final qty = cartItem?.quantity ?? 0;
@@ -993,7 +998,25 @@ class _DesktopListCard extends ConsumerWidget {
                     ),
                     if (!isBrowsable) ...[
                       const SizedBox(width: 14),
-                      if (inCart)
+                      if (node.relAvailabilityStatus == 'unavailable' ||
+                          node.relAvailabilityStatus == 'hidden')
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 20, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFEFEFEF),
+                            borderRadius: BorderRadius.circular(100),
+                          ),
+                          child: Text(
+                            'Not Available',
+                            style: GoogleFonts.inter(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                              color: _kTextMuted,
+                            ),
+                          ),
+                        )
+                      else if (inCart)
                         Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
@@ -1001,7 +1024,7 @@ class _DesktopListCard extends ConsumerWidget {
                               label: '−',
                               onTap: () => ref
                                   .read(cartProvider.notifier)
-                                  .updateQuantity(node.id, qty - 1),
+                                  .updateQuantity(cartItem.bookingId, qty - 1),
                             ),
                             Padding(
                               padding: const EdgeInsets.symmetric(horizontal: 10),
@@ -1018,7 +1041,7 @@ class _DesktopListCard extends ConsumerWidget {
                               label: '+',
                               onTap: () => ref
                                   .read(cartProvider.notifier)
-                                  .updateQuantity(node.id, qty + 1),
+                                  .updateQuantity(cartItem.bookingId, qty + 1),
                             ),
                           ],
                         )
@@ -1048,6 +1071,36 @@ class _DesktopListCard extends ConsumerWidget {
                     ],
                   ],
                 ),
+
+                // Loyalty earn badge
+                if (node.isLeafBookable && node.loyaltyEarnEnabled)
+                  Consumer(
+                    builder: (_, lr, _) {
+                      final settings =
+                          lr.watch(loyaltySettingsProvider).valueOrNull;
+                      if (settings == null ||
+                          !settings.isEnabled ||
+                          !settings.earnEnabled) {
+                        return const SizedBox.shrink();
+                      }
+                      final cfgAsync =
+                          lr.watch(resolvedLoyaltyConfigProvider((
+                        serviceId: node.id,
+                        parentNodeId: parentId,
+                      )));
+                      if (!cfgAsync.hasValue) return const SizedBox.shrink();
+                      final pts = computeLoyaltyPoints(
+                        cfgAsync.valueOrNull,
+                        settings,
+                        node.basePrice ?? 0,
+                      );
+                      if (pts <= 0) return const SizedBox.shrink();
+                      return Padding(
+                        padding: const EdgeInsets.only(top: 5),
+                        child: LoyaltyEarnBadge(points: pts),
+                      );
+                    },
+                  ),
 
                 // Price
                 if (node.basePrice != null) ...[
@@ -1580,66 +1633,207 @@ class _CartPanel extends ConsumerWidget {
   }
 }
 
-class _CartPanelItem extends ConsumerWidget {
+class _CartPanelItem extends ConsumerStatefulWidget {
   final CartItem item;
   const _CartPanelItem({required this.item});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF7F7F7),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  item.serviceName,
-                  style: GoogleFonts.inter(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    color: _kTextDark,
+  ConsumerState<_CartPanelItem> createState() => _CartPanelItemState();
+}
+
+class _CartPanelItemState extends ConsumerState<_CartPanelItem> {
+  bool _expanded = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final item = widget.item;
+    final addonsTotal = item.addons.fold(0.0, (s, a) => s + a.addonPrice);
+    final basePrice = item.unitPrice - addonsTotal;
+
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () => setState(() => _expanded = !_expanded),
+        child: Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: const Color(0xFFF7F7F7),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // ── Collapsed header (always visible) ──────────────────────
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          item.serviceName,
+                          style: GoogleFonts.inter(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: _kTextDark,
+                          ),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          item.isAmc
+                              ? '₹${item.unitPrice.toInt()} (AMC)'
+                              : '₹${item.unitPrice.toInt()} × ${item.quantity}',
+                          style: GoogleFonts.inter(
+                              fontSize: 12, color: _kTextMuted),
+                        ),
+                      ],
+                    ),
                   ),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  item.isAmc
-                      ? '₹${item.unitPrice.toInt()} (AMC)'
-                      : '₹${item.unitPrice.toInt()} × ${item.quantity}',
-                  style:
-                      GoogleFonts.inter(fontSize: 12, color: _kTextMuted),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 8),
-          MouseRegion(
-            cursor: SystemMouseCursors.click,
-            child: GestureDetector(
-              onTap: () =>
-                  ref.read(cartProvider.notifier).removeFromCart(item.serviceId),
-              child: Container(
-                width: 28,
-                height: 28,
-                decoration: BoxDecoration(
-                  color: const Color(0xFFEEEEEE),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: const Icon(Icons.close_rounded,
-                    size: 14, color: _kTextMid),
+                  const SizedBox(width: 6),
+                  AnimatedRotation(
+                    turns: _expanded ? 0.5 : 0.0,
+                    duration: const Duration(milliseconds: 200),
+                    child: const Icon(
+                      Icons.keyboard_arrow_down_rounded,
+                      size: 16,
+                      color: _kTextMuted,
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                  GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: () => ref
+                        .read(cartProvider.notifier)
+                        .removeFromCart(item.bookingId),
+                    child: Container(
+                      width: 28,
+                      height: 28,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFEEEEEE),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: const Icon(Icons.close_rounded,
+                          size: 14, color: _kTextMid),
+                    ),
+                  ),
+                ],
               ),
-            ),
+
+              // ── Expanded breakdown ────────────────────────────────────
+              if (_expanded) ...[
+                const SizedBox(height: 10),
+                const Divider(height: 0, thickness: 0.8, color: _kBorderColor),
+                const SizedBox(height: 10),
+
+                if (item.isAmc) ...[
+                  _PanelBreakdownRow(
+                    label: item.amcPlanName?.isNotEmpty == true
+                        ? item.amcPlanName!
+                        : 'AMC Plan',
+                    value:
+                        '₹${(item.amcFinalPrice ?? item.unitPrice).toInt()}',
+                  ),
+                  if ((item.amcRecurrenceInterval?.isNotEmpty == true) ||
+                      item.amcNumVisits != null)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 3),
+                      child: Text(
+                        [
+                          if (item.amcRecurrenceInterval?.isNotEmpty == true)
+                            item.amcRecurrenceInterval!,
+                          if (item.amcNumVisits != null)
+                            '${item.amcNumVisits} visits',
+                        ].join(' · '),
+                        style: GoogleFonts.inter(
+                            fontSize: 10, color: _kTextMuted),
+                      ),
+                    ),
+                  if (item.amcIsRenewal)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 3),
+                      child: Text(
+                        'Renewal',
+                        style: GoogleFonts.inter(
+                          fontSize: 10,
+                          color: _kTextMid,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  if (item.amcQuantity > 1) ...[
+                    const SizedBox(height: 4),
+                    _PanelBreakdownRow(
+                      label: '× ${item.amcQuantity} units',
+                      value: '₹${item.unitPrice.toInt()}',
+                      muted: true,
+                    ),
+                  ],
+                ] else ...[
+                  _PanelBreakdownRow(
+                    label: 'Base service',
+                    value: '₹${basePrice.toInt()}',
+                  ),
+                  ...item.addons.map((a) => Padding(
+                        padding: const EdgeInsets.only(top: 4),
+                        child: _PanelBreakdownRow(
+                          label: '+ ${a.addonName}',
+                          value: '₹${a.addonPrice.toInt()}',
+                          muted: true,
+                        ),
+                      )),
+                  if (item.quantity > 1) ...[
+                    const SizedBox(height: 4),
+                    _PanelBreakdownRow(
+                      label: 'Qty: ${item.quantity}',
+                      value: '₹${item.totalPrice.toInt()} total',
+                      muted: true,
+                    ),
+                  ],
+                ],
+              ],
+            ],
           ),
-        ],
+        ),
       ),
+    );
+  }
+}
+
+class _PanelBreakdownRow extends StatelessWidget {
+  final String label;
+  final String value;
+  final bool muted;
+
+  const _PanelBreakdownRow({
+    required this.label,
+    required this.value,
+    this.muted = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final color = muted ? _kTextMuted : _kTextDark;
+    return Row(
+      children: [
+        Expanded(
+          child: Text(
+            label,
+            style: GoogleFonts.inter(fontSize: 11, color: color),
+          ),
+        ),
+        Text(
+          value,
+          style: GoogleFonts.inter(
+            fontSize: 11,
+            color: color,
+            fontWeight: muted ? FontWeight.w400 : FontWeight.w600,
+          ),
+        ),
+      ],
     );
   }
 }

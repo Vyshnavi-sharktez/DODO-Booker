@@ -44,6 +44,11 @@ class CatalogNodeModel {
   /// under each parent independently.
   final String relAvailabilityStatus;
 
+  /// Customer-facing message for this specific relationship edge when
+  /// relAvailabilityStatus is 'unavailable'. Populated from
+  /// get_catalog_node_children; null for direct/root fetches.
+  final String? relUnavailabilityMessage;
+
   // ── Loyalty earn config (mirrors catalog_nodes.loyalty_earn_* columns) ──────
   final bool loyaltyEarnEnabled;
   /// 'global' | 'fixed' | 'percentage'
@@ -83,6 +88,7 @@ class CatalogNodeModel {
     this.availabilityStatus = 'active',
     this.unavailabilityMessage,
     this.relAvailabilityStatus = 'active',
+    this.relUnavailabilityMessage,
     this.loyaltyEarnEnabled = true,
     this.loyaltyEarnRule = 'global',
     this.loyaltyFixedPoints,
@@ -131,6 +137,7 @@ class CatalogNodeModel {
       availabilityStatus: availabilityStatus,
       unavailabilityMessage: unavailabilityMessage,
       relAvailabilityStatus: relAvailabilityStatus,
+      relUnavailabilityMessage: relUnavailabilityMessage,
       loyaltyEarnEnabled: loyaltyEarnEnabled,
       loyaltyEarnRule: loyaltyEarnRule,
       loyaltyFixedPoints: loyaltyFixedPoints,
@@ -188,6 +195,7 @@ class CatalogNodeModel {
       unavailabilityMessage: map['unavailability_message'] as String?,
       relAvailabilityStatus: (map['rel_availability_status'] as String?) ??
           (map['availability_status'] as String? ?? 'active'),
+      relUnavailabilityMessage: map['rel_unavailability_message'] as String?,
       loyaltyEarnEnabled: (map['loyalty_earn_enabled'] as bool?) ?? true,
       loyaltyEarnRule: (map['loyalty_earn_rule'] as String?) ?? 'global',
       loyaltyFixedPoints: map['loyalty_fixed_points'] as int?,

@@ -88,6 +88,11 @@ final appRouter = GoRouter(
       builder: (context, state) {
         final nodeId = state.pathParameters['nodeId']!;
         final extra = state.extra;
+        if (extra is Map<String, dynamic> && extra['node'] is CatalogNodeModel) {
+          final node = extra['node'] as CatalogNodeModel;
+          final parentNodeId = extra['parentNodeId'] as String?;
+          return CatalogNodeScreen(node: node, parentNodeId: parentNodeId);
+        }
         if (extra is CatalogNodeModel) {
           return CatalogNodeScreen(node: extra);
         }
