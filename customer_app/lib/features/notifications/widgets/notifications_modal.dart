@@ -5,7 +5,7 @@ import '../../../core/constants/app_colors.dart';
 import '../../../core/widgets/app_modal_dialog.dart';
 import '../../../routes/app_router.dart';
 import '../../catalog/providers/catalog_providers.dart';
-import '../../catalog/widgets/catalog_service_detail_web_modal.dart';
+import '../../catalog/utils/catalog_launcher.dart';
 import '../models/notification_model.dart';
 import '../services/notification_providers.dart';
 
@@ -56,16 +56,11 @@ class _NotificationsModalState extends ConsumerState<NotificationsModal> {
         n.entityType == 'customer_question' ||
         n.notificationType == 'question_answered') {
       final serviceId = n.entityId!;
-      final questionId = n.customerQuestionId;
       final targetContext = Navigator.of(context).context;
       Navigator.of(context).pop();
       final node = await ref.read(catalogServiceProvider).fetchNode(serviceId);
       if (node != null && targetContext.mounted) {
-        CatalogServiceDetailWebModal.show(
-          targetContext,
-          node,
-          initialCustomerQuestionId: questionId,
-        );
+        openCatalogNode(targetContext, node);
       }
     }
   }

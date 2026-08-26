@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -205,16 +206,284 @@ class _EmptyCart extends StatelessWidget {
 
 // ── Cart item card ─────────────────────────────────────────────────────────────
 
-class _CartItemCard extends ConsumerWidget {
+class _CartItemCard extends ConsumerStatefulWidget {
   final CartItem item;
 
   const _CartItemCard({required this.item});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_CartItemCard> createState() => _CartItemCardState();
+}
+
+class _CartItemCardState extends ConsumerState<_CartItemCard> {
+  bool _expanded = false;
+
+  @override
+  Widget build(BuildContext context) {
     final tt = Theme.of(context).textTheme;
     final notifier = ref.read(cartProvider.notifier);
+    final item = widget.item;
 
+    if (!kIsWeb) {
+      return _mobileCard(context, tt, notifier, item);
+    }
+
+    return _webCard(context, tt, notifier, item);
+  }
+
+  // ── Web: collapsible card ─────────────────────────────────────────────────
+
+  Widget _webCard(
+    BuildContext context,
+    TextTheme tt,
+    CartNotifier notifier,
+    CartItem item,
+  ) {
+    final addonsTotal = item.addons.fold(0.0, (s, a) => s + a.addonPrice);
+    final basePrice = item.unitPrice - addonsTotal;
+
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.border, width: 0.8),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withAlpha(6),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // ── Clickable collapsed header ──────────────────────────────
+          MouseRegion(
+            cursor: SystemMouseCursors.click,
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: () => setState(() => _expanded = !_expanded),
+              child: Padding(
+                padding: const EdgeInsets.all(12),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    _ServiceThumbnail(imageUrl: item.imageUrl),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            item.serviceName,
+                            style: tt.bodyMedium
+                                ?.copyWith(fontWeight: FontWeight.w600),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          const SizedBox(height: 4),
+                          if (item.isAmc)
+                            Row(
+                              children: [
+                                _AmcBadge(tt: tt),
+                                if (item.amcRecurrenceInterval != null &&
+                                    item.amcRecurrenceInterval!.isNotEmpty) ...[
+                                  const SizedBox(width: 6),
+                                  Text(
+                                    item.amcRecurrenceInterval!,
+                                    style: tt.labelSmall?.copyWith(
+                                        color: AppColors.textHint),
+                                  ),
+                                ],
+                              ],
+                            )
+                          else
+                            Text(
+                              '₹${item.unitPrice.toInt()} per unit',
+                              style: tt.labelSmall
+                                  ?.copyWith(color: AppColors.textSecondary),
+                            ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Text(
+                          '₹${item.totalPrice.toInt()}',
+                          style: tt.titleSmall?.copyWith(
+                            color: AppColors.primary,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                        if (item.quantity > 1)
+                          Text(
+                            '× ${item.quantity}',
+                            style: tt.labelSmall
+                                ?.copyWith(color: AppColors.textHint),
+                          ),
+                      ],
+                    ),
+                    const SizedBox(width: 6),
+                    AnimatedRotation(
+                      turns: _expanded ? 0.5 : 0.0,
+                      duration: const Duration(milliseconds: 200),
+                      child: const Icon(
+                        Icons.keyboard_arrow_down_rounded,
+                        size: 20,
+                        color: AppColors.textHint,
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTap: () => notifier.removeFromCart(item.bookingId),
+                      child: const Padding(
+                        padding: EdgeInsets.all(4),
+                        child: Icon(
+                          Icons.delete_outline_rounded,
+                          size: 20,
+                          color: AppColors.textHint,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+
+          // ── Expanded breakdown ──────────────────────────────────────
+          if (_expanded) ...[
+            const Divider(color: AppColors.divider, height: 0, thickness: 0.8),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
+              child: Column(
+                children: [
+                  // Price line items
+                  if (item.isAmc) ...[
+                    _BreakdownRow(
+                      label: item.amcPlanName?.isNotEmpty == true
+                          ? item.amcPlanName!
+                          : 'AMC Plan',
+                      value: '₹${(item.amcFinalPrice ?? item.unitPrice).toInt()}',
+                      tt: tt,
+                    ),
+                    if ((item.amcRecurrenceInterval?.isNotEmpty == true) ||
+                        item.amcNumVisits != null)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 3),
+                        child: Align(
+                          alignment: Alignment.centerLeft,
+                          child: Text(
+                            [
+                              if (item.amcRecurrenceInterval?.isNotEmpty == true)
+                                item.amcRecurrenceInterval!,
+                              if (item.amcNumVisits != null)
+                                '${item.amcNumVisits} visits',
+                            ].join(' · '),
+                            style: tt.labelSmall
+                                ?.copyWith(color: AppColors.textHint),
+                          ),
+                        ),
+                      ),
+                    if (item.amcIsRenewal)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 3),
+                        child: Align(
+                          alignment: Alignment.centerLeft,
+                          child: Text(
+                            'Renewal',
+                            style: tt.labelSmall?.copyWith(
+                              color: AppColors.primary,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ),
+                    if (item.amcQuantity > 1) ...[
+                      const SizedBox(height: 6),
+                      _BreakdownRow(
+                        label: '× ${item.amcQuantity} units',
+                        value: '₹${item.unitPrice.toInt()}',
+                        tt: tt,
+                        isSubtotal: true,
+                      ),
+                    ],
+                  ] else ...[
+                    _BreakdownRow(
+                      label: 'Base service',
+                      value: '₹${basePrice.toInt()}',
+                      tt: tt,
+                    ),
+                    ...item.addons.map(
+                      (a) => Padding(
+                        padding: const EdgeInsets.only(top: 6),
+                        child: _BreakdownRow(
+                          label: '+ ${a.addonName}',
+                          value: '₹${a.addonPrice.toInt()}',
+                          tt: tt,
+                          isAddon: true,
+                        ),
+                      ),
+                    ),
+                  ],
+
+                  const SizedBox(height: 12),
+                  const Divider(
+                      color: AppColors.divider, height: 0, thickness: 0.8),
+                  const SizedBox(height: 12),
+
+                  // Qty stepper + line total
+                  Row(
+                    children: [
+                      _QuantityStepper(
+                        quantity: item.quantity,
+                        onDecrement: () => notifier.updateQuantity(
+                            item.bookingId, item.quantity - 1),
+                        onIncrement: () => notifier.updateQuantity(
+                            item.bookingId, item.quantity + 1),
+                      ),
+                      const Spacer(),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          Text(
+                            '₹${item.totalPrice.toInt()}',
+                            style: tt.titleSmall?.copyWith(
+                              color: AppColors.primary,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                          if (item.quantity > 1)
+                            Text(
+                              '${item.quantity} × ₹${item.unitPrice.toInt()}',
+                              style: tt.labelSmall
+                                  ?.copyWith(color: AppColors.textHint),
+                            ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  // ── Mobile: original layout unchanged ────────────────────────────────────
+
+  Widget _mobileCard(
+    BuildContext context,
+    TextTheme tt,
+    CartNotifier notifier,
+    CartItem item,
+  ) {
     return Container(
       decoration: BoxDecoration(
         color: AppColors.surface,
@@ -232,7 +501,6 @@ class _CartItemCard extends ConsumerWidget {
         padding: const EdgeInsets.all(12),
         child: Column(
           children: [
-            // Top row: image + name/price + delete
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -257,7 +525,7 @@ class _CartItemCard extends ConsumerWidget {
                           const SizedBox(width: 8),
                           Clickable(
                             onTap: () =>
-                                notifier.removeFromCart(item.serviceId),
+                                notifier.removeFromCart(item.bookingId),
                             child: const Icon(
                               Icons.delete_outline_rounded,
                               size: 20,
@@ -268,48 +536,29 @@ class _CartItemCard extends ConsumerWidget {
                       ),
                       const SizedBox(height: 6),
                       if (item.isAmc) ...[
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFEBF8FF),
-                            borderRadius: BorderRadius.circular(4),
-                            border: Border.all(
-                              color: const Color(0xFF3182CE).withValues(alpha: 0.4),
-                            ),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              const Icon(Icons.autorenew_rounded, size: 11, color: Color(0xFF3182CE)),
-                              const SizedBox(width: 3),
-                              Text(
-                                'AMC',
-                                style: tt.labelSmall?.copyWith(
-                                  color: const Color(0xFF3182CE),
-                                  fontWeight: FontWeight.w700,
-                                  fontSize: 10,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
+                        _AmcBadge(tt: tt),
                         const SizedBox(height: 4),
-                        if (item.amcPlanName != null && item.amcPlanName!.isNotEmpty)
+                        if (item.amcPlanName != null &&
+                            item.amcPlanName!.isNotEmpty)
                           Text(
                             item.amcPlanName!,
-                            style: tt.labelSmall?.copyWith(color: AppColors.textSecondary),
+                            style: tt.labelSmall
+                                ?.copyWith(color: AppColors.textSecondary),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                           ),
-                        if (item.amcRecurrenceInterval != null && item.amcRecurrenceInterval!.isNotEmpty)
+                        if (item.amcRecurrenceInterval != null &&
+                            item.amcRecurrenceInterval!.isNotEmpty)
                           Text(
                             '${item.amcRecurrenceInterval!} · ${item.amcNumVisits ?? 12} visits',
-                            style: tt.labelSmall?.copyWith(color: AppColors.textHint),
+                            style: tt.labelSmall
+                                ?.copyWith(color: AppColors.textHint),
                           ),
                         if (item.amcQuantity > 1)
                           Text(
                             '₹${(item.amcFinalPrice ?? 0).toInt()} × ${item.amcQuantity} units',
-                            style: tt.labelSmall?.copyWith(color: AppColors.textSecondary),
+                            style: tt.labelSmall
+                                ?.copyWith(color: AppColors.textSecondary),
                           )
                         else if (item.amcIsRenewal)
                           Text(
@@ -332,20 +581,17 @@ class _CartItemCard extends ConsumerWidget {
                 ),
               ],
             ),
-
             const SizedBox(height: 12),
             const Divider(color: AppColors.divider, height: 0, thickness: 0.8),
             const SizedBox(height: 12),
-
-            // Bottom row: qty stepper + line total
             Row(
               children: [
                 _QuantityStepper(
                   quantity: item.quantity,
                   onDecrement: () =>
-                      notifier.updateQuantity(item.serviceId, item.quantity - 1),
+                      notifier.updateQuantity(item.bookingId, item.quantity - 1),
                   onIncrement: () =>
-                      notifier.updateQuantity(item.serviceId, item.quantity + 1),
+                      notifier.updateQuantity(item.bookingId, item.quantity + 1),
                 ),
                 const Spacer(),
                 Column(
@@ -361,8 +607,7 @@ class _CartItemCard extends ConsumerWidget {
                     if (item.quantity > 1)
                       Text(
                         '${item.quantity} × ₹${item.unitPrice.toInt()}',
-                        style: tt.labelSmall
-                            ?.copyWith(color: AppColors.textHint),
+                        style: tt.labelSmall?.copyWith(color: AppColors.textHint),
                       ),
                   ],
                 ),
@@ -371,6 +616,78 @@ class _CartItemCard extends ConsumerWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+// ── AMC badge (shared between web header and mobile card) ─────────────────────
+
+class _AmcBadge extends StatelessWidget {
+  final TextTheme tt;
+  const _AmcBadge({required this.tt});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        color: const Color(0xFFEBF8FF),
+        borderRadius: BorderRadius.circular(4),
+        border: Border.all(
+          color: const Color(0xFF3182CE).withValues(alpha: 0.4),
+        ),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.autorenew_rounded,
+              size: 11, color: Color(0xFF3182CE)),
+          const SizedBox(width: 3),
+          Text(
+            'AMC',
+            style: tt.labelSmall?.copyWith(
+              color: const Color(0xFF3182CE),
+              fontWeight: FontWeight.w700,
+              fontSize: 10,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Breakdown row (price line item in expanded section) ───────────────────────
+
+class _BreakdownRow extends StatelessWidget {
+  final String label;
+  final String value;
+  final TextTheme tt;
+  final bool isAddon;
+  final bool isSubtotal;
+
+  const _BreakdownRow({
+    required this.label,
+    required this.value,
+    required this.tt,
+    this.isAddon = false,
+    this.isSubtotal = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final color = isAddon ? AppColors.textSecondary : AppColors.textPrimary;
+    final labelStyle = tt.labelSmall?.copyWith(color: color);
+    final valueStyle = tt.labelSmall?.copyWith(
+      color: isSubtotal ? AppColors.primary : color,
+      fontWeight: (isAddon || isSubtotal) ? null : FontWeight.w600,
+    );
+
+    return Row(
+      children: [
+        Expanded(child: Text(label, style: labelStyle)),
+        Text(value, style: valueStyle),
+      ],
     );
   }
 }

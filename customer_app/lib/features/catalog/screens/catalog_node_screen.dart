@@ -14,11 +14,6 @@ import '../../cart/providers/cart_provider.dart';
 import '../../cart/utils/cart_launcher.dart';
 import '../../category/services/category_providers.dart';
 import '../../reviews/widgets/service_reviews_section.dart';
-import '../../auth/providers/auth_provider.dart';
-import '../../auth/utils/auth_modal_gate.dart';
-import '../../service/models/customer_question_model.dart';
-import '../../service/services/customer_question_providers.dart';
-import '../../service/widgets/ask_question_dialog.dart';
 import '../../service/widgets/faq_section.dart';
 import '../../service/widgets/service_attribute_section.dart';
 import '../../wishlist/widgets/heart_button.dart';
@@ -70,10 +65,16 @@ class _StripedBox extends StatelessWidget {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 class CatalogNodeScreen extends ConsumerStatefulWidget {
-  const CatalogNodeScreen({super.key, required this.node, this.parentNodeId});
+  const CatalogNodeScreen({
+    super.key,
+    required this.node,
+    this.parentNodeId,
+    this.inModal = false,
+  });
 
   final CatalogNodeModel node;
   final String? parentNodeId;
+  final bool inModal;
 
   @override
   ConsumerState<CatalogNodeScreen> createState() => _CatalogNodeScreenState();
@@ -84,7 +85,6 @@ class _CatalogNodeScreenState extends ConsumerState<CatalogNodeScreen> {
   double _priceAdjustment = 0.0;
   final Set<String> _selectedAddonIds = {};
   AmcPlanModel? _selectedAmcPlan;
-
   CatalogNodeModel get node => widget.node;
 
   void _onOptionSelected(
@@ -124,7 +124,7 @@ class _CatalogNodeScreenState extends ConsumerState<CatalogNodeScreen> {
         ? (ref.watch(serviceAttributesProvider(node.id)).valueOrNull ?? [])
         : <ServiceAttributeModel>[];
     final addOns = node.isLeafBookable
-        ? (ref.watch(serviceAddonsProvider(node.id)).valueOrNull ?? [])
+        ? (ref.watch(allActiveAddonsProvider).valueOrNull ?? [])
         : <AddOnModel>[];
     final faqs = node.isLeafBookable
         ? (ref
@@ -139,17 +139,30 @@ class _CatalogNodeScreenState extends ConsumerState<CatalogNodeScreen> {
         addresses.where((a) => a.isDefault).firstOrNull ??
         (addresses.isNotEmpty ? addresses.first : null);
 
+    // For shared nodes without a known parentNodeId, do NOT fall back to the
+    // canonical parent: it could be a different, active edge and would cause
+    // check_node_availability to return 'active' even though the actual
+    // relationship that was navigated is paused. Pass null so the RPC checks
+    // node-scoped availability only; relAvailabilityStatus (set by the children
+    // query for the specific edge) remains the relationship-scoped signal.
+    final effectiveParentId =
+        widget.parentNodeId ?? (node.isShared ? null : node.parentId);
     final availAsync = ref.watch(
       nodeAvailabilityProvider((
         nodeId: node.id,
-        parentId: widget.parentNodeId ?? node.parentId,
+        parentId: effectiveParentId,
         lat: defaultAddress?.latitude,
         lng: defaultAddress?.longitude,
       )),
     );
     final avail = availAsync.valueOrNull;
-    final isUnavailable = avail?.status == 'unavailable';
-    final isEffectivelyHidden = avail?.status == 'hidden';
+    // relAvailabilityStatus is a permanent floor: a paused relationship must
+    // never become bookable regardless of what the async check returns (it
+    // might have been called with a different or null parent).
+    final isUnavailable = avail?.status == 'unavailable' ||
+        node.relAvailabilityStatus == 'unavailable';
+    final isEffectivelyHidden = avail?.status == 'hidden' ||
+        node.relAvailabilityStatus == 'hidden';
 
     final addonsTotal = totalAddonsPrice(
       buildSelectedAddons(addOns, _selectedAddonIds),
@@ -188,6 +201,7 @@ class _CatalogNodeScreenState extends ConsumerState<CatalogNodeScreen> {
         onOptionSelected: _onOptionSelected,
         onAddonToggled: _onAddonToggled,
         onAmcPlanSelected: (plan) => setState(() => _selectedAmcPlan = plan),
+        inModal: widget.inModal,
       );
     }
 
@@ -227,28 +241,21 @@ class _CatalogNodeScreenState extends ConsumerState<CatalogNodeScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // ── Hero image section ─────────────────────────────────────
-                // Leaf-bookable: image + inline info block (no floating card).
-                // Category nodes: keep the floating card overlap layout.
-                if (hasHero) ...[
-                  if (node.isLeafBookable)
-                    _ServiceDetailHeroBlock(
-                      imageUrl: heroUrl!,
-                      node: node,
-                      displayPrice: displayPrice,
-                      hasAdjustment: hasAdjustment,
-                    )
-                  else ...[
-                    _HeroWithCard(
-                      imageUrl: heroUrl!,
-                      node: node,
-                      displayPrice: displayPrice,
-                      hasAdjustment: hasAdjustment,
-                    ),
-                    // Spacer: card extends 60 px below the Stack + 20 px gap.
-                    const SizedBox(height: 80),
-                  ],
-                ],
+                // ── Hero photo ─────────────────────────────────────────────
+                if (hasHero)
+                  _MobileHero(
+                    imageUrl: heroUrl!,
+                    node: node,
+                    showHeart: node.isLeafBookable,
+                  ),
+
+                // ── Service content header ─────────────────────────────────
+                if (hasHero && node.isLeafBookable)
+                  _ServiceContentBlock(
+                    node: node,
+                    displayPrice: displayPrice,
+                    hasAdjustment: hasAdjustment,
+                  ),
 
                 // ── Category hero fallback ─────────────────────────────────
                 if (hasHero && !node.isLeafBookable)
@@ -287,53 +294,30 @@ class _CatalogNodeScreenState extends ConsumerState<CatalogNodeScreen> {
                         _onOptionSelected(attrId, optId, attrs),
                   ),
 
-                // ── Description ────────────────────────────────────────────
-                // Category nodes only — leaf-bookable description is in accordion.
-                if (node.description?.isNotEmpty == true &&
-                    !node.isLeafBookable)
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(20, 24, 20, 0),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          node.name,
-                          style: const TextStyle(
-                            fontSize: 17,
-                            fontWeight: FontWeight.w700,
-                            color: AppColors.textPrimary,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          node.description!,
-                          style: const TextStyle(
-                            fontSize: 14,
-                            color: AppColors.textSecondary,
-                            height: 1.65,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-
-                // ── Children list ──────────────────────────────────────────
+                // ── Children (category navigation) ─────────────────────────
                 if (node.hasChildren)
                   (isUnavailable || isEffectivelyHidden)
                       ? CatalogUnavailabilityBanner(
-                          message: isUnavailable ? avail?.message : null,
+                          message: isUnavailable
+                              ? (avail?.message ?? node.relUnavailabilityMessage)
+                              : null,
                           isHidden: isEffectivelyHidden,
                         )
                       : _ChildrenSection(node: node, children: children),
 
-                // ── Add-ons ────────────────────────────────────────────────
-                if (node.isLeafBookable && addOns.isNotEmpty)
-                  _MobileAddonSection(
+                // ── Suggested Add-ons ──────────────────────────────────────
+                if (node.isLeafBookable && addOns.isNotEmpty) ...[
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 24, 20, 12),
+                    child: _SectionHeaderRow(title: 'Suggested Add-ons'),
+                  ),
+                  _InlineAddonCards(
                     addOns: addOns,
                     selectedIds: _selectedAddonIds,
                     onToggle: _onAddonToggled,
                     isWeb: false,
                   ),
+                ],
 
                 // ── AMC Plans ──────────────────────────────────────────────
                 if (node.isLeafBookable)
@@ -364,24 +348,77 @@ class _CatalogNodeScreenState extends ConsumerState<CatalogNodeScreen> {
                     },
                   ),
 
-                // ── AMC ────────────────────────────────────────────────────
-                if (node.isLeafBookable)
-                  _MobileAmcInlineSection(
-                    serviceId: node.id,
-                    selectedPlan: _selectedAmcPlan,
-                    onPlanSelected: (plan) =>
-                        setState(() => _selectedAmcPlan = plan),
-                  ),
+                // ── What's Included ───────────────────────────────────────
+                if (node.isLeafBookable && node.includedItems.isNotEmpty)
+                  _IncludedSection(items: node.includedItems),
 
-                // ── About / FAQs / Reviews accordion ───────────────────────
-                if (node.isLeafBookable)
-                  _ServiceDetailAccordionSections(
-                    serviceId: node.id,
-                    serviceName: node.name,
-                    description: node.description,
-                    faqs: faqs,
-                    reviewCount: node.reviewCount,
+                // ── What's Excluded ───────────────────────────────────────
+                if (node.isLeafBookable && node.excludedItems.isNotEmpty)
+                  _ExcludedSection(items: node.excludedItems),
+
+                // ── Before & After ────────────────────────────────────────
+                if (node.isLeafBookable && node.beforeAfterPairs.isNotEmpty)
+                  _BeforeAfterSection(pairs: node.beforeAfterPairs),
+
+                // ── Customer Content blocks ───────────────────────────────
+                if (node.isLeafBookable && node.contentBlocks.isNotEmpty)
+                  _ContentBlocksSection(blocks: node.contentBlocks),
+
+                // ── Accordion: About / FAQs / Reviews ─────────────────────
+                if (node.isLeafBookable) ...[
+                  const SizedBox(height: 24),
+                  _AccordionSection(
+                    label: 'About this service',
+                    isFirst: true,
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(0, 4, 0, 14),
+                      child: Text(
+                        node.description?.isNotEmpty == true
+                            ? node.description!
+                            : 'No description available.',
+                        style: const TextStyle(
+                            fontSize: 13, color: _kMuted, height: 1.6),
+                      ),
+                    ),
                   ),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 20, 20, 8),
+                    child: Text('FAQs',
+                        style: GoogleFonts.poppins(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w700,
+                            color: _kInk)),
+                  ),
+                  if (faqs.isEmpty) ...[
+                    const Padding(
+                      padding: EdgeInsets.fromLTRB(20, 0, 20, 4),
+                      child: Text('No FAQs yet.',
+                          style: TextStyle(fontSize: 13, color: _kMuted)),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.only(left: 20, top: 2),
+                      child: AskQuestionLink(serviceId: node.id, parentId: widget.parentNodeId),
+                    ),
+                    const SizedBox(height: 8),
+                  ] else ...[
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
+                      child: FaqSection(faqs: faqs),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.only(left: 20, top: 6),
+                      child: AskQuestionLink(serviceId: node.id, parentId: widget.parentNodeId),
+                    ),
+                    const SizedBox(height: 8),
+                  ],
+                  _AccordionSection(
+                    label: node.reviewCount > 0
+                        ? 'Reviews (${node.reviewCount})'
+                        : 'Reviews',
+                    isLast: true,
+                    child: ServiceReviewsSection(serviceId: node.id, showHeader: false),
+                  ),
+                ],
 
                 // ── Coming Soon ────────────────────────────────────────────
                 if (!node.hasChildren && !node.isBookable)
@@ -398,7 +435,9 @@ class _CatalogNodeScreenState extends ConsumerState<CatalogNodeScreen> {
       bottomNavigationBar: node.isLeafBookable
           ? (isUnavailable || isEffectivelyHidden)
                 ? CatalogUnavailabilityBar(
-                    message: isUnavailable ? avail?.message : null,
+                    message: isUnavailable
+                        ? (avail?.message ?? node.relUnavailabilityMessage)
+                        : null,
                   )
                 : _NodeBookingBar(
                     node: node,
@@ -461,13 +500,18 @@ class _CatalogNodeFetchScreenState
       );
     }
 
-    // Web: once node loads, show its category explorer as background and open
-    // the catalog modal on top. AppNavigation is shown only during the brief load.
+    // Web: use the same floating modal as the normal catalog View Details flow.
+    // CategoryExplorerScreen provides the app background; the modal opens on top.
     if (!_modalOpened && async.hasValue && async.value != null) {
       _node = async.value;
       _modalOpened = true;
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) CatalogNodeModal.open(context, _node!);
+        if (!mounted) return;
+        if (_node!.isLeafBookable) {
+          openCatalogNode(context, _node!);
+        } else {
+          CatalogNodeModal.open(context, _node!);
+        }
       });
     }
 
@@ -585,166 +629,6 @@ class _MobileHero extends StatelessWidget {
   }
 }
 
-// ── Leaf-bookable service detail: image + inline info block ──────────────────
-
-class _ServiceDetailHeroBlock extends StatelessWidget {
-  const _ServiceDetailHeroBlock({
-    required this.imageUrl,
-    required this.node,
-    required this.displayPrice,
-    required this.hasAdjustment,
-  });
-
-  final String imageUrl;
-  final CatalogNodeModel node;
-  final double displayPrice;
-  final bool hasAdjustment;
-
-  @override
-  Widget build(BuildContext context) {
-    final topInset = MediaQuery.of(context).padding.top + kToolbarHeight;
-    final heroHeight = topInset + 200.0;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        SizedBox(
-          height: heroHeight,
-          width: double.infinity,
-          child: _HeroImage(url: imageUrl),
-        ),
-        // Inline info section below image
-        _ServiceDetailInfoSection(
-          node: node,
-          displayPrice: displayPrice,
-          hasAdjustment: hasAdjustment,
-        ),
-      ],
-    );
-  }
-}
-
-class _ServiceDetailInfoSection extends StatelessWidget {
-  const _ServiceDetailInfoSection({
-    required this.node,
-    required this.displayPrice,
-    required this.hasAdjustment,
-  });
-
-  final CatalogNodeModel node;
-  final double displayPrice;
-  final bool hasAdjustment;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 18, 20, 4),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Category pill (dark ink)
-          if (!node.isRoot && node.parentName != null) ...[
-            Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-              decoration: BoxDecoration(
-                color: AppColors.primary,
-                borderRadius: BorderRadius.circular(100),
-              ),
-              child: Text(
-                node.parentName!,
-                style: const TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600,
-                  color: Colors.white,
-                ),
-              ),
-            ),
-            const SizedBox(height: 10),
-          ],
-
-          // Title
-          Text(
-            node.name,
-            style: const TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.w700,
-              color: AppColors.textPrimary,
-              height: 1.2,
-            ),
-          ),
-
-          // Rating + review count
-          if (node.rating > 0) ...[
-            const SizedBox(height: 6),
-            Row(
-              children: [
-                const Icon(Icons.star_rounded,
-                    size: 13, color: AppColors.gold),
-                const SizedBox(width: 3),
-                Text(
-                  node.rating.toStringAsFixed(1),
-                  style: const TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w500,
-                    color: AppColors.textPrimary,
-                  ),
-                ),
-                if (node.reviewCount > 0) ...[
-                  const SizedBox(width: 3),
-                  Text(
-                    '(${node.reviewCount} reviews)',
-                    style: const TextStyle(
-                      fontSize: 12,
-                      color: AppColors.textSecondary,
-                    ),
-                  ),
-                ],
-              ],
-            ),
-          ],
-
-          // Price row: From + Poppins 800 22px ink price
-          if (node.basePrice != null) ...[
-            const SizedBox(height: 14),
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.baseline,
-              textBaseline: TextBaseline.alphabetic,
-              children: [
-                const Text(
-                  'From',
-                  style: TextStyle(
-                      fontSize: 13, color: AppColors.textHint),
-                ),
-                const SizedBox(width: 6),
-                Text(
-                  '₹${displayPrice.toInt()}',
-                  style: const TextStyle(
-                    fontSize: 22,
-                    fontWeight: FontWeight.w800,
-                    color: AppColors.textPrimary,
-                    height: 1.0,
-                  ),
-                ),
-                if (hasAdjustment) ...[
-                  const SizedBox(width: 6),
-                  const Text(
-                    'incl. adjustments',
-                    style: TextStyle(
-                        fontSize: 12, color: AppColors.textHint),
-                  ),
-                ],
-              ],
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-}
-
-// ── Hero + floating card (Stack-based overlap) ────────────────────────────────
-
 class _CircleNavBtn extends StatelessWidget {
   const _CircleNavBtn({required this.icon, required this.onTap});
   final IconData icon;
@@ -755,15 +639,15 @@ class _CircleNavBtn extends StatelessWidget {
     return MouseRegion(
       cursor: SystemMouseCursors.click,
       child: GestureDetector(
-        onTap: onTap,
-        child: Container(
-          width: 36,
-          height: 36,
-          decoration: const BoxDecoration(
-              color: Colors.white, shape: BoxShape.circle),
-          child: Icon(icon, size: 18, color: _kInk),
-        ),
+      onTap: onTap,
+      child: Container(
+        width: 36,
+        height: 36,
+        decoration: const BoxDecoration(
+            color: Colors.white, shape: BoxShape.circle),
+        child: Icon(icon, size: 18, color: _kInk),
       ),
+    ),
     );
   }
 }
@@ -1786,7 +1670,6 @@ class _ChildListItemState extends State<_ChildListItem> {
                           ],
                         ),
                       ],
-
                       const SizedBox(height: 6),
                       Row(
                         children: [
@@ -1955,696 +1838,9 @@ class _ComingSoonBanner extends StatelessWidget {
   }
 }
 
-// ── Mobile add-on section ─────────────────────────────────────────────────────
-
-class _MobileAddonSection extends StatelessWidget {
-  const _MobileAddonSection({
-    required this.addOns,
-    required this.selectedIds,
-    required this.onToggle,
-  });
-
-  final List<AddOnModel> addOns;
-  final Set<String> selectedIds;
-  final void Function(String id, bool selected) onToggle;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Padding(
-          padding: EdgeInsets.fromLTRB(20, 28, 20, 14),
-          child: Text(
-            'Add-ons',
-            style: TextStyle(
-              fontFamily: 'Poppins',
-              fontSize: 16,
-              fontWeight: FontWeight.w700,
-              color: AppColors.textPrimary,
-            ),
-          ),
-        ),
-        SizedBox(
-          height: 110,
-          child: ListView.separated(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 20),
-            itemCount: addOns.length,
-            separatorBuilder: (_, _) => const SizedBox(width: 12),
-            itemBuilder: (_, i) {
-              final addon = addOns[i];
-              final selected = selectedIds.contains(addon.id);
-              return GestureDetector(
-                onTap: () => onToggle(addon.id, !selected),
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 160),
-                  width: 110,
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    color: selected ? AppColors.goldLight : AppColors.surface,
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(
-                      color:
-                          selected ? AppColors.gold : AppColors.border,
-                      width: selected ? 1.5 : 1.0,
-                    ),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Container(
-                        height: 36,
-                        width: double.infinity,
-                        decoration: BoxDecoration(
-                          color: AppColors.goldLight,
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: const Icon(
-                          Icons.home_repair_service_rounded,
-                          size: 20,
-                          color: AppColors.gold,
-                        ),
-                      ),
-                      const SizedBox(height: 6),
-                      Text(
-                        addon.name,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
-                          color: AppColors.textPrimary,
-                          height: 1.3,
-                        ),
-                      ),
-                      const Spacer(),
-                      Text(
-                        '+₹${addon.price.toInt()}',
-                        style: const TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w700,
-                          color: AppColors.primary,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              );
-            },
-          ),
-        ),
-        const SizedBox(height: 8),
-      ],
-    );
-  }
-}
-
-// ── Mobile AMC inline section ─────────────────────────────────────────────────
-
-class _MobileAmcInlineSection extends ConsumerWidget {
-  const _MobileAmcInlineSection({
-    super.key,
-    required this.serviceId,
-    required this.selectedPlan,
-    required this.onPlanSelected,
-  });
-
-  final String serviceId;
-  final AmcPlanModel? selectedPlan;
-  final void Function(AmcPlanModel?) onPlanSelected;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final plans =
-        ref.watch(amcPlansProvider(serviceId)).valueOrNull ?? [];
-    if (plans.isEmpty) return const SizedBox.shrink();
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Padding(
-          padding: EdgeInsets.fromLTRB(20, 28, 20, 14),
-          child: Text(
-            'AMC Plans',
-            style: TextStyle(
-              fontFamily: 'Poppins',
-              fontSize: 16,
-              fontWeight: FontWeight.w700,
-              color: AppColors.textPrimary,
-            ),
-          ),
-        ),
-        for (int i = 0; i < plans.take(2).length; i++) ...[
-          if (i > 0) const SizedBox(height: 12),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20),
-            child: _MobileAmcPlanCard(
-              plan: plans[i],
-              isPopular: i == 0,
-              isSelected: selectedPlan?.id == plans[i].id,
-              onTap: () => onPlanSelected(
-                selectedPlan?.id == plans[i].id ? null : plans[i],
-              ),
-            ),
-          ),
-        ],
-        const SizedBox(height: 8),
-      ],
-    );
-  }
-}
-
-class _MobileAmcPlanCard extends StatelessWidget {
-  const _MobileAmcPlanCard({
-    required this.plan,
-    required this.isPopular,
-    required this.isSelected,
-    required this.onTap,
-  });
-
-  final AmcPlanModel plan;
-  final bool isPopular;
-  final bool isSelected;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Stack(
-      clipBehavior: Clip.none,
-      children: [
-        GestureDetector(
-          onTap: onTap,
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 180),
-            width: double.infinity,
-            padding: EdgeInsets.fromLTRB(16, isPopular ? 22 : 16, 16, 16),
-            decoration: BoxDecoration(
-              color: isSelected ? AppColors.goldLight : AppColors.surface,
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(
-                color: isSelected ? AppColors.gold : AppColors.border,
-                width: isSelected ? 1.5 : 1.0,
-              ),
-            ),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        plan.name,
-                        style: const TextStyle(
-                          fontFamily: 'Poppins',
-                          fontSize: 14,
-                          fontWeight: FontWeight.w700,
-                          color: AppColors.textPrimary,
-                        ),
-                      ),
-                      const SizedBox(height: 6),
-                      Text(
-                        '${plan.numVisits} visits · ${plan.packageDurationLabel}',
-                        style: const TextStyle(
-                          fontSize: 12,
-                          color: AppColors.textSecondary,
-                        ),
-                      ),
-                      if (plan.discountValue > 0) ...[
-                        const SizedBox(height: 2),
-                        Text(
-                          plan.discountType == 'percentage'
-                              ? '${plan.discountValue.toInt()}% off per visit'
-                              : '₹${plan.discountValue.toInt()} off per visit',
-                          style: const TextStyle(
-                            fontSize: 12,
-                            color: AppColors.textSecondary,
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    AnimatedContainer(
-                      duration: const Duration(milliseconds: 180),
-                      width: 20,
-                      height: 20,
-                      decoration: BoxDecoration(
-                        color: isSelected
-                            ? AppColors.primary
-                            : Colors.transparent,
-                        shape: BoxShape.circle,
-                        border: Border.all(
-                          color: isSelected
-                              ? AppColors.primary
-                              : AppColors.border,
-                          width: 1.5,
-                        ),
-                      ),
-                      child: isSelected
-                          ? const Icon(Icons.check_rounded,
-                              size: 12, color: Colors.white)
-                          : null,
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      '₹${plan.finalPrice.toInt()}',
-                      style: const TextStyle(
-                        fontFamily: 'Poppins',
-                        fontSize: 16,
-                        fontWeight: FontWeight.w800,
-                        color: AppColors.textPrimary,
-                      ),
-                    ),
-                    Text(
-                      '/ ${plan.packageDurationLabel}',
-                      style: const TextStyle(
-                        fontSize: 11,
-                        color: AppColors.textSecondary,
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        ),
-        if (isPopular)
-          Positioned(
-            top: -9,
-            left: 16,
-            child: Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-              decoration: BoxDecoration(
-                color: AppColors.gold,
-                borderRadius: BorderRadius.circular(100),
-              ),
-              child: const Text(
-                'Popular',
-                style: TextStyle(
-                  fontSize: 10,
-                  fontWeight: FontWeight.w700,
-                  color: Colors.white,
-                ),
-              ),
-            ),
-          ),
-      ],
-    );
-  }
-}
-
-// ── Service detail accordion sections (About / FAQs / Reviews) ────────────────
-
-class _ServiceDetailAccordionSections extends ConsumerWidget {
-  const _ServiceDetailAccordionSections({
-    required this.serviceId,
-    required this.serviceName,
-    required this.faqs,
-    required this.reviewCount,
-    this.description,
-  });
-
-  final String serviceId;
-  final String serviceName;
-  final String? description;
-  final List<FaqModel> faqs;
-  final int reviewCount;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final answeredQuestions =
-        ref.watch(answeredCustomerQuestionsProvider(serviceId)).valueOrNull ??
-            <CustomerQuestionModel>[];
-    final isAuthenticated = ref.watch(isAuthenticatedProvider);
-    final hasAnyFaq = faqs.isNotEmpty || answeredQuestions.isNotEmpty;
-    final showcaseAsync = ref.watch(serviceShowcaseImagesProvider(serviceId));
-    final showcaseImages = showcaseAsync.valueOrNull ?? [];
-    debugPrint('[Screen] serviceId=$serviceId  showcaseAsync=$showcaseAsync  images=${showcaseImages.length}');
-
-    return Column(
-      children: [
-        if (description?.isNotEmpty == true)
-          _DetailAccordionTile(
-            title: 'About this service',
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
-              child: Align(
-                alignment: Alignment.centerLeft,
-                child: Text(
-                  description!,
-                  textAlign: TextAlign.left,
-                  style: const TextStyle(
-                    fontSize: 14,
-                    color: AppColors.textSecondary,
-                    height: 1.65,
-                  ),
-                ),
-              ),
-            ),
-          ),
-        if (hasAnyFaq)
-          _DetailAccordionTile(
-            title: 'FAQs',
-            child: _MobileFaqContentSection(
-              faqs: faqs,
-              answeredQuestions: answeredQuestions,
-              serviceId: serviceId,
-              serviceName: serviceName,
-              isAuthenticated: isAuthenticated,
-            ),
-          ),
-        if (showcaseImages.isNotEmpty)
-          _DetailAccordionTile(
-            title: 'Before & After',
-            child: _BeforeAfterContent(images: showcaseImages),
-          ),
-        _DetailAccordionTile(
-          title: reviewCount > 0 ? 'Reviews ($reviewCount)' : 'Reviews',
-          child: Padding(
-            padding: const EdgeInsets.only(bottom: 8),
-            child: ServiceReviewsSection(serviceId: serviceId),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _MobileFaqContentSection extends StatelessWidget {
-  const _MobileFaqContentSection({
-    required this.faqs,
-    required this.answeredQuestions,
-    required this.serviceId,
-    required this.serviceName,
-    required this.isAuthenticated,
-  });
-
-  final List<FaqModel> faqs;
-  final List<CustomerQuestionModel> answeredQuestions;
-  final String serviceId;
-  final String serviceName;
-  final bool isAuthenticated;
-
-  @override
-  Widget build(BuildContext context) {
-    final tt = Theme.of(context).textTheme;
-
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Predefined FAQs
-          ...faqs.map((f) => Theme(
-                data: Theme.of(context)
-                    .copyWith(dividerColor: Colors.transparent),
-                child: ExpansionTile(
-                  tilePadding: EdgeInsets.zero,
-                  childrenPadding: const EdgeInsets.only(bottom: 12),
-                  title: Text(
-                    f.question,
-                    textAlign: TextAlign.left,
-                    style: tt.bodyMedium?.copyWith(
-                      fontWeight: FontWeight.w600,
-                      color: AppColors.textPrimary,
-                    ),
-                  ),
-                  trailing: const Icon(
-                    Icons.keyboard_arrow_down_rounded,
-                    size: 20,
-                    color: AppColors.textHint,
-                  ),
-                  children: [
-                    Align(
-                      alignment: Alignment.centerLeft,
-                      child: Text(
-                        f.answer,
-                        textAlign: TextAlign.left,
-                        style: tt.bodyMedium?.copyWith(
-                          color: AppColors.textSecondary,
-                          height: 1.5,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              )),
-
-          // Customer answered questions — tap to expand and reveal Admin's answer
-          ...answeredQuestions.map((q) => Theme(
-                data: Theme.of(context)
-                    .copyWith(dividerColor: Colors.transparent),
-                child: ExpansionTile(
-                  tilePadding: EdgeInsets.zero,
-                  childrenPadding:
-                      const EdgeInsets.only(bottom: 12),
-                  title: Text(
-                    q.question,
-                    textAlign: TextAlign.left,
-                    style: tt.bodyMedium?.copyWith(
-                      fontWeight: FontWeight.w600,
-                      color: AppColors.textPrimary,
-                    ),
-                  ),
-                  trailing: const Icon(
-                    Icons.keyboard_arrow_down_rounded,
-                    size: 20,
-                    color: AppColors.textHint,
-                  ),
-                  children: [
-                    if (q.answer?.isNotEmpty == true)
-                      Align(
-                        alignment: Alignment.centerLeft,
-                        child: Text(
-                          q.answer!,
-                          textAlign: TextAlign.left,
-                          style: tt.bodyMedium?.copyWith(
-                            color: AppColors.textSecondary,
-                            height: 1.5,
-                          ),
-                        ),
-                      ),
-                  ],
-                ),
-              )),
-
-          const SizedBox(height: 8),
-
-          // "Have a question? Ask us" row inside FAQs
-          _AskQuestionRow(
-            serviceId: serviceId,
-            serviceName: serviceName,
-            isAuthenticated: isAuthenticated,
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ── Before & After showcase content ──────────────────────────────────────────
-
-class _BeforeAfterContent extends StatelessWidget {
-  final List<Map<String, dynamic>> images;
-  const _BeforeAfterContent({required this.images});
-
-  @override
-  Widget build(BuildContext context) {
-    final before =
-        images.where((i) => i['image_type'] == 'before').toList();
-    final after =
-        images.where((i) => i['image_type'] == 'after').toList();
-
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          if (before.isNotEmpty)
-            SizedBox(width: 140, child: _ShowcasePhotoRow(label: 'Before', photos: before)),
-          if (before.isNotEmpty && after.isNotEmpty) const SizedBox(width: 16),
-          if (after.isNotEmpty)
-            SizedBox(width: 140, child: _ShowcasePhotoRow(label: 'After', photos: after)),
-        ],
-      ),
-    );
-  }
-}
-
-class _ShowcasePhotoRow extends StatelessWidget {
-  final String label;
-  final List<Map<String, dynamic>> photos;
-  const _ShowcasePhotoRow({required this.label, required this.photos});
-
-  @override
-  Widget build(BuildContext context) {
-    final tt = Theme.of(context).textTheme;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label,
-          style: tt.labelSmall?.copyWith(
-            color: AppColors.textSecondary,
-            fontWeight: FontWeight.w600,
-            letterSpacing: 0.3,
-          ),
-        ),
-        const SizedBox(height: 8),
-        SizedBox(
-          height: 140,
-          child: ListView.separated(
-            scrollDirection: Axis.horizontal,
-            itemCount: photos.length,
-            separatorBuilder: (_, _) => const SizedBox(width: 8),
-            itemBuilder: (_, i) {
-              final url = photos[i]['image_url'] as String;
-              return ClipRRect(
-                borderRadius: BorderRadius.circular(8),
-                child: Image.network(
-                  url,
-                  width: 140,
-                  height: 140,
-                  fit: BoxFit.cover,
-                  loadingBuilder: (ctx, child, progress) {
-                    if (progress == null) return child;
-                    return Container(
-                      width: 140,
-                      height: 140,
-                      color: AppColors.background,
-                      child: const Center(
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      ),
-                    );
-                  },
-                  errorBuilder: (_, _, _) => Container(
-                    width: 140,
-                    height: 140,
-                    color: AppColors.background,
-                    child: const Icon(
-                      Icons.broken_image_outlined,
-                      color: AppColors.textHint,
-                    ),
-                  ),
-                ),
-              );
-            },
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _AskQuestionRow extends ConsumerWidget {
-  const _AskQuestionRow({
-    required this.serviceId,
-    required this.serviceName,
-    required this.isAuthenticated,
-  });
-
-  final String serviceId;
-  final String serviceName;
-  final bool isAuthenticated;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    return Container(
-      decoration: BoxDecoration(
-        color: AppColors.surfaceVariant.withOpacity(0.5),
-        borderRadius: BorderRadius.circular(10),
-      ),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(10),
-        onTap: () async {
-          if (!isAuthenticated) {
-            final authed = await requireAuth(context, ref);
-            if (!authed || !context.mounted) return;
-          }
-          if (context.mounted) {
-            AskQuestionDialog.show(
-              context,
-              serviceId: serviceId,
-              serviceName: serviceName,
-            );
-          }
-        },
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          child: Row(
-            children: [
-              const Icon(Icons.help_outline_rounded,
-                  size: 18, color: AppColors.primary),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Text(
-                  isAuthenticated
-                      ? 'Have a question? Ask us'
-                      : 'Sign in to ask a question',
-                  style: const TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                    color: AppColors.primary,
-                  ),
-                ),
-              ),
-              const Icon(Icons.chevron_right_rounded,
-                  size: 20, color: AppColors.textHint),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _DetailAccordionTile extends StatelessWidget {
-  const _DetailAccordionTile({
-    required this.title,
-    required this.child,
-  });
-
-  final String title;
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: const BoxDecoration(
-        border: Border(
-          bottom: BorderSide(color: AppColors.divider, width: 1),
-        ),
-      ),
-      child: Theme(
-        data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
-        child: ExpansionTile(
-          tilePadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
-          childrenPadding: EdgeInsets.zero,
-          title: Text(
-            title,
-            style: const TextStyle(
-              fontFamily: 'Poppins',
-              fontWeight: FontWeight.w700,
-              fontSize: 15,
-              color: AppColors.textPrimary,
-            ),
-          ),
-          children: [child],
-        ),
-      ),
-    );
-  }
-}
-
-// ── Sticky cart bar ───────────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════════
+// Sticky booking bar — gold pill CTA
+// ═══════════════════════════════════════════════════════════════════════════════
 
 class _NodeBookingBar extends ConsumerWidget {
   const _NodeBookingBar({
@@ -2686,8 +1882,20 @@ class _NodeBookingBar extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final inCart =
-        ref.watch(cartProvider).any((i) => i.serviceId == node.id);
+    final cartItems = ref.watch(cartProvider);
+    final inCart = amcPlan != null
+        ? cartItems.any((i) =>
+            i.serviceId == node.id &&
+            i.isAmc &&
+            i.amcPlanId == amcPlan!.id &&
+            (parentNodeId == null ||
+                i.parentNodeId == null ||
+                i.parentNodeId == parentNodeId))
+        : cartItems.any((i) =>
+            i.serviceId == node.id &&
+            (parentNodeId == null ||
+                i.parentNodeId == null ||
+                i.parentNodeId == parentNodeId));
 
     return Container(
       padding: EdgeInsets.fromLTRB(
@@ -2730,7 +1938,7 @@ class _NodeBookingBar extends ConsumerWidget {
                   child: Text(
                     inCart
                         ? '🛒  View Cart'
-                        : '🛒  ${amcPlan != null ? 'Book Now' : 'Add to Cart'}',
+                        : '🛒  Add to Cart',
                     style: GoogleFonts.poppins(
                         fontSize: 13,
                         fontWeight: FontWeight.w600,
@@ -2774,6 +1982,7 @@ class _WebScaffold extends ConsumerWidget {
     required this.onOptionSelected,
     required this.onAddonToggled,
     required this.onAmcPlanSelected,
+    this.inModal = false,
   });
 
   final CatalogNodeModel node;
@@ -2798,11 +2007,22 @@ class _WebScaffold extends ConsumerWidget {
       onOptionSelected;
   final void Function(String, bool) onAddonToggled;
   final void Function(AmcPlanModel?) onAmcPlanSelected;
+  final bool inModal;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final inCart =
-        ref.watch(cartProvider).any((i) => i.serviceId == node.id);
+    final cart = ref.watch(cartProvider);
+    final cartItem = findMatchingCartItem(
+      cart,
+      serviceId: node.id,
+      isAmc: selectedAmcPlan != null,
+      amcPlanId: selectedAmcPlan?.id,
+      addonIds: selectedAddonIds,
+      effectiveBasePrice: (node.basePrice ?? 0.0) + priceAdjustment,
+      parentNodeId: parentNodeId,
+    );
+    final inCart = cartItem != null;
+    final cartQty = cartItem?.quantity ?? 1;
 
     void addToCart() {
       ref.read(cartProvider.notifier).addToCart(
@@ -2813,7 +2033,349 @@ class _WebScaffold extends ConsumerWidget {
             parentNodeId: parentNodeId,
             amcPlan: selectedAmcPlan,
             amcQuantity: 1,
+            addons: buildSelectedAddons(addOns, selectedAddonIds),
           );
+    }
+
+    final screenH = MediaQuery.sizeOf(context).height;
+
+    final cardDecoration = BoxDecoration(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(20),
+      boxShadow: [
+        BoxShadow(
+          color: const Color(0xFF1A1714).withAlpha(90),
+          blurRadius: 70,
+          spreadRadius: -20,
+          offset: const Offset(0, 30),
+        ),
+      ],
+    );
+
+    final header = _WebHeader(
+      node: node,
+      heroUrl: heroUrl,
+      hasHero: hasHero,
+      displayPrice: displayPrice,
+      hasAdjustment: hasAdjustment,
+      onClose: () => Navigator.of(context).maybePop(),
+      showClose: !inModal,
+    );
+
+    final middleSections = <Widget>[
+      if (node.isLeafBookable && attrs.isNotEmpty)
+        Padding(
+          padding: const EdgeInsets.fromLTRB(28, 20, 28, 0),
+          child: ServiceAttributeSection(
+            attrs: attrs,
+            selections: selections,
+            onChanged: (a, o) => onOptionSelected(a, o, attrs),
+          ),
+        ),
+
+      if (node.isLeafBookable && addOns.isNotEmpty)
+        Container(
+          padding: const EdgeInsets.fromLTRB(28, 24, 28, 24),
+          decoration: const BoxDecoration(
+            border: Border(
+              top: BorderSide(color: _kBorder),
+              bottom: BorderSide(color: _kBorder),
+            ),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _SectionHeaderRow(title: 'Suggested Add-ons'),
+              const SizedBox(height: 14),
+              _WebAddonsGrid(
+                addOns: addOns,
+                selectedIds: selectedAddonIds,
+                onToggle: onAddonToggled,
+              ),
+            ],
+          ),
+        ),
+
+      Padding(
+        padding: const EdgeInsets.fromLTRB(28, 24, 28, 0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (node.isLeafBookable)
+              Consumer(
+                builder: (ctx, ref, _) {
+                  final plans =
+                      ref.watch(amcPlansProvider(node.id)).valueOrNull;
+                  if (plans == null || plans.isEmpty) {
+                    return const SizedBox.shrink();
+                  }
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _SectionHeaderRow(title: 'AMC Plans'),
+                      const SizedBox(height: 12),
+                      _InlineAmcPlans(
+                        serviceId: node.id,
+                        selectedPlan: selectedAmcPlan,
+                        onPlanSelected: onAmcPlanSelected,
+                        regularPrice: node.basePrice,
+                        isWeb: true,
+                      ),
+                      const SizedBox(height: 26),
+                    ],
+                  );
+                },
+              ),
+
+            if (node.isLeafBookable) ...[
+              Text('About this service',
+                  style: GoogleFonts.poppins(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700,
+                      color: _kInk)),
+              const SizedBox(height: 10),
+              Text(
+                node.description?.isNotEmpty == true
+                    ? node.description!
+                    : 'No description available.',
+                style:
+                    const TextStyle(fontSize: 13, color: _kMuted, height: 1.6),
+              ),
+              const SizedBox(height: 18),
+
+              if (node.includedItems.isNotEmpty)
+                _IncludedSection(items: node.includedItems),
+              if (node.excludedItems.isNotEmpty)
+                _ExcludedSection(items: node.excludedItems),
+              if (node.beforeAfterPairs.isNotEmpty)
+                _BeforeAfterSection(pairs: node.beforeAfterPairs),
+
+              if (node.contentBlocks.isNotEmpty)
+                _ContentBlocksSection(blocks: node.contentBlocks),
+
+              Text('FAQs',
+                  style: GoogleFonts.poppins(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700,
+                      color: _kInk)),
+              const SizedBox(height: 12),
+              if (faqs.isEmpty) ...[
+                const Text('No FAQs yet.',
+                    style: TextStyle(fontSize: 13, color: _kMuted)),
+                const SizedBox(height: 6),
+                AskQuestionLink(serviceId: node.id, parentId: parentNodeId),
+                const SizedBox(height: 8),
+              ] else ...[
+                FaqSection(faqs: faqs),
+                const SizedBox(height: 6),
+                AskQuestionLink(serviceId: node.id, parentId: parentNodeId),
+                const SizedBox(height: 12),
+              ],
+
+              const SizedBox(height: 8),
+              Text(
+                node.reviewCount > 0
+                    ? 'Reviews (${node.reviewCount})'
+                    : 'Reviews',
+                style: GoogleFonts.poppins(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                    color: _kInk),
+              ),
+              const SizedBox(height: 12),
+              ServiceReviewsSection(serviceId: node.id, showHeader: false),
+              const SizedBox(height: 16),
+            ],
+
+            if (node.hasChildren)
+              (isUnavailable || isEffectivelyHidden)
+                  ? CatalogUnavailabilityBanner(
+                      message: isUnavailable
+                          ? (avail?.message ?? node.relUnavailabilityMessage)
+                          : null,
+                      isHidden: isEffectivelyHidden,
+                    )
+                  : _ChildrenSection(node: node, children: children),
+
+            if (!node.hasChildren && !node.isBookable)
+              const _ComingSoonBanner(),
+          ],
+        ),
+      ),
+    ];
+
+    final footer = node.isLeafBookable
+        ? (isUnavailable || isEffectivelyHidden)
+            ? CatalogUnavailabilityBar(
+                message: isUnavailable
+                    ? (avail?.message ?? node.relUnavailabilityMessage)
+                    : null,
+              )
+            : Container(
+            padding:
+                const EdgeInsets.symmetric(horizontal: 28, vertical: 18),
+            decoration: const BoxDecoration(
+              border: Border(top: BorderSide(color: _kBorder)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (inCart && cartItem.addons.isNotEmpty) ...[
+                  ...cartItem.addons.map((a) => Padding(
+                        padding: const EdgeInsets.only(bottom: 4),
+                        child: Row(
+                          children: [
+                            Text('+ ${a.addonName}',
+                                style: const TextStyle(
+                                    fontSize: 12, color: _kMuted)),
+                            const Spacer(),
+                            Text('₹${a.addonPrice.toInt()}',
+                                style: const TextStyle(
+                                    fontSize: 12, color: _kMuted)),
+                          ],
+                        ),
+                      )),
+                  const SizedBox(height: 10),
+                ],
+                Row(
+                  children: [
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      inCart ? 'Total' : 'From',
+                      style: const TextStyle(fontSize: 11, color: _kMuted2),
+                    ),
+                    Text(
+                      '₹${(displayPrice * cartQty).toInt()}',
+                      style: GoogleFonts.poppins(
+                          fontSize: 20,
+                          fontWeight: FontWeight.w800,
+                          color: _kInk,
+                          height: 1.1),
+                    ),
+                  ],
+                ),
+                const Spacer(),
+                if (inCart) ...[
+                  _WebQtyStepper(
+                    quantity: cartQty,
+                    onDecrement: () => ref
+                        .read(cartProvider.notifier)
+                        .updateQuantity(cartItem.bookingId, cartQty - 1),
+                    onIncrement: () => ref
+                        .read(cartProvider.notifier)
+                        .updateQuantity(cartItem.bookingId, cartQty + 1),
+                  ),
+                  const SizedBox(width: 12),
+                  MouseRegion(
+                    cursor: SystemMouseCursors.click,
+                    child: GestureDetector(
+                      onTap: () => Navigator.of(context).maybePop(),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 24, vertical: 13),
+                        decoration: BoxDecoration(
+                            color: _kInk,
+                            borderRadius: BorderRadius.circular(100)),
+                        child: Text(
+                          'Done',
+                          style: GoogleFonts.poppins(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.white),
+                        ),
+                      ),
+                    ),
+                  ),
+                ] else
+                  MouseRegion(
+                    cursor: SystemMouseCursors.click,
+                    child: GestureDetector(
+                      onTap: addToCart,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 24, vertical: 13),
+                        decoration: BoxDecoration(
+                            color: _kInk,
+                            borderRadius: BorderRadius.circular(100)),
+                        child: Text(
+                          '🛒  Add to Cart',
+                          style: GoogleFonts.poppins(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.white),
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+              ],
+            ),
+          )
+        : null;
+
+    if (inModal) {
+      return Scaffold(
+        backgroundColor: Colors.transparent,
+        body: SafeArea(
+          child: Center(
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                  maxWidth: 920, maxHeight: screenH - 48),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 20, vertical: 20),
+                child: Stack(
+                  children: [
+                    Container(
+                      decoration: cardDecoration,
+                      clipBehavior: Clip.antiAlias,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Expanded(
+                            child: SingleChildScrollView(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
+                                children: [header, ...middleSections],
+                              ),
+                            ),
+                          ),
+                          if (footer != null) footer,
+                        ],
+                      ),
+                    ),
+                    Positioned(
+                      top: 12,
+                      right: 12,
+                      child: MouseRegion(
+                        cursor: SystemMouseCursors.click,
+                        child: GestureDetector(
+                          onTap: () => Navigator.of(context).maybePop(),
+                          child: Container(
+                            width: 34,
+                            height: 34,
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFF2EFE9),
+                              borderRadius: BorderRadius.circular(100),
+                            ),
+                            child: const Icon(Icons.close_rounded,
+                                size: 16, color: _kInk),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
     }
 
     return Scaffold(
@@ -2827,246 +2389,81 @@ class _WebScaffold extends ConsumerWidget {
                 padding: const EdgeInsets.symmetric(
                     horizontal: 20, vertical: 24),
                 child: Container(
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(20),
-                    boxShadow: [
-                      BoxShadow(
-                        color: const Color(0xFF1A1714).withAlpha(90),
-                        blurRadius: 70,
-                        spreadRadius: -20,
-                        offset: const Offset(0, 30),
-                      ),
-                    ],
-                  ),
+                  decoration: cardDecoration,
                   clipBehavior: Clip.antiAlias,
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      // ── Header: photo | info ───────────────────────────────
-                      _WebHeader(
-                        node: node,
-                        heroUrl: heroUrl,
-                        hasHero: hasHero,
-                        displayPrice: displayPrice,
-                        hasAdjustment: hasAdjustment,
-                        onClose: () => Navigator.of(context).maybePop(),
-                      ),
-
-                      // ── Attribute selection ────────────────────────────────
-                      if (node.isLeafBookable && attrs.isNotEmpty)
-                        Padding(
-                          padding:
-                              const EdgeInsets.fromLTRB(28, 20, 28, 0),
-                          child: ServiceAttributeSection(
-                            attrs: attrs,
-                            selections: selections,
-                            onChanged: (a, o) =>
-                                onOptionSelected(a, o, attrs),
-                          ),
-                        ),
-
-                      // ── Add-ons ────────────────────────────────────────────
-                      if (node.isLeafBookable && addOns.isNotEmpty)
-                        Container(
-                          padding: const EdgeInsets.fromLTRB(28, 24, 28, 24),
-                          decoration: const BoxDecoration(
-                            border: Border(
-                              top: BorderSide(color: _kBorder),
-                              bottom: BorderSide(color: _kBorder),
-                            ),
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              _SectionHeaderRow(title: 'Suggested Add-ons'),
-                              const SizedBox(height: 14),
-                              // 4-col grid
-                              _WebAddonsGrid(
-                                addOns: addOns,
-                                selectedIds: selectedAddonIds,
-                                onToggle: onAddonToggled,
-                              ),
-                            ],
-                          ),
-                        ),
-
-                      // ── AMC + About + FAQs + Reviews ───────────────────────
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(28, 24, 28, 0),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            if (node.isLeafBookable)
-                              Consumer(
-                                builder: (ctx, ref, _) {
-                                  final plans = ref
-                                      .watch(amcPlansProvider(node.id))
-                                      .valueOrNull;
-                                  if (plans == null || plans.isEmpty) {
-                                    return const SizedBox.shrink();
-                                  }
-                                  return Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      _SectionHeaderRow(title: 'AMC Plans'),
-                                      const SizedBox(height: 12),
-                                      _InlineAmcPlans(
-                                        serviceId: node.id,
-                                        selectedPlan: selectedAmcPlan,
-                                        onPlanSelected: onAmcPlanSelected,
-                                        regularPrice: node.basePrice,
-                                        isWeb: true,
-                                      ),
-                                      const SizedBox(height: 26),
-                                    ],
-                                  );
-                                },
-                              ),
-
-                            if (node.isLeafBookable) ...[
-                              // About — flat on web
-                              Text('About this service',
-                                  style: GoogleFonts.poppins(
-                                      fontSize: 15,
-                                      fontWeight: FontWeight.w700,
-                                      color: _kInk)),
-                              const SizedBox(height: 10),
-                              Text(
-                                node.description?.isNotEmpty == true
-                                    ? node.description!
-                                    : 'No description available.',
-                                style: const TextStyle(
-                                    fontSize: 13,
-                                    color: _kMuted,
-                                    height: 1.6),
-                              ),
-                              const SizedBox(height: 18),
-
-                              if (node.includedItems.isNotEmpty)
-                                _IncludedSection(items: node.includedItems),
-                              if (node.excludedItems.isNotEmpty)
-                                _ExcludedSection(items: node.excludedItems),
-                              if (node.beforeAfterPairs.isNotEmpty)
-                                _BeforeAfterSection(
-                                    pairs: node.beforeAfterPairs),
-
-                              if (node.contentBlocks.isNotEmpty)
-                                _ContentBlocksSection(
-                                    blocks: node.contentBlocks),
-
-                              Text('FAQs',
-                                  style: GoogleFonts.poppins(
-                                      fontSize: 15,
-                                      fontWeight: FontWeight.w700,
-                                      color: _kInk)),
-                              const SizedBox(height: 12),
-                              if (faqs.isEmpty) ...[
-                                const Text('No FAQs yet.',
-                                    style: TextStyle(
-                                        fontSize: 13, color: _kMuted)),
-                                const SizedBox(height: 6),
-                                AskQuestionLink(serviceId: node.id, parentId: parentNodeId),
-                                const SizedBox(height: 8),
-                              ] else ...[
-                                FaqSection(faqs: faqs),
-                                const SizedBox(height: 6),
-                                AskQuestionLink(serviceId: node.id, parentId: parentNodeId),
-                                const SizedBox(height: 12),
-                              ],
-                              _AccordionSection(
-                                label: node.reviewCount > 0
-                                    ? 'Reviews (${node.reviewCount})'
-                                    : 'Reviews',
-                                isLast: true,
-                                child: ServiceReviewsSection(
-                                    serviceId: node.id, showHeader: false),
-                              ),
-                              const SizedBox(height: 4),
-                            ],
-
-                            if (node.hasChildren)
-                              (isUnavailable || isEffectivelyHidden)
-                                  ? CatalogUnavailabilityBanner(
-                                      message: isUnavailable
-                                          ? avail?.message
-                                          : null,
-                                      isHidden: isEffectivelyHidden,
-                                    )
-                                  : _ChildrenSection(
-                                      node: node,
-                                      children: children,
-                                    ),
-
-                            if (!node.hasChildren && !node.isBookable)
-                              const _ComingSoonBanner(),
-                          ],
-                        ),
-                      ),
-
-                      // ── Footer bar ─────────────────────────────────────────
-                      if (node.isLeafBookable)
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 28, vertical: 18),
-                          decoration: const BoxDecoration(
-                            border:
-                                Border(top: BorderSide(color: _kBorder)),
-                          ),
-                          child: Row(
-                            children: [
-                              Column(
-                                crossAxisAlignment:
-                                    CrossAxisAlignment.start,
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  const Text('From',
-                                      style: TextStyle(
-                                          fontSize: 11, color: _kMuted2)),
-                                  Text('₹${displayPrice.toInt()}',
-                                      style: GoogleFonts.poppins(
-                                          fontSize: 20,
-                                          fontWeight: FontWeight.w800,
-                                          color: _kInk,
-                                          height: 1.1)),
-                                ],
-                              ),
-                              const Spacer(),
-                              MouseRegion(
-                                cursor: SystemMouseCursors.click,
-                                child: GestureDetector(
-                                onTap: inCart
-                                    ? () => openCart(context)
-                                    : addToCart,
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 24, vertical: 13),
-                                  decoration: BoxDecoration(
-                                      color: _kInk,
-                                      borderRadius:
-                                          BorderRadius.circular(100)),
-                                  child: Text(
-                                    inCart
-                                        ? '🛒  View Cart'
-                                        : '🛒  ${selectedAmcPlan != null ? 'Book Now' : 'Add to Cart'}',
-                                    style: GoogleFonts.poppins(
-                                        fontSize: 14,
-                                        fontWeight: FontWeight.w600,
-                                        color: Colors.white),
-                                  ),
-                                ),
-                              ),
-                              ),
-                            ],
-                          ),
-                        ),
+                      header,
+                      ...middleSections,
+                      if (footer != null) footer,
                     ],
                   ),
                 ),
               ),
             ),
           ),
+        ),
+      ),
+    );
+  }
+}
+
+// ── Web quantity stepper (− qty +) used in the web footer when in-cart ────────
+
+class _WebQtyStepper extends StatelessWidget {
+  const _WebQtyStepper({
+    required this.quantity,
+    required this.onDecrement,
+    required this.onIncrement,
+  });
+
+  final int quantity;
+  final VoidCallback onDecrement;
+  final VoidCallback onIncrement;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        border: Border.all(color: _kBorder),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _WebStepBtn(icon: Icons.remove_rounded, onTap: onDecrement),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 14),
+            child: Text(
+              '$quantity',
+              style: GoogleFonts.poppins(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                  color: _kInk),
+            ),
+          ),
+          _WebStepBtn(icon: Icons.add_rounded, onTap: onIncrement),
+        ],
+      ),
+    );
+  }
+}
+
+class _WebStepBtn extends StatelessWidget {
+  const _WebStepBtn({required this.icon, required this.onTap});
+  final IconData icon;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      child: GestureDetector(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+          child: Icon(icon, size: 16, color: _kInk),
         ),
       ),
     );
@@ -3454,6 +2851,7 @@ class _WebHeader extends StatelessWidget {
     required this.displayPrice,
     required this.hasAdjustment,
     required this.onClose,
+    this.showClose = true,
   });
 
   final CatalogNodeModel node;
@@ -3461,6 +2859,7 @@ class _WebHeader extends StatelessWidget {
   final bool hasHero;
   final double displayPrice;
   final bool hasAdjustment;
+  final bool showClose;
   final VoidCallback onClose;
 
   @override
@@ -3612,26 +3011,26 @@ class _WebHeader extends StatelessWidget {
             ],
           ),
 
-          // Close ✕
-          Positioned(
-            top: 0,
-            right: 0,
-            child: MouseRegion(
-              cursor: SystemMouseCursors.click,
-              child: GestureDetector(
-              onTap: onClose,
-              child: Container(
-                width: 34,
-                height: 34,
-                decoration: BoxDecoration(
-                    color: const Color(0xFFF2EFE9),
-                    borderRadius: BorderRadius.circular(100)),
-                child: const Icon(Icons.close_rounded,
-                    size: 16, color: _kInk),
+          if (showClose)
+            Positioned(
+              top: 0,
+              right: 0,
+              child: MouseRegion(
+                cursor: SystemMouseCursors.click,
+                child: GestureDetector(
+                  onTap: onClose,
+                  child: Container(
+                    width: 34,
+                    height: 34,
+                    decoration: BoxDecoration(
+                        color: const Color(0xFFF2EFE9),
+                        borderRadius: BorderRadius.circular(100)),
+                    child: const Icon(Icons.close_rounded,
+                        size: 16, color: _kInk),
+                  ),
+                ),
               ),
             ),
-            ),
-          ),
         ],
       ),
     );

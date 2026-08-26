@@ -42,6 +42,7 @@ class CartSyncService {
       final payload = {
         'customer_id': customerId,
         'service_id': item.serviceId,
+        'parent_node_id': item.parentNodeId,
         'service_name': item.serviceName,
         'unit_price': item.unitPrice,
         'quantity': item.quantity,
@@ -53,7 +54,7 @@ class CartSyncService {
       );
       final response = await _client.from('cart_items').upsert(
         payload,
-        onConflict: 'customer_id,service_id',
+        onConflict: 'customer_id,service_id,parent_node_id',
       );
       debugPrint('[DODO][CartSync][6] upsert response: $response');
     } catch (e) {
@@ -62,15 +63,21 @@ class CartSyncService {
     }
   }
 
-  Future<void> deleteItem(String serviceId) async {
+  Future<void> deleteItem(String serviceId, String? parentNodeId) async {
     try {
       final customerId = await _customerId();
       if (customerId == null) return;
-      await _client
+      var query = _client
           .from('cart_items')
           .delete()
           .eq('customer_id', customerId)
           .eq('service_id', serviceId);
+      if (parentNodeId != null) {
+        query = query.eq('parent_node_id', parentNodeId);
+      } else {
+        query = query.isFilter('parent_node_id', null);
+      }
+      await query;
     } catch (e) {
       debugPrint('[DODO][CartSync] deleteItem failed: $e');
     }
@@ -95,7 +102,7 @@ class CartSyncService {
       if (customerId == null) return [];
       final rows = await _client
           .from('cart_items')
-          .select('service_id, service_name, image_url, unit_price, quantity')
+          .select('service_id, parent_node_id, service_name, image_url, unit_price, quantity')
           .eq('customer_id', customerId);
 
       final items = rows as List<dynamic>;
@@ -117,8 +124,11 @@ class CartSyncService {
       return items
           .map((r) {
             final sid = r['service_id'] as String;
+            final pnid = r['parent_node_id'] as String?;
             return CartItem(
+              bookingId: '${sid}_${pnid ?? ''}_${DateTime.now().millisecondsSinceEpoch}',
               serviceId: sid,
+              parentNodeId: pnid,
               serviceName: r['service_name'] as String,
               imageUrl: r['image_url'] as String?,
               unitPrice: (r['unit_price'] as num).toDouble(),

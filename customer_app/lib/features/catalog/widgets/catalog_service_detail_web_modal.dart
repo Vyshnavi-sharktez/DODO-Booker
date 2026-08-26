@@ -146,7 +146,10 @@ class _CatalogServiceDetailWebModalState
     final addOns =
         ref.watch(serviceAddonsProvider(node.id)).valueOrNull ?? <AddOnModel>[];
     final faqs =
-        ref.watch(catalogNodeFaqsProvider(node.id)).valueOrNull ??
+        ref.watch(catalogNodeFaqsProvider((
+              nodeId: node.id,
+              parentNodeId: widget.parentNodeId,
+            ))).valueOrNull ??
             <FaqModel>[];
     final answeredQuestions =
         ref.watch(answeredCustomerQuestionsProvider(node.id)).valueOrNull ??
@@ -160,15 +163,19 @@ class _CatalogServiceDetailWebModalState
         addresses.where((a) => a.isDefault).firstOrNull ??
             (addresses.isNotEmpty ? addresses.first : null);
 
+    final effectiveParentId =
+        widget.parentNodeId ?? (node.isShared ? null : node.parentId);
     final availAsync = ref.watch(nodeAvailabilityProvider((
       nodeId: node.id,
-      parentId: widget.parentNodeId ?? node.parentId,
+      parentId: effectiveParentId,
       lat: defaultAddress?.latitude,
       lng: defaultAddress?.longitude,
     )));
     final avail = availAsync.valueOrNull;
-    final isUnavailable = avail?.status == 'unavailable';
-    final isEffectivelyHidden = avail?.status == 'hidden';
+    final isUnavailable = avail?.status == 'unavailable' ||
+        node.relAvailabilityStatus == 'unavailable';
+    final isEffectivelyHidden = avail?.status == 'hidden' ||
+        node.relAvailabilityStatus == 'hidden';
 
     final addonsTotal =
         totalAddonsPrice(buildSelectedAddons(addOns, _selectedAddonIds));
@@ -265,7 +272,8 @@ class _CatalogServiceDetailWebModalState
                                     if (isUnavailable || isEffectivelyHidden)
                                       CatalogUnavailabilityBanner(
                                         message: isUnavailable
-                                            ? avail?.message
+                                            ? (avail?.message ??
+                                                node.relUnavailabilityMessage)
                                             : null,
                                         isHidden: isEffectivelyHidden,
                                       )
@@ -321,10 +329,14 @@ class _CatalogServiceDetailWebModalState
                                       title: node.reviewCount > 0
                                           ? 'Reviews (${node.reviewCount})'
                                           : 'Reviews',
-                                      child: ServiceReviewsSection(
-                                        serviceId: node.id,
+                                      child: Padding(
                                         padding: const EdgeInsets.fromLTRB(
                                             28, 8, 28, 16),
+                                        child: ServiceReviewsSection(
+                                          serviceId: node.id,
+                                          showHeader: false,
+                                          flat: true,
+                                        ),
                                       ),
                                     ),
 
@@ -338,8 +350,10 @@ class _CatalogServiceDetailWebModalState
                           // ── Sticky booking bar ───────────────────────────
                           if (isUnavailable || isEffectivelyHidden)
                             CatalogUnavailabilityBar(
-                              message:
-                                  isUnavailable ? avail?.message : null,
+                              message: isUnavailable
+                                  ? (avail?.message ??
+                                      node.relUnavailabilityMessage)
+                                  : null,
                             )
                           else
                             _WebDetailBookingBar(
@@ -1383,8 +1397,20 @@ class _WebDetailBookingBar extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final inCart =
-        ref.watch(cartProvider).any((item) => item.serviceId == node.id);
+    final cart = ref.watch(cartProvider);
+    final inCart = amcPlan != null
+        ? cart.any((item) =>
+            item.serviceId == node.id &&
+            item.isAmc &&
+            item.amcPlanId == amcPlan!.id &&
+            (parentNodeId == null ||
+                item.parentNodeId == null ||
+                item.parentNodeId == parentNodeId))
+        : cart.any((item) =>
+            item.serviceId == node.id &&
+            (parentNodeId == null ||
+                item.parentNodeId == null ||
+                item.parentNodeId == parentNodeId));
 
     return Container(
       decoration: BoxDecoration(
@@ -1466,7 +1492,7 @@ class _WebDetailBookingBar extends ConsumerWidget {
                     icon: const Icon(Icons.add_shopping_cart_rounded,
                         size: 16),
                     label: Text(
-                      amcPlan != null ? 'Book Now' : 'Add to Cart',
+                      'Add to Cart',
                       style: const TextStyle(
                           fontSize: 14, fontWeight: FontWeight.w600),
                     ),

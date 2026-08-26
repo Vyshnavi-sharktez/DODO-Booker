@@ -982,6 +982,7 @@ class _AmcContractDetailsScreenState
       // Prefill quantity from the previous contract; customer adjusts in cart.
       final prefillQty = contract.quantity;
       final cartItem = CartItem(
+        bookingId: '${contract.serviceId}_${DateTime.now().millisecondsSinceEpoch}',
         serviceId: contract.serviceId,
         serviceName: contract.serviceName,
         unitPrice: selection.plan.finalPrice,

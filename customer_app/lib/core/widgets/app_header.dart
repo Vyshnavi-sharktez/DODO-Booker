@@ -1574,65 +1574,6 @@ class _HeaderIconBtnState extends State<_HeaderIconBtn> {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Wishlist button
-// ─────────────────────────────────────────────────────────────────────────────
-
-class _WishlistButton extends StatefulWidget {
-  const _WishlistButton();
-
-  @override
-  State<_WishlistButton> createState() => _WishlistButtonState();
-}
-
-class _WishlistButtonState extends State<_WishlistButton> {
-  bool _hovered = false;
-
-  @override
-  Widget build(BuildContext context) {
-    return MouseRegion(
-      cursor: SystemMouseCursors.click,
-      onEnter: (_) => setState(() => _hovered = true),
-      onExit: (_) => setState(() => _hovered = false),
-      child: GestureDetector(
-        onTap: () {
-          if (MediaQuery.of(context).size.width >= 768) {
-            PageSheet.show(
-              context,
-              title: 'Wishlist',
-              child: const WishlistScreen(inModal: true),
-            );
-          } else {
-            context.push('/wishlist');
-          }
-        },
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 150),
-          width: 40,
-          height: 40,
-          decoration: BoxDecoration(
-            color: _hovered
-                ? Colors.white.withAlpha(28)
-                : Colors.white.withAlpha(14),
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color: _hovered
-                  ? Colors.white.withAlpha(80)
-                  : Colors.white.withAlpha(35),
-              width: 0.8,
-            ),
-          ),
-          child: Icon(
-            Icons.favorite_outline_rounded,
-            size: 20,
-            color: _hovered ? AppColors.gold : Colors.white.withAlpha(220),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
 // Profile avatar
 // ─────────────────────────────────────────────────────────────────────────────
 
