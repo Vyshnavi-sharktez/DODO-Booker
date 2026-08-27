@@ -6,6 +6,16 @@ class CustomerQuestionsRepository {
 
   const CustomerQuestionsRepository(this._db);
 
+  Future<CustomerQuestion?> fetchById(String questionId) async {
+    final data = await _db
+        .from('customer_questions')
+        .select()
+        .eq('id', questionId)
+        .maybeSingle();
+    if (data == null) return null;
+    return CustomerQuestion.fromJson(data as Map<String, dynamic>);
+  }
+
   Future<List<CustomerQuestion>> fetchForService(
     String serviceId, {
     String? parentNodeId,
@@ -16,6 +26,8 @@ class CustomerQuestionsRepository {
         .eq('service_id', serviceId);
     if (parentNodeId != null) {
       query = query.eq('parent_node_id', parentNodeId);
+    } else {
+      query = query.filter('parent_node_id', 'is', null);
     }
     final data = await query.order('created_at', ascending: false);
     return (data as List)

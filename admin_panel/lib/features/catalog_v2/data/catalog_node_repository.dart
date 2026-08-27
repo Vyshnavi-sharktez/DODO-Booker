@@ -363,6 +363,8 @@ class CatalogNodeRepository {
     return (data as List).length;
   }
 
+  Future<CatalogNode> fetchById(String id) => _fetchById(id);
+
   Future<CatalogNode> _fetchById(String id) async {
     final data = await _supabase
         .from('catalog_nodes_view')

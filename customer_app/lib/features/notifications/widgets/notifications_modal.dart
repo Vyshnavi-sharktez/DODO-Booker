@@ -60,7 +60,7 @@ class _NotificationsModalState extends ConsumerState<NotificationsModal> {
       Navigator.of(context).pop();
       final node = await ref.read(catalogServiceProvider).fetchNode(serviceId);
       if (node != null && targetContext.mounted) {
-        openCatalogNode(targetContext, node);
+        openCatalogNode(targetContext, node, parentId: n.parentNodeId);
       }
     }
   }
