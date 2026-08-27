@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:uuid/uuid.dart';
 
 import '../../../core/config/supabase_config.dart';
 import '../../../models/faq_model.dart';
@@ -143,7 +144,9 @@ class CatalogService {
     required String question,
   }) async {
     if (!_ready) return;
+    final questionId = const Uuid().v4();
     await _db.from('customer_questions').insert({
+      'id': questionId,
       'service_id': serviceId,
       if (parentNodeId != null) 'parent_node_id': parentNodeId,
       'customer_id': customerId,
@@ -164,6 +167,8 @@ class CatalogService {
       'is_read': false,
       'entity_type': 'customer_question',
       'entity_id': serviceId,
+      if (parentNodeId != null) 'parent_node_id': parentNodeId,
+      'customer_question_id': questionId,
     });
   }
 

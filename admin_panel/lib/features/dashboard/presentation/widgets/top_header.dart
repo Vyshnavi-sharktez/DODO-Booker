@@ -9,6 +9,7 @@ import '../../../../features/notifications/domain/models/app_notification.dart';
 import '../../../bookings/application/providers/bookings_providers.dart';
 import '../../../bookings/presentation/widgets/booking_details_dialog.dart';
 import '../../../catalog_v2/application/providers/catalog_node_providers.dart';
+import '../../../customer_questions/application/providers/customer_questions_providers.dart';
 import '../../../service_faqs/presentation/widgets/node_faqs_dialog.dart';
 
 final _timeFmt = DateFormat('dd MMM, h:mm a');
@@ -122,7 +123,7 @@ class _NotificationsPanelDialog extends ConsumerStatefulWidget {
 
 class _NotificationsPanelDialogState
     extends ConsumerState<_NotificationsPanelDialog> {
-  void _handleTap(AppNotification n) {
+  Future<void> _handleTap(AppNotification n) async {
     if (!n.isRead) {
       ref
           .read(notificationsNotifierProvider.notifier)
@@ -155,18 +156,47 @@ class _NotificationsPanelDialogState
     }
 
     if (n.entityType == 'customer_question' && n.entityId != null) {
-      final allNodes =
-          ref.read(catalogNodeNotifierProvider).valueOrNull ?? [];
-      final serviceNode =
-          allNodes.where((nd) => nd.id == n.entityId).firstOrNull;
+      // Fetch the service node from cache or repo.
+      var serviceNode =
+          (ref.read(catalogNodeNotifierProvider).valueOrNull ?? [])
+              .where((nd) => nd.id == n.entityId)
+              .firstOrNull;
+      if (serviceNode == null) {
+        try {
+          serviceNode = await ref
+              .read(catalogNodeRepositoryProvider)
+              .fetchById(n.entityId!);
+        } catch (_) {}
+      }
+
+      // Resolve the parent context from the question record so the panel
+      // uses the same (service_id, parent_node_id) scope as the normal
+      // catalog FAQ path. Falls back to the parent stored on the notification.
+      String? resolvedParentId = n.parentNodeId;
+      if (n.customerQuestionId != null) {
+        try {
+          final question = await ref
+              .read(customerQuestionsRepositoryProvider)
+              .fetchById(n.customerQuestionId!);
+          if (question != null) resolvedParentId = question.parentNodeId;
+        } catch (_) {}
+      }
+
       final navKey = router.routerDelegate.navigatorKey;
       Navigator.of(context).pop();
       router.go('/dashboard/catalog');
       if (serviceNode != null) {
+        final node = serviceNode;
+        final parentId = resolvedParentId;
         WidgetsBinding.instance.addPostFrameCallback((_) {
           final ctx = navKey.currentContext;
           if (ctx != null) {
-            NodeFaqsDialog.show(ctx, serviceNode, parentId: n.parentNodeId);
+            NodeFaqsDialog.show(
+              ctx,
+              node,
+              parentId: parentId,
+              focusQuestionId: n.customerQuestionId,
+            );
           }
         });
       }

@@ -8,7 +8,12 @@ import '../../domain/models/service_faq.dart';
 import 'faq_form_dialog.dart';
 
 class NodeFaqsDialog extends ConsumerStatefulWidget {
-  const NodeFaqsDialog({super.key, required this.node, this.parentId});
+  const NodeFaqsDialog({
+    super.key,
+    required this.node,
+    this.parentId,
+    this.focusQuestionId,
+  });
 
   final CatalogNode node;
 
@@ -16,15 +21,24 @@ class NodeFaqsDialog extends ConsumerStatefulWidget {
   /// Used to scope customer questions to this specific parent context.
   final String? parentId;
 
+  /// When set, the dialog opens on the Customer Questions tab and the panel
+  /// scrolls to this specific question.
+  final String? focusQuestionId;
+
   static Future<void> show(
     BuildContext context,
     CatalogNode node, {
     String? parentId,
+    String? focusQuestionId,
   }) {
     return showDialog(
       context: context,
       barrierDismissible: true,
-      builder: (_) => NodeFaqsDialog(node: node, parentId: parentId),
+      builder: (_) => NodeFaqsDialog(
+        node: node,
+        parentId: parentId,
+        focusQuestionId: focusQuestionId,
+      ),
     );
   }
 
@@ -41,7 +55,11 @@ class _NodeFaqsDialogState extends ConsumerState<NodeFaqsDialog>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
+    _tabController = TabController(
+      length: 2,
+      vsync: this,
+      initialIndex: widget.focusQuestionId != null ? 1 : 0,
+    );
   }
 
   @override
@@ -199,7 +217,11 @@ class _NodeFaqsDialogState extends ConsumerState<NodeFaqsDialog>
                   ),
 
                   // ── Tab 2: Customer Questions ───────────────────────
-                  CustomerQuestionsPanel(node: node, parentNodeId: widget.parentId),
+                  CustomerQuestionsPanel(
+                    node: node,
+                    parentNodeId: widget.parentId,
+                    focusQuestionId: widget.focusQuestionId,
+                  ),
                 ],
               ),
             ),

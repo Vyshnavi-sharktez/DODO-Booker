@@ -174,8 +174,6 @@ class _DesktopRow extends StatelessWidget {
               context: context, child: const NotificationsModal());
         }),
         const SizedBox(width: 8),
-        const _WishlistButton(),
-        const SizedBox(width: 8),
         const _CartButton(),
         const SizedBox(width: 8),
         _ProfileAvatar(onTap: onProfileTap),
@@ -242,8 +240,6 @@ class _WideRow extends StatelessWidget {
               context: context, child: const NotificationsModal());
         }),
         const SizedBox(width: 8),
-        const _WishlistButton(),
-        const SizedBox(width: 8),
         const _CartButton(),
         const SizedBox(width: 8),
         _ProfileAvatar(onTap: onProfileTap),
@@ -298,8 +294,6 @@ class _MobileRow extends StatelessWidget {
           AppModalDialog.show(
               context: context, child: const NotificationsModal());
         }),
-        const SizedBox(width: 4),
-        const _WishlistButton(),
         const SizedBox(width: 4),
         const NavSearchButton(),
         const SizedBox(width: 4),

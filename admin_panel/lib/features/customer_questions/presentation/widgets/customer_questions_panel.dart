@@ -5,34 +5,73 @@ import '../../../catalog_v2/domain/models/catalog_node.dart';
 import '../../application/providers/customer_questions_providers.dart';
 import '../../domain/models/customer_question.dart';
 
-class CustomerQuestionsPanel extends ConsumerWidget {
+class CustomerQuestionsPanel extends ConsumerStatefulWidget {
   const CustomerQuestionsPanel({
     super.key,
     required this.node,
     this.parentNodeId,
+    this.focusQuestionId,
   });
 
   final CatalogNode node;
 
-  /// When set, only customer questions submitted from this parent context are
-  /// shown. Pass null to show all questions for the service (global view).
+  /// Scopes questions to this parent context. Null means only questions
+  /// submitted without a parent context (strict IS NULL filter), matching
+  /// the customer app's own fetchAnsweredQuestionsForNode behaviour.
   final String? parentNodeId;
 
+  /// When set, the list scrolls to this question after data loads.
+  final String? focusQuestionId;
+
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final key = (
-      serviceId: node.id,
-      serviceName: node.name,
-      parentNodeId: parentNodeId,
+  ConsumerState<CustomerQuestionsPanel> createState() =>
+      _CustomerQuestionsPanelState();
+}
+
+class _CustomerQuestionsPanelState
+    extends ConsumerState<CustomerQuestionsPanel> {
+  final _scrollController = ScrollController();
+  final Map<String, GlobalKey> _itemKeys = {};
+  bool _didScroll = false;
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  void _scrollToFocused() {
+    if (_didScroll || widget.focusQuestionId == null) return;
+    final key = _itemKeys[widget.focusQuestionId!];
+    if (key?.currentContext == null) return;
+    _didScroll = true;
+    Scrollable.ensureVisible(
+      key!.currentContext!,
+      duration: const Duration(milliseconds: 300),
+      curve: Curves.easeOut,
     );
-    final questionsAsync = ref.watch(customerQuestionsNotifierProvider(key));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final providerKey = (
+      serviceId: widget.node.id,
+      serviceName: widget.node.name,
+      parentNodeId: widget.parentNodeId,
+    );
+    final questionsAsync =
+        ref.watch(customerQuestionsNotifierProvider(providerKey));
     final notifier =
-        ref.read(customerQuestionsNotifierProvider(key).notifier);
+        ref.read(customerQuestionsNotifierProvider(providerKey).notifier);
 
     return questionsAsync.when(
       loading: () => const Center(child: CircularProgressIndicator()),
       error: (e, _) => Center(child: Text('Error: $e')),
       data: (questions) {
+        if (widget.focusQuestionId != null) {
+          WidgetsBinding.instance
+              .addPostFrameCallback((_) => _scrollToFocused());
+        }
         if (questions.isEmpty) {
           return Center(
             child: Column(
@@ -56,14 +95,23 @@ class CustomerQuestionsPanel extends ConsumerWidget {
           );
         }
         return ListView.separated(
+          controller: _scrollController,
           padding: const EdgeInsets.all(16),
           itemCount: questions.length,
           separatorBuilder: (_, _) => const SizedBox(height: 8),
-          itemBuilder: (ctx, i) => _QuestionTile(
-            question: questions[i],
-            onAnswer: () => _openAnswerDialog(ctx, notifier, questions[i]),
-            onDelete: () => _confirmDelete(ctx, notifier, questions[i]),
-          ),
+          itemBuilder: (ctx, i) {
+            final q = questions[i];
+            final itemKey =
+                _itemKeys.putIfAbsent(q.id, () => GlobalKey());
+            return KeyedSubtree(
+              key: itemKey,
+              child: _QuestionTile(
+                question: q,
+                onAnswer: () => _openAnswerDialog(ctx, notifier, q),
+                onDelete: () => _confirmDelete(ctx, notifier, q),
+              ),
+            );
+          },
         );
       },
     );

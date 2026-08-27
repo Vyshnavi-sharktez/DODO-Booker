@@ -25,14 +25,15 @@ class CustomerQuestionService {
     required String? customerPhone,
     required String question,
   }) async {
-    await _db.from('customer_questions').insert({
+    final row = await _db.from('customer_questions').insert({
       'service_id': serviceId,
       'customer_id': customerId,
       'customer_name': customerName,
       'customer_phone': customerPhone,
       'question': question,
       'status': 'pending',
-    });
+    }).select('id').single();
+    final questionId = row['id'] as String;
 
     final preview =
         question.length > 80 ? '${question.substring(0, 80)}...' : question;
@@ -46,6 +47,7 @@ class CustomerQuestionService {
       'is_read': false,
       'entity_type': 'customer_question',
       'entity_id': serviceId,
+      'customer_question_id': questionId,
     });
   }
 }
