@@ -188,13 +188,14 @@ class CategoryService {
     debugPrint('[DODO][CategoryService] fetchServiceAttributes($serviceId) → SUPABASE');
 
     const optionsSelect =
-        'service_attribute_options(id, attribute_id, option_name, price_adjustment)';
+        'service_attribute_options(id, attribute_id, option_name, price_adjustment, discount_type, discount_value)';
 
-    // service_id == catalog_node id for service-type nodes (UUIDs preserved).
+    // Attributes saved by catalog-v2 admin use node_id; legacy services use service_id.
+    // Match on either so both sources are visible to the customer.
     final data = await _db
         .from('service_attributes')
         .select('*, $optionsSelect')
-        .eq('service_id', serviceId)
+        .or('service_id.eq.$serviceId,node_id.eq.$serviceId')
         .order('name', ascending: true);
 
     return (data as List)

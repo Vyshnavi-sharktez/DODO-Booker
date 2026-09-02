@@ -15,6 +15,7 @@ import '../utils/catalog_launcher.dart';
 import '../widgets/catalog_node_card.dart';
 import '../../loyalty/providers/loyalty_providers.dart';
 import '../../loyalty/utils/loyalty_utils.dart';
+import '../../category/services/category_providers.dart';
 import 'package:go_router/go_router.dart';
 
 // ── Constants ────────────────────────────────────────────────────────────────
@@ -203,13 +204,41 @@ class _CategoryExplorerScreenState
     final w = MediaQuery.sizeOf(context).width;
     final isDesktop = w >= _kBreakpoint;
 
-    return Scaffold(
+    return PopScope(
+      canPop: _browseHistory.isEmpty,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) _goBack(context);
+      },
+      child: Scaffold(
       backgroundColor: Colors.white,
-      appBar: AppHeader(
-        onLogoTap: () => context.go(AppRoutes.home),
-        onProfileTap: () => context.push(AppRoutes.profile),
-        isScrolled: _scrolled,
-      ),
+      appBar: isDesktop
+          ? AppHeader(
+              onLogoTap: () => context.go(AppRoutes.home),
+              onProfileTap: () => context.push(AppRoutes.profile),
+              isScrolled: _scrolled,
+            )
+          : AppBar(
+              backgroundColor: Colors.white,
+              elevation: 0,
+              scrolledUnderElevation: 0,
+              surfaceTintColor: Colors.transparent,
+              leading: IconButton(
+                icon: const Icon(Icons.arrow_back_rounded, color: _kTextDark),
+                onPressed: () => _goBack(context),
+              ),
+              title: Text(
+                'Services',
+                style: GoogleFonts.poppins(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
+                  color: _kTextDark,
+                ),
+              ),
+              bottom: const PreferredSize(
+                preferredSize: Size.fromHeight(0.8),
+                child: Divider(height: 0.8, color: Color(0xFFECE7DE)),
+              ),
+            ),
       body: NotificationListener<ScrollNotification>(
         onNotification: _onScroll,
         child: rootsAsync.when(
@@ -233,56 +262,45 @@ class _CategoryExplorerScreenState
 
             if (isDesktop) {
               final hasCart = cartItems.isNotEmpty;
-              return LayoutBuilder(
-                builder: (context, constraints) {
-                  final contentWidth = constraints.maxWidth < _kContentMaxWidth
-                      ? constraints.maxWidth
-                      : _kContentMaxWidth;
-                  return Align(
-                    alignment: Alignment.topCenter,
-                    child: SizedBox(
-                      width: contentWidth,
-                      height: constraints.maxHeight,
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          // Left: Categories
-                          SizedBox(
-                            width: _kSidebarWidth,
-                            child: _Sidebar(
-                              roots: activeRoots,
-                              activeCategoryId: catId,
-                              onSelect: _selectCategory,
-                            ),
-                          ),
-                          const VerticalDivider(width: 1, color: _kBorderColor),
-
-                          // Middle: Catalog listing (service detail opens as floating modal)
-                          Expanded(
-                            child: _RightPane(
-                              categoryId: catId,
-                              categoryName: catName,
-                              browseNodeId: _browseNodeId,
-                              activeSubId: _activeSubId,
-                              onSubSelected: _selectSub,
-                              onBrowseNode: _setBrowseNode,
-                              onBack: () => _goBack(context),
-                            ),
-                          ),
-
-                          // Right: Cart panel (only when cart has items)
-                          if (hasCart) ...[
-                            const VerticalDivider(width: 1, color: _kBorderColor),
-                            SizedBox(
-                              width: _kCartPanelWidth,
-                              child: const _CartPanel(),
-                            ),
-                          ],
-                        ],
+              return Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Left: Categories
+                    SizedBox(
+                      width: _kSidebarWidth,
+                      child: _Sidebar(
+                        roots: activeRoots,
+                        activeCategoryId: catId,
+                        onSelect: _selectCategory,
                       ),
                     ),
-                  );
-                },
+                    const SizedBox(width: 20),
+
+                    // Middle: Catalog listing
+                    Expanded(
+                      child: _RightPane(
+                        categoryId: catId,
+                        categoryName: catName,
+                        browseNodeId: _browseNodeId,
+                        activeSubId: _activeSubId,
+                        onSubSelected: _selectSub,
+                        onBrowseNode: _setBrowseNode,
+                        onBack: () => _goBack(context),
+                      ),
+                    ),
+
+                    // Right: Cart panel (only when cart has items)
+                    if (hasCart) ...[
+                      const SizedBox(width: 20),
+                      SizedBox(
+                        width: _kCartPanelWidth,
+                        child: const _CartPanel(),
+                      ),
+                    ],
+                  ],
+                ),
               );
             }
 
@@ -310,6 +328,7 @@ class _CategoryExplorerScreenState
           },
         ),
       ),
+    ),
     );
   }
 }
@@ -687,7 +706,7 @@ class _RightPaneContent extends ConsumerWidget {
           // Card grid.
           SliverPadding(
             padding: EdgeInsets.fromLTRB(
-                _rightPad(context), 0, _rightPad(context), 40),
+                _rightPad(context), 0, _rightPad(context), _bottomPad(context)),
             sliver: cardsAsync.when(
               loading: () => const SliverToBoxAdapter(
                   child: Center(child: CircularProgressIndicator())),
@@ -695,40 +714,23 @@ class _RightPaneContent extends ConsumerWidget {
                   child: Center(child: Text('Could not load services'))),
               data: (cards) {
                 if (cards.isEmpty) return const _SliverEmpty();
-                final isDesktop = MediaQuery.sizeOf(context).width >= _kBreakpoint;
-                if (isDesktop) {
-                  return SliverList(
-                    delegate: SliverChildBuilderDelegate(
-                      (ctx, i) => Padding(
-                        padding: EdgeInsets.only(
-                            bottom: i < cards.length - 1 ? 14 : 0),
-                        child: _DesktopListCard(
-                          node: cards[i],
-                          parentId: sub?.id ?? categoryId,
-                          onBrowse: cards[i].hasChildren
-                              ? () => onBrowseNode(cards[i].id)
-                              : null,
-                        ),
-                      ),
-                      childCount: cards.length,
-                    ),
-                  );
-                }
-                return SliverGrid(
-                  gridDelegate:
-                      const SliverGridDelegateWithMaxCrossAxisExtent(
-                    maxCrossAxisExtent: 300,
-                    mainAxisExtent: 340,
-                    crossAxisSpacing: 18,
-                    mainAxisSpacing: 18,
-                  ),
+                // Both desktop and mobile use a single-column list card.
+                // Desktop keeps the existing _DesktopListCard layout.
+                // Mobile uses the same card (full-width, one per row) so all
+                // content (image, loyalty, price, description, View details,
+                // Add/Not Available) is preserved — only the grid is removed.
+                return SliverList(
                   delegate: SliverChildBuilderDelegate(
-                    (ctx, i) => _ServiceCard(
-                      node: cards[i],
-                      parentId: sub?.id ?? categoryId,
-                      onBrowse: cards[i].hasChildren
-                          ? () => onBrowseNode(cards[i].id)
-                          : null,
+                    (ctx, i) => Padding(
+                      padding: EdgeInsets.only(
+                          bottom: i < cards.length - 1 ? 14 : 0),
+                      child: _DesktopListCard(
+                        node: cards[i],
+                        parentId: sub?.id ?? categoryId,
+                        onBrowse: cards[i].hasChildren
+                            ? () => onBrowseNode(cards[i].id)
+                            : null,
+                      ),
                     ),
                     childCount: cards.length,
                   ),
@@ -745,6 +747,15 @@ class _RightPaneContent extends ConsumerWidget {
     final w = MediaQuery.sizeOf(context).width;
     if (w >= _kBreakpoint) return 36;
     return 16;
+  }
+
+  // On mobile the floating cart bar is ~64 px tall plus the device safe-area
+  // bottom inset. Add that clearance so the last card's buttons are never
+  // hidden behind the bar.
+  double _bottomPad(BuildContext context) {
+    final w = MediaQuery.sizeOf(context).width;
+    if (w >= _kBreakpoint) return 40;
+    return 80 + MediaQuery.of(context).padding.bottom;
   }
 }
 
@@ -882,7 +893,7 @@ class _SubChip extends StatelessWidget {
   }
 }
 
-// ── Desktop list card (single-column, full-width, web/desktop only) ──────────
+// ── Desktop list card (horizontal: image-left, info-right, web/desktop only) ──
 
 class _DesktopListCard extends ConsumerWidget {
   final CatalogNodeModel node;
@@ -906,7 +917,11 @@ class _DesktopListCard extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final imageUrl = ServiceImageRegistry.resolve(node.imageUrl, node.name);
+    final isMobileScreen = MediaQuery.sizeOf(context).width < _kBreakpoint;
+    final imageUrl = isMobileScreen
+        ? ServiceImageRegistry.resolveMobile(
+            node.mobileImageUrl, node.imageUrl, node.name)
+        : ServiceImageRegistry.resolve(node.imageUrl, node.name);
     final isBrowsable = onBrowse != null;
 
     final cartItems = ref.watch(cartProvider);
@@ -917,270 +932,586 @@ class _DesktopListCard extends ConsumerWidget {
     final inCart = cartItem != null;
     final qty = cartItem?.quantity ?? 0;
 
-    return Container(
-      clipBehavior: Clip.antiAlias,
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: _kBorderColor),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // ── Hero image ────────────────────────────────────────────────────
-          AspectRatio(
-            aspectRatio: 16 / 7,
-            child: Image.network(
-              imageUrl,
-              fit: BoxFit.cover,
-              errorBuilder: (_, __, ___) => Container(
-                color: const Color(0xFFEFEFEF),
-                child: Center(
-                  child: Icon(
-                    IconRegistry.resolve(node.iconKey, node.name),
-                    size: 52,
-                    color: _kTextMuted,
+    final isUnavailable = node.relAvailabilityStatus == 'unavailable' ||
+        node.relAvailabilityStatus == 'hidden';
+
+    final isMobile = isMobileScreen;
+
+    // ── Shared action buttons widget ────────────────────────────────────────
+    Widget actionButtons() {
+      if (isBrowsable) {
+        return Align(
+          alignment: Alignment.centerRight,
+          child: MouseRegion(
+            cursor: SystemMouseCursors.click,
+            child: GestureDetector(
+              onTap: onBrowse!,
+              child: Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
+                decoration: BoxDecoration(
+                  color: _kTextDark,
+                  borderRadius: BorderRadius.circular(100),
+                ),
+                child: Text(
+                  'Browse →',
+                  style: GoogleFonts.inter(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.white,
                   ),
                 ),
               ),
             ),
           ),
-
-          // ── Content ───────────────────────────────────────────────────────
-          Padding(
-            padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+        );
+      }
+      if (isUnavailable) {
+        return Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
+          decoration: BoxDecoration(
+            color: const Color(0xFFEFEFEF),
+            borderRadius: BorderRadius.circular(100),
+          ),
+          child: Text(
+            'Not Available',
+            style: GoogleFonts.inter(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: _kTextMuted,
+            ),
+          ),
+        );
+      }
+      return Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        children: [
+          _OutlinedBtn(
+            label: 'View Details',
+            onTap: () =>
+                openCatalogNode(context, node, parentId: parentId),
+          ),
+          if (inCart)
+            Row(
+              mainAxisSize: MainAxisSize.min,
               children: [
-                // Name + Rating inline + Add button
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    Expanded(
-                      child: Row(
-                        children: [
-                          Flexible(
-                            child: Text(
-                              node.name,
-                              style: GoogleFonts.poppins(
-                                fontSize: 17,
-                                fontWeight: FontWeight.w700,
-                                color: _kTextDark,
-                                height: 1.3,
+                _CardQtyBtn(
+                  label: '−',
+                  onTap: () => ref
+                      .read(cartProvider.notifier)
+                      .updateQuantity(cartItem.bookingId, qty - 1),
+                ),
+                Padding(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10),
+                  child: Text(
+                    '$qty',
+                    style: GoogleFonts.poppins(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: _kTextDark,
+                    ),
+                  ),
+                ),
+                _CardQtyBtn(
+                  label: '+',
+                  onTap: () => ref
+                      .read(cartProvider.notifier)
+                      .updateQuantity(cartItem.bookingId, qty + 1),
+                ),
+              ],
+            )
+          else
+            _AddToCartBtn(onTap: () => _addToCart(ref)),
+        ],
+      );
+    }
+
+    // ── Mobile: vertical card (image top, content below) ───────────────────
+    if (isMobile) {
+      return Container(
+        clipBehavior: Clip.antiAlias,
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: _kBorderColor),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withAlpha(10),
+              blurRadius: 12,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Image on top
+            ClipRRect(
+              borderRadius:
+                  const BorderRadius.vertical(top: Radius.circular(15)),
+              child: Container(
+                height: 148,
+                color: const Color(0xFFF3EDE0),
+                child: Image.network(
+                  imageUrl,
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, __, ___) => Center(
+                    child: Icon(
+                      IconRegistry.resolve(node.iconKey, node.name),
+                      size: 36,
+                      color: _kTextMuted,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            // Content
+            Padding(
+              padding: const EdgeInsets.all(14),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Loyalty earn badge
+                  if (node.isLeafBookable && node.loyaltyEarnEnabled)
+                    Consumer(
+                      builder: (_, lr, _) {
+                        final settings =
+                            lr.watch(loyaltySettingsProvider).valueOrNull;
+                        if (settings == null ||
+                            !settings.isEnabled ||
+                            !settings.earnEnabled) {
+                          return const SizedBox.shrink();
+                        }
+                        final cfgAsync =
+                            lr.watch(resolvedLoyaltyConfigProvider((
+                          serviceId: node.id,
+                          parentNodeId: parentId,
+                        )));
+                        if (!cfgAsync.hasValue) {
+                          return const SizedBox.shrink();
+                        }
+                        final pts = computeLoyaltyPoints(
+                          cfgAsync.valueOrNull,
+                          settings,
+                          node.basePrice ?? 0,
+                        );
+                        if (pts <= 0) return const SizedBox.shrink();
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 6),
+                          child: LoyaltyEarnBadge(points: pts),
+                        );
+                      },
+                    ),
+                  // Name
+                  Text(
+                    node.name,
+                    style: GoogleFonts.poppins(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700,
+                      color: _kTextDark,
+                      height: 1.25,
+                    ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  // Price
+                  Consumer(
+                    builder: (_, ref, _) {
+                      final attrs =
+                          ref.watch(serviceAttributesProvider(node.id)).valueOrNull ?? [];
+                      final attrOpts =
+                          attrs.where((a) => a.options.isNotEmpty).toList();
+                      if (attrOpts.isNotEmpty) {
+                        final startsAt = attrOpts
+                            .map((a) => a.options.first.finalPrice)
+                            .reduce((a, b) => a < b ? a : b);
+                        final origStartsAt = attrOpts
+                            .map((a) => a.options.first.priceAdjustment)
+                            .reduce((a, b) => a < b ? a : b);
+                        final hasDisc = startsAt < origStartsAt;
+                        return Padding(
+                          padding: const EdgeInsets.only(top: 3),
+                          child: Wrap(
+                            spacing: 5,
+                            crossAxisAlignment: WrapCrossAlignment.center,
+                            children: [
+                              Text(
+                                'Starts at ₹${startsAt.toInt()}',
+                                style: GoogleFonts.inter(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w700,
+                                  color: _kTextDark,
+                                ),
                               ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
+                              if (hasDisc)
+                                Text(
+                                  '₹${origStartsAt.toInt()}',
+                                  style: GoogleFonts.inter(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w500,
+                                    color: _kTextMuted,
+                                    decoration: TextDecoration.lineThrough,
+                                  ),
+                                ),
+                            ],
                           ),
-                          if (node.rating > 0) ...[
-                            const SizedBox(width: 10),
-                            const Icon(Icons.star_rounded,
-                                size: 14, color: AppColors.gold),
-                            const SizedBox(width: 3),
+                        );
+                      }
+                      if (node.basePrice != null) {
+                        return Padding(
+                          padding: const EdgeInsets.only(top: 3),
+                          child: Wrap(
+                            spacing: 5,
+                            crossAxisAlignment: WrapCrossAlignment.center,
+                            children: [
+                              Text(
+                                '₹${(node.finalPrice ?? node.basePrice)!.toStringAsFixed(0)}',
+                                style: GoogleFonts.inter(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w800,
+                                  color: _kTextDark,
+                                ),
+                              ),
+                              if (node.hasDiscount)
+                                Text(
+                                  '₹${node.basePrice!.toStringAsFixed(0)}',
+                                  style: GoogleFonts.inter(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w500,
+                                    color: _kTextMuted,
+                                    decoration: TextDecoration.lineThrough,
+                                  ),
+                                ),
+                            ],
+                          ),
+                        );
+                      }
+                      if (isBrowsable) {
+                        return Padding(
+                          padding: const EdgeInsets.only(top: 3),
+                          child: Text(
+                            '${node.childrenCount} options',
+                            style: GoogleFonts.inter(
+                                fontSize: 12, color: _kTextMuted),
+                          ),
+                        );
+                      }
+                      return const SizedBox.shrink();
+                    },
+                  ),
+                  // Description
+                  if (node.description?.isNotEmpty == true) ...[
+                    const SizedBox(height: 5),
+                    Text(
+                      node.description!,
+                      style: GoogleFonts.inter(
+                        fontSize: 12,
+                        color: _kTextMuted,
+                        height: 1.5,
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                  // Rating
+                  if (node.rating > 0) ...[
+                    const SizedBox(height: 6),
+                    Row(
+                      children: [
+                        const Icon(Icons.star_rounded,
+                            size: 14, color: AppColors.gold),
+                        const SizedBox(width: 4),
+                        Text(
+                          node.rating.toStringAsFixed(1),
+                          style: GoogleFonts.inter(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                            color: _kTextDark,
+                          ),
+                        ),
+                        const SizedBox(width: 5),
+                        Text(
+                          '${_formatReviews(node.reviewCount)}+ reviews',
+                          style: GoogleFonts.inter(
+                              fontSize: 11, color: _kTextMuted),
+                        ),
+                      ],
+                    ),
+                  ],
+                  const SizedBox(height: 10),
+                  actionButtons(),
+                ],
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    // ── Desktop: horizontal card (image left, content right) ───────────────
+    return Container(
+      clipBehavior: Clip.antiAlias,
+      height: 250,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: _kBorderColor),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withAlpha(10),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // ── Image panel (left, warm cream bg) ────────────────────────
+          Container(
+            width: 280,
+            color: const Color(0xFFF3EDE0),
+            child: Image.network(
+              imageUrl,
+              fit: BoxFit.cover,
+              errorBuilder: (_, __, ___) => Center(
+                child: Icon(
+                  IconRegistry.resolve(node.iconKey, node.name),
+                  size: 52,
+                  color: _kTextMuted,
+                ),
+              ),
+            ),
+          ),
+
+          // ── Content panel (right) ─────────────────────────────────────
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(20, 14, 20, 14),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Loyalty earn badge
+                  if (node.isLeafBookable && node.loyaltyEarnEnabled)
+                    Consumer(
+                      builder: (_, lr, _) {
+                        final settings =
+                            lr.watch(loyaltySettingsProvider).valueOrNull;
+                        if (settings == null ||
+                            !settings.isEnabled ||
+                            !settings.earnEnabled) {
+                          return const SizedBox.shrink();
+                        }
+                        final cfgAsync =
+                            lr.watch(resolvedLoyaltyConfigProvider((
+                          serviceId: node.id,
+                          parentNodeId: parentId,
+                        )));
+                        if (!cfgAsync.hasValue) {
+                          return const SizedBox.shrink();
+                        }
+                        final pts = computeLoyaltyPoints(
+                          cfgAsync.valueOrNull,
+                          settings,
+                          node.basePrice ?? 0,
+                        );
+                        if (pts <= 0) return const SizedBox.shrink();
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 6),
+                          child: LoyaltyEarnBadge(points: pts),
+                        );
+                      },
+                    ),
+                  // Service name
+                  Text(
+                    node.name,
+                    style: GoogleFonts.poppins(
+                      fontSize: 20,
+                      fontWeight: FontWeight.w700,
+                      color: _kTextDark,
+                      height: 1.2,
+                    ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 3),
+                  // Price
+                  Consumer(
+                    builder: (_, ref, _) {
+                      final attrs =
+                          ref.watch(serviceAttributesProvider(node.id)).valueOrNull ?? [];
+                      final attrOpts =
+                          attrs.where((a) => a.options.isNotEmpty).toList();
+                      if (attrOpts.isNotEmpty) {
+                        final startsAt = attrOpts
+                            .map((a) => a.options.first.finalPrice)
+                            .reduce((a, b) => a < b ? a : b);
+                        final origStartsAt = attrOpts
+                            .map((a) => a.options.first.priceAdjustment)
+                            .reduce((a, b) => a < b ? a : b);
+                        final hasDisc = startsAt < origStartsAt;
+                        return Wrap(
+                          spacing: 5,
+                          crossAxisAlignment: WrapCrossAlignment.center,
+                          children: [
                             Text(
-                              node.rating.toStringAsFixed(1),
+                              'Starts at ₹${startsAt.toInt()}',
                               style: GoogleFonts.inter(
                                 fontSize: 13,
                                 fontWeight: FontWeight.w700,
                                 color: _kTextDark,
                               ),
                             ),
-                            const SizedBox(width: 3),
-                            Text(
-                              '(${_formatReviews(node.reviewCount)})',
-                              style: GoogleFonts.inter(
-                                  fontSize: 12, color: _kTextMuted),
-                            ),
-                          ],
-                        ],
-                      ),
-                    ),
-                    if (!isBrowsable) ...[
-                      const SizedBox(width: 14),
-                      if (node.relAvailabilityStatus == 'unavailable' ||
-                          node.relAvailabilityStatus == 'hidden')
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 20, vertical: 8),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFEFEFEF),
-                            borderRadius: BorderRadius.circular(100),
-                          ),
-                          child: Text(
-                            'Not Available',
-                            style: GoogleFonts.inter(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w600,
-                              color: _kTextMuted,
-                            ),
-                          ),
-                        )
-                      else if (inCart)
-                        Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            _CardQtyBtn(
-                              label: '−',
-                              onTap: () => ref
-                                  .read(cartProvider.notifier)
-                                  .updateQuantity(cartItem.bookingId, qty - 1),
-                            ),
-                            Padding(
-                              padding: const EdgeInsets.symmetric(horizontal: 10),
-                              child: Text(
-                                '$qty',
-                                style: GoogleFonts.poppins(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w600,
-                                  color: _kTextDark,
-                                ),
-                              ),
-                            ),
-                            _CardQtyBtn(
-                              label: '+',
-                              onTap: () => ref
-                                  .read(cartProvider.notifier)
-                                  .updateQuantity(cartItem.bookingId, qty + 1),
-                            ),
-                          ],
-                        )
-                      else
-                        MouseRegion(
-                          cursor: SystemMouseCursors.click,
-                          child: GestureDetector(
-                            onTap: () => _addToCart(ref),
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 20, vertical: 8),
-                              decoration: BoxDecoration(
-                                color: _kTextDark,
-                                borderRadius: BorderRadius.circular(100),
-                              ),
-                              child: Text(
-                                'Add',
+                            if (hasDisc)
+                              Text(
+                                '₹${origStartsAt.toInt()}',
                                 style: GoogleFonts.inter(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w600,
-                                  color: Colors.white,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w500,
+                                  color: _kTextMuted,
+                                  decoration: TextDecoration.lineThrough,
                                 ),
                               ),
-                            ),
-                          ),
-                        ),
-                    ],
-                  ],
-                ),
-
-                // Loyalty earn badge
-                if (node.isLeafBookable && node.loyaltyEarnEnabled)
-                  Consumer(
-                    builder: (_, lr, _) {
-                      final settings =
-                          lr.watch(loyaltySettingsProvider).valueOrNull;
-                      if (settings == null ||
-                          !settings.isEnabled ||
-                          !settings.earnEnabled) {
-                        return const SizedBox.shrink();
+                          ],
+                        );
                       }
-                      final cfgAsync =
-                          lr.watch(resolvedLoyaltyConfigProvider((
-                        serviceId: node.id,
-                        parentNodeId: parentId,
-                      )));
-                      if (!cfgAsync.hasValue) return const SizedBox.shrink();
-                      final pts = computeLoyaltyPoints(
-                        cfgAsync.valueOrNull,
-                        settings,
-                        node.basePrice ?? 0,
-                      );
-                      if (pts <= 0) return const SizedBox.shrink();
-                      return Padding(
-                        padding: const EdgeInsets.only(top: 5),
-                        child: LoyaltyEarnBadge(points: pts),
-                      );
+                      if (node.basePrice != null) {
+                        return Wrap(
+                          spacing: 5,
+                          crossAxisAlignment: WrapCrossAlignment.center,
+                          children: [
+                            Text(
+                              '₹${(node.finalPrice ?? node.basePrice)!.toStringAsFixed(0)}',
+                              style: GoogleFonts.inter(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w800,
+                                color: _kTextDark,
+                              ),
+                            ),
+                            if (node.hasDiscount)
+                              Text(
+                                '₹${node.basePrice!.toStringAsFixed(0)}',
+                                style: GoogleFonts.inter(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w500,
+                                  color: _kTextMuted,
+                                  decoration: TextDecoration.lineThrough,
+                                ),
+                              ),
+                          ],
+                        );
+                      }
+                      if (isBrowsable) {
+                        return Text(
+                          '${node.childrenCount} options',
+                          style: GoogleFonts.inter(
+                              fontSize: 13, color: _kTextMuted),
+                        );
+                      }
+                      return const SizedBox.shrink();
                     },
                   ),
-
-                // Price
-                if (node.basePrice != null) ...[
-                  const SizedBox(height: 4),
-                  Text(
-                    'Starts at ₹${node.basePrice!.toStringAsFixed(0)}',
-                    style: GoogleFonts.poppins(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w700,
-                      color: _kTextDark,
+                  const SizedBox(height: 8),
+                  // Description
+                  if (node.description?.isNotEmpty == true) ...[
+                    Text(
+                      node.description!,
+                      style: GoogleFonts.inter(
+                        fontSize: 13,
+                        color: _kTextMuted,
+                        height: 1.55,
+                      ),
+                      maxLines: 3,
+                      overflow: TextOverflow.ellipsis,
                     ),
-                  ),
-                ] else if (isBrowsable) ...[
-                  const SizedBox(height: 4),
-                  Text(
-                    '${node.childrenCount} options',
-                    style: GoogleFonts.inter(
-                        fontSize: 13, color: _kTextMuted),
-                  ),
-                ],
-
-                // Divider
-                const SizedBox(height: 14),
-                const Divider(height: 1, thickness: 1, color: _kBorderColor),
-                const SizedBox(height: 12),
-
-                // Description
-                if (node.description?.isNotEmpty == true)
-                  Text(
-                    node.description!,
-                    style: GoogleFonts.inter(
-                        fontSize: 13, color: _kTextMuted, height: 1.6),
-                    maxLines: 4,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-
-                // "View details" gold text link / Browse button
-                const SizedBox(height: 10),
-                isBrowsable
-                    ? Align(
-                        alignment: Alignment.centerRight,
-                        child: MouseRegion(
-                          cursor: SystemMouseCursors.click,
-                          child: GestureDetector(
-                            onTap: onBrowse!,
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 20, vertical: 8),
-                              decoration: BoxDecoration(
-                                color: _kTextDark,
-                                borderRadius: BorderRadius.circular(100),
-                              ),
-                              child: Text(
-                                'Browse →',
-                                style: GoogleFonts.inter(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w600,
-                                  color: Colors.white,
+                    const SizedBox(height: 10),
+                  ],
+                  // Rating + review count
+                  if (node.rating > 0) ...[
+                    Row(
+                      children: [
+                        const Icon(Icons.star_rounded,
+                            size: 16, color: AppColors.gold),
+                        const SizedBox(width: 5),
+                        Text(
+                          node.rating.toStringAsFixed(1),
+                          style: GoogleFonts.inter(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w700,
+                            color: _kTextDark,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          '${_formatReviews(node.reviewCount)}+ reviews',
+                          style: GoogleFonts.inter(
+                              fontSize: 13, color: _kTextMuted),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                  ],
+                  // Customer social proof (avatars + label)
+                  if (node.reviewCount > 0)
+                    Row(
+                      children: [
+                        SizedBox(
+                          width: 60,
+                          height: 22,
+                          child: Stack(
+                            children: [
+                              Positioned(
+                                left: 0,
+                                child: Container(
+                                  width: 22,
+                                  height: 22,
+                                  decoration: const BoxDecoration(
+                                    color: Color(0xFF7B9CDE),
+                                    shape: BoxShape.circle,
+                                  ),
                                 ),
                               ),
-                            ),
+                              Positioned(
+                                left: 14,
+                                child: Container(
+                                  width: 22,
+                                  height: 22,
+                                  decoration: const BoxDecoration(
+                                    color: Color(0xFF85C1A3),
+                                    shape: BoxShape.circle,
+                                  ),
+                                ),
+                              ),
+                              Positioned(
+                                left: 28,
+                                child: Container(
+                                  width: 22,
+                                  height: 22,
+                                  decoration: const BoxDecoration(
+                                    color: Color(0xFFE8A87C),
+                                    shape: BoxShape.circle,
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
                         ),
-                      )
-                    : MouseRegion(
-                        cursor: SystemMouseCursors.click,
-                        child: GestureDetector(
-                          onTap: () => openCatalogNode(context, node,
-                              parentId: parentId),
-                          child: Text(
-                            'View details',
-                            style: GoogleFonts.inter(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w600,
-                              color: AppColors.gold,
-                            ),
-                          ),
+                        const SizedBox(width: 8),
+                        Text(
+                          'Customers loved our service',
+                          style: GoogleFonts.inter(
+                              fontSize: 12, color: _kTextMuted),
                         ),
-                      ),
-              ],
+                      ],
+                    ),
+                  const Spacer(),
+                  actionButtons(),
+                ],
+              ),
             ),
           ),
         ],
@@ -1502,6 +1833,100 @@ class _FilledBtnState extends State<_FilledBtn> {
   }
 }
 
+// ── Outlined button (light style, used for View Details) ─────────────────────
+
+class _OutlinedBtn extends StatefulWidget {
+  final String label;
+  final VoidCallback onTap;
+  const _OutlinedBtn({required this.label, required this.onTap});
+
+  @override
+  State<_OutlinedBtn> createState() => _OutlinedBtnState();
+}
+
+class _OutlinedBtnState extends State<_OutlinedBtn> {
+  bool _hovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      child: GestureDetector(
+        onTap: widget.onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 120),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
+          decoration: BoxDecoration(
+            color: _hovered ? const Color(0xFFF5F5F5) : Colors.white,
+            borderRadius: BorderRadius.circular(100),
+            border: Border.all(color: _kBorderColor),
+          ),
+          child: Text(
+            widget.label,
+            style: GoogleFonts.inter(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: _kTextDark,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ── Add to Cart button — black pill with cart icon ───────────────────────────
+
+class _AddToCartBtn extends StatefulWidget {
+  final VoidCallback onTap;
+  const _AddToCartBtn({required this.onTap});
+
+  @override
+  State<_AddToCartBtn> createState() => _AddToCartBtnState();
+}
+
+class _AddToCartBtnState extends State<_AddToCartBtn> {
+  bool _hovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      child: GestureDetector(
+        onTap: widget.onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 120),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
+          decoration: BoxDecoration(
+            color: _hovered ? const Color(0xFF333333) : _kTextDark,
+            borderRadius: BorderRadius.circular(100),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.shopping_cart_outlined,
+                  size: 14, color: Colors.white),
+              const SizedBox(width: 6),
+              Text(
+                'Add to Cart',
+                style: GoogleFonts.inter(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.white,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 // ── Empty state ───────────────────────────────────────────────────────────────
 
 class _SliverEmpty extends StatelessWidget {
@@ -1776,12 +2201,18 @@ class _CartPanelItemState extends ConsumerState<_CartPanelItem> {
                   _PanelBreakdownRow(
                     label: 'Base service',
                     value: '₹${basePrice.toInt()}',
+                    originalValue: item.originalUnitPrice != null
+                        ? '₹${item.originalUnitPrice!.toInt()}'
+                        : null,
                   ),
                   ...item.addons.map((a) => Padding(
                         padding: const EdgeInsets.only(top: 4),
                         child: _PanelBreakdownRow(
                           label: '+ ${a.addonName}',
                           value: '₹${a.addonPrice.toInt()}',
+                          originalValue: a.originalAddonPrice != null
+                              ? '₹${a.originalAddonPrice!.toInt()}'
+                              : null,
                           muted: true,
                         ),
                       )),
@@ -1806,11 +2237,13 @@ class _CartPanelItemState extends ConsumerState<_CartPanelItem> {
 class _PanelBreakdownRow extends StatelessWidget {
   final String label;
   final String value;
+  final String? originalValue;
   final bool muted;
 
   const _PanelBreakdownRow({
     required this.label,
     required this.value,
+    this.originalValue,
     this.muted = false,
   });
 
@@ -1833,6 +2266,18 @@ class _PanelBreakdownRow extends StatelessWidget {
             fontWeight: muted ? FontWeight.w400 : FontWeight.w600,
           ),
         ),
+        if (originalValue != null) ...[
+          const SizedBox(width: 5),
+          Text(
+            originalValue!,
+            style: GoogleFonts.inter(
+              fontSize: 11,
+              color: _kTextMuted,
+              decoration: TextDecoration.lineThrough,
+              decorationColor: _kTextMuted,
+            ),
+          ),
+        ],
       ],
     );
   }

@@ -45,14 +45,22 @@ class _CatalogNodeAttributesDrawerState
         onSave: ({
           required serviceId,
           required name,
-          required fieldType,
-          required isRequired,
+          required price,
+          required discountType,
+          required discountValue,
         }) async {
-          await notifier.createAttribute(
+          final attrId = await notifier.createAttribute(
             nodeId: serviceId,
             name: name,
-            fieldType: fieldType,
-            isRequired: isRequired,
+            fieldType: 'dropdown',
+            isRequired: false,
+          );
+          await notifier.createOption(
+            attributeId: attrId,
+            optionName: name,
+            priceAdjustment: price,
+            discountType: discountType,
+            discountValue: discountValue,
           );
         },
       ),
@@ -72,15 +80,33 @@ class _CatalogNodeAttributesDrawerState
         onSave: ({
           required serviceId,
           required name,
-          required fieldType,
-          required isRequired,
+          required price,
+          required discountType,
+          required discountValue,
         }) async {
           await notifier.updateAttribute(
             attr.id,
             name: name,
-            fieldType: fieldType,
-            isRequired: isRequired,
+            fieldType: 'dropdown',
+            isRequired: false,
           );
+          if (attr.options.isNotEmpty) {
+            await notifier.updateOption(
+              attr.options.first.id,
+              optionName: name,
+              priceAdjustment: price,
+              discountType: discountType,
+              discountValue: discountValue,
+            );
+          } else {
+            await notifier.createOption(
+              attributeId: attr.id,
+              optionName: name,
+              priceAdjustment: price,
+              discountType: discountType,
+              discountValue: discountValue,
+            );
+          }
         },
       ),
     );
@@ -216,7 +242,7 @@ class _CatalogNodeAttributesDrawerState
         child: OutlinedButton.icon(
           onPressed: _openCreate,
           icon: const Icon(Icons.add, size: 16),
-          label: const Text('Add Attribute'),
+          label: const Text('Add Entry'),
           style: OutlinedButton.styleFrom(
             foregroundColor: AppColors.accent,
             side: const BorderSide(color: AppColors.accent),
@@ -243,21 +269,24 @@ class _AttributeItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final price = attr.options.isNotEmpty
+        ? attr.options.first.priceAdjustment
+        : 0.0;
+
     return Container(
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
         color: AppColors.background,
         borderRadius: BorderRadius.circular(8),
         border: Border.all(color: AppColors.border),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Row(
         children: [
-          // ── Name + tags + edit/delete ──────────────────────────────────
-          Row(
-            children: [
-              Expanded(
-                child: Text(
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
                   attr.name,
                   style: const TextStyle(
                     fontWeight: FontWeight.w600,
@@ -265,59 +294,36 @@ class _AttributeItem extends StatelessWidget {
                     color: AppColors.textPrimary,
                   ),
                 ),
-              ),
-              if (attr.isRequired) ...[
-                _Tag('Required', AppColors.error.withValues(alpha: 0.1),
-                    AppColors.error),
-                const SizedBox(width: 4),
+                if (price > 0) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    '₹${price.toStringAsFixed(0)}',
+                    style: const TextStyle(
+                        fontSize: 12, color: AppColors.textSecondary),
+                  ),
+                ],
               ],
-              _Tag(attr.fieldType,
-                  AppColors.primary.withValues(alpha: 0.08), AppColors.primary),
-              const SizedBox(width: 2),
-              IconButton(
-                icon: const Icon(Icons.edit_outlined, size: 15),
-                tooltip: 'Edit attribute',
-                color: AppColors.textSecondary,
-                onPressed: () => onEdit(attr),
-                padding: EdgeInsets.zero,
-                constraints:
-                    const BoxConstraints(minWidth: 28, minHeight: 28),
-              ),
-              IconButton(
-                icon: const Icon(Icons.delete_outline, size: 15),
-                tooltip: 'Delete attribute',
-                color: AppColors.error,
-                onPressed: () => onDelete(attr),
-                padding: EdgeInsets.zero,
-                constraints:
-                    const BoxConstraints(minWidth: 28, minHeight: 28),
-              ),
-            ],
+            ),
           ),
-
+          IconButton(
+            icon: const Icon(Icons.edit_outlined, size: 15),
+            tooltip: 'Edit entry',
+            color: AppColors.textSecondary,
+            onPressed: () => onEdit(attr),
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+          ),
+          IconButton(
+            icon: const Icon(Icons.delete_outline, size: 15),
+            tooltip: 'Delete entry',
+            color: AppColors.error,
+            onPressed: () => onDelete(attr),
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+          ),
         ],
       ),
     );
   }
 }
 
-// ── Label tag ──────────────────────────────────────────────────────────────────
-
-class _Tag extends StatelessWidget {
-  const _Tag(this.label, this.bg, this.fg);
-  final String label;
-  final Color bg;
-  final Color fg;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-      decoration:
-          BoxDecoration(color: bg, borderRadius: BorderRadius.circular(4)),
-      child: Text(label,
-          style: TextStyle(
-              fontSize: 11, color: fg, fontWeight: FontWeight.w500)),
-    );
-  }
-}

@@ -6,6 +6,7 @@ import '../../../core/utils/service_image_registry.dart';
 import '../../../core/widgets/horizontal_carousel.dart';
 import '../../../core/widgets/section_header.dart';
 import '../../../features/catalog/models/catalog_node_model.dart';
+import '../../../features/category/services/category_providers.dart';
 
 // ── Layout constants (standard card, same spec as sub_services) ───────────────
 
@@ -178,17 +179,38 @@ class _ServiceCardState extends State<_ServiceCard> {
                         Row(
                           children: [
                             // Price
-                            if (node.basePrice != null)
-                              Text(
-                                '₹${node.basePrice!.toInt()}',
-                                style: GoogleFonts.inter(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w700,
-                                  color: const Color(0xFF1A1714),
-                                ),
-                              ),
-                            if (node.basePrice != null && node.rating > 0)
-                              const SizedBox(width: 8),
+                            Consumer(
+                              builder: (_, ref, _) {
+                                final attrs =
+                                    ref.watch(serviceAttributesProvider(node.id)).valueOrNull ?? [];
+                                final prices = attrs
+                                    .where((a) => a.options.isNotEmpty)
+                                    .map((a) => a.options.first.finalPrice);
+                                if (prices.isNotEmpty) {
+                                  final startsAt = prices.reduce((a, b) => a < b ? a : b);
+                                  return Text(
+                                    'Starts at ₹${startsAt.toInt()}',
+                                    style: GoogleFonts.inter(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w700,
+                                      color: const Color(0xFF1A1714),
+                                    ),
+                                  );
+                                }
+                                if (node.basePrice != null) {
+                                  return Text(
+                                    '₹${(node.finalPrice ?? node.basePrice)!.toInt()}',
+                                    style: GoogleFonts.inter(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w700,
+                                      color: const Color(0xFF1A1714),
+                                    ),
+                                  );
+                                }
+                                return const SizedBox.shrink();
+                              },
+                            ),
+                            if (node.rating > 0) const SizedBox(width: 8),
                             // Rating
                             if (node.rating > 0) ...[
                               const Icon(

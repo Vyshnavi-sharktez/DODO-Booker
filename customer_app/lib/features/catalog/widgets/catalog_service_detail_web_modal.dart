@@ -123,7 +123,7 @@ class _CatalogServiceDetailWebModalState
         final sel = _selections[attr.id];
         if (sel == null) return sum;
         final opt = attr.options.where((o) => o.id == sel).firstOrNull;
-        return sum + (opt?.priceAdjustment ?? 0.0);
+        return sum + (opt?.finalPrice ?? 0.0);
       });
     });
   }
@@ -179,10 +179,32 @@ class _CatalogServiceDetailWebModalState
 
     final addonsTotal =
         totalAddonsPrice(buildSelectedAddons(addOns, _selectedAddonIds));
+
+    final attrEntries = attrs.where((a) => a.options.isNotEmpty).toList();
+    ServiceAttributeOptionModel? activeAttrOpt;
+    if (attrEntries.isNotEmpty) {
+      for (final attr in attrEntries) {
+        final selId = _selections[attr.id];
+        if (selId == null) continue;
+        activeAttrOpt = attr.options.where((o) => o.id == selId).firstOrNull;
+        if (activeAttrOpt != null) break;
+      }
+      activeAttrOpt ??= attrEntries
+          .map((a) => a.options.first)
+          .reduce((a, b) => a.finalPrice <= b.finalPrice ? a : b);
+    }
+
     final displayPrice = _selectedAmcPlan != null
         ? _selectedAmcPlan!.finalPrice
-        : (node.basePrice ?? 0.0) + _priceAdjustment + addonsTotal;
-    final hasAdjustment = _priceAdjustment > 0 || addonsTotal > 0;
+        : activeAttrOpt != null
+            ? activeAttrOpt.finalPrice + addonsTotal
+            : (node.finalPrice ?? node.basePrice ?? 0.0) + addonsTotal;
+    final double? originalDisplayPrice = _selectedAmcPlan != null
+        ? null
+        : activeAttrOpt != null
+            ? (activeAttrOpt.hasDiscount ? activeAttrOpt.priceAdjustment : null)
+            : (node.hasDiscount ? node.basePrice : null);
+    final hasAdjustment = addonsTotal > 0;
 
     return Stack(
       children: [
@@ -233,6 +255,7 @@ class _CatalogServiceDetailWebModalState
                             node: node,
                             displayPrice: displayPrice,
                             hasAdjustment: hasAdjustment,
+                            originalDisplayPrice: originalDisplayPrice,
                             onClose: () => Navigator.of(context).pop(),
                           ),
 
@@ -359,6 +382,7 @@ class _CatalogServiceDetailWebModalState
                             _WebDetailBookingBar(
                               node: node,
                               displayPrice: displayPrice,
+                              originalDisplayPrice: originalDisplayPrice,
                               priceAdjustment: _priceAdjustment,
                               addonsTotal: addonsTotal,
                               parentNodeId: widget.parentNodeId,
@@ -390,11 +414,13 @@ class _WebDetailHeader extends StatelessWidget {
     required this.displayPrice,
     required this.hasAdjustment,
     required this.onClose,
+    this.originalDisplayPrice,
   });
 
   final CatalogNodeModel node;
   final double displayPrice;
   final bool hasAdjustment;
+  final double? originalDisplayPrice;
   final VoidCallback onClose;
 
   @override
@@ -518,7 +544,7 @@ class _WebDetailHeader extends StatelessWidget {
 
 
                       // Price row
-                      if (node.basePrice != null) ...[
+                      if (displayPrice > 0) ...[
                         const SizedBox(height: 14),
                         Row(
                           crossAxisAlignment: CrossAxisAlignment.baseline,
@@ -538,13 +564,27 @@ class _WebDetailHeader extends StatelessWidget {
                                 fontSize: 24,
                                 fontWeight: FontWeight.w800,
                                 color: AppColors.textPrimary,
+                                decoration: TextDecoration.none,
                                 height: 1.0,
                               ),
                             ),
-                            if (hasAdjustment) ...[
+                            if (originalDisplayPrice != null) ...[
+                              const SizedBox(width: 8),
+                              Text(
+                                '₹${originalDisplayPrice!.toInt()}',
+                                style: const TextStyle(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w500,
+                                  color: AppColors.textHint,
+                                  decoration: TextDecoration.lineThrough,
+                                  decorationColor: AppColors.textHint,
+                                  height: 1.0,
+                                ),
+                              ),
+                            ] else if (hasAdjustment) ...[
                               const SizedBox(width: 6),
                               const Text(
-                                'incl. adjustments',
+                                'incl. add-ons',
                                 style: TextStyle(
                                   fontSize: 12,
                                   color: AppColors.textHint,
@@ -746,12 +786,31 @@ class _WebAddonItem extends StatelessWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
-                Text(
-                  '₹${addOn.price.toInt()}',
-                  style: const TextStyle(
-                    fontSize: 12,
-                    color: AppColors.textSecondary,
-                  ),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.baseline,
+                  textBaseline: TextBaseline.alphabetic,
+                  children: [
+                    Text(
+                      '₹${addOn.finalPrice.toInt()}',
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: AppColors.textSecondary,
+                        decoration: TextDecoration.none,
+                      ),
+                    ),
+                    if (addOn.hasDiscount) ...[
+                      const SizedBox(width: 5),
+                      Text(
+                        '₹${addOn.price.toInt()}',
+                        style: const TextStyle(
+                          fontSize: 11,
+                          color: AppColors.textSecondary,
+                          decoration: TextDecoration.lineThrough,
+                          decorationColor: AppColors.textSecondary,
+                        ),
+                      ),
+                    ],
+                  ],
                 ),
               ],
             ),
@@ -1329,6 +1388,7 @@ class _WebDetailBookingBar extends ConsumerWidget {
   const _WebDetailBookingBar({
     required this.node,
     required this.displayPrice,
+    this.originalDisplayPrice,
     required this.priceAdjustment,
     required this.addonsTotal,
     this.parentNodeId,
@@ -1341,6 +1401,7 @@ class _WebDetailBookingBar extends ConsumerWidget {
 
   final CatalogNodeModel node;
   final double displayPrice;
+  final double? originalDisplayPrice;
   final double priceAdjustment;
   final double addonsTotal;
   final String? parentNodeId;
@@ -1385,14 +1446,25 @@ class _WebDetailBookingBar extends ConsumerWidget {
         return;
       }
     }
-    ref.read(cartProvider.notifier).addToCart(
-          node,
-          priceAdjustment:
-              amcPlan != null ? 0.0 : priceAdjustment + addonsTotal,
-          parentNodeId: parentNodeId,
-          amcPlan: amcPlan,
-          amcQuantity: 1,
-        );
+    if (amcPlan != null) {
+      ref.read(cartProvider.notifier).addToCart(
+            node,
+            priceAdjustment: 0.0,
+            parentNodeId: parentNodeId,
+            amcPlan: amcPlan,
+            amcQuantity: 1,
+          );
+    } else {
+      final selAddons = buildSelectedAddons(addOns, selectedAddonIds);
+      ref.read(cartProvider.notifier).addToCart(
+            node,
+            unitPriceOverride: (node.finalPrice ?? node.basePrice ?? 0.0) +
+                priceAdjustment +
+                totalAddonsPrice(selAddons),
+            addons: selAddons,
+            parentNodeId: parentNodeId,
+          );
+    }
   }
 
   @override
@@ -1439,24 +1511,48 @@ class _WebDetailBookingBar extends ConsumerWidget {
                   style: TextStyle(
                       fontSize: 11, color: AppColors.textHint),
                 ),
-                Text(
-                  '₹${displayPrice.toInt()}',
-                  style: const TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.w800,
-                    color: AppColors.textPrimary,
-                    height: 1.1,
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.baseline,
+                  textBaseline: TextBaseline.alphabetic,
+                  children: [
+                    Text(
+                      '₹${displayPrice.toInt()}',
+                      style: const TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.w800,
+                        color: AppColors.textPrimary,
+                        decoration: TextDecoration.none,
+                        height: 1.1,
+                      ),
+                    ),
+                    if (originalDisplayPrice != null) ...[
+                      const SizedBox(width: 6),
+                      Text(
+                        '₹${originalDisplayPrice!.toInt()}',
+                        style: const TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w500,
+                          color: AppColors.textHint,
+                          decoration: TextDecoration.lineThrough,
+                          decorationColor: AppColors.textHint,
+                          height: 1.1,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+                if (amcPlan != null)
+                  Text(
+                    'AMC · ${amcPlan!.numVisits} visits',
+                    style: const TextStyle(
+                        fontSize: 10, color: AppColors.textHint),
+                  )
+                else if (originalDisplayPrice == null)
+                  Text(
+                    addonsTotal > 0 ? 'incl. add-ons' : 'onwards',
+                    style: const TextStyle(
+                        fontSize: 10, color: AppColors.textHint),
                   ),
-                ),
-                Text(
-                  amcPlan != null
-                      ? 'AMC · ${amcPlan!.numVisits} visits'
-                      : (priceAdjustment > 0 || addonsTotal > 0)
-                          ? 'incl. adjustments'
-                          : 'onwards',
-                  style: const TextStyle(
-                      fontSize: 10, color: AppColors.textHint),
-                ),
               ],
             ),
 

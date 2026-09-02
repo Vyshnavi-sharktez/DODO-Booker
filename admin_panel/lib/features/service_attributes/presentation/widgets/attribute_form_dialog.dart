@@ -1,25 +1,21 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../domain/models/service_attribute.dart';
-
-const _fieldTypes = [
-  ('text', 'Text', Icons.text_fields_rounded),
-  ('number', 'Number', Icons.numbers_rounded),
-  ('dropdown', 'Dropdown', Icons.arrow_drop_down_circle_outlined),
-  ('radio', 'Radio', Icons.radio_button_checked_rounded),
-  ('checkbox', 'Checkbox', Icons.check_box_outlined),
-];
+import '../../domain/models/service_attribute_option.dart';
 
 class AttributeFormDialog extends StatefulWidget {
   final ServiceAttribute? existing;
   final String serviceId;
   final String serviceName;
 
+  /// Called on submit with the entry name, price, and optional discount.
   final Future<void> Function({
     required String serviceId,
     required String name,
-    required String fieldType,
-    required bool isRequired,
+    required double price,
+    required String discountType,
+    required double discountValue,
   }) onSave;
 
   const AttributeFormDialog({
@@ -37,8 +33,9 @@ class AttributeFormDialog extends StatefulWidget {
 class _AttributeFormDialogState extends State<AttributeFormDialog> {
   final _formKey = GlobalKey<FormState>();
   late final TextEditingController _name;
-  late String _fieldType;
-  late bool _isRequired;
+  late final TextEditingController _price;
+  late final TextEditingController _discountValue;
+  String _discountType = 'percentage';
   bool _saving = false;
 
   @override
@@ -46,13 +43,24 @@ class _AttributeFormDialogState extends State<AttributeFormDialog> {
     super.initState();
     final e = widget.existing;
     _name = TextEditingController(text: e?.name ?? '');
-    _fieldType = e?.fieldType ?? 'text';
-    _isRequired = e?.isRequired ?? false;
+    final ServiceAttributeOption? firstOpt =
+        e?.options.isNotEmpty == true ? e!.options.first : null;
+    _price = TextEditingController(
+        text: (firstOpt?.priceAdjustment ?? 0) == 0
+            ? ''
+            : firstOpt!.priceAdjustment.toStringAsFixed(0));
+    _discountType = firstOpt?.discountType ?? 'percentage';
+    _discountValue = TextEditingController(
+        text: (firstOpt?.discountValue ?? 0) > 0
+            ? firstOpt!.discountValue.toStringAsFixed(0)
+            : '');
   }
 
   @override
   void dispose() {
     _name.dispose();
+    _price.dispose();
+    _discountValue.dispose();
     super.dispose();
   }
 
@@ -63,8 +71,9 @@ class _AttributeFormDialogState extends State<AttributeFormDialog> {
       await widget.onSave(
         serviceId: widget.serviceId,
         name: _name.text.trim(),
-        fieldType: _fieldType,
-        isRequired: _isRequired,
+        price: double.tryParse(_price.text.trim()) ?? 0.0,
+        discountType: _discountType,
+        discountValue: double.tryParse(_discountValue.text.trim()) ?? 0.0,
       );
       if (mounted) Navigator.of(context).pop();
     } catch (e) {
@@ -89,12 +98,12 @@ class _AttributeFormDialogState extends State<AttributeFormDialog> {
       insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 480),
+        constraints: const BoxConstraints(maxWidth: 420),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // -- Header
+            // Header
             Container(
               padding: const EdgeInsets.fromLTRB(24, 20, 16, 20),
               decoration: BoxDecoration(
@@ -113,7 +122,7 @@ class _AttributeFormDialogState extends State<AttributeFormDialog> {
                   ),
                   const SizedBox(width: 10),
                   Text(
-                    isEdit ? 'Edit Attribute' : 'New Attribute',
+                    isEdit ? 'Edit Entry' : 'Add Entry',
                     style: const TextStyle(
                       color: Colors.white,
                       fontSize: 16,
@@ -123,87 +132,136 @@ class _AttributeFormDialogState extends State<AttributeFormDialog> {
                   const Spacer(),
                   IconButton(
                     onPressed: () => Navigator.of(context).pop(),
-                    icon: const Icon(Icons.close_rounded, color: Colors.white70),
+                    icon:
+                        const Icon(Icons.close_rounded, color: Colors.white70),
                     visualDensity: VisualDensity.compact,
                   ),
                 ],
               ),
             ),
 
-            // -- Form
-            Flexible(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.all(24),
-                child: Form(
-                  key: _formKey,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      _ContextRow(
-                        label: 'Service',
-                        name: widget.serviceName,
-                        icon: Icons.miscellaneous_services_rounded,
-                      ),
-                      const SizedBox(height: 16),
+            // Form
+            Padding(
+              padding: const EdgeInsets.all(24),
+              child: Form(
+                key: _formKey,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _ContextRow(
+                      label: 'Service',
+                      name: widget.serviceName,
+                      icon: Icons.miscellaneous_services_rounded,
+                    ),
+                    const SizedBox(height: 20),
 
-                      TextFormField(
-                        controller: _name,
-                        decoration: const InputDecoration(
-                          labelText: 'Attribute Name *',
-                          hintText: 'e.g. Number of Rooms',
+                    TextFormField(
+                      controller: _name,
+                      decoration: const InputDecoration(
+                        labelText: 'Name *',
+                        hintText: 'e.g. 2 ACs',
+                      ),
+                      textCapitalization: TextCapitalization.words,
+                      validator: (v) =>
+                          v == null || v.trim().isEmpty ? 'Required' : null,
+                    ),
+                    const SizedBox(height: 16),
+
+                    TextFormField(
+                      controller: _price,
+                      keyboardType: const TextInputType.numberWithOptions(
+                          decimal: true),
+                      inputFormatters: [
+                        FilteringTextInputFormatter.allow(
+                            RegExp(r'^\d*\.?\d{0,2}')),
+                      ],
+                      decoration: const InputDecoration(
+                        labelText: 'Price (₹) *',
+                        hintText: 'e.g. 2000',
+                        prefixText: '₹ ',
+                      ),
+                      validator: (v) {
+                        if (v == null || v.trim().isEmpty) return 'Required';
+                        if (double.tryParse(v.trim()) == null) {
+                          return 'Enter a valid number';
+                        }
+                        return null;
+                      },
+                    ),
+                    const SizedBox(height: 20),
+
+                    // Discount section
+                    Text(
+                      'DISCOUNT (OPTIONAL)',
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.textSecondary,
+                        letterSpacing: 0.8,
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        ToggleButtons(
+                          isSelected: [
+                            _discountType == 'percentage',
+                            _discountType == 'flat',
+                          ],
+                          onPressed: (i) => setState(
+                              () => _discountType =
+                                  i == 0 ? 'percentage' : 'flat'),
+                          borderRadius: BorderRadius.circular(8),
+                          selectedColor: Colors.white,
+                          fillColor: AppColors.primary,
+                          textStyle: const TextStyle(fontSize: 13),
+                          constraints: const BoxConstraints(
+                              minWidth: 48, minHeight: 44),
+                          children: const [
+                            Padding(
+                              padding: EdgeInsets.symmetric(horizontal: 10),
+                              child: Text('%'),
+                            ),
+                            Padding(
+                              padding: EdgeInsets.symmetric(horizontal: 10),
+                              child: Text('₹'),
+                            ),
+                          ],
                         ),
-                        textCapitalization: TextCapitalization.words,
-                        validator: (v) =>
-                            v == null || v.trim().isEmpty ? 'Required' : null,
-                      ),
-                      const SizedBox(height: 16),
-
-                      DropdownButtonFormField<String>(
-                        // ignore: deprecated_member_use
-                        value: _fieldType,
-                        decoration: const InputDecoration(
-                          labelText: 'Field Type *',
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: TextFormField(
+                            controller: _discountValue,
+                            keyboardType:
+                                const TextInputType.numberWithOptions(
+                                    decimal: true),
+                            inputFormatters: [
+                              FilteringTextInputFormatter.allow(
+                                  RegExp(r'^\d*\.?\d{0,2}')),
+                            ],
+                            decoration: InputDecoration(
+                              labelText: _discountType == 'percentage'
+                                  ? 'Discount %'
+                                  : 'Discount ₹',
+                              hintText: '0',
+                              prefixText: _discountType == 'percentage'
+                                  ? null
+                                  : '₹ ',
+                              suffixText: _discountType == 'percentage'
+                                  ? '%'
+                                  : null,
+                            ),
+                          ),
                         ),
-                        items: _fieldTypes
-                            .map(
-                              (t) => DropdownMenuItem(
-                                value: t.$1,
-                                child: Row(
-                                  children: [
-                                    Icon(t.$3,
-                                        size: 16,
-                                        color: AppColors.textSecondary),
-                                    const SizedBox(width: 10),
-                                    Text(t.$2),
-                                  ],
-                                ),
-                              ),
-                            )
-                            .toList(),
-                        onChanged: (v) {
-                          if (v != null) setState(() => _fieldType = v);
-                        },
-                        validator: (v) =>
-                            v == null ? 'Please select a type' : null,
-                        isExpanded: true,
-                      ),
-                      const SizedBox(height: 20),
-
-                      _ToggleRow(
-                        icon: Icons.star_outline_rounded,
-                        activeIcon: Icons.star_rounded,
-                        label: 'Required',
-                        value: _isRequired,
-                        activeColor: AppColors.warning,
-                        onChanged: (v) => setState(() => _isRequired = v),
-                      ),
-                    ],
-                  ),
+                      ],
+                    ),
+                  ],
                 ),
               ),
             ),
 
-            // -- Footer
+            // Footer
             Container(
               padding: const EdgeInsets.fromLTRB(24, 12, 24, 20),
               decoration: BoxDecoration(
@@ -238,7 +296,7 @@ class _AttributeFormDialogState extends State<AttributeFormDialog> {
                               color: Colors.white,
                             ),
                           )
-                        : Text(isEdit ? 'Save Changes' : 'Create Attribute'),
+                        : Text(isEdit ? 'Save Changes' : 'Add Entry'),
                   ),
                 ],
               ),
@@ -250,7 +308,7 @@ class _AttributeFormDialogState extends State<AttributeFormDialog> {
   }
 }
 
-// -- Context row
+// ── Context row ───────────────────────────────────────────────────────────────
 
 class _ContextRow extends StatelessWidget {
   final String label;
@@ -297,63 +355,8 @@ class _ContextRow extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 4),
-          Icon(Icons.lock_outline, size: 13, color: AppColors.textSecondary),
-        ],
-      ),
-    );
-  }
-}
-
-// -- Toggle row
-
-class _ToggleRow extends StatelessWidget {
-  final IconData icon;
-  final IconData activeIcon;
-  final String label;
-  final bool value;
-  final Color activeColor;
-  final ValueChanged<bool> onChanged;
-
-  const _ToggleRow({
-    required this.icon,
-    required this.activeIcon,
-    required this.label,
-    required this.value,
-    required this.activeColor,
-    required this.onChanged,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      decoration: BoxDecoration(
-        color: AppColors.background,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: AppColors.border),
-      ),
-      child: Row(
-        children: [
-          Icon(
-            value ? activeIcon : icon,
-            color: value ? activeColor : AppColors.textSecondary,
-            size: 18,
-          ),
-          const SizedBox(width: 10),
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 14,
-              color: AppColors.textPrimary,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-          const Spacer(),
-          Switch(
-            value: value,
-            onChanged: onChanged,
-            activeThumbColor: activeColor,
-          ),
+          Icon(Icons.lock_outline,
+              size: 13, color: AppColors.textSecondary),
         ],
       ),
     );

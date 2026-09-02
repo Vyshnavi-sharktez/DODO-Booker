@@ -73,14 +73,22 @@ class _ServiceAttributesPageState
         onSave: ({
           required serviceId,
           required name,
-          required fieldType,
-          required isRequired,
+          required price,
+          required discountType,
+          required discountValue,
         }) async {
-          await notifier.createAttribute(
+          final attrId = await notifier.createAttribute(
             serviceId: serviceId,
             name: name,
-            fieldType: fieldType,
-            isRequired: isRequired,
+            fieldType: 'dropdown',
+            isRequired: false,
+          );
+          await notifier.createOption(
+            attributeId: attrId,
+            optionName: name,
+            priceAdjustment: price,
+            discountType: discountType,
+            discountValue: discountValue,
           );
         },
       ),
@@ -99,16 +107,34 @@ class _ServiceAttributesPageState
         onSave: ({
           required serviceId,
           required name,
-          required fieldType,
-          required isRequired,
+          required price,
+          required discountType,
+          required discountValue,
         }) async {
           await notifier.updateAttribute(
             attr.id,
             serviceId: serviceId,
             name: name,
-            fieldType: fieldType,
-            isRequired: isRequired,
+            fieldType: 'dropdown',
+            isRequired: false,
           );
+          if (attr.options.isNotEmpty) {
+            await notifier.updateOption(
+              attr.options.first.id,
+              optionName: name,
+              priceAdjustment: price,
+              discountType: discountType,
+              discountValue: discountValue,
+            );
+          } else {
+            await notifier.createOption(
+              attributeId: attr.id,
+              optionName: name,
+              priceAdjustment: price,
+              discountType: discountType,
+              discountValue: discountValue,
+            );
+          }
         },
       ),
     );

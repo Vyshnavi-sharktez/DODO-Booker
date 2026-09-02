@@ -206,13 +206,28 @@ class _AmcSectionBodyState extends State<_AmcSectionBody> {
                                 color: AppColors.success,
                               ),
                             ),
-                            Text(
-                              '₹${selectedPlan.finalPrice % 1 == 0 ? selectedPlan.finalPrice.toInt() : selectedPlan.finalPrice.toStringAsFixed(2)} · ${selectedPlan.numVisits} visits',
-                              style: TextStyle(
-                                fontSize: 11,
-                                color: AppColors.success
-                                    .withValues(alpha: 0.85),
-                              ),
+                            Row(
+                              children: [
+                                if (selectedPlan.discountAmount > 0) ...[
+                                  Text(
+                                    '₹${selectedPlan.originalTotal % 1 == 0 ? selectedPlan.originalTotal.toInt() : selectedPlan.originalTotal.toStringAsFixed(2)}',
+                                    style: TextStyle(
+                                      fontSize: 10,
+                                      color: AppColors.success.withValues(alpha: 0.55),
+                                      decoration: TextDecoration.lineThrough,
+                                      decorationColor: AppColors.success.withValues(alpha: 0.55),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 5),
+                                ],
+                                Text(
+                                  '₹${selectedPlan.finalPrice % 1 == 0 ? selectedPlan.finalPrice.toInt() : selectedPlan.finalPrice.toStringAsFixed(2)} · ${selectedPlan.numVisits} visits',
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    color: AppColors.success.withValues(alpha: 0.85),
+                                  ),
+                                ),
+                              ],
                             ),
                           ],
                         ),

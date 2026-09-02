@@ -890,9 +890,18 @@ class _OrderItemRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final tt = Theme.of(context).textTheme;
+    final addonsTotal = item.addons.fold(0.0, (s, a) => s + a.addonPrice);
+    final basePrice = item.unitPrice - addonsTotal;
+    final originalAddonsTotal = item.addons.fold(
+        0.0, (s, a) => s + (a.originalAddonPrice ?? a.addonPrice));
+    final originalBase = item.originalUnitPrice ?? basePrice;
+    final originalPerUnit = originalBase + originalAddonsTotal;
+    final hasDiscount = originalPerUnit > item.unitPrice + 0.01;
+
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Expanded(
             child: Text(
@@ -903,18 +912,54 @@ class _OrderItemRow extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 8),
-          Text(
-            '${item.quantity} × ₹${item.unitPrice.toInt()}',
-            style:
-                tt.labelSmall?.copyWith(color: AppColors.textSecondary),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.baseline,
+                textBaseline: TextBaseline.alphabetic,
+                children: [
+                  Text(
+                    '${item.quantity} × ₹${item.unitPrice.toInt()}',
+                    style: tt.labelSmall
+                        ?.copyWith(color: AppColors.textSecondary),
+                  ),
+                  if (hasDiscount) ...[
+                    const SizedBox(width: 4),
+                    Text(
+                      '₹${originalPerUnit.toInt()}',
+                      style: tt.labelSmall?.copyWith(
+                        color: AppColors.textHint,
+                        decoration: TextDecoration.lineThrough,
+                        decorationColor: AppColors.textHint,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ],
           ),
           const SizedBox(width: 8),
-          Text(
-            '₹${item.totalPrice.toInt()}',
-            style: tt.labelMedium?.copyWith(
-              fontWeight: FontWeight.w700,
-              color: AppColors.textPrimary,
-            ),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text(
+                '₹${item.totalPrice.toInt()}',
+                style: tt.labelMedium?.copyWith(
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.textPrimary,
+                ),
+              ),
+              if (hasDiscount)
+                Text(
+                  '₹${(originalPerUnit * item.quantity).toInt()}',
+                  style: tt.labelSmall?.copyWith(
+                    color: AppColors.textHint,
+                    decoration: TextDecoration.lineThrough,
+                    decorationColor: AppColors.textHint,
+                  ),
+                ),
+            ],
           ),
         ],
       ),

@@ -26,6 +26,7 @@ class CatalogNodeRepository {
     required String slug,
     String? description,
     String? imageUrl,
+    String? mobileImageUrl,
     String? iconKey,
     required int sortOrder,
     required bool isActive,
@@ -33,6 +34,8 @@ class CatalogNodeRepository {
     double? basePrice,
     int? estimatedDuration,
     double? minimumOrderAmount,
+    String discountType = 'percentage',
+    double discountValue = 0,
   }) async {
     final data = await _supabase
         .from('catalog_nodes')
@@ -42,6 +45,8 @@ class CatalogNodeRepository {
           if (description != null && description.isNotEmpty)
             'description': description,
           if (imageUrl != null && imageUrl.isNotEmpty) 'image_url': imageUrl,
+          if (mobileImageUrl != null && mobileImageUrl.isNotEmpty)
+            'mobile_image_url': mobileImageUrl,
           if (iconKey != null && iconKey.isNotEmpty) 'icon_key': iconKey,
           'sort_order': sortOrder,
           'is_active': isActive,
@@ -51,6 +56,8 @@ class CatalogNodeRepository {
             'estimated_duration': estimatedDuration,
           if (minimumOrderAmount != null)
             'minimum_order_amount': minimumOrderAmount,
+          'discount_type': discountType,
+          'discount_value': discountValue,
         })
         .select()
         .single();
@@ -77,6 +84,7 @@ class CatalogNodeRepository {
     required String slug,
     String? description,
     String? imageUrl,
+    String? mobileImageUrl,
     String? iconKey,
     required int sortOrder,
     required bool isActive,
@@ -84,6 +92,8 @@ class CatalogNodeRepository {
     double? basePrice,
     int? estimatedDuration,
     double? minimumOrderAmount,
+    String discountType = 'percentage',
+    double discountValue = 0,
   }) async {
     await _supabase
         .from('catalog_nodes')
@@ -93,6 +103,8 @@ class CatalogNodeRepository {
           'description':
               description?.isNotEmpty == true ? description : null,
           'image_url': imageUrl?.isNotEmpty == true ? imageUrl : null,
+          'mobile_image_url':
+              mobileImageUrl?.isNotEmpty == true ? mobileImageUrl : null,
           'icon_key': iconKey?.isNotEmpty == true ? iconKey : null,
           'sort_order': sortOrder,
           'is_active': isActive,
@@ -100,6 +112,8 @@ class CatalogNodeRepository {
           'base_price': basePrice,
           'estimated_duration': estimatedDuration,
           'minimum_order_amount': minimumOrderAmount,
+          'discount_type': discountType,
+          'discount_value': discountValue,
         })
         .eq('id', id);
     return _fetchById(id);

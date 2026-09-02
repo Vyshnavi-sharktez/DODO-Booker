@@ -63,16 +63,22 @@ class CartNotifier extends StateNotifier<List<CartItem>> {
   Future<void> _load() async {
     final prefs = await SharedPreferences.getInstance();
     final raw = prefs.getString(_storageKey);
-    if (raw == null) return;
-    try {
-      final decoded = jsonDecode(raw) as List<dynamic>;
-      state = decoded
-          .map((e) => CartItem.fromJson(e as Map<String, dynamic>))
-          .toList();
-    } catch (_) {
-      // Corrupted data — start fresh
-      await prefs.remove(_storageKey);
+    if (raw != null) {
+      try {
+        final decoded = jsonDecode(raw) as List<dynamic>;
+        state = decoded
+            .map((e) => CartItem.fromJson(e as Map<String, dynamic>))
+            .toList();
+      } catch (_) {
+        // Corrupted data — start fresh
+        await prefs.remove(_storageKey);
+      }
     }
+    // Always attempt a remote sync on startup. When the user is already
+    // authenticated (e.g. returning web session), this loads any cart items
+    // added from another platform. CartSyncService._customerId() returns null
+    // when not logged in, so loadFromRemote() exits early with no network call.
+    await loadFromRemote();
   }
 
   Future<void> _save() async {
@@ -133,6 +139,7 @@ class CartNotifier extends StateNotifier<List<CartItem>> {
         amcQuantity: local?.amcQuantity ?? 1,
         amcIsRenewal: local?.amcIsRenewal ?? false,
         amcPreviousContractId: local?.amcPreviousContractId,
+        addons: local?.addons ?? const [],
       );
     }
 
@@ -155,6 +162,8 @@ class CartNotifier extends StateNotifier<List<CartItem>> {
   void addToCart(
     CatalogNodeModel service, {
     double priceAdjustment = 0.0,
+    double? unitPriceOverride,
+    double? originalUnitPrice,
     String? parentNodeId,
     AmcPlanModel? amcPlan,
     int amcQuantity = 1,
@@ -166,7 +175,7 @@ class CartNotifier extends StateNotifier<List<CartItem>> {
     final isAmc = amcPlan != null;
     final unitPrice = isAmc
         ? amcPlan.finalPrice * amcQuantity
-        : (service.basePrice ?? 0.0) + priceAdjustment;
+        : unitPriceOverride ?? ((service.basePrice ?? 0.0) + priceAdjustment);
 
     // Merge into the existing CartItem if the configuration is identical.
     final addonIds = addons.map((a) => a.addonId).toSet();
@@ -194,6 +203,7 @@ class CartNotifier extends StateNotifier<List<CartItem>> {
       unitPrice: unitPrice,
       quantity: 1,
       minimumOrderAmount: isAmc ? null : service.minimumOrderAmount,
+      originalUnitPrice: isAmc ? null : originalUnitPrice,
       parentNodeId: parentNodeId,
       isAmc: isAmc,
       amcPlanName: amcPlan?.planName,

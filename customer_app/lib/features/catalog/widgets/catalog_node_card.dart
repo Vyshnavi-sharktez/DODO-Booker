@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/utils/service_image_registry.dart';
+import '../../category/services/category_providers.dart';
 import '../../loyalty/providers/loyalty_providers.dart';
 import '../../loyalty/utils/loyalty_utils.dart';
 import '../models/catalog_node_model.dart';
@@ -171,29 +172,91 @@ class _CardInfo extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                // Show price only for leaf-bookable nodes (no children + is_bookable)
-                if (node.isLeafBookable && node.basePrice != null)
-                  Text(
-                    '₹${node.basePrice!.toInt()}',
-                    style: const TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w800,
-                      color: Color(0xFF1A1A1A),
-                      height: 1.2,
-                    ),
-                  )
-                else if (node.hasChildren)
-                  Text(
-                    '${node.childrenCount} ${node.childrenCount == 1 ? 'option' : 'options'}',
-                    style: const TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w700,
-                      color: Color(0xFF1A1A1A),
-                      height: 1.2,
-                    ),
-                  )
-                else
-                  const SizedBox.shrink(),
+                Flexible(
+                  child: Consumer(
+                    builder: (_, ref, _) {
+                      final attrs =
+                          ref.watch(serviceAttributesProvider(node.id)).valueOrNull ?? [];
+                      final attrOpts =
+                          attrs.where((a) => a.options.isNotEmpty).toList();
+                      if (attrOpts.isNotEmpty) {
+                        final lowestOpt = attrOpts
+                            .map((a) => a.options.first)
+                            .reduce((a, b) =>
+                                a.finalPrice <= b.finalPrice ? a : b);
+                        final startsAt = lowestOpt.finalPrice;
+                        final origStartsAt = lowestOpt.priceAdjustment;
+                        final hasDisc = lowestOpt.hasDiscount;
+                        return Wrap(
+                          spacing: 5,
+                          crossAxisAlignment: WrapCrossAlignment.center,
+                          children: [
+                            Text(
+                              'Starts at ₹${startsAt.toInt()}',
+                              style: const TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w700,
+                                color: Color(0xFF1A1A1A),
+                                height: 1.2,
+                              ),
+                            ),
+                            if (hasDisc)
+                              Text(
+                                '₹${origStartsAt.toInt()}',
+                                style: const TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w500,
+                                  color: Color(0xFF888888),
+                                  decoration: TextDecoration.lineThrough,
+                                  height: 1.2,
+                                ),
+                              ),
+                          ],
+                        );
+                      }
+                      if (node.basePrice != null) {
+                        return Wrap(
+                          spacing: 5,
+                          crossAxisAlignment: WrapCrossAlignment.center,
+                          children: [
+                            Text(
+                              '₹${(node.finalPrice ?? node.basePrice)!.toInt()}',
+                              style: const TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w800,
+                                color: Color(0xFF1A1A1A),
+                                height: 1.2,
+                              ),
+                            ),
+                            if (node.hasDiscount)
+                              Text(
+                                '₹${node.basePrice!.toInt()}',
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w500,
+                                  color: Color(0xFF888888),
+                                  decoration: TextDecoration.lineThrough,
+                                  height: 1.2,
+                                ),
+                              ),
+                          ],
+                        );
+                      }
+                      if (node.hasChildren) {
+                        return Text(
+                          '${node.childrenCount} ${node.childrenCount == 1 ? 'option' : 'options'}',
+                          style: const TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                            color: Color(0xFF1A1A1A),
+                            height: 1.2,
+                          ),
+                        );
+                      }
+                      return const SizedBox.shrink();
+                    },
+                  ),
+                ),
 
                 GestureDetector(
                   onTap: onTap,
@@ -246,14 +309,18 @@ class LoyaltyEarnBadge extends StatelessWidget {
           const Icon(Icons.workspace_premium_rounded,
               size: 14, color: AppColors.gold),
           const SizedBox(width: 5),
-          Text(
-            'Earn $points loyalty points (₹$points)',
-            style: const TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w700,
-              color: AppColors.gold,
-              height: 1.2,
-              letterSpacing: 0.1,
+          Flexible(
+            child: Text(
+              'Earn $points loyalty points (₹$points)',
+              style: const TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                color: AppColors.gold,
+                height: 1.2,
+                letterSpacing: 0.1,
+              ),
+              overflow: TextOverflow.ellipsis,
+              maxLines: 1,
             ),
           ),
         ],

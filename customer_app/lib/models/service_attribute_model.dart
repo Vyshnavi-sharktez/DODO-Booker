@@ -3,13 +3,26 @@ class ServiceAttributeOptionModel {
   final String attributeId;
   final String optionName;
   final double priceAdjustment;
+  final String discountType;
+  final double discountValue;
 
   const ServiceAttributeOptionModel({
     required this.id,
     required this.attributeId,
     required this.optionName,
     this.priceAdjustment = 0.0,
+    this.discountType = 'percentage',
+    this.discountValue = 0,
   });
+
+  double get discountAmount => discountType == 'percentage'
+      ? priceAdjustment * discountValue / 100
+      : discountValue;
+
+  double get finalPrice =>
+      (priceAdjustment - discountAmount).clamp(0.0, double.infinity);
+
+  bool get hasDiscount => discountValue > 0;
 
   factory ServiceAttributeOptionModel.fromJson(Map<String, dynamic> json) {
     return ServiceAttributeOptionModel(
@@ -17,6 +30,8 @@ class ServiceAttributeOptionModel {
       attributeId: json['attribute_id'] as String? ?? '',
       optionName: json['option_name'] as String? ?? '',
       priceAdjustment: (json['price_adjustment'] as num?)?.toDouble() ?? 0.0,
+      discountType: (json['discount_type'] as String?) ?? 'percentage',
+      discountValue: (json['discount_value'] as num?)?.toDouble() ?? 0,
     );
   }
 }

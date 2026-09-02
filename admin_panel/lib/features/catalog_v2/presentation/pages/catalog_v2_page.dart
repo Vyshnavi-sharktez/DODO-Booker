@@ -69,6 +69,7 @@ class _CatalogV2PageState extends ConsumerState<CatalogV2Page> {
           required slug,
           description,
           imageUrl,
+          mobileImageUrl,
           iconKey,
           required sortOrder,
           required isActive,
@@ -76,6 +77,8 @@ class _CatalogV2PageState extends ConsumerState<CatalogV2Page> {
           basePrice,
           estimatedDuration,
           minimumOrderAmount,
+          discountType = 'percentage',
+          discountValue = 0,
         }) async {
           await ref.read(catalogNodeNotifierProvider.notifier).createNode(
                 parentId: parent?.id,
@@ -83,6 +86,7 @@ class _CatalogV2PageState extends ConsumerState<CatalogV2Page> {
                 slug: slug,
                 description: description,
                 imageUrl: imageUrl,
+                mobileImageUrl: mobileImageUrl,
                 iconKey: iconKey,
                 sortOrder: sortOrder,
                 isActive: isActive,
@@ -90,6 +94,8 @@ class _CatalogV2PageState extends ConsumerState<CatalogV2Page> {
                 basePrice: basePrice,
                 estimatedDuration: estimatedDuration,
                 minimumOrderAmount: minimumOrderAmount,
+                discountType: discountType,
+                discountValue: discountValue,
               );
           if (mounted && parent != null) {
             setState(() => _expandedIds.add(parent.id));
@@ -118,6 +124,7 @@ class _CatalogV2PageState extends ConsumerState<CatalogV2Page> {
           required slug,
           description,
           imageUrl,
+          mobileImageUrl,
           iconKey,
           required sortOrder,
           required isActive,
@@ -125,6 +132,8 @@ class _CatalogV2PageState extends ConsumerState<CatalogV2Page> {
           basePrice,
           estimatedDuration,
           minimumOrderAmount,
+          discountType = 'percentage',
+          discountValue = 0,
         }) async {
           await ref.read(catalogNodeNotifierProvider.notifier).updateNode(
                 node.id,
@@ -132,6 +141,7 @@ class _CatalogV2PageState extends ConsumerState<CatalogV2Page> {
                 slug: slug,
                 description: description,
                 imageUrl: imageUrl,
+                mobileImageUrl: mobileImageUrl,
                 iconKey: iconKey,
                 sortOrder: sortOrder,
                 isActive: isActive,
@@ -139,6 +149,8 @@ class _CatalogV2PageState extends ConsumerState<CatalogV2Page> {
                 basePrice: basePrice,
                 estimatedDuration: estimatedDuration,
                 minimumOrderAmount: minimumOrderAmount,
+                discountType: discountType,
+                discountValue: discountValue,
               );
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(

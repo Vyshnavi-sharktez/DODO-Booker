@@ -3,7 +3,7 @@ import '../domain/models/service_attribute.dart';
 import '../domain/models/service_attribute_option.dart';
 
 const _optionsSelect =
-    'service_attribute_options(id, attribute_id, option_name, price_adjustment, sort_order)';
+    'service_attribute_options(id, attribute_id, option_name, price_adjustment, sort_order, discount_type, discount_value)';
 
 class ServiceAttributesRepository {
   final SupabaseClient _supabase;
@@ -64,6 +64,10 @@ class ServiceAttributesRepository {
   }
 
   Future<void> deleteAttribute(String id) async {
+    await _supabase
+        .from('service_attribute_options')
+        .delete()
+        .eq('attribute_id', id);
     await _supabase.from('service_attributes').delete().eq('id', id);
   }
 
@@ -74,6 +78,8 @@ class ServiceAttributesRepository {
     required String optionName,
     required double priceAdjustment,
     required int sortOrder,
+    String discountType = 'percentage',
+    double discountValue = 0,
   }) async {
     final data = await _supabase
         .from('service_attribute_options')
@@ -82,6 +88,8 @@ class ServiceAttributesRepository {
           'option_name': optionName,
           'price_adjustment': priceAdjustment,
           'sort_order': sortOrder,
+          'discount_type': discountType,
+          'discount_value': discountValue,
         })
         .select()
         .single();
@@ -92,12 +100,16 @@ class ServiceAttributesRepository {
     String id, {
     required String optionName,
     required double priceAdjustment,
+    String discountType = 'percentage',
+    double discountValue = 0,
   }) async {
     final data = await _supabase
         .from('service_attribute_options')
         .update({
           'option_name': optionName,
           'price_adjustment': priceAdjustment,
+          'discount_type': discountType,
+          'discount_value': discountValue,
         })
         .eq('id', id)
         .select()

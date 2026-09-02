@@ -37,6 +37,7 @@ class CatalogNodeNotifier
     required String slug,
     String? description,
     String? imageUrl,
+    String? mobileImageUrl,
     String? iconKey,
     required int sortOrder,
     required bool isActive,
@@ -44,6 +45,8 @@ class CatalogNodeNotifier
     double? basePrice,
     int? estimatedDuration,
     double? minimumOrderAmount,
+    String discountType = 'percentage',
+    double discountValue = 0,
   }) async {
     await _repo.createNode(
       parentId: parentId,
@@ -51,6 +54,7 @@ class CatalogNodeNotifier
       slug: slug,
       description: description,
       imageUrl: imageUrl,
+      mobileImageUrl: mobileImageUrl,
       iconKey: iconKey,
       sortOrder: sortOrder,
       isActive: isActive,
@@ -58,6 +62,8 @@ class CatalogNodeNotifier
       basePrice: basePrice,
       estimatedDuration: estimatedDuration,
       minimumOrderAmount: minimumOrderAmount,
+      discountType: discountType,
+      discountValue: discountValue,
     );
     await _load();
   }
@@ -68,6 +74,7 @@ class CatalogNodeNotifier
     required String slug,
     String? description,
     String? imageUrl,
+    String? mobileImageUrl,
     String? iconKey,
     required int sortOrder,
     required bool isActive,
@@ -75,6 +82,8 @@ class CatalogNodeNotifier
     double? basePrice,
     int? estimatedDuration,
     double? minimumOrderAmount,
+    String discountType = 'percentage',
+    double discountValue = 0,
   }) async {
     await _repo.updateNode(
       id,
@@ -82,6 +91,7 @@ class CatalogNodeNotifier
       slug: slug,
       description: description,
       imageUrl: imageUrl,
+      mobileImageUrl: mobileImageUrl,
       iconKey: iconKey,
       sortOrder: sortOrder,
       isActive: isActive,
@@ -89,6 +99,8 @@ class CatalogNodeNotifier
       basePrice: basePrice,
       estimatedDuration: estimatedDuration,
       minimumOrderAmount: minimumOrderAmount,
+      discountType: discountType,
+      discountValue: discountValue,
     );
     await _load();
   }
@@ -235,6 +247,8 @@ class CatalogNodeAttributesNotifier
     required String attributeId,
     required String optionName,
     required double priceAdjustment,
+    String discountType = 'percentage',
+    double discountValue = 0,
   }) async {
     final attrs = state.valueOrNull ?? [];
     final attr = attrs.where((a) => a.id == attributeId).firstOrNull;
@@ -244,6 +258,8 @@ class CatalogNodeAttributesNotifier
       optionName: optionName,
       priceAdjustment: priceAdjustment,
       sortOrder: nextSortOrder,
+      discountType: discountType,
+      discountValue: discountValue,
     );
     await _reload();
   }
@@ -252,11 +268,15 @@ class CatalogNodeAttributesNotifier
     String optionId, {
     required String optionName,
     required double priceAdjustment,
+    String discountType = 'percentage',
+    double discountValue = 0,
   }) async {
     await _repo.updateOption(
       optionId,
       optionName: optionName,
       priceAdjustment: priceAdjustment,
+      discountType: discountType,
+      discountValue: discountValue,
     );
     await _reload();
   }

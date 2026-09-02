@@ -34,6 +34,11 @@ class NavSearchButton extends StatelessWidget {
   }
 }
 
+/// Opens the mobile full-screen search overlay with trending and live results.
+/// Reuses the same search logic and data as the web NavSearchBar.
+Future<void> showMobileSearch(BuildContext context) =>
+    _MobileSearchModal.show(context);
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Desktop / tablet — inline search with overlay dropdown
 // ─────────────────────────────────────────────────────────────────────────────
@@ -322,25 +327,25 @@ class _SearchPanelState extends ConsumerState<_SearchPanel> {
   @override
   Widget build(BuildContext context) {
     final showTrending = _lastQuery.length < 2;
-    final content = Column(
-      mainAxisSize:
-          widget.compact ? MainAxisSize.min : MainAxisSize.max,
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        if (showTrending)
-          _TrendingSection(
+    final section = showTrending
+        ? _TrendingSection(
             compact: widget.compact,
             onNodeTap: widget.onNodeTap,
             onTrendingTap: widget.onTrendingTap,
           )
-        else
-          _ResultsSection(
+        : _ResultsSection(
             compact: widget.compact,
             query: _lastQuery,
             results: _results,
             isLoading: _isLoading,
             onNodeTap: widget.onNodeTap,
-          ),
+          );
+    final content = Column(
+      mainAxisSize:
+          widget.compact ? MainAxisSize.min : MainAxisSize.max,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (widget.compact) section else Expanded(child: section),
       ],
     );
 
@@ -413,6 +418,20 @@ class _TrendingSection extends ConsumerWidget {
         if (visible.isEmpty) {
           return const _PanelMessage('No trending services right now');
         }
+        // Mobile (non-compact): vertical list, one item per row.
+        if (!compact) {
+          return ListView.separated(
+            padding: EdgeInsets.zero,
+            itemCount: visible.length,
+            separatorBuilder: (_, _) =>
+                const Divider(height: 1, indent: 64, color: AppColors.border),
+            itemBuilder: (_, i) => _TrendingRow(
+              node: visible[i],
+              onTap: () => onNodeTap(visible[i]),
+            ),
+          );
+        }
+        // Web/desktop (compact): horizontal chip wrap.
         return SingleChildScrollView(
           padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
           child: Wrap(
@@ -514,6 +533,61 @@ class _TrendingChipState extends State<_TrendingChip> {
               ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+// Mobile trending row — full-width tap target used in the vertical list.
+class _TrendingRow extends StatelessWidget {
+  final CatalogNodeModel node;
+  final VoidCallback onTap;
+
+  const _TrendingRow({required this.node, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        child: Row(
+          children: [
+            Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                color: AppColors.surfaceVariant,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Icon(
+                Icons.trending_up_rounded,
+                size: 16,
+                color: Color(0xFFF97316),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                node.name,
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                  color: AppColors.textPrimary,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            const SizedBox(width: 8),
+            const Icon(
+              Icons.arrow_forward_ios_rounded,
+              size: 12,
+              color: AppColors.textHint,
+            ),
+          ],
         ),
       ),
     );
@@ -663,7 +737,7 @@ class _ResultRowState extends State<_ResultRow> {
   Widget build(BuildContext context) {
     final node = widget.node;
     final price = node.basePrice != null
-        ? '₹${node.basePrice!.toStringAsFixed(0)}'
+        ? '₹${(node.finalPrice ?? node.basePrice)!.toStringAsFixed(0)}'
         : null;
     final hasRating = node.rating > 0 && node.reviewCount > 0;
 
@@ -885,10 +959,10 @@ class _MobileSearchModalState extends State<_MobileSearchModal> {
         children: [
           // Top bar
           Container(
-            color: Colors.white,
             padding: EdgeInsets.fromLTRB(
                 12, padding.top + 8, 12, 12),
             decoration: const BoxDecoration(
+              color: Colors.white,
               border: Border(
                 bottom: BorderSide(
                     color: AppColors.border, width: 0.8),
@@ -915,62 +989,38 @@ class _MobileSearchModalState extends State<_MobileSearchModal> {
                 const SizedBox(width: 10),
                 // Search input
                 Expanded(
-                  child: Container(
-                    height: 44,
-                    decoration: BoxDecoration(
-                      color: AppColors.surfaceVariant,
-                      borderRadius: BorderRadius.circular(24),
-                      border: Border.all(
-                        color: AppColors.gold.withAlpha(153),
-                        width: 1.5,
+                  child: TextField(
+                    controller: _ctrl,
+                    focusNode: _focus,
+                    textInputAction: TextInputAction.search,
+                    onSubmitted: (_) {
+                      if (_panelResults.isNotEmpty) {
+                        _onNodeTap(_panelResults.first);
+                      }
+                    },
+                    style: const TextStyle(
+                        fontSize: 14,
+                        color: AppColors.textPrimary),
+                    decoration: InputDecoration(
+                      hintText: 'Search for services...',
+                      hintStyle: const TextStyle(
+                          fontSize: 14,
+                          color: AppColors.textHint),
+                      prefixIcon: const Icon(Icons.search_rounded,
+                          size: 18, color: AppColors.gold),
+                      suffixIcon: ValueListenableBuilder<TextEditingValue>(
+                        valueListenable: _ctrl,
+                        builder: (_, val, _) => val.text.isEmpty
+                            ? const SizedBox.shrink()
+                            : GestureDetector(
+                                onTap: _ctrl.clear,
+                                child: const Icon(Icons.clear_rounded,
+                                    size: 16, color: AppColors.textHint),
+                              ),
                       ),
-                    ),
-                    child: Row(
-                      children: [
-                        const SizedBox(width: 14),
-                        const Icon(Icons.search_rounded,
-                            size: 18, color: AppColors.gold),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: TextField(
-                            controller: _ctrl,
-                            focusNode: _focus,
-                            textInputAction: TextInputAction.search,
-                            onSubmitted: (_) {
-                              if (_panelResults.isNotEmpty) {
-                                _onNodeTap(_panelResults.first);
-                              }
-                            },
-                            style: const TextStyle(
-                                fontSize: 14,
-                                color: AppColors.textPrimary),
-                            decoration: const InputDecoration(
-                              hintText: 'Search for services...',
-                              hintStyle: TextStyle(
-                                  fontSize: 14,
-                                  color: AppColors.textHint),
-                              border: InputBorder.none,
-                              isDense: true,
-                              contentPadding: EdgeInsets.zero,
-                            ),
-                          ),
-                        ),
-                        ValueListenableBuilder<TextEditingValue>(
-                          valueListenable: _ctrl,
-                          builder: (_, val, _) => val.text.isEmpty
-                              ? const SizedBox.shrink()
-                              : GestureDetector(
-                                  onTap: _ctrl.clear,
-                                  child: const Padding(
-                                    padding: EdgeInsets.symmetric(
-                                        horizontal: 12),
-                                    child: Icon(Icons.clear_rounded,
-                                        size: 16,
-                                        color: AppColors.textHint),
-                                  ),
-                                ),
-                        ),
-                      ],
+                      border: InputBorder.none,
+                      isDense: true,
+                      contentPadding: EdgeInsets.zero,
                     ),
                   ),
                 ),

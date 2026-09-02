@@ -39,6 +39,8 @@ class _AddonsPageState extends ConsumerState<AddonsPage> {
           required price,
           required isActive,
           serviceId,
+          discountType = 'percentage',
+          discountValue = 0,
         }) =>
             ref.read(allAddonsNotifierProvider.notifier).create(
                   name: name,
@@ -46,6 +48,8 @@ class _AddonsPageState extends ConsumerState<AddonsPage> {
                   price: price,
                   isActive: isActive,
                   serviceId: serviceId,
+                  discountType: discountType,
+                  discountValue: discountValue,
                 ),
       ),
     );
@@ -63,6 +67,8 @@ class _AddonsPageState extends ConsumerState<AddonsPage> {
           required price,
           required isActive,
           serviceId,
+          discountType = 'percentage',
+          discountValue = 0,
         }) =>
             ref.read(allAddonsNotifierProvider.notifier).update(
                   addon.id,
@@ -71,6 +77,8 @@ class _AddonsPageState extends ConsumerState<AddonsPage> {
                   price: price,
                   isActive: isActive,
                   serviceId: serviceId,
+                  discountType: discountType,
+                  discountValue: discountValue,
                 ),
       ),
     );

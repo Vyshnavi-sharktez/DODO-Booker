@@ -110,10 +110,10 @@ class _ServiceCardState extends State<_ServiceCard> {
   Widget build(BuildContext context) {
     final node = widget.node;
     final url = ServiceImageRegistry.resolve(node.imageUrl, node.name);
-    final String? subLabel = node.childrenCount > 0
-        ? '${node.childrenCount} options'
-        : node.basePrice != null
-            ? 'From ₹${node.basePrice!.toInt()}'
+    final String? subLabel = node.basePrice != null
+        ? '₹${(node.finalPrice ?? node.basePrice)!.toInt()}'
+        : node.childrenCount > 0
+            ? '${node.childrenCount} options'
             : null;
 
     return MouseRegion(
@@ -325,7 +325,7 @@ class _CardInfo extends StatelessWidget {
               children: [
                 if (node.isLeafBookable && node.basePrice != null)
                   Text(
-                    '₹${node.basePrice!.toInt()}',
+                    '₹${(node.finalPrice ?? node.basePrice)!.toInt()}',
                     style: const TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.w800,

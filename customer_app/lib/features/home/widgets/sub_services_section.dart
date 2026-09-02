@@ -5,6 +5,7 @@ import '../../../core/constants/app_colors.dart';
 import '../../../core/widgets/horizontal_carousel.dart';
 import '../../../core/widgets/section_header.dart';
 import '../../../features/catalog/models/catalog_node_model.dart';
+import '../../../features/category/services/category_providers.dart';
 
 // ── Layout constants ──────────────────────────────────────────────────────────
 
@@ -172,17 +173,43 @@ class _ServiceCardState extends State<_ServiceCard> {
                             height: 1.25,
                           ),
                         ),
-                        if (node.basePrice != null) ...[
-                          const SizedBox(height: 4),
-                          Text(
-                            'From ₹${node.basePrice!.toInt()}',
-                            style: GoogleFonts.inter(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w600,
-                              color: const Color(0xFF1A1714),
-                            ),
-                          ),
-                        ],
+                        Consumer(
+                          builder: (_, ref, _) {
+                            final attrs =
+                                ref.watch(serviceAttributesProvider(node.id)).valueOrNull ?? [];
+                            final prices = attrs
+                                .where((a) => a.options.isNotEmpty)
+                                .map((a) => a.options.first.finalPrice);
+                            if (prices.isNotEmpty) {
+                              final startsAt = prices.reduce((a, b) => a < b ? a : b);
+                              return Padding(
+                                padding: const EdgeInsets.only(top: 4),
+                                child: Text(
+                                  'Starts at ₹${startsAt.toInt()}',
+                                  style: GoogleFonts.inter(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w700,
+                                    color: const Color(0xFF1A1A1A),
+                                  ),
+                                ),
+                              );
+                            }
+                            if (node.basePrice != null) {
+                              return Padding(
+                                padding: const EdgeInsets.only(top: 4),
+                                child: Text(
+                                  '₹${(node.finalPrice ?? node.basePrice)!.toInt()}',
+                                  style: GoogleFonts.inter(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w600,
+                                    color: const Color(0xFF1A1714),
+                                  ),
+                                ),
+                              );
+                            }
+                            return const SizedBox.shrink();
+                          },
+                        ),
                       ],
                     ),
                   ),

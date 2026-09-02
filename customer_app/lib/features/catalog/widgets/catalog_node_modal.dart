@@ -24,6 +24,7 @@ import '../../loyalty/utils/loyalty_utils.dart';
 import '../../wishlist/widgets/heart_button.dart';
 import '../models/catalog_node_model.dart';
 import '../providers/catalog_providers.dart';
+import '../screens/catalog_node_screen.dart';
 import '../utils/catalog_launcher.dart';
 import 'catalog_unavailability_widgets.dart';
 
@@ -43,6 +44,7 @@ class CatalogNodeModal extends ConsumerStatefulWidget {
     super.key,
     required this.node,
     this.parentNodeId,
+    this.isMobileSheet = false,
   });
 
   final CatalogNodeModel node;
@@ -51,13 +53,31 @@ class CatalogNodeModal extends ConsumerStatefulWidget {
   /// Null for root-level nodes or deep-link entry points.
   final String? parentNodeId;
 
-  /// Shows the modal with a fade+scale transition over a blurred backdrop.
-  /// Stacks safely — tapping a child node opens another modal on top.
+  /// When true, renders as a bottom-sheet body (no blurred backdrop Stack).
+  /// Set automatically by [open] on screens narrower than 768 logical pixels.
+  final bool isMobileSheet;
+
+  /// On mobile (< 768 px wide): shows a bottom sheet.
+  /// On desktop: shows the premium centered dialog with blurred backdrop.
   static Future<void> open(
     BuildContext context,
     CatalogNodeModel node, {
     String? parentId,
   }) {
+    final isMobile = MediaQuery.of(context).size.width < 768;
+    if (isMobile) {
+      return showModalBottomSheet<void>(
+        context: context,
+        isScrollControlled: true,
+        useSafeArea: true,
+        backgroundColor: Colors.transparent,
+        builder: (_) => CatalogNodeScreen(
+          node: node,
+          parentNodeId: parentId,
+          inSheet: true,
+        ),
+      );
+    }
     return showGeneralDialog(
       context: context,
       barrierDismissible: false,
@@ -111,7 +131,7 @@ class _CatalogNodeModalState extends ConsumerState<CatalogNodeModal> {
         final sel = _selections[attr.id];
         if (sel == null) return sum;
         final opt = attr.options.where((o) => o.id == sel).firstOrNull;
-        return sum + (opt?.priceAdjustment ?? 0.0);
+        return sum + (opt?.finalPrice ?? 0.0);
       });
     });
   }
@@ -168,16 +188,227 @@ class _CatalogNodeModalState extends ConsumerState<CatalogNodeModal> {
 
     final addonsTotal =
         totalAddonsPrice(buildSelectedAddons(addOns, _selectedAddonIds));
+
+    // Resolve the active attribute option: prefer user-selected, fall back to
+    // the option with the lowest finalPrice across all entries.
+    final attrEntries = attrs.where((a) => a.options.isNotEmpty).toList();
+    ServiceAttributeOptionModel? activeAttrOpt;
+    if (attrEntries.isNotEmpty) {
+      for (final attr in attrEntries) {
+        final selId = _selections[attr.id];
+        if (selId == null) continue;
+        activeAttrOpt = attr.options.where((o) => o.id == selId).firstOrNull;
+        if (activeAttrOpt != null) break;
+      }
+      activeAttrOpt ??= attrEntries
+          .map((a) => a.options.first)
+          .reduce((a, b) => a.finalPrice <= b.finalPrice ? a : b);
+    }
+
     final displayPrice = _selectedAmcPlan != null
         ? _selectedAmcPlan!.finalPrice
-        : (node.basePrice ?? 0.0) + _priceAdjustment + addonsTotal;
-    final hasAdjustment = _priceAdjustment > 0 || addonsTotal > 0;
+        : activeAttrOpt != null
+            ? activeAttrOpt.finalPrice + addonsTotal
+            : (node.finalPrice ?? node.basePrice ?? 0.0) + addonsTotal;
+    final double? originalDisplayPrice = _selectedAmcPlan != null
+        ? null
+        : activeAttrOpt != null
+            ? (activeAttrOpt.hasDiscount ? activeAttrOpt.priceAdjustment : null)
+            : (node.hasDiscount ? node.basePrice : null);
+    final hasAdjustment = addonsTotal > 0;
 
     final heroUrl = node.hasChildren
         ? ServiceImageRegistry.resolve(node.imageUrl, node.name)
         : node.imageUrl;
     final hasHero = node.hasChildren || (heroUrl != null && heroUrl.isNotEmpty);
 
+    // ── Shared card Column children (used by both mobile sheet and desktop modal)
+    final cardChildren = <Widget>[
+      // ── Hero image + floating info card ────────────────────────────────
+      if (hasHero) ...[
+        Stack(
+          clipBehavior: Clip.none,
+          children: [
+            SizedBox(
+              height: 220,
+              width: double.infinity,
+              child: _ModalHeroImage(url: heroUrl!),
+            ),
+            if (node.isLeafBookable)
+              Positioned(
+                top: 10,
+                right: 52,
+                child: HeartButton(serviceId: node.id, mini: true),
+              ),
+            Positioned(
+              top: 10,
+              right: 10,
+              child: _HeroCloseButton(),
+            ),
+            Positioned(
+              bottom: -52,
+              left: 16,
+              right: 16,
+              child: _ModalInfoCard(
+                node: node,
+                displayPrice: displayPrice,
+                hasAdjustment: hasAdjustment,
+                originalDisplayPrice: originalDisplayPrice,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 68),
+      ],
+
+      // ── No-hero: plain header ───────────────────────────────────────────
+      if (!hasHero)
+        _ModalPlainHeader(
+          node: node,
+          displayPrice: displayPrice,
+          hasAdjustment: hasAdjustment,
+          originalDisplayPrice: originalDisplayPrice,
+        ),
+
+      // ── Scrollable content ──────────────────────────────────────────────
+      Flexible(
+        child: ScrollConfiguration(
+          behavior:
+              ScrollConfiguration.of(context).copyWith(scrollbars: false),
+          child: SingleChildScrollView(
+            padding:
+                EdgeInsets.only(bottom: node.isLeafBookable ? 8 : 24),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (node.isLeafBookable && attrs.isNotEmpty)
+                  ServiceAttributeSection(
+                    attrs: attrs,
+                    selections: _selections,
+                    onChanged: (attrId, optId) =>
+                        _onOptionSelected(attrId, optId, attrs),
+                  ),
+                if (node.description?.isNotEmpty == true)
+                  Padding(
+                    padding:
+                        const EdgeInsets.fromLTRB(20, 20, 20, 0),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          node.isLeafBookable
+                              ? 'About this service'
+                              : node.name,
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.textPrimary,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          node.description!,
+                          style: const TextStyle(
+                            fontSize: 14,
+                            color: AppColors.textSecondary,
+                            height: 1.65,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                if (node.hasChildren)
+                  (isUnavailable || isEffectivelyHidden)
+                      ? CatalogUnavailabilityBanner(
+                          message: isUnavailable
+                              ? (avail?.message ??
+                                  node.relUnavailabilityMessage)
+                              : null,
+                          isHidden: isEffectivelyHidden,
+                        )
+                      : _ModalChildrenList(
+                          node: node,
+                          children: children,
+                        ),
+                if (node.isLeafBookable && addOns.isNotEmpty)
+                  ServiceAddonSection(
+                    addOns: addOns,
+                    selectedIds: _selectedAddonIds,
+                    onToggle: _onAddonToggled,
+                  ),
+                if (node.isLeafBookable)
+                  AmcSection(
+                    serviceId: node.id,
+                    selectedPlan: _selectedAmcPlan,
+                    onPlanSelected: (plan) => setState(() {
+                      _selectedAmcPlan = plan;
+                    }),
+                    regularPrice: node.basePrice != null &&
+                            node.basePrice! > 0
+                        ? node.basePrice
+                        : null,
+                  ),
+                if (node.isLeafBookable && faqs.isNotEmpty)
+                  FaqSection(faqs: faqs),
+                if (node.isLeafBookable)
+                  ServiceReviewsSection(serviceId: node.id),
+                if (!node.hasChildren && !node.isBookable)
+                  const _ModalComingSoon(),
+              ],
+            ),
+          ),
+        ),
+      ),
+
+      // ── Sticky cart bar / unavailability bar ────────────────────────────
+      if (node.isLeafBookable)
+        (isUnavailable || isEffectivelyHidden)
+            ? CatalogUnavailabilityBar(
+                message: isUnavailable
+                    ? (avail?.message ?? node.relUnavailabilityMessage)
+                    : null,
+              )
+            : _ModalBookingBar(
+                node: node,
+                displayPrice: displayPrice,
+                priceAdjustment: _priceAdjustment,
+                addonsTotal: addonsTotal,
+                parentNodeId: widget.parentNodeId,
+                attrs: attrs,
+                selections: _selections,
+                addOns: addOns,
+                selectedAddonIds: _selectedAddonIds,
+                amcPlan: _selectedAmcPlan,
+                amcQuantity: 1,
+              ),
+    ];
+
+    // ── Mobile: bottom sheet ──────────────────────────────────────────────
+    if (widget.isMobileSheet) {
+      return ConstrainedBox(
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.of(context).size.height * 0.88,
+        ),
+        child: Material(
+          color: AppColors.surface,
+          borderRadius:
+              const BorderRadius.vertical(top: Radius.circular(24)),
+          child: ClipRRect(
+            borderRadius:
+                const BorderRadius.vertical(top: Radius.circular(24)),
+            child: Column(
+              mainAxisSize: MainAxisSize.max,
+              children: [
+                const _SheetDragHandle(),
+                ...cardChildren,
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    // ── Desktop: centered modal with blurred backdrop ─────────────────────
     return Stack(
       children: [
         // ── Blurred dimmed backdrop ──────────────────────────────────────
@@ -201,8 +432,8 @@ class _CatalogNodeModalState extends ConsumerState<CatalogNodeModal> {
                 maxHeight: MediaQuery.of(context).size.height * 0.88,
               ),
               child: Padding(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 16, vertical: 16),
                 child: Material(
                   color: Colors.transparent,
                   child: Container(
@@ -221,187 +452,7 @@ class _CatalogNodeModalState extends ConsumerState<CatalogNodeModal> {
                       borderRadius: BorderRadius.circular(24),
                       child: Column(
                         mainAxisSize: MainAxisSize.max,
-                        children: [
-                          // ── Hero image + floating info card ────────────
-                          if (hasHero) ...[
-                            Stack(
-                              clipBehavior: Clip.none,
-                              children: [
-                                SizedBox(
-                                  height: 220,
-                                  width: double.infinity,
-                                  child: _ModalHeroImage(url: heroUrl!),
-                                ),
-                                // Heart button (service detail only)
-                                if (node.isLeafBookable)
-                                  Positioned(
-                                    top: 10,
-                                    right: 52,
-                                    child: HeartButton(
-                                        serviceId: node.id, mini: true),
-                                  ),
-                                // Close button
-                                Positioned(
-                                  top: 10,
-                                  right: 10,
-                                  child: _HeroCloseButton(),
-                                ),
-                                // Floating info card (overlaps hero bottom)
-                                Positioned(
-                                  bottom: -52,
-                                  left: 16,
-                                  right: 16,
-                                  child: _ModalInfoCard(
-                                    node: node,
-                                    displayPrice: displayPrice,
-                                    hasAdjustment: hasAdjustment,
-                                  ),
-                                ),
-                              ],
-                            ),
-                            // Reserve space for card overflow + gap
-                            const SizedBox(height: 68),
-                          ],
-
-                          // ── No-hero: plain header ──────────────────────
-                          if (!hasHero)
-                            _ModalPlainHeader(
-                              node: node,
-                              displayPrice: displayPrice,
-                              hasAdjustment: hasAdjustment,
-                            ),
-
-                          // ── Scrollable content ─────────────────────────
-                          Flexible(
-                            child: ScrollConfiguration(
-                              behavior: ScrollConfiguration.of(context)
-                                  .copyWith(scrollbars: false),
-                              child: SingleChildScrollView(
-                                padding: EdgeInsets.only(
-                                    bottom: node.isLeafBookable ? 8 : 24),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    // Attribute selection
-                                    if (node.isLeafBookable && attrs.isNotEmpty)
-                                      ServiceAttributeSection(
-                                        attrs: attrs,
-                                        selections: _selections,
-                                        onChanged: (attrId, optId) =>
-                                            _onOptionSelected(
-                                                attrId, optId, attrs),
-                                      ),
-
-                                    // Description
-                                    if (node.description?.isNotEmpty == true)
-                                      Padding(
-                                        padding: const EdgeInsets.fromLTRB(
-                                            20, 20, 20, 0),
-                                        child: Column(
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.start,
-                                          children: [
-                                            Text(
-                                              node.isLeafBookable
-                                                  ? 'About this service'
-                                                  : node.name,
-                                              style: const TextStyle(
-                                                fontSize: 16,
-                                                fontWeight: FontWeight.w700,
-                                                color: AppColors.textPrimary,
-                                              ),
-                                            ),
-                                            const SizedBox(height: 8),
-                                            Text(
-                                              node.description!,
-                                              style: const TextStyle(
-                                                fontSize: 14,
-                                                color: AppColors.textSecondary,
-                                                height: 1.65,
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-
-                                    // Children list (category nodes)
-                                    if (node.hasChildren)
-                                      (isUnavailable || isEffectivelyHidden)
-                                          ? CatalogUnavailabilityBanner(
-                                              message: isUnavailable
-                                                  ? (avail?.message ??
-                                                      node.relUnavailabilityMessage)
-                                                  : null,
-                                              isHidden: isEffectivelyHidden,
-                                            )
-                                          : _ModalChildrenList(
-                                              node: node,
-                                              children: children,
-                                            ),
-
-                                    // Add-ons
-                                    if (node.isLeafBookable && addOns.isNotEmpty)
-                                      ServiceAddonSection(
-                                        addOns: addOns,
-                                        selectedIds: _selectedAddonIds,
-                                        onToggle: _onAddonToggled,
-                                      ),
-
-                                    // AMC
-                                    if (node.isLeafBookable)
-                                      AmcSection(
-                                        serviceId: node.id,
-                                        selectedPlan: _selectedAmcPlan,
-                                        onPlanSelected: (plan) => setState(() {
-                                          _selectedAmcPlan = plan;
-                                        }),
-                                        regularPrice: node.basePrice != null &&
-                                                node.basePrice! > 0
-                                            ? node.basePrice
-                                            : null,
-                                      ),
-
-                                    // FAQs
-                                    if (node.isLeafBookable && faqs.isNotEmpty)
-                                      FaqSection(faqs: faqs),
-
-                                    // Reviews
-                                    if (node.isLeafBookable)
-                                      ServiceReviewsSection(
-                                          serviceId: node.id),
-
-                                    // Coming Soon
-                                    if (!node.hasChildren && !node.isBookable)
-                                      const _ModalComingSoon(),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          ),
-
-                          // ── Sticky cart bar / unavailability bar ───────
-                          if (node.isLeafBookable)
-                            (isUnavailable || isEffectivelyHidden)
-                                ? CatalogUnavailabilityBar(
-                                    message: isUnavailable
-                                        ? (avail?.message ??
-                                            node.relUnavailabilityMessage)
-                                        : null,
-                                  )
-                                : _ModalBookingBar(
-                                    node: node,
-                                    displayPrice: displayPrice,
-                                    priceAdjustment: _priceAdjustment,
-                                    addonsTotal: addonsTotal,
-                                    parentNodeId: widget.parentNodeId,
-                                    attrs: attrs,
-                                    selections: _selections,
-                                    addOns: addOns,
-                                    selectedAddonIds: _selectedAddonIds,
-                                    amcPlan: _selectedAmcPlan,
-                                    amcQuantity: 1,
-                                  ),
-                        ],
+                        children: cardChildren,
                       ),
                     ),
                   ),
@@ -411,6 +462,25 @@ class _CatalogNodeModalState extends ConsumerState<CatalogNodeModal> {
           ),
         ),
       ],
+    );
+  }
+}
+
+// ── Bottom-sheet drag handle ──────────────────────────────────────────────────
+
+class _SheetDragHandle extends StatelessWidget {
+  const _SheetDragHandle();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(top: 12, bottom: 8),
+      width: 40,
+      height: 4,
+      decoration: BoxDecoration(
+        color: const Color(0xFFDDD8D0),
+        borderRadius: BorderRadius.circular(2),
+      ),
     );
   }
 }
@@ -486,10 +556,12 @@ class _ModalInfoCard extends StatelessWidget {
     required this.node,
     required this.displayPrice,
     required this.hasAdjustment,
+    this.originalDisplayPrice,
   });
   final CatalogNodeModel node;
   final double displayPrice;
   final bool hasAdjustment;
+  final double? originalDisplayPrice;
 
   @override
   Widget build(BuildContext context) {
@@ -583,7 +655,7 @@ class _ModalInfoCard extends StatelessWidget {
           ],
 
           // Price row (service) or count chip (category)
-          if (node.isLeafBookable && node.basePrice != null) ...[
+          if (node.isLeafBookable && displayPrice > 0) ...[
             const SizedBox(height: 10),
             const Divider(height: 1, color: AppColors.divider),
             const SizedBox(height: 10),
@@ -597,15 +669,31 @@ class _ModalInfoCard extends StatelessWidget {
                     fontSize: 26,
                     fontWeight: FontWeight.w800,
                     color: AppColors.primary,
+                    decoration: TextDecoration.none,
                     height: 1.0,
                   ),
                 ),
-                const SizedBox(width: 6),
-                Text(
-                  hasAdjustment ? 'incl. adjustments' : 'onwards',
-                  style: const TextStyle(
-                      fontSize: 12, color: AppColors.textHint),
-                ),
+                if (originalDisplayPrice != null) ...[
+                  const SizedBox(width: 8),
+                  Text(
+                    '₹${originalDisplayPrice!.toInt()}',
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w500,
+                      color: AppColors.textHint,
+                      decoration: TextDecoration.lineThrough,
+                      decorationColor: AppColors.textHint,
+                      height: 1.0,
+                    ),
+                  ),
+                ] else ...[
+                  const SizedBox(width: 6),
+                  Text(
+                    hasAdjustment ? 'incl. add-ons' : 'onwards',
+                    style: const TextStyle(
+                        fontSize: 12, color: AppColors.textHint),
+                  ),
+                ],
               ],
             ),
           ] else if (node.hasChildren) ...[
@@ -641,10 +729,12 @@ class _ModalPlainHeader extends StatelessWidget {
     required this.node,
     required this.displayPrice,
     required this.hasAdjustment,
+    this.originalDisplayPrice,
   });
   final CatalogNodeModel node;
   final double displayPrice;
   final bool hasAdjustment;
+  final double? originalDisplayPrice;
 
   @override
   Widget build(BuildContext context) {
@@ -718,7 +808,7 @@ class _ModalPlainHeader extends StatelessWidget {
                     ],
                   ),
                 ],
-                if (node.isLeafBookable && node.basePrice != null) ...[
+                if (node.isLeafBookable && displayPrice > 0) ...[
                   const SizedBox(height: 10),
                   Row(
                     crossAxisAlignment: CrossAxisAlignment.baseline,
@@ -733,12 +823,27 @@ class _ModalPlainHeader extends StatelessWidget {
                           height: 1.0,
                         ),
                       ),
-                      const SizedBox(width: 6),
-                      Text(
-                        hasAdjustment ? 'incl. adjustments' : 'onwards',
-                        style: const TextStyle(
-                            fontSize: 12, color: AppColors.textHint),
-                      ),
+                      if (originalDisplayPrice != null) ...[
+                        const SizedBox(width: 8),
+                        Text(
+                          '₹${originalDisplayPrice!.toInt()}',
+                          style: const TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w500,
+                            color: AppColors.textHint,
+                            decoration: TextDecoration.lineThrough,
+                            decorationColor: AppColors.textHint,
+                            height: 1.0,
+                          ),
+                        ),
+                      ] else ...[
+                        const SizedBox(width: 6),
+                        Text(
+                          hasAdjustment ? 'incl. add-ons' : 'onwards',
+                          style: const TextStyle(
+                              fontSize: 12, color: AppColors.textHint),
+                        ),
+                      ],
                     ],
                   ),
                 ],
@@ -944,23 +1049,16 @@ class _ModalChildItemState extends State<_ModalChildItem> {
                       const SizedBox(height: 5),
                       Row(
                         children: [
-                          if (node.isLeafBookable &&
-                              node.basePrice != null) ...[
+                          if (node.basePrice != null)
                             Text(
-                              '₹${node.basePrice!.toInt()}',
+                              '₹${(node.finalPrice ?? node.basePrice)!.toInt()}',
                               style: const TextStyle(
                                 fontSize: 13,
                                 fontWeight: FontWeight.w800,
                                 color: AppColors.primary,
                               ),
-                            ),
-                            const SizedBox(width: 3),
-                            const Text(
-                              'onwards',
-                              style: TextStyle(
-                                  fontSize: 10, color: AppColors.textHint),
-                            ),
-                          ] else if (node.hasChildren)
+                            )
+                          else if (node.hasChildren)
                             Text(
                               '${node.childrenCount} '
                               '${node.childrenCount == 1 ? 'option' : 'options'}',
@@ -1192,14 +1290,25 @@ class _ModalBookingBar extends ConsumerWidget {
         return;
       }
     }
-    ref.read(cartProvider.notifier).addToCart(
-          node,
-          priceAdjustment:
-              amcPlan != null ? 0.0 : priceAdjustment + addonsTotal,
-          parentNodeId: parentNodeId,
-          amcPlan: amcPlan,
-          amcQuantity: amcQuantity,
-        );
+    if (amcPlan != null) {
+      ref.read(cartProvider.notifier).addToCart(
+            node,
+            priceAdjustment: 0.0,
+            parentNodeId: parentNodeId,
+            amcPlan: amcPlan,
+            amcQuantity: amcQuantity,
+          );
+    } else {
+      final selAddons = buildSelectedAddons(addOns, selectedAddonIds);
+      ref.read(cartProvider.notifier).addToCart(
+            node,
+            unitPriceOverride: (node.finalPrice ?? node.basePrice ?? 0.0) +
+                priceAdjustment +
+                totalAddonsPrice(selAddons),
+            addons: selAddons,
+            parentNodeId: parentNodeId,
+          );
+    }
   }
 
   @override

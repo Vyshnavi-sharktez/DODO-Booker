@@ -343,7 +343,7 @@ class _CartItemCardState extends ConsumerState<_CartItemCard> {
                       child: const Padding(
                         padding: EdgeInsets.all(4),
                         child: Icon(
-                          Icons.delete_outline_rounded,
+                          Icons.close_rounded,
                           size: 20,
                           color: AppColors.textHint,
                         ),
@@ -527,7 +527,7 @@ class _CartItemCardState extends ConsumerState<_CartItemCard> {
                             onTap: () =>
                                 notifier.removeFromCart(item.bookingId),
                             child: const Icon(
-                              Icons.delete_outline_rounded,
+                              Icons.close_rounded,
                               size: 20,
                               color: AppColors.textHint,
                             ),

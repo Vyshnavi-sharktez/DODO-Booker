@@ -34,3 +34,7 @@ final newServicesProvider = FutureProvider<List<CatalogNodeModel>>((ref) {
 final homeReviewsProvider = FutureProvider<List<PublicReview>>((ref) {
   return ref.read(homeServiceProvider).fetchPublicReviews();
 });
+
+/// Set to true once the user completes the mobile location flow and taps
+/// "Continue to Home". Gates whether the service content is visible.
+final mobileServicesUnlockedProvider = StateProvider<bool>((ref) => false);

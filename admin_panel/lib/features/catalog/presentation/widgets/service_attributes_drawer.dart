@@ -5,7 +5,6 @@ import '../../../../core/theme/app_theme.dart';
 import '../../../service_attributes/application/providers/service_attributes_providers.dart';
 import '../../../service_attributes/domain/models/service_attribute.dart';
 import '../../../service_attributes/presentation/widgets/attribute_form_dialog.dart';
-import '../../../service_attributes/presentation/widgets/attribute_options_dialog.dart';
 import '../../../services/domain/models/service.dart';
 
 /// Right-side drawer content showing and editing attributes for [service].
@@ -34,6 +33,7 @@ class _ServiceAttributesDrawerState
   }
 
   void _openCreate() {
+    final notifier = ref.read(serviceAttributesNotifierProvider.notifier);
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -43,21 +43,26 @@ class _ServiceAttributesDrawerState
         onSave: ({
           required serviceId,
           required name,
-          required fieldType,
-          required isRequired,
+          required price,
+          required discountType,
+          required discountValue,
         }) async {
-          await ref
-              .read(serviceAttributesNotifierProvider.notifier)
-              .createAttribute(
-                serviceId: serviceId,
-                name: name,
-                fieldType: fieldType,
-                isRequired: isRequired,
-              );
+          final attrId = await notifier.createAttribute(
+            serviceId: serviceId,
+            name: name,
+            fieldType: 'dropdown',
+            isRequired: false,
+          );
+          await notifier.createOption(
+            attributeId: attrId,
+            optionName: name,
+            priceAdjustment: price,
+            discountType: discountType,
+            discountValue: discountValue,
+          );
           if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Attribute created.')),
-            );
+            ScaffoldMessenger.of(context)
+                .showSnackBar(const SnackBar(content: Text('Entry created.')));
           }
         },
       ),
@@ -65,6 +70,7 @@ class _ServiceAttributesDrawerState
   }
 
   void _openEdit(ServiceAttribute attr) {
+    final notifier = ref.read(serviceAttributesNotifierProvider.notifier);
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -75,22 +81,37 @@ class _ServiceAttributesDrawerState
         onSave: ({
           required serviceId,
           required name,
-          required fieldType,
-          required isRequired,
+          required price,
+          required discountType,
+          required discountValue,
         }) async {
-          await ref
-              .read(serviceAttributesNotifierProvider.notifier)
-              .updateAttribute(
-                attr.id,
-                serviceId: serviceId,
-                name: name,
-                fieldType: fieldType,
-                isRequired: isRequired,
-              );
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Attribute updated.')),
+          await notifier.updateAttribute(
+            attr.id,
+            serviceId: serviceId,
+            name: name,
+            fieldType: 'dropdown',
+            isRequired: false,
+          );
+          if (attr.options.isNotEmpty) {
+            await notifier.updateOption(
+              attr.options.first.id,
+              optionName: name,
+              priceAdjustment: price,
+              discountType: discountType,
+              discountValue: discountValue,
             );
+          } else {
+            await notifier.createOption(
+              attributeId: attr.id,
+              optionName: name,
+              priceAdjustment: price,
+              discountType: discountType,
+              discountValue: discountValue,
+            );
+          }
+          if (mounted) {
+            ScaffoldMessenger.of(context)
+                .showSnackBar(const SnackBar(content: Text('Entry updated.')));
           }
         },
       ),
@@ -126,16 +147,6 @@ class _ServiceAttributesDrawerState
       ScaffoldMessenger.of(context)
           .showSnackBar(const SnackBar(content: Text('Attribute deleted.')));
     }
-  }
-
-  void _openOptions(ServiceAttribute attr) {
-    showDialog(
-      context: context,
-      builder: (_) => AttributeOptionsDialog(
-        attributeId: attr.id,
-        attributeName: attr.name,
-      ),
-    );
   }
 
   @override
@@ -182,7 +193,6 @@ class _ServiceAttributesDrawerState
                   attr: serviceAttrs[i],
                   onEdit: _openEdit,
                   onDelete: _delete,
-                  onOptions: _openOptions,
                 ),
               );
             },
@@ -241,7 +251,7 @@ class _ServiceAttributesDrawerState
         child: OutlinedButton.icon(
           onPressed: _openCreate,
           icon: const Icon(Icons.add, size: 16),
-          label: const Text('Add Attribute'),
+          label: const Text('Add Entry'),
           style: OutlinedButton.styleFrom(
             foregroundColor: AppColors.accent,
             side: const BorderSide(color: AppColors.accent),
@@ -260,30 +270,32 @@ class _AttributeItem extends StatelessWidget {
     required this.attr,
     required this.onEdit,
     required this.onDelete,
-    required this.onOptions,
   });
 
   final ServiceAttribute attr;
   final void Function(ServiceAttribute) onEdit;
   final void Function(ServiceAttribute) onDelete;
-  final void Function(ServiceAttribute) onOptions;
 
   @override
   Widget build(BuildContext context) {
+    final price = attr.options.isNotEmpty
+        ? attr.options.first.priceAdjustment
+        : 0.0;
+
     return Container(
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
         color: AppColors.background,
         borderRadius: BorderRadius.circular(8),
         border: Border.all(color: AppColors.border),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Row(
         children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text(
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
                   attr.name,
                   style: const TextStyle(
                     fontWeight: FontWeight.w600,
@@ -291,84 +303,32 @@ class _AttributeItem extends StatelessWidget {
                     color: AppColors.textPrimary,
                   ),
                 ),
-              ),
-              if (attr.isRequired)
-                Container(
-                  margin: const EdgeInsets.only(right: 6),
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: AppColors.error.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(4),
+                if (price > 0) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    '₹${price.toStringAsFixed(0)}',
+                    style: const TextStyle(
+                        fontSize: 12, color: AppColors.textSecondary),
                   ),
-                  child: const Text(
-                    'Required',
-                    style: TextStyle(
-                      fontSize: 11,
-                      color: AppColors.error,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                ),
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                decoration: BoxDecoration(
-                  color: AppColors.primary.withValues(alpha: 0.08),
-                  borderRadius: BorderRadius.circular(4),
-                ),
-                child: Text(
-                  attr.fieldType,
-                  style: const TextStyle(
-                    fontSize: 11,
-                    color: AppColors.primary,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ),
-            ],
+                ],
+              ],
+            ),
           ),
-          const SizedBox(height: 6),
-          Row(
-            children: [
-              if (attr.hasOptions)
-                Text(
-                  '${attr.options.length} option${attr.options.length == 1 ? "" : "s"}',
-                  style: const TextStyle(
-                      fontSize: 12, color: AppColors.textSecondary),
-                ),
-              const Spacer(),
-              if (attr.hasOptions)
-                TextButton.icon(
-                  onPressed: () => onOptions(attr),
-                  icon: const Icon(Icons.list_alt_outlined, size: 14),
-                  label:
-                      const Text('Options', style: TextStyle(fontSize: 12)),
-                  style: TextButton.styleFrom(
-                    foregroundColor: AppColors.accent,
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 8, vertical: 4),
-                  ),
-                ),
-              IconButton(
-                icon: const Icon(Icons.edit_outlined, size: 15),
-                tooltip: 'Edit',
-                color: AppColors.textSecondary,
-                onPressed: () => onEdit(attr),
-                padding: EdgeInsets.zero,
-                constraints:
-                    const BoxConstraints(minWidth: 28, minHeight: 28),
-              ),
-              IconButton(
-                icon: const Icon(Icons.delete_outline, size: 15),
-                tooltip: 'Delete',
-                color: AppColors.error,
-                onPressed: () => onDelete(attr),
-                padding: EdgeInsets.zero,
-                constraints:
-                    const BoxConstraints(minWidth: 28, minHeight: 28),
-              ),
-            ],
+          IconButton(
+            icon: const Icon(Icons.edit_outlined, size: 15),
+            tooltip: 'Edit entry',
+            color: AppColors.textSecondary,
+            onPressed: () => onEdit(attr),
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+          ),
+          IconButton(
+            icon: const Icon(Icons.delete_outline, size: 15),
+            tooltip: 'Delete entry',
+            color: AppColors.error,
+            onPressed: () => onDelete(attr),
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
           ),
         ],
       ),

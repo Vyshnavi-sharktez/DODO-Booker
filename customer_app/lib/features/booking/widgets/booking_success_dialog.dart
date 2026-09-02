@@ -219,12 +219,7 @@ class _SummaryCard extends StatelessWidget {
       ),
       child: Column(
         children: [
-          _SummaryRow(
-            label: 'Booking ID',
-            value: booking.id,
-            valueBold: true,
-            valueColor: AppColors.primary,
-          ),
+          _BookingIdRow(id: booking.id),
           const Divider(height: 20),
           _SummaryRow(label: 'Service', value: booking.serviceName),
           const SizedBox(height: 10),
@@ -285,6 +280,53 @@ class _SummaryCard extends StatelessWidget {
   }
 }
 
+class _BookingIdRow extends StatelessWidget {
+  final String id;
+  const _BookingIdRow({required this.id});
+
+  @override
+  Widget build(BuildContext context) {
+    final tt = Theme.of(context).textTheme;
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        Text(
+          'Booking ID',
+          style: tt.labelSmall?.copyWith(color: AppColors.textSecondary),
+        ),
+        const Spacer(),
+        Flexible(
+          child: Text(
+            id,
+            style: tt.labelSmall?.copyWith(
+              fontWeight: FontWeight.w700,
+              color: AppColors.primary,
+            ),
+            textAlign: TextAlign.right,
+            overflow: TextOverflow.ellipsis,
+            maxLines: 1,
+            softWrap: false,
+          ),
+        ),
+        const SizedBox(width: 4),
+        GestureDetector(
+          onTap: () {
+            Clipboard.setData(ClipboardData(text: id));
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Booking ID copied'),
+                duration: Duration(seconds: 2),
+                behavior: SnackBarBehavior.floating,
+              ),
+            );
+          },
+          child: Icon(Icons.copy_rounded, size: 14, color: AppColors.textSecondary),
+        ),
+      ],
+    );
+  }
+}
+
 class _SummaryRow extends StatelessWidget {
   final String label;
   final String value;
@@ -320,6 +362,8 @@ class _SummaryRow extends StatelessWidget {
               color: valueColor,
             ),
             textAlign: TextAlign.right,
+            overflow: TextOverflow.ellipsis,
+            maxLines: 2,
           ),
         ),
       ],

@@ -30,6 +30,8 @@ class AllAddonsNotifier extends StateNotifier<AsyncValue<List<ServiceAddon>>> {
     required double price,
     required bool isActive,
     String? serviceId,
+    String discountType = 'percentage',
+    double discountValue = 0,
   }) async {
     await _repo.create(
       name: name,
@@ -37,6 +39,8 @@ class AllAddonsNotifier extends StateNotifier<AsyncValue<List<ServiceAddon>>> {
       price: price,
       isActive: isActive,
       serviceId: serviceId,
+      discountType: discountType,
+      discountValue: discountValue,
     );
     await _load();
   }
@@ -48,6 +52,8 @@ class AllAddonsNotifier extends StateNotifier<AsyncValue<List<ServiceAddon>>> {
     required double price,
     required bool isActive,
     String? serviceId,
+    String discountType = 'percentage',
+    double discountValue = 0,
   }) async {
     await _repo.update(
       id,
@@ -56,6 +62,8 @@ class AllAddonsNotifier extends StateNotifier<AsyncValue<List<ServiceAddon>>> {
       price: price,
       isActive: isActive,
       serviceId: serviceId,
+      discountType: discountType,
+      discountValue: discountValue,
     );
     await _load();
   }

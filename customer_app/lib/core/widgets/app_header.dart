@@ -248,7 +248,7 @@ class _WideRow extends StatelessWidget {
   }
 }
 
-// Mobile (<768px): Logo | Spacer | Loyalty | Notif | Wishlist | Search | Cart | ☰ | Profile
+// Mobile (<768px): Logo | Spacer | Search | Cart | Wishlist | ☰ | UserLoyaltyChip
 
 class _MobileRow extends StatelessWidget {
   final VoidCallback onLogoTap;
@@ -280,31 +280,18 @@ class _MobileRow extends StatelessWidget {
           ),
         ),
         const Spacer(),
-        const _LoyaltyPill(),
-        const SizedBox(width: 4),
         const NavSearchButton(),
         const SizedBox(width: 4),
         const _CartButton(),
         const SizedBox(width: 4),
         const _WishlistButton(),
         const SizedBox(width: 4),
-        _NotifButton(onTap: () {
-          debugPrint(
-              '[DODO][Notif] tap fired — ${DateTime.now().millisecondsSinceEpoch}ms');
-          AppModalDialog.show(
-              context: context, child: const NotificationsModal());
-        }),
-        const SizedBox(width: 4),
-        const NavSearchButton(),
-        const SizedBox(width: 4),
-        const _CartButton(),
-        const SizedBox(width: 4),
         _HeaderIconBtn(
           icon: Icons.menu_rounded,
           onTap: () => _showMenu(context),
         ),
         const SizedBox(width: 6),
-        _ProfileAvatar(onTap: onProfileTap),
+        const _MobileUserLoyaltyChip(),
       ],
     );
   }
@@ -1510,6 +1497,71 @@ class _LoyaltyPill extends ConsumerWidget {
                 fontWeight: FontWeight.w700,
                 height: 1),
           ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Mobile user loyalty chip — first name + available points (replaces Notif/Profile)
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _MobileUserLoyaltyChip extends ConsumerWidget {
+  const _MobileUserLoyaltyChip();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    if (!ref.watch(isAuthenticatedProvider)) return const SizedBox.shrink();
+
+    final firstName = ref.watch(profileProvider).whenOrNull(
+          data: (p) => p.fullName.trim().split(' ').first,
+        );
+    final points = ref.watch(customerLoyaltyProvider).whenOrNull(
+          data: (l) => l.availablePoints,
+        );
+
+    if (firstName == null && points == null) return const SizedBox.shrink();
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: const Color(0xFF1A1A2E),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+            color: const Color(0xFFFFD700).withAlpha(100), width: 0.8),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (firstName != null) ...[
+            Text(
+              firstName,
+              style: const TextStyle(
+                color: Colors.white70,
+                fontSize: 11,
+                fontWeight: FontWeight.w500,
+                height: 1,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+            if (points != null) const SizedBox(width: 5),
+          ],
+          if (points != null) ...[
+            const Icon(Icons.stars_rounded,
+                size: 13, color: Color(0xFFFFD700)),
+            const SizedBox(width: 3),
+            Text(
+              '$points',
+              style: const TextStyle(
+                color: Color(0xFFFFD700),
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+                height: 1,
+              ),
+            ),
+          ],
         ],
       ),
     );
