@@ -10,12 +10,13 @@ import '../../../core/widgets/horizontal_carousel.dart';
 import '../../../models/faq_model.dart';
 import '../../../models/service_attribute_model.dart';
 import '../../../models/addon_model.dart';
+import '../../cart/models/cart_item.dart';
 import '../../cart/providers/cart_provider.dart';
 import '../../cart/utils/cart_launcher.dart';
 import '../../category/services/category_providers.dart';
 import '../../reviews/widgets/service_reviews_section.dart';
 import '../../service/widgets/faq_section.dart';
-import '../../service/widgets/service_attribute_section.dart';
+// service_attribute_section removed — replaced by _AttributeOptionCardsSection
 import '../../wishlist/widgets/heart_button.dart';
 import '../../loyalty/providers/loyalty_providers.dart';
 import '../../loyalty/utils/loyalty_utils.dart';
@@ -70,11 +71,16 @@ class CatalogNodeScreen extends ConsumerStatefulWidget {
     required this.node,
     this.parentNodeId,
     this.inModal = false,
+    this.inSheet = false,
   });
 
   final CatalogNodeModel node;
   final String? parentNodeId;
   final bool inModal;
+
+  /// When true, renders as a draggable bottom-sheet body (no Scaffold/AppBar).
+  /// Use with [showModalBottomSheet] + isScrollControlled + useSafeArea.
+  final bool inSheet;
 
   @override
   ConsumerState<CatalogNodeScreen> createState() => _CatalogNodeScreenState();
@@ -85,6 +91,8 @@ class _CatalogNodeScreenState extends ConsumerState<CatalogNodeScreen> {
   double _priceAdjustment = 0.0;
   final Set<String> _selectedAddonIds = {};
   AmcPlanModel? _selectedAmcPlan;
+  // Tracks the explicitly chosen attribute variant (null = auto-select first on load).
+  String? _selectedAttrId;
   CatalogNodeModel get node => widget.node;
 
   void _onOptionSelected(
@@ -98,7 +106,7 @@ class _CatalogNodeScreenState extends ConsumerState<CatalogNodeScreen> {
         final sel = _selections[attr.id];
         if (sel == null) return sum;
         final opt = attr.options.where((o) => o.id == sel).firstOrNull;
-        return sum + (opt?.priceAdjustment ?? 0.0);
+        return sum + (opt?.finalPrice ?? 0.0);
       });
     });
   }
@@ -167,9 +175,30 @@ class _CatalogNodeScreenState extends ConsumerState<CatalogNodeScreen> {
     final addonsTotal = totalAddonsPrice(
       buildSelectedAddons(addOns, _selectedAddonIds),
     );
+    // Flat-model attribute variants: auto-select first on load.
+    final attrEntries = attrs.where((a) => a.options.isNotEmpty).toList();
+    final effectiveAttrId =
+        _selectedAttrId ?? (attrEntries.isNotEmpty ? attrEntries.first.id : null);
+    final selectedAttr = effectiveAttrId != null
+        ? attrEntries.where((a) => a.id == effectiveAttrId).firstOrNull
+        : null;
+    final selectedAttrPrice = selectedAttr?.options.first.finalPrice;
+    final selectedAttrOriginalPrice = (selectedAttr?.options.first.hasDiscount == true)
+        ? selectedAttr?.options.first.priceAdjustment
+        : null;
+
+    // Lowest attr option price across all variants — used as the static header label.
+    final startsAtPrice = attrEntries.isNotEmpty
+        ? attrEntries
+            .map((a) => a.options.first.finalPrice)
+            .reduce((a, b) => a < b ? a : b)
+        : null;
+
     final displayPrice = _selectedAmcPlan != null
         ? _selectedAmcPlan!.finalPrice
-        : (node.basePrice ?? 0.0) + _priceAdjustment + addonsTotal;
+        : selectedAttrPrice != null
+            ? selectedAttrPrice + addonsTotal
+            : (node.finalPrice ?? node.basePrice ?? 0.0) + _priceAdjustment + addonsTotal;
     final hasAdjustment = _priceAdjustment > 0 || addonsTotal > 0;
 
     final heroUrl = node.hasChildren
@@ -201,7 +230,304 @@ class _CatalogNodeScreenState extends ConsumerState<CatalogNodeScreen> {
         onOptionSelected: _onOptionSelected,
         onAddonToggled: _onAddonToggled,
         onAmcPlanSelected: (plan) => setState(() => _selectedAmcPlan = plan),
+        effectiveAttrId: effectiveAttrId,
+        onAttrSelected: (id) => setState(() => _selectedAttrId = id),
+        selectedAttrPrice: selectedAttrPrice,
+        selectedAttrOriginalPrice: selectedAttrOriginalPrice,
+        startsAtPrice: startsAtPrice,
         inModal: widget.inModal,
+      );
+    }
+
+    // ── Mobile bottom-sheet mode ─────────────────────────────────────────────
+    if (widget.inSheet) {
+      return ConstrainedBox(
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.of(context).size.height * 0.92,
+        ),
+        child: Material(
+          color: _kBg,
+          borderRadius:
+              const BorderRadius.vertical(top: Radius.circular(24)),
+          child: ClipRRect(
+            borderRadius:
+                const BorderRadius.vertical(top: Radius.circular(24)),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Sheet header: drag handle centred, X close at far right
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(0, 8, 12, 8),
+                  child: Row(
+                    children: [
+                      const Spacer(),
+                      Container(
+                        width: 40,
+                        height: 4,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFDDD8D0),
+                          borderRadius: BorderRadius.circular(2),
+                        ),
+                      ),
+                      Expanded(
+                        child: Align(
+                          alignment: Alignment.centerRight,
+                          child: GestureDetector(
+                            onTap: () => Navigator.of(context).maybePop(),
+                            child: Container(
+                              width: 36,
+                              height: 36,
+                              decoration: BoxDecoration(
+                                color: AppColors.surfaceVariant,
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(
+                                Icons.close_rounded,
+                                size: 18,
+                                color: _kInk,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                // Scrollable content
+                Flexible(
+                  child: SingleChildScrollView(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        if (hasHero)
+                          _SheetHero(imageUrl: heroUrl!, node: node),
+                        if (hasHero && node.isLeafBookable)
+                          _ServiceContentBlock(
+                            node: node,
+                            displayPrice: displayPrice,
+                            hasAdjustment: hasAdjustment,
+                            startsAtPrice: startsAtPrice,
+                          ),
+                        if (hasHero && !node.isLeafBookable)
+                          Padding(
+                            padding:
+                                const EdgeInsets.fromLTRB(20, 16, 20, 4),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  node.name,
+                                  style: GoogleFonts.poppins(
+                                    fontSize: 20,
+                                    fontWeight: FontWeight.w700,
+                                    color: _kInk,
+                                  ),
+                                ),
+                                if (node.childrenCount > 0)
+                                  Padding(
+                                    padding: const EdgeInsets.only(top: 4),
+                                    child: Text(
+                                      '${node.childrenCount} services available',
+                                      style: const TextStyle(
+                                          fontSize: 13, color: _kMuted2),
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          ),
+                        if (!hasHero) ...[
+                          _Breadcrumb(
+                            parentName: node.parentName ?? '',
+                            nodeName: node.name,
+                            onParentTap: () =>
+                                Navigator.of(context).maybePop(),
+                          ),
+                          _NodeInfoHeader(
+                            node: node,
+                            displayPrice: displayPrice,
+                            hasAdjustment: hasAdjustment,
+                            startsAtPrice: startsAtPrice,
+                          ),
+                        ],
+                        if (node.isLeafBookable && attrEntries.isNotEmpty)
+                          _AttributeVariantSection(
+                            attrs: attrEntries,
+                            selectedAttrId: effectiveAttrId,
+                            onAttrSelected: (id) =>
+                                setState(() => _selectedAttrId = id),
+                          ),
+                        if (node.hasChildren)
+                          (isUnavailable || isEffectivelyHidden)
+                              ? CatalogUnavailabilityBanner(
+                                  message: isUnavailable
+                                      ? (avail?.message ??
+                                          node.relUnavailabilityMessage)
+                                      : null,
+                                  isHidden: isEffectivelyHidden,
+                                )
+                              : _ChildrenSection(
+                                  node: node, children: children),
+                        if (node.isLeafBookable && addOns.isNotEmpty) ...[
+                          Padding(
+                            padding:
+                                const EdgeInsets.fromLTRB(20, 24, 20, 12),
+                            child:
+                                _SectionHeaderRow(title: 'Suggested Add-ons'),
+                          ),
+                          _InlineAddonCards(
+                            addOns: addOns,
+                            selectedIds: _selectedAddonIds,
+                            onToggle: _onAddonToggled,
+                            isWeb: false,
+                          ),
+                        ],
+                        if (node.isLeafBookable)
+                          Consumer(
+                            builder: (ctx, ref, _) {
+                              final plans = ref
+                                  .watch(amcPlansProvider(node.id))
+                                  .valueOrNull;
+                              if (plans == null || plans.isEmpty) {
+                                return const SizedBox.shrink();
+                              }
+                              return Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Padding(
+                                    padding: const EdgeInsets.fromLTRB(
+                                        20, 24, 20, 12),
+                                    child: _SectionHeaderRow(
+                                        title: 'AMC Plans'),
+                                  ),
+                                  _InlineAmcPlans(
+                                    serviceId: node.id,
+                                    selectedPlan: _selectedAmcPlan,
+                                    onPlanSelected: (plan) => setState(
+                                        () => _selectedAmcPlan = plan),
+                                    regularPrice: node.basePrice,
+                                    isWeb: false,
+                                  ),
+                                ],
+                              );
+                            },
+                          ),
+                        if (node.isLeafBookable &&
+                            node.includedItems.isNotEmpty)
+                          _IncludedSection(items: node.includedItems),
+                        if (node.isLeafBookable &&
+                            node.excludedItems.isNotEmpty)
+                          _ExcludedSection(items: node.excludedItems),
+                        if (node.isLeafBookable &&
+                            node.beforeAfterPairs.isNotEmpty)
+                          _BeforeAfterSection(pairs: node.beforeAfterPairs),
+                        if (node.isLeafBookable &&
+                            node.contentBlocks.isNotEmpty)
+                          _ContentBlocksSection(blocks: node.contentBlocks),
+                        if (node.isLeafBookable) ...[
+                          const SizedBox(height: 24),
+                          _AccordionSection(
+                            label: 'About this service',
+                            isFirst: true,
+                            child: Padding(
+                              padding:
+                                  const EdgeInsets.fromLTRB(0, 4, 0, 14),
+                              child: Text(
+                                node.description?.isNotEmpty == true
+                                    ? node.description!
+                                    : 'No description available.',
+                                style: const TextStyle(
+                                    fontSize: 13,
+                                    color: _kMuted,
+                                    height: 1.6),
+                              ),
+                            ),
+                          ),
+                          Padding(
+                            padding:
+                                const EdgeInsets.fromLTRB(20, 20, 20, 8),
+                            child: Text(
+                              'FAQs',
+                              style: GoogleFonts.poppins(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w700,
+                                  color: _kInk),
+                            ),
+                          ),
+                          if (faqs.isEmpty) ...[
+                            const Padding(
+                              padding: EdgeInsets.fromLTRB(20, 0, 20, 4),
+                              child: Text('No FAQs yet.',
+                                  style: TextStyle(
+                                      fontSize: 13, color: _kMuted)),
+                            ),
+                            Padding(
+                              padding:
+                                  const EdgeInsets.only(left: 20, top: 2),
+                              child: AskQuestionLink(
+                                  serviceId: node.id,
+                                  parentId: widget.parentNodeId),
+                            ),
+                            const SizedBox(height: 8),
+                          ] else ...[
+                            Padding(
+                              padding:
+                                  const EdgeInsets.symmetric(horizontal: 20),
+                              child: FaqSection(faqs: faqs),
+                            ),
+                            Padding(
+                              padding:
+                                  const EdgeInsets.only(left: 20, top: 6),
+                              child: AskQuestionLink(
+                                  serviceId: node.id,
+                                  parentId: widget.parentNodeId),
+                            ),
+                            const SizedBox(height: 8),
+                          ],
+                          _AccordionSection(
+                            label: node.reviewCount > 0
+                                ? 'Reviews (${node.reviewCount})'
+                                : 'Reviews',
+                            isLast: true,
+                            child: ServiceReviewsSection(
+                                serviceId: node.id, showHeader: false),
+                          ),
+                        ],
+                        if (!node.hasChildren && !node.isBookable)
+                          const _ComingSoonBanner(),
+                        SizedBox(
+                            height: node.isLeafBookable ? 100 : 40),
+                      ],
+                    ),
+                  ),
+                ),
+                // Sticky booking bar
+                if (node.isLeafBookable)
+                  (isUnavailable || isEffectivelyHidden)
+                      ? CatalogUnavailabilityBar(
+                          message: isUnavailable
+                              ? (avail?.message ??
+                                  node.relUnavailabilityMessage)
+                              : null,
+                        )
+                      : _NodeBookingBar(
+                          node: node,
+                          displayPrice: displayPrice,
+                          priceAdjustment: _priceAdjustment,
+                          addonsTotal: addonsTotal,
+                          parentNodeId: widget.parentNodeId,
+                          attrs: attrs,
+                          selections: _selections,
+                          addOns: addOns,
+                          selectedAddonIds: _selectedAddonIds,
+                          amcPlan: _selectedAmcPlan,
+                          amcQuantity: 1,
+                          attrOptionPrice: selectedAttrPrice,
+                          attrOptionOriginalPrice: selectedAttrOriginalPrice,
+                        ),
+              ],
+            ),
+          ),
+        ),
       );
     }
 
@@ -255,6 +581,7 @@ class _CatalogNodeScreenState extends ConsumerState<CatalogNodeScreen> {
                     node: node,
                     displayPrice: displayPrice,
                     hasAdjustment: hasAdjustment,
+                    startsAtPrice: startsAtPrice,
                   ),
 
                 // ── Category hero fallback ─────────────────────────────────
@@ -282,16 +609,16 @@ class _CatalogNodeScreenState extends ConsumerState<CatalogNodeScreen> {
                     node: node,
                     displayPrice: displayPrice,
                     hasAdjustment: hasAdjustment,
+                    startsAtPrice: startsAtPrice,
                   ),
                 ],
 
                 // ── Attribute selection ────────────────────────────────────
-                if (node.isLeafBookable && attrs.isNotEmpty)
-                  ServiceAttributeSection(
-                    attrs: attrs,
-                    selections: _selections,
-                    onChanged: (attrId, optId) =>
-                        _onOptionSelected(attrId, optId, attrs),
+                if (node.isLeafBookable && attrEntries.isNotEmpty)
+                  _AttributeVariantSection(
+                    attrs: attrEntries,
+                    selectedAttrId: effectiveAttrId,
+                    onAttrSelected: (id) => setState(() => _selectedAttrId = id),
                   ),
 
                 // ── Children (category navigation) ─────────────────────────
@@ -451,6 +778,8 @@ class _CatalogNodeScreenState extends ConsumerState<CatalogNodeScreen> {
                     selectedAddonIds: _selectedAddonIds,
                     amcPlan: _selectedAmcPlan,
                     amcQuantity: 1,
+                    attrOptionPrice: selectedAttrPrice,
+                    attrOptionOriginalPrice: selectedAttrOriginalPrice,
                   )
           : null,
     );
@@ -524,6 +853,42 @@ class _CatalogNodeFetchScreenState
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// Sheet hero: 220px photo + close + optional heart (used inside inSheet mode)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+class _SheetHero extends StatelessWidget {
+  const _SheetHero({required this.imageUrl, required this.node});
+  final String imageUrl;
+  final CatalogNodeModel node;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 220,
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          _HeroImage(url: imageUrl),
+          if (node.isLeafBookable)
+            Positioned(
+              top: 14,
+              right: 14,
+              child: Container(
+                width: 36,
+                height: 36,
+                decoration: const BoxDecoration(
+                    color: Colors.white, shape: BoxShape.circle),
+                child: Center(
+                    child: HeartButton(serviceId: node.id, mini: true)),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // Mobile hero: 260px photo + overlay buttons
 // ═══════════════════════════════════════════════════════════════════════════════
 
@@ -560,11 +925,11 @@ class _MobileHero extends StatelessWidget {
             ),
           ),
 
-          // Heart
+          // Heart (shifted left to make room for X close button)
           if (showHeart)
             Positioned(
               top: statusBarH + 16,
-              right: 16,
+              right: 58,
               child: Container(
                 width: 36,
                 height: 36,
@@ -572,6 +937,17 @@ class _MobileHero extends StatelessWidget {
                     color: Colors.white, shape: BoxShape.circle),
                 child: Center(
                     child: HeartButton(serviceId: node.id, mini: true)),
+              ),
+            ),
+
+          // X close button — top-right, bookable services only
+          if (showHeart)
+            Positioned(
+              top: statusBarH + 16,
+              right: 16,
+              child: _CircleNavBtn(
+                icon: Icons.close_rounded,
+                onTap: () => Navigator.of(context).maybePop(),
               ),
             ),
 
@@ -662,11 +1038,13 @@ class _ServiceContentBlock extends StatelessWidget {
     required this.node,
     required this.displayPrice,
     required this.hasAdjustment,
+    this.startsAtPrice,
   });
 
   final CatalogNodeModel node;
   final double displayPrice;
   final bool hasAdjustment;
+  final double? startsAtPrice;
 
   @override
   Widget build(BuildContext context) {
@@ -735,22 +1113,38 @@ class _ServiceContentBlock extends StatelessWidget {
           ] else
             const SizedBox(height: 8),
 
-          // Price row: "From ₹X"
-          if (node.basePrice != null)
+          // Price row
+          if (node.basePrice != null || startsAtPrice != null)
             Row(
               crossAxisAlignment: CrossAxisAlignment.baseline,
               textBaseline: TextBaseline.alphabetic,
               children: [
-                const Text('From',
-                    style: TextStyle(fontSize: 13, color: _kMuted2)),
+                Text(
+                  startsAtPrice != null ? 'Starts at' : 'From',
+                  style: const TextStyle(fontSize: 13, color: _kMuted2),
+                ),
                 const SizedBox(width: 8),
-                Text('₹${displayPrice.toInt()}',
-                    style: GoogleFonts.poppins(
-                        fontSize: 22,
-                        fontWeight: FontWeight.w800,
-                        color: _kInk,
-                        height: 1.0)),
-                if (hasAdjustment) ...[
+                Text(
+                  '₹${(startsAtPrice ?? displayPrice).toInt()}',
+                  style: GoogleFonts.poppins(
+                      fontSize: 22,
+                      fontWeight: FontWeight.w800,
+                      color: _kInk,
+                      height: 1.0),
+                ),
+                if (node.hasDiscount && startsAtPrice == null) ...[
+                  const SizedBox(width: 8),
+                  Text(
+                    '₹${node.basePrice!.toInt()}',
+                    style: const TextStyle(
+                      fontSize: 14,
+                      color: _kMuted2,
+                      decoration: TextDecoration.lineThrough,
+                      decorationColor: _kMuted2,
+                    ),
+                  ),
+                ],
+                if (hasAdjustment && startsAtPrice == null) ...[
                   const SizedBox(width: 8),
                   const Text('incl. add-ons',
                       style: TextStyle(fontSize: 12, color: _kMuted2)),
@@ -910,9 +1304,21 @@ class _AddonMobileCardState extends State<_AddonMobileCard> {
             Row(
               children: [
                 Text(
-                  '₹${widget.addOn.price.toInt()}',
+                  '₹${widget.addOn.finalPrice.toInt()}',
                   style: const TextStyle(fontSize: 11, color: _kMuted),
                 ),
+                if (widget.addOn.hasDiscount) ...[
+                  const SizedBox(width: 4),
+                  Text(
+                    '₹${widget.addOn.price.toInt()}',
+                    style: const TextStyle(
+                      fontSize: 10,
+                      color: _kMuted2,
+                      decoration: TextDecoration.lineThrough,
+                      decorationColor: _kMuted2,
+                    ),
+                  ),
+                ],
                 const Spacer(),
                 MouseRegion(
                   cursor: SystemMouseCursors.click,
@@ -991,7 +1397,17 @@ class _AddonWebRow extends StatelessWidget {
                         color: _kInk),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis),
-                Text('₹${addOn.price.toInt()}',
+                if (addOn.hasDiscount)
+                  Text(
+                    '₹${addOn.price.toInt()}',
+                    style: const TextStyle(
+                      fontSize: 11,
+                      color: _kMuted2,
+                      decoration: TextDecoration.lineThrough,
+                      decorationColor: _kMuted2,
+                    ),
+                  ),
+                Text('₹${addOn.finalPrice.toInt()}',
                     style: const TextStyle(fontSize: 12, color: _kMuted)),
               ],
             ),
@@ -1194,25 +1610,40 @@ class _AmcPlanCard extends StatelessWidget {
                 ),
 
                 // Price
-                RichText(
-                  text: TextSpan(
-                    children: [
-                      TextSpan(
-                        text: '₹${plan.finalPrice.toInt()}',
-                        style: GoogleFonts.poppins(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w700,
-                            color: _kInk),
-                      ),
-                      TextSpan(
-                        text: ' / ${plan.packageDurationLabel}',
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (plan.discountAmount > 0)
+                      Text(
+                        '₹${plan.originalTotal.toInt()}',
                         style: const TextStyle(
-                            fontSize: 11,
-                            color: _kMuted2,
-                            fontWeight: FontWeight.w400),
+                          fontSize: 11,
+                          color: _kMuted2,
+                          decoration: TextDecoration.lineThrough,
+                          decorationColor: _kMuted2,
+                        ),
                       ),
-                    ],
-                  ),
+                    RichText(
+                      text: TextSpan(
+                        children: [
+                          TextSpan(
+                            text: '₹${plan.finalPrice.toInt()}',
+                            style: GoogleFonts.poppins(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w700,
+                                color: _kInk),
+                          ),
+                          TextSpan(
+                            text: ' / ${plan.packageDurationLabel}',
+                            style: const TextStyle(
+                                fontSize: 11,
+                                color: _kMuted2,
+                                fontWeight: FontWeight.w400),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),
@@ -1430,9 +1861,11 @@ class _NodeInfoHeader extends StatelessWidget {
     required this.node,
     required this.displayPrice,
     required this.hasAdjustment,
+    this.startsAtPrice,
   });
   final CatalogNodeModel node;
   final double displayPrice;
+  final double? startsAtPrice;
   final bool hasAdjustment;
 
   @override
@@ -1486,21 +1919,37 @@ class _NodeInfoHeader extends StatelessWidget {
                 ],
               ),
             ),
-          if (node.isLeafBookable && node.basePrice != null)
+          if (node.isLeafBookable && (node.basePrice != null || startsAtPrice != null))
             Row(
               crossAxisAlignment: CrossAxisAlignment.baseline,
               textBaseline: TextBaseline.alphabetic,
               children: [
-                const Text('From',
-                    style: TextStyle(fontSize: 13, color: _kMuted2)),
+                Text(
+                  startsAtPrice != null ? 'Starts at' : 'From',
+                  style: const TextStyle(fontSize: 13, color: _kMuted2),
+                ),
                 const SizedBox(width: 8),
-                Text('₹${displayPrice.toInt()}',
-                    style: GoogleFonts.poppins(
-                        fontSize: 22,
-                        fontWeight: FontWeight.w800,
-                        color: _kInk,
-                        height: 1.0)),
-                if (hasAdjustment) ...[
+                Text(
+                  '₹${(startsAtPrice ?? displayPrice).toInt()}',
+                  style: GoogleFonts.poppins(
+                      fontSize: 22,
+                      fontWeight: FontWeight.w800,
+                      color: _kInk,
+                      height: 1.0),
+                ),
+                if (node.hasDiscount && startsAtPrice == null) ...[
+                  const SizedBox(width: 8),
+                  Text(
+                    '₹${node.basePrice!.toInt()}',
+                    style: const TextStyle(
+                      fontSize: 14,
+                      color: _kMuted2,
+                      decoration: TextDecoration.lineThrough,
+                      decorationColor: _kMuted2,
+                    ),
+                  ),
+                ],
+                if (hasAdjustment && startsAtPrice == null) ...[
                   const SizedBox(width: 8),
                   const Text('incl. add-ons',
                       style: TextStyle(fontSize: 12, color: _kMuted2)),
@@ -1855,6 +2304,8 @@ class _NodeBookingBar extends ConsumerWidget {
     required this.selectedAddonIds,
     this.amcPlan,
     this.amcQuantity = 1,
+    this.attrOptionPrice,
+    this.attrOptionOriginalPrice,
   });
 
   final CatalogNodeModel node;
@@ -1868,34 +2319,85 @@ class _NodeBookingBar extends ConsumerWidget {
   final Set<String> selectedAddonIds;
   final AmcPlanModel? amcPlan;
   final int amcQuantity;
+  // Non-null when the service has attribute variants and one is selected.
+  final double? attrOptionPrice;
+  final double? attrOptionOriginalPrice;
 
   void _addToCart(WidgetRef ref) {
-    ref.read(cartProvider.notifier).addToCart(
-          node,
-          priceAdjustment:
-              amcPlan != null ? 0.0 : priceAdjustment + addonsTotal,
-          parentNodeId: parentNodeId,
-          amcPlan: amcPlan,
-          amcQuantity: amcQuantity,
-        );
+    if (attrOptionPrice != null) {
+      // Attribute service: embed addons in unitPrice so totalPrice = attrPrice + addonsTotal.
+      // Addons still passed separately for cart display breakdown.
+      final selAddons = buildSelectedAddons(addOns, selectedAddonIds);
+      ref.read(cartProvider.notifier).addToCart(
+            node,
+            unitPriceOverride: attrOptionPrice! + totalAddonsPrice(selAddons),
+            originalUnitPrice: attrOptionOriginalPrice,
+            addons: selAddons,
+            parentNodeId: parentNodeId,
+            amcPlan: amcPlan,
+            amcQuantity: amcQuantity,
+          );
+    } else if (amcPlan != null) {
+      ref.read(cartProvider.notifier).addToCart(
+            node,
+            priceAdjustment: 0.0,
+            parentNodeId: parentNodeId,
+            amcPlan: amcPlan,
+            amcQuantity: amcQuantity,
+          );
+    } else {
+      // Normal service: unitPriceOverride = discounted base + attr adj + addons.
+      final selAddons = buildSelectedAddons(addOns, selectedAddonIds);
+      ref.read(cartProvider.notifier).addToCart(
+            node,
+            unitPriceOverride: (node.finalPrice ?? node.basePrice ?? 0.0) +
+                priceAdjustment +
+                totalAddonsPrice(selAddons),
+            originalUnitPrice: node.hasDiscount ? node.basePrice : null,
+            addons: selAddons,
+            parentNodeId: parentNodeId,
+          );
+    }
   }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final cartItems = ref.watch(cartProvider);
-    final inCart = amcPlan != null
-        ? cartItems.any((i) =>
-            i.serviceId == node.id &&
-            i.isAmc &&
-            i.amcPlanId == amcPlan!.id &&
-            (parentNodeId == null ||
-                i.parentNodeId == null ||
-                i.parentNodeId == parentNodeId))
-        : cartItems.any((i) =>
-            i.serviceId == node.id &&
-            (parentNodeId == null ||
-                i.parentNodeId == null ||
-                i.parentNodeId == parentNodeId));
+
+    // Determine whether the CURRENT configuration is already in the cart.
+    final CartItem? cartItem;
+    if (amcPlan != null) {
+      cartItem = cartItems
+          .where((i) =>
+              i.serviceId == node.id &&
+              i.isAmc &&
+              i.amcPlanId == amcPlan!.id &&
+              (parentNodeId == null ||
+                  i.parentNodeId == null ||
+                  i.parentNodeId == parentNodeId))
+          .firstOrNull;
+    } else if (attrOptionPrice != null) {
+      // Attr service: effectiveBase = attrOptionPrice (addons embedded in unitPrice,
+      // so item.effectiveBase = unitPrice − addonsTotal = attrOptionPrice).
+      cartItem = findMatchingCartItem(
+        cartItems,
+        serviceId: node.id,
+        isAmc: false,
+        addonIds: selectedAddonIds,
+        effectiveBasePrice: attrOptionPrice!,
+        parentNodeId: parentNodeId,
+      );
+    } else {
+      cartItem = findMatchingCartItem(
+        cartItems,
+        serviceId: node.id,
+        isAmc: false,
+        addonIds: selectedAddonIds,
+        effectiveBasePrice: (node.finalPrice ?? node.basePrice ?? 0.0) + priceAdjustment,
+        parentNodeId: parentNodeId,
+      );
+    }
+    final inCart = cartItem != null;
 
     return Container(
       padding: EdgeInsets.fromLTRB(
@@ -1906,48 +2408,67 @@ class _NodeBookingBar extends ConsumerWidget {
       ),
       child: Row(
         children: [
-          // Price
           Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text('From',
-                  style: TextStyle(fontSize: 10, color: _kMuted2)),
-              Text('₹${displayPrice.toInt()}',
-                  style: GoogleFonts.poppins(
-                      fontSize: 17,
-                      fontWeight: FontWeight.w800,
-                      color: _kInk,
-                      height: 1.1)),
+              Text(
+                inCart ? 'Total' : 'From',
+                style: const TextStyle(fontSize: 10, color: _kMuted2),
+              ),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.baseline,
+                textBaseline: TextBaseline.alphabetic,
+                children: [
+                  Text(
+                    '₹${displayPrice.toInt()}',
+                    style: GoogleFonts.poppins(
+                        fontSize: 17,
+                        fontWeight: FontWeight.w800,
+                        color: _kInk,
+                        height: 1.1),
+                  ),
+                  if (node.hasDiscount &&
+                      attrOptionPrice == null &&
+                      amcPlan == null) ...[
+                    const SizedBox(width: 6),
+                    Text(
+                      '₹${node.basePrice!.toInt()}',
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: _kMuted2,
+                        decoration: TextDecoration.lineThrough,
+                        decorationColor: _kMuted2,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
             ],
           ),
           const SizedBox(width: 12),
-
-          // Gold pill CTA
           Expanded(
             child: MouseRegion(
               cursor: SystemMouseCursors.click,
               child: GestureDetector(
-              onTap: inCart ? () => openCart(context) : () => _addToCart(ref),
-              child: Container(
-                padding: const EdgeInsets.symmetric(vertical: 13),
-                decoration: BoxDecoration(
-                    color: _kInk,
-                    borderRadius: BorderRadius.circular(100)),
-                child: Center(
-                  child: Text(
-                    inCart
-                        ? '🛒  View Cart'
-                        : '🛒  Add to Cart',
-                    style: GoogleFonts.poppins(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                        color: Colors.white),
+                onTap: inCart ? () => openCart(context) : () => _addToCart(ref),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(vertical: 13),
+                  decoration: BoxDecoration(
+                      color: _kInk,
+                      borderRadius: BorderRadius.circular(100)),
+                  child: Center(
+                    child: Text(
+                      inCart ? '🛒  View Cart' : '🛒  Add to Cart',
+                      style: GoogleFonts.poppins(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.white),
+                    ),
                   ),
                 ),
               ),
             ),
-          ),
           ),
         ],
       ),
@@ -1982,6 +2503,11 @@ class _WebScaffold extends ConsumerWidget {
     required this.onOptionSelected,
     required this.onAddonToggled,
     required this.onAmcPlanSelected,
+    this.effectiveAttrId,
+    this.onAttrSelected,
+    this.selectedAttrPrice,
+    this.selectedAttrOriginalPrice,
+    this.startsAtPrice,
     this.inModal = false,
   });
 
@@ -2007,34 +2533,88 @@ class _WebScaffold extends ConsumerWidget {
       onOptionSelected;
   final void Function(String, bool) onAddonToggled;
   final void Function(AmcPlanModel?) onAmcPlanSelected;
+  final String? effectiveAttrId;
+  final void Function(String)? onAttrSelected;
+  final double? selectedAttrPrice;
+  final double? selectedAttrOriginalPrice;
+  final double? startsAtPrice;
   final bool inModal;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final cart = ref.watch(cartProvider);
-    final cartItem = findMatchingCartItem(
-      cart,
-      serviceId: node.id,
-      isAmc: selectedAmcPlan != null,
-      amcPlanId: selectedAmcPlan?.id,
-      addonIds: selectedAddonIds,
-      effectiveBasePrice: (node.basePrice ?? 0.0) + priceAdjustment,
-      parentNodeId: parentNodeId,
-    );
+
+    // Cart matching: for attr services match by unitPrice = selectedAttrPrice;
+    // for normal services use the full effectiveBasePrice match.
+    final selectedAddons = buildSelectedAddons(addOns, selectedAddonIds);
+    final CartItem? cartItem;
+    if (selectedAmcPlan != null) {
+      cartItem = cart
+          .where((i) =>
+              i.serviceId == node.id &&
+              i.isAmc &&
+              i.amcPlanId == selectedAmcPlan!.id &&
+              (parentNodeId == null ||
+                  i.parentNodeId == null ||
+                  i.parentNodeId == parentNodeId))
+          .firstOrNull;
+    } else if (selectedAttrPrice != null) {
+      // Attr service: effectiveBase = selectedAttrPrice (addons embedded in unitPrice,
+      // so item.effectiveBase = unitPrice − addonsTotal = selectedAttrPrice).
+      cartItem = findMatchingCartItem(
+        cart,
+        serviceId: node.id,
+        isAmc: false,
+        addonIds: selectedAddonIds,
+        effectiveBasePrice: selectedAttrPrice!,
+        parentNodeId: parentNodeId,
+      );
+    } else {
+      cartItem = findMatchingCartItem(
+        cart,
+        serviceId: node.id,
+        isAmc: false,
+        addonIds: selectedAddonIds,
+        effectiveBasePrice: (node.finalPrice ?? node.basePrice ?? 0.0) + priceAdjustment,
+        parentNodeId: parentNodeId,
+      );
+    }
     final inCart = cartItem != null;
     final cartQty = cartItem?.quantity ?? 1;
 
     void addToCart() {
-      ref.read(cartProvider.notifier).addToCart(
-            node,
-            priceAdjustment: selectedAmcPlan != null
-                ? 0.0
-                : priceAdjustment + addonsTotal,
-            parentNodeId: parentNodeId,
-            amcPlan: selectedAmcPlan,
-            amcQuantity: 1,
-            addons: buildSelectedAddons(addOns, selectedAddonIds),
-          );
+      if (selectedAttrPrice != null) {
+        // Attribute service: embed addons in unitPrice so totalPrice = attrPrice + addonsTotal.
+        // Addons still passed separately for cart display breakdown.
+        ref.read(cartProvider.notifier).addToCart(
+              node,
+              unitPriceOverride: selectedAttrPrice! + addonsTotal,
+              originalUnitPrice: selectedAttrOriginalPrice,
+              addons: selectedAddons,
+              parentNodeId: parentNodeId,
+              amcPlan: selectedAmcPlan,
+              amcQuantity: 1,
+            );
+      } else if (selectedAmcPlan != null) {
+        ref.read(cartProvider.notifier).addToCart(
+              node,
+              priceAdjustment: 0.0,
+              parentNodeId: parentNodeId,
+              amcPlan: selectedAmcPlan,
+              amcQuantity: 1,
+            );
+      } else {
+        // Normal service: unitPriceOverride = discounted base + attr adj + addons.
+        ref.read(cartProvider.notifier).addToCart(
+              node,
+              unitPriceOverride: (node.finalPrice ?? node.basePrice ?? 0.0) +
+                  priceAdjustment +
+                  addonsTotal,
+              originalUnitPrice: node.hasDiscount ? node.basePrice : null,
+              addons: selectedAddons,
+              parentNodeId: parentNodeId,
+            );
+      }
     }
 
     final screenH = MediaQuery.sizeOf(context).height;
@@ -2058,19 +2638,18 @@ class _WebScaffold extends ConsumerWidget {
       hasHero: hasHero,
       displayPrice: displayPrice,
       hasAdjustment: hasAdjustment,
+      startsAtPrice: startsAtPrice,
       onClose: () => Navigator.of(context).maybePop(),
       showClose: !inModal,
     );
 
     final middleSections = <Widget>[
-      if (node.isLeafBookable && attrs.isNotEmpty)
-        Padding(
-          padding: const EdgeInsets.fromLTRB(28, 20, 28, 0),
-          child: ServiceAttributeSection(
-            attrs: attrs,
-            selections: selections,
-            onChanged: (a, o) => onOptionSelected(a, o, attrs),
-          ),
+      if (node.isLeafBookable && attrs.any((a) => a.options.isNotEmpty))
+        _AttributeVariantSection(
+          attrs: attrs.where((a) => a.options.isNotEmpty).toList(),
+          selectedAttrId: effectiveAttrId,
+          onAttrSelected: onAttrSelected ?? (_) {},
+          horizontalPadding: 28,
         ),
 
       if (node.isLeafBookable && addOns.isNotEmpty)
@@ -2264,10 +2843,10 @@ class _WebScaffold extends ConsumerWidget {
                     quantity: cartQty,
                     onDecrement: () => ref
                         .read(cartProvider.notifier)
-                        .updateQuantity(cartItem.bookingId, cartQty - 1),
+                        .updateQuantity(cartItem!.bookingId, cartQty - 1),
                     onIncrement: () => ref
                         .read(cartProvider.notifier)
-                        .updateQuantity(cartItem.bookingId, cartQty + 1),
+                        .updateQuantity(cartItem!.bookingId, cartQty + 1),
                   ),
                   const SizedBox(width: 12),
                   MouseRegion(
@@ -2536,9 +3115,26 @@ class _WebAddonsGrid extends StatelessWidget {
                                       color: _kInk),
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis),
-                              Text('₹${a.price.toInt()}',
-                                  style: const TextStyle(
-                                      fontSize: 12, color: _kMuted)),
+                              Row(
+                                crossAxisAlignment: CrossAxisAlignment.baseline,
+                                textBaseline: TextBaseline.alphabetic,
+                                children: [
+                                  Text('₹${a.finalPrice.toInt()}',
+                                      style: const TextStyle(
+                                          fontSize: 12, color: _kMuted)),
+                                  if (a.hasDiscount) ...[
+                                    const SizedBox(width: 5),
+                                    Text('₹${a.price.toInt()}',
+                                        style: const TextStyle(
+                                          fontSize: 11,
+                                          color: _kMuted2,
+                                          decoration:
+                                              TextDecoration.lineThrough,
+                                          decorationColor: _kMuted2,
+                                        )),
+                                  ],
+                                ],
+                              ),
                             ],
                           ),
                         ),
@@ -2840,6 +3436,135 @@ class _ContentBlocksSection extends StatelessWidget {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// Attribute variant selector — single-select chips; booking bar handles cart
+// ═══════════════════════════════════════════════════════════════════════════════
+
+class _AttributeVariantSection extends StatelessWidget {
+  const _AttributeVariantSection({
+    required this.attrs,
+    required this.selectedAttrId,
+    required this.onAttrSelected,
+    this.horizontalPadding = 20.0,
+  });
+
+  // Pre-filtered: only attrs with options.isNotEmpty
+  final List<ServiceAttributeModel> attrs;
+  final String? selectedAttrId;
+  final void Function(String attrId) onAttrSelected;
+  final double horizontalPadding;
+
+  @override
+  Widget build(BuildContext context) {
+    if (attrs.isEmpty) return const SizedBox.shrink();
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      padding: EdgeInsets.fromLTRB(horizontalPadding, 20, horizontalPadding, 4),
+      child: Row(
+        children: attrs.asMap().entries.map((e) {
+          final idx = e.key;
+          final attr = e.value;
+          final opt = attr.options.first;
+          final isSelected = selectedAttrId == attr.id;
+          return Padding(
+            padding: EdgeInsets.only(right: idx < attrs.length - 1 ? 8 : 0),
+            child: _VariantChip(
+              optionName: attr.name,
+              price: opt.finalPrice,
+              originalPrice: opt.hasDiscount ? opt.priceAdjustment : null,
+              isSelected: isSelected,
+              onTap: () => onAttrSelected(attr.id),
+            ),
+          );
+        }).toList(),
+      ),
+    );
+  }
+}
+
+class _VariantChip extends StatelessWidget {
+  const _VariantChip({
+    required this.optionName,
+    required this.price,
+    this.originalPrice,
+    required this.isSelected,
+    required this.onTap,
+  });
+
+  final String optionName;
+  final double price;
+  final double? originalPrice;
+  final bool isSelected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final bg = isSelected ? _kInk : Colors.white;
+    final fg = isSelected ? Colors.white : _kInk;
+    final border = isSelected ? _kInk : const Color(0xFFE8E8E8);
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      child: GestureDetector(
+        onTap: onTap,
+        child: Container(
+          width: 155,
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: bg,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: border),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                optionName,
+                style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: fg,
+                    height: 1.3),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+              const SizedBox(height: 8),
+              if (price > 0 || originalPrice != null)
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.baseline,
+                  textBaseline: TextBaseline.alphabetic,
+                  children: [
+                    if (price > 0)
+                      Text(
+                        '₹${price.toInt()}',
+                        style: GoogleFonts.poppins(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                            color: fg,
+                            height: 1.2),
+                      ),
+                    if (originalPrice != null) ...[
+                      const SizedBox(width: 5),
+                      Text(
+                        '₹${originalPrice!.toInt()}',
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: fg.withAlpha(140),
+                          decoration: TextDecoration.lineThrough,
+                          decorationColor: fg.withAlpha(140),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // Web header: photo panel | info panel
 // ═══════════════════════════════════════════════════════════════════════════════
 
@@ -2851,6 +3576,7 @@ class _WebHeader extends StatelessWidget {
     required this.displayPrice,
     required this.hasAdjustment,
     required this.onClose,
+    this.startsAtPrice,
     this.showClose = true,
   });
 
@@ -2859,6 +3585,7 @@ class _WebHeader extends StatelessWidget {
   final bool hasHero;
   final double displayPrice;
   final bool hasAdjustment;
+  final double? startsAtPrice;
   final bool showClose;
   final VoidCallback onClose;
 
@@ -2981,22 +3708,38 @@ class _WebHeader extends StatelessWidget {
                               maxLines: 4,
                               overflow: TextOverflow.ellipsis),
                         ),
-                      if (node.basePrice != null)
+                      if (node.basePrice != null || startsAtPrice != null)
                         Row(
                           crossAxisAlignment: CrossAxisAlignment.baseline,
                           textBaseline: TextBaseline.alphabetic,
                           children: [
-                            const Text('From',
-                                style: TextStyle(
-                                    fontSize: 13, color: _kMuted2)),
+                            Text(
+                              startsAtPrice != null ? 'Starts at' : 'From',
+                              style: const TextStyle(
+                                  fontSize: 13, color: _kMuted2),
+                            ),
                             const SizedBox(width: 8),
-                            Text('₹${displayPrice.toInt()}',
-                                style: GoogleFonts.poppins(
-                                    fontSize: 24,
-                                    fontWeight: FontWeight.w800,
-                                    color: _kInk,
-                                    height: 1.0)),
-                            if (hasAdjustment) ...[
+                            Text(
+                              '₹${(startsAtPrice ?? displayPrice).toInt()}',
+                              style: GoogleFonts.poppins(
+                                  fontSize: 24,
+                                  fontWeight: FontWeight.w800,
+                                  color: _kInk,
+                                  height: 1.0),
+                            ),
+                            if (node.hasDiscount && startsAtPrice == null) ...[
+                              const SizedBox(width: 8),
+                              Text(
+                                '₹${node.basePrice!.toInt()}',
+                                style: const TextStyle(
+                                  fontSize: 14,
+                                  color: _kMuted2,
+                                  decoration: TextDecoration.lineThrough,
+                                  decorationColor: _kMuted2,
+                                ),
+                              ),
+                            ],
+                            if (hasAdjustment && startsAtPrice == null) ...[
                               const SizedBox(width: 8),
                               const Text('incl. add-ons',
                                   style: TextStyle(

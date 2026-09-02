@@ -1,12 +1,14 @@
 import 'dart:async';
 import 'dart:ui' show ImageFilter;
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/services/nominatim_service.dart';
 import '../../address/screens/map_picker_screen.dart';
 import '../../service_availability/services/serviceability_service.dart';
+import '../services/home_providers.dart';
 
 // ── Picked location (from search or map) ──────────────────────────────────────
 
@@ -55,7 +57,7 @@ extension _CheckStateX on _CheckState {
   String get mobileButtonLabel {
     switch (this) {
       case _CheckState.idle:
-        return 'Check Availability';
+        return 'Get Started';
       case _CheckState.gettingLocation:
         return 'Getting location…';
       case _CheckState.checkingAvailability:
@@ -92,7 +94,7 @@ extension _CheckStateX on _CheckState {
 
 // ── Widget ────────────────────────────────────────────────────────────────────
 
-class HeroSection extends StatefulWidget {
+class HeroSection extends ConsumerStatefulWidget {
   final VoidCallback onBookNow;
   final VoidCallback onExplore;
 
@@ -103,10 +105,10 @@ class HeroSection extends StatefulWidget {
   });
 
   @override
-  State<HeroSection> createState() => _HeroSectionState();
+  ConsumerState<HeroSection> createState() => _HeroSectionState();
 }
 
-class _HeroSectionState extends State<HeroSection>
+class _HeroSectionState extends ConsumerState<HeroSection>
     with SingleTickerProviderStateMixin {
   late final AnimationController _fadeCtrl;
   late final Animation<double> _fadeAnim;
@@ -262,6 +264,12 @@ class _HeroSectionState extends State<HeroSection>
     }
 
     if (!mounted) return;
+    try {
+      final addr = await NominatimService().reverseGeocode(lat, lng);
+      final label = addr.line1 ?? addr.city ?? addr.state;
+      if (label != null && mounted) setState(() => _pickedLabel = label);
+    } catch (_) {}
+    if (!mounted) return;
     setState(() => _checkState = _CheckState.checkingAvailability);
     await _runServiceabilityCheck(lat, lng);
   }
@@ -281,6 +289,9 @@ class _HeroSectionState extends State<HeroSection>
 
   void _resetCheck() => setState(() => _checkState = _CheckState.idle);
 
+  void _onMobileContinue() =>
+      ref.read(mobileServicesUnlockedProvider.notifier).state = true;
+
   // Web-only continue: requires an explicit location pick; no GPS fallback.
   Future<void> _handleWebContinue() async {
     if (_checkState.isLoading) return;
@@ -297,10 +308,19 @@ class _HeroSectionState extends State<HeroSection>
   @override
   Widget build(BuildContext context) {
     final width = MediaQuery.of(context).size.width;
+    final isMobile = width < 768;
     return FadeTransition(
       opacity: _fadeAnim,
-      child: width >= 768
-          ? _WebHero(
+      child: isMobile
+          ? _MobileHero(
+              checkState: _checkState,
+              locationLabel: _pickedLabel,
+              onGetStarted: _handleContinue,
+              onReset: _resetCheck,
+              onContinue: _onMobileContinue,
+              onEnterManually: _openLocationPicker,
+            )
+          : _WebHero(
               checkState: _checkState,
               pickedLabel: _pickedLabel,
               fetchingGps: _fetchingGps,
@@ -309,11 +329,6 @@ class _HeroSectionState extends State<HeroSection>
               onLocationTap: _openLocationPicker,
               onClearLocation: _clearLocation,
               onFetchLiveLocation: _fetchLiveLocation,
-            )
-          : _MobileHero(
-              checkState: _checkState,
-              onGetStarted: _handleContinue,
-              onReset: _resetCheck,
             ),
     );
   }
@@ -1134,14 +1149,62 @@ class _LocationPickerSheetState extends State<_LocationPickerSheet> {
   }
 }
 
-// ── Mobile Hero ──────────────────────────────────────────────────────────────
+// ── Mobile Hero (state router) ────────────────────────────────────────────────
 
 class _MobileHero extends StatelessWidget {
+  final _CheckState checkState;
+  final String? locationLabel;
+  final VoidCallback onGetStarted;
+  final VoidCallback onReset;
+  final VoidCallback onContinue;
+  final VoidCallback onEnterManually;
+
+  const _MobileHero({
+    required this.checkState,
+    required this.locationLabel,
+    required this.onGetStarted,
+    required this.onReset,
+    required this.onContinue,
+    required this.onEnterManually,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final screenH = MediaQuery.sizeOf(context).height;
+    if (checkState.isLoading) {
+      return _MobileFetchingScreen(checkState: checkState, minHeight: screenH);
+    }
+    if (checkState == _CheckState.serviceable) {
+      return _MobileSupportedScreen(
+        locationLabel: locationLabel,
+        onContinue: onContinue,
+        minHeight: screenH,
+      );
+    }
+    if (checkState.hasMessage && !checkState.isSuccess) {
+      return _MobileNotSupportedScreen(
+        locationLabel: locationLabel,
+        onTryAnother: onGetStarted,
+        onEnterManually: onEnterManually,
+        minHeight: screenH,
+      );
+    }
+    return _MobileIdleHero(
+      checkState: checkState,
+      onGetStarted: onGetStarted,
+      onReset: onReset,
+    );
+  }
+}
+
+// ── Mobile: idle hero ─────────────────────────────────────────────────────────
+
+class _MobileIdleHero extends StatelessWidget {
   final _CheckState checkState;
   final VoidCallback onGetStarted;
   final VoidCallback onReset;
 
-  const _MobileHero({
+  const _MobileIdleHero({
     required this.checkState,
     required this.onGetStarted,
     required this.onReset,
@@ -1149,44 +1212,41 @@ class _MobileHero extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      color: const Color(0xFF111111),
-      child: Stack(
-        children: [
-          Positioned(
-            top: 20,
-            left: 20,
-            child: IgnorePointer(
-              child: Text(
-                'SERV\nICE',
-                style: GoogleFonts.poppins(
-                  fontWeight: FontWeight.w800,
-                  fontSize: 72,
-                  color: const Color(0xFF1E1B17),
-                  height: 0.95,
-                  letterSpacing: -1.5,
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final h = constraints.maxHeight.isFinite
+            ? constraints.maxHeight
+            : MediaQuery.sizeOf(context).height;
+        return Container(
+          width: double.infinity,
+          height: h,
+          color: const Color(0xFF111111),
+          child: Stack(
+            children: [
+              // Decorative background text
+              Positioned(
+                top: 16,
+                left: 20,
+                child: IgnorePointer(
+                  child: Text(
+                    'SERV\nICE',
+                    style: GoogleFonts.poppins(
+                      fontWeight: FontWeight.w800,
+                      fontSize: 80,
+                      color: const Color(0xFF1E1B17),
+                      height: 0.92,
+                      letterSpacing: -2,
+                    ),
+                  ),
                 ),
               ),
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(24, 28, 24, 36),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  mainAxisSize: MainAxisSize.min,
+              // Main content: brand → mascot (flex) → text → button
+              Padding(
+                padding: const EdgeInsets.fromLTRB(24, 40, 24, 76),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Container(
-                      width: 22,
-                      height: 22,
-                      decoration: BoxDecoration(
-                        color: AppColors.gold,
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
+                    // Brand
                     Text(
                       'DODO BOOKER',
                       style: GoogleFonts.poppins(
@@ -1196,63 +1256,455 @@ class _MobileHero extends StatelessWidget {
                         letterSpacing: 0.5,
                       ),
                     ),
+                    // Mascot fills all available middle space
+                    Expanded(
+                      child: Center(
+                        child: Image.asset(
+                          'assets/images/dodo-mascot.png',
+                          fit: BoxFit.contain,
+                          errorBuilder: (_, _, _) => const SizedBox.shrink(),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    // Headline
+                    Text.rich(
+                      TextSpan(
+                        style: GoogleFonts.poppins(
+                          fontSize: 28,
+                          fontWeight: FontWeight.w800,
+                          color: Colors.white,
+                          height: 1.15,
+                        ),
+                        children: const [
+                          TextSpan(text: 'Are you looking for\n'),
+                          TextSpan(
+                            text: 'home service?',
+                            style: TextStyle(color: AppColors.gold),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    // Subtitle
+                    Text(
+                      'Let us take care of it. Book trusted professionals in just a few taps.',
+                      style: GoogleFonts.inter(
+                        fontSize: 14,
+                        color: const Color(0xFFB3ADA3),
+                        height: 1.6,
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    // CTA button
+                    _GetStartedButton(
+                      checkState: checkState,
+                      onTap: onGetStarted,
+                      onReset: onReset,
+                    ),
                   ],
                 ),
-                const SizedBox(height: 16),
-                Center(
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(
-                      maxWidth: 280,
-                      maxHeight: 220,
-                    ),
-                    child: Image.asset(
-                      'assets/images/dodo-mascot.png',
-                      fit: BoxFit.contain,
-                      errorBuilder: (_, _, _) =>
-                          const SizedBox(height: 180),
-                    ),
-                  ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+// ── Mobile: fetching location ─────────────────────────────────────────────────
+
+class _MobileFetchingScreen extends StatelessWidget {
+  final _CheckState checkState;
+  final double minHeight;
+
+  const _MobileFetchingScreen({
+    required this.checkState,
+    required this.minHeight,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isChecking = checkState == _CheckState.checkingAvailability;
+    return Container(
+      width: double.infinity,
+      constraints: BoxConstraints(minHeight: minHeight),
+      color: const Color(0xFFFBF8F3),
+      padding: const EdgeInsets.symmetric(horizontal: 28),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const SizedBox(height: 60),
+          Container(
+            width: 96,
+            height: 96,
+            decoration: const BoxDecoration(
+              color: Color(0xFFE8E3DA),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(
+              Icons.location_on_outlined,
+              size: 40,
+              color: Color(0xFF5A554E),
+            ),
+          ),
+          const SizedBox(height: 28),
+          Text(
+            'Getting your location...',
+            style: GoogleFonts.poppins(
+              fontSize: 22,
+              fontWeight: FontWeight.w700,
+              color: const Color(0xFF1A1714),
+            ),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 8),
+          Text(
+            "We're checking if DODO Booker is available in your area.",
+            style: GoogleFonts.inter(
+              fontSize: 13,
+              color: const Color(0xFF6E6A64),
+              height: 1.5,
+            ),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 32),
+          Container(
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _ChecklistRow(
+                  label: 'Requesting location permission',
+                  done: isChecking,
+                  active: !isChecking,
                 ),
-                const SizedBox(height: 20),
-                Text.rich(
-                  TextSpan(
-                    style: GoogleFonts.poppins(
-                      fontSize: 28,
-                      fontWeight: FontWeight.w800,
-                      color: Colors.white,
-                      height: 1.15,
-                    ),
-                    children: const [
-                      TextSpan(text: 'Are you looking for\n'),
-                      TextSpan(
-                        text: 'home services?',
-                        style: TextStyle(color: AppColors.gold),
-                      ),
-                    ],
-                  ),
+                const Divider(height: 1, indent: 16, endIndent: 16),
+                _ChecklistRow(
+                  label: 'Detecting your location',
+                  done: isChecking,
+                  active: !isChecking,
                 ),
-                const SizedBox(height: 10),
-                Text(
-                  'Let us take care of it. Book trusted professionals in just a few taps.',
-                  style: GoogleFonts.inter(
-                    fontSize: 14,
-                    color: const Color(0xFFB3ADA3),
-                    height: 1.6,
-                  ),
+                const Divider(height: 1, indent: 16, endIndent: 16),
+                _ChecklistRow(
+                  label: 'Checking service availability',
+                  done: false,
+                  active: isChecking,
                 ),
-                const SizedBox(height: 28),
-                _GetStartedButton(
-                  checkState: checkState,
-                  onTap: onGetStarted,
-                  onReset: onReset,
-                ),
-                if (checkState.hasMessage) ...[
-                  const SizedBox(height: 14),
-                  _StatusMessage(checkState: checkState),
-                ],
               ],
             ),
           ),
+          const SizedBox(height: 60),
+        ],
+      ),
+    );
+  }
+}
+
+class _ChecklistRow extends StatelessWidget {
+  final String label;
+  final bool done;
+  final bool active;
+
+  const _ChecklistRow({
+    required this.label,
+    required this.done,
+    this.active = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              label,
+              style: GoogleFonts.inter(
+                fontSize: 14,
+                color: const Color(0xFF2E2A26),
+              ),
+            ),
+          ),
+          const SizedBox(width: 12),
+          if (done)
+            const Icon(Icons.check_rounded,
+                color: Color(0xFF3F9142), size: 18)
+          else if (active)
+            const SizedBox(
+              width: 16,
+              height: 16,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                valueColor:
+                    AlwaysStoppedAnimation<Color>(Color(0xFF3F9142)),
+              ),
+            )
+          else
+            Container(
+              width: 16,
+              height: 16,
+              decoration: const BoxDecoration(
+                color: Color(0xFFECE7DE),
+                shape: BoxShape.circle,
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Mobile: location supported ────────────────────────────────────────────────
+
+class _MobileSupportedScreen extends StatelessWidget {
+  final String? locationLabel;
+  final VoidCallback onContinue;
+  final double minHeight;
+
+  const _MobileSupportedScreen({
+    required this.locationLabel,
+    required this.onContinue,
+    required this.minHeight,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      constraints: BoxConstraints(minHeight: minHeight),
+      color: const Color(0xFFFBF8F3),
+      padding: const EdgeInsets.symmetric(horizontal: 28),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const SizedBox(height: 60),
+          Container(
+            width: 96,
+            height: 96,
+            decoration: const BoxDecoration(
+              color: Color(0xFF1A1714),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(
+              Icons.check_rounded,
+              size: 44,
+              color: Colors.white,
+            ),
+          ),
+          const SizedBox(height: 28),
+          Text(
+            'Great!',
+            style: GoogleFonts.poppins(
+              fontSize: 22,
+              fontWeight: FontWeight.w700,
+              color: const Color(0xFF1A1714),
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'We serve your location 🎉',
+            style: GoogleFonts.inter(
+              fontSize: 15,
+              color: const Color(0xFF2E2A26),
+            ),
+          ),
+          const SizedBox(height: 20),
+          if (locationLabel != null)
+            Container(
+              padding: const EdgeInsets.symmetric(
+                  horizontal: 20, vertical: 12),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(100),
+                border: Border.all(color: const Color(0xFFECE7DE)),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.location_on_rounded,
+                      size: 16, color: Color(0xFFE53935)),
+                  const SizedBox(width: 8),
+                  Flexible(
+                    child: Text(
+                      locationLabel!,
+                      style: GoogleFonts.inter(
+                        fontSize: 14,
+                        color: const Color(0xFF2E2A26),
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          const SizedBox(height: 32),
+          GestureDetector(
+            onTap: onContinue,
+            child: Container(
+              width: double.infinity,
+              height: 56,
+              decoration: BoxDecoration(
+                color: const Color(0xFF1A1714),
+                borderRadius: BorderRadius.circular(100),
+              ),
+              alignment: Alignment.center,
+              child: Text(
+                'Continue to Home →',
+                style: GoogleFonts.poppins(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.white,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 60),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Mobile: location not supported ───────────────────────────────────────────
+
+class _MobileNotSupportedScreen extends StatelessWidget {
+  final String? locationLabel;
+  final VoidCallback onTryAnother;
+  final VoidCallback onEnterManually;
+  final double minHeight;
+
+  const _MobileNotSupportedScreen({
+    required this.locationLabel,
+    required this.onTryAnother,
+    required this.onEnterManually,
+    required this.minHeight,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      constraints: BoxConstraints(minHeight: minHeight),
+      color: const Color(0xFFFBF8F3),
+      padding: const EdgeInsets.symmetric(horizontal: 28),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const SizedBox(height: 60),
+          Container(
+            width: 96,
+            height: 96,
+            decoration: const BoxDecoration(
+              color: Color(0xFFE8E3DA),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(
+              Icons.do_not_disturb_alt_rounded,
+              size: 40,
+              color: Color(0xFF9A948C),
+            ),
+          ),
+          const SizedBox(height: 28),
+          Text(
+            "Sorry, we're not serving\nyour location yet.",
+            style: GoogleFonts.poppins(
+              fontSize: 19,
+              fontWeight: FontWeight.w700,
+              color: const Color(0xFF1A1714),
+              height: 1.3,
+            ),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'We are expanding our service areas. Please check back soon!',
+            style: GoogleFonts.inter(
+              fontSize: 13,
+              color: const Color(0xFF6E6A64),
+              height: 1.5,
+            ),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 20),
+          if (locationLabel != null)
+            Container(
+              padding: const EdgeInsets.symmetric(
+                  horizontal: 20, vertical: 12),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(100),
+                border: Border.all(color: const Color(0xFFECE7DE)),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.location_on_rounded,
+                      size: 16, color: Color(0xFFE53935)),
+                  const SizedBox(width: 8),
+                  Flexible(
+                    child: Text(
+                      locationLabel!,
+                      style: GoogleFonts.inter(
+                        fontSize: 14,
+                        color: const Color(0xFF2E2A26),
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          const SizedBox(height: 32),
+          GestureDetector(
+            onTap: onTryAnother,
+            child: Container(
+              width: double.infinity,
+              height: 56,
+              decoration: BoxDecoration(
+                color: const Color(0xFF1A1714),
+                borderRadius: BorderRadius.circular(100),
+              ),
+              alignment: Alignment.center,
+              child: Text(
+                'Try Another Location →',
+                style: GoogleFonts.poppins(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.white,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          GestureDetector(
+            onTap: onEnterManually,
+            child: Container(
+              width: double.infinity,
+              height: 56,
+              decoration: BoxDecoration(
+                color: Colors.transparent,
+                borderRadius: BorderRadius.circular(100),
+                border: Border.all(
+                    color: const Color(0xFFECE7DE), width: 1.5),
+              ),
+              alignment: Alignment.center,
+              child: Text(
+                'Enter Location Manually',
+                style: GoogleFonts.poppins(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                  color: const Color(0xFF1A1714),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 60),
         ],
       ),
     );

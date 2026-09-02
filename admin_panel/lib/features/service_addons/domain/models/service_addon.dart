@@ -6,6 +6,8 @@ class ServiceAddon {
   final bool isActive;
   final String? serviceId;
   final DateTime? createdAt;
+  final String discountType;
+  final double discountValue;
 
   const ServiceAddon({
     required this.id,
@@ -15,7 +17,18 @@ class ServiceAddon {
     required this.isActive,
     this.serviceId,
     this.createdAt,
+    this.discountType = 'percentage',
+    this.discountValue = 0,
   });
+
+  double get discountAmount => discountType == 'percentage'
+      ? price * discountValue / 100
+      : discountValue;
+
+  double get finalPrice =>
+      (price - discountAmount).clamp(0.0, double.infinity);
+
+  bool get hasDiscount => discountValue > 0;
 
   factory ServiceAddon.fromMap(Map<String, dynamic> map) {
     return ServiceAddon(
@@ -28,6 +41,8 @@ class ServiceAddon {
       createdAt: map['created_at'] != null
           ? DateTime.tryParse(map['created_at'] as String)
           : null,
+      discountType: (map['discount_type'] as String?) ?? 'percentage',
+      discountValue: (map['discount_value'] as num?)?.toDouble() ?? 0,
     );
   }
 
@@ -37,6 +52,8 @@ class ServiceAddon {
     double? price,
     bool? isActive,
     Object? serviceId = _sentinel,
+    String? discountType,
+    double? discountValue,
   }) {
     return ServiceAddon(
       id: id,
@@ -48,6 +65,8 @@ class ServiceAddon {
           ? this.serviceId
           : serviceId as String?,
       createdAt: createdAt,
+      discountType: discountType ?? this.discountType,
+      discountValue: discountValue ?? this.discountValue,
     );
   }
 }

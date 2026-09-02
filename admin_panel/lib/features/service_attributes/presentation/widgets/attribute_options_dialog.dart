@@ -24,6 +24,8 @@ class _AttributeOptionsDialogState
     extends ConsumerState<AttributeOptionsDialog> {
   final _optionNameController = TextEditingController();
   final _priceAdjController = TextEditingController();
+  final _addDiscountValueController = TextEditingController();
+  String _addDiscountType = 'percentage';
   final _addFormKey = GlobalKey<FormState>();
   bool _adding = false;
   String? _deletingId;
@@ -32,14 +34,18 @@ class _AttributeOptionsDialogState
   String? _editingId;
   final _editNameController = TextEditingController();
   final _editPriceController = TextEditingController();
+  final _editDiscountValueController = TextEditingController();
+  String _editDiscountType = 'percentage';
   bool _saving = false;
 
   @override
   void dispose() {
     _optionNameController.dispose();
     _priceAdjController.dispose();
+    _addDiscountValueController.dispose();
     _editNameController.dispose();
     _editPriceController.dispose();
+    _editDiscountValueController.dispose();
     super.dispose();
   }
 
@@ -49,7 +55,11 @@ class _AttributeOptionsDialogState
       _editNameController.text = option.optionName;
       _editPriceController.text = option.priceAdjustment == 0
           ? ''
-          : option.priceAdjustment.toStringAsFixed(2);
+          : option.priceAdjustment.toStringAsFixed(0);
+      _editDiscountType = option.discountType;
+      _editDiscountValueController.text = option.discountValue > 0
+          ? option.discountValue.toStringAsFixed(0)
+          : '';
     });
   }
 
@@ -58,6 +68,8 @@ class _AttributeOptionsDialogState
       _editingId = null;
       _editNameController.clear();
       _editPriceController.clear();
+      _editDiscountType = 'percentage';
+      _editDiscountValueController.clear();
     });
   }
 
@@ -70,6 +82,9 @@ class _AttributeOptionsDialogState
             optionName: _editNameController.text.trim(),
             priceAdjustment:
                 double.tryParse(_editPriceController.text.trim()) ?? 0.0,
+            discountType: _editDiscountType,
+            discountValue:
+                double.tryParse(_editDiscountValueController.text.trim()) ?? 0,
           );
       _cancelEdit();
     } catch (e) {
@@ -95,9 +110,14 @@ class _AttributeOptionsDialogState
             optionName: _optionNameController.text.trim(),
             priceAdjustment:
                 double.tryParse(_priceAdjController.text.trim()) ?? 0.0,
+            discountType: _addDiscountType,
+            discountValue:
+                double.tryParse(_addDiscountValueController.text.trim()) ?? 0,
           );
       _optionNameController.clear();
       _priceAdjController.clear();
+      _addDiscountValueController.clear();
+      setState(() => _addDiscountType = 'percentage');
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -146,9 +166,8 @@ class _AttributeOptionsDialogState
   }
 
   String _formatPrice(double price) {
-    if (price == 0) return 'No adjustment';
-    final sign = price > 0 ? '+' : '';
-    return '$sign₹${price.toStringAsFixed(2)}';
+    if (price == 0) return 'No price set';
+    return '₹${price.toStringAsFixed(0)}';
   }
 
   @override
@@ -269,6 +288,11 @@ class _AttributeOptionsDialogState
                             key: ValueKey(opt.id),
                             nameController: _editNameController,
                             priceController: _editPriceController,
+                            discountType: _editDiscountType,
+                            discountValueController:
+                                _editDiscountValueController,
+                            onDiscountTypeChanged: (t) =>
+                                setState(() => _editDiscountType = t),
                             onSave: _saving ? null : _saveEdit,
                             onCancel: _cancelEdit,
                             saving: _saving,
@@ -338,18 +362,69 @@ class _AttributeOptionsDialogState
                           child: TextFormField(
                             controller: _priceAdjController,
                             decoration: const InputDecoration(
-                              labelText: 'Price Adj.',
-                              hintText: '0.00',
+                              labelText: 'Price (₹)',
+                              hintText: 'e.g. 1198',
                               prefixText: '₹ ',
                               contentPadding: EdgeInsets.symmetric(
                                   horizontal: 12, vertical: 10),
                             ),
                             keyboardType:
                                 const TextInputType.numberWithOptions(
-                                    decimal: true, signed: true),
+                                    decimal: true),
                             inputFormatters: [
                               FilteringTextInputFormatter.allow(
-                                  RegExp(r'^-?\d*\.?\d{0,2}')),
+                                  RegExp(r'^\d*\.?\d{0,2}')),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Padding(
+                          padding: const EdgeInsets.only(top: 4),
+                          child: ToggleButtons(
+                            isSelected: [
+                              _addDiscountType == 'percentage',
+                              _addDiscountType == 'flat',
+                            ],
+                            onPressed: (i) => setState(() =>
+                                _addDiscountType =
+                                    i == 0 ? 'percentage' : 'flat'),
+                            borderRadius: BorderRadius.circular(6),
+                            selectedColor: Colors.white,
+                            fillColor: AppColors.primary,
+                            textStyle: const TextStyle(fontSize: 11),
+                            constraints: const BoxConstraints(
+                                minWidth: 32, minHeight: 42),
+                            children: const [
+                              Padding(
+                                padding: EdgeInsets.symmetric(horizontal: 8),
+                                child: Text('%'),
+                              ),
+                              Padding(
+                                padding: EdgeInsets.symmetric(horizontal: 8),
+                                child: Text('₹'),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        SizedBox(
+                          width: 80,
+                          child: TextFormField(
+                            controller: _addDiscountValueController,
+                            decoration: InputDecoration(
+                              labelText: _addDiscountType == 'percentage'
+                                  ? 'Disc %'
+                                  : 'Disc ₹',
+                              hintText: '0',
+                              contentPadding: const EdgeInsets.symmetric(
+                                  horizontal: 8, vertical: 10),
+                            ),
+                            keyboardType:
+                                const TextInputType.numberWithOptions(
+                                    decimal: true),
+                            inputFormatters: [
+                              FilteringTextInputFormatter.allow(
+                                  RegExp(r'^\d*\.?\d{0,2}')),
                             ],
                           ),
                         ),
@@ -476,16 +551,12 @@ class _OptionTile extends StatelessWidget {
             decoration: BoxDecoration(
               color: option.priceAdjustment == 0
                   ? AppColors.background
-                  : option.priceAdjustment > 0
-                      ? AppColors.success.withValues(alpha: 0.08)
-                      : AppColors.error.withValues(alpha: 0.08),
+                  : AppColors.primary.withValues(alpha: 0.07),
               borderRadius: BorderRadius.circular(4),
               border: Border.all(
                 color: option.priceAdjustment == 0
                     ? AppColors.border
-                    : option.priceAdjustment > 0
-                        ? AppColors.success.withValues(alpha: 0.3)
-                        : AppColors.error.withValues(alpha: 0.3),
+                    : AppColors.primary.withValues(alpha: 0.3),
               ),
             ),
             child: Text(
@@ -494,9 +565,7 @@ class _OptionTile extends StatelessWidget {
                 fontSize: 11,
                 color: option.priceAdjustment == 0
                     ? AppColors.textSecondary
-                    : option.priceAdjustment > 0
-                        ? AppColors.success
-                        : AppColors.error,
+                    : AppColors.primary,
                 fontWeight: FontWeight.w500,
               ),
             ),
@@ -533,6 +602,9 @@ class _OptionTile extends StatelessWidget {
 class _EditOptionRow extends StatelessWidget {
   final TextEditingController nameController;
   final TextEditingController priceController;
+  final String discountType;
+  final TextEditingController discountValueController;
+  final ValueChanged<String> onDiscountTypeChanged;
   final VoidCallback? onSave;
   final VoidCallback onCancel;
   final bool saving;
@@ -541,6 +613,9 @@ class _EditOptionRow extends StatelessWidget {
     super.key,
     required this.nameController,
     required this.priceController,
+    required this.discountType,
+    required this.discountValueController,
+    required this.onDiscountTypeChanged,
     required this.onSave,
     required this.onCancel,
     required this.saving,
@@ -578,16 +653,72 @@ class _EditOptionRow extends StatelessWidget {
                 child: TextField(
                   controller: priceController,
                   decoration: const InputDecoration(
-                    labelText: 'Price Adj.',
+                    labelText: 'Price (₹)',
                     prefixText: '₹ ',
                     contentPadding:
                         EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                   ),
                   keyboardType: const TextInputType.numberWithOptions(
-                      decimal: true, signed: true),
+                      decimal: true),
                   inputFormatters: [
                     FilteringTextInputFormatter.allow(
-                        RegExp(r'^-?\d*\.?\d{0,2}')),
+                        RegExp(r'^\d*\.?\d{0,2}')),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Text(
+                'Discount (optional)',
+                style: TextStyle(
+                    fontSize: 11, color: AppColors.textSecondary),
+              ),
+              const Spacer(),
+              ToggleButtons(
+                isSelected: [
+                  discountType == 'percentage',
+                  discountType == 'flat',
+                ],
+                onPressed: (i) =>
+                    onDiscountTypeChanged(i == 0 ? 'percentage' : 'flat'),
+                borderRadius: BorderRadius.circular(6),
+                selectedColor: Colors.white,
+                fillColor: AppColors.primary,
+                textStyle: const TextStyle(fontSize: 11),
+                constraints:
+                    const BoxConstraints(minWidth: 32, minHeight: 34),
+                children: const [
+                  Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 8),
+                    child: Text('%'),
+                  ),
+                  Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 8),
+                    child: Text('₹'),
+                  ),
+                ],
+              ),
+              const SizedBox(width: 8),
+              SizedBox(
+                width: 90,
+                child: TextField(
+                  controller: discountValueController,
+                  decoration: InputDecoration(
+                    labelText: discountType == 'percentage'
+                        ? 'Disc %'
+                        : 'Disc ₹',
+                    hintText: '0',
+                    contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 8, vertical: 10),
+                  ),
+                  keyboardType:
+                      const TextInputType.numberWithOptions(decimal: true),
+                  inputFormatters: [
+                    FilteringTextInputFormatter.allow(
+                        RegExp(r'^\d*\.?\d{0,2}')),
                   ],
                 ),
               ),

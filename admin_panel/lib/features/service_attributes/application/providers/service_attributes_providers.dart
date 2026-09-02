@@ -89,6 +89,8 @@ class ServiceAttributesNotifier
     required String attributeId,
     required String optionName,
     required double priceAdjustment,
+    String discountType = 'percentage',
+    double discountValue = 0,
   }) async {
     // Append at the end of the current list.
     final attrs = state.valueOrNull ?? [];
@@ -100,6 +102,8 @@ class ServiceAttributesNotifier
       optionName: optionName,
       priceAdjustment: priceAdjustment,
       sortOrder: nextSortOrder,
+      discountType: discountType,
+      discountValue: discountValue,
     );
     await _reload();
   }
@@ -108,11 +112,15 @@ class ServiceAttributesNotifier
     String optionId, {
     required String optionName,
     required double priceAdjustment,
+    String discountType = 'percentage',
+    double discountValue = 0,
   }) async {
     await _repo.updateOption(
       optionId,
       optionName: optionName,
       priceAdjustment: priceAdjustment,
+      discountType: discountType,
+      discountValue: discountValue,
     );
     await _reload();
   }

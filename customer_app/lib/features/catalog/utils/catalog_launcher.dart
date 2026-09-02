@@ -1,26 +1,31 @@
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
-
 import '../models/catalog_node_model.dart';
 import '../screens/catalog_node_screen.dart';
 import '../widgets/catalog_node_modal.dart';
 
 /// Opens a catalog node:
-///   • Leaf-bookable on web (≥768): floating _WebScaffold modal over the app
-///   • Leaf-bookable on mobile (<768): full-screen CatalogNodeScreen push
-///   • Category nodes (hasChildren): existing browse modal on all sizes
+///   • Any node on web (≥768): floating modal over the app
+///   • Any node on mobile (<768): proper bottom sheet using CatalogNodeScreen
 void openCatalogNode(BuildContext context, CatalogNodeModel node,
     {String? parentId}) {
+  final isMobile = MediaQuery.of(context).size.width < 768;
   if (node.isLeafBookable) {
-    if (MediaQuery.of(context).size.width >= 768) {
-      _showNodeAsWebModal(context, node, parentId: parentId);
-    } else {
-      context.push(
-        '/catalog/${node.id}',
-        extra: {'node': node, 'parentNodeId': parentId},
+    if (isMobile) {
+      showModalBottomSheet<void>(
+        context: context,
+        isScrollControlled: true,
+        useSafeArea: true,
+        backgroundColor: Colors.transparent,
+        builder: (_) => CatalogNodeScreen(
+          node: node,
+          parentNodeId: parentId,
+          inSheet: true,
+        ),
       );
+    } else {
+      _showNodeAsWebModal(context, node, parentId: parentId);
     }
   } else {
     CatalogNodeModal.open(context, node, parentId: parentId);

@@ -35,6 +35,7 @@ class CatalogNodeFormDialog extends StatefulWidget {
     required String slug,
     String? description,
     String? imageUrl,
+    String? mobileImageUrl,
     String? iconKey,
     required int sortOrder,
     required bool isActive,
@@ -42,6 +43,8 @@ class CatalogNodeFormDialog extends StatefulWidget {
     double? basePrice,
     int? estimatedDuration,
     double? minimumOrderAmount,
+    String discountType,
+    double discountValue,
   }) onSave;
 
   @override
@@ -54,6 +57,7 @@ class _CatalogNodeFormDialogState extends State<CatalogNodeFormDialog> {
   late final TextEditingController _name;
   late final TextEditingController _description;
   late final TextEditingController _imageUrl;
+  late final TextEditingController _mobileImageUrl;
   late final TextEditingController _iconKey;
   late final TextEditingController _sortOrder;
   late final TextEditingController _basePrice;
@@ -61,6 +65,8 @@ class _CatalogNodeFormDialogState extends State<CatalogNodeFormDialog> {
 
   late bool _isActive;
   late bool _isBookable;
+  late String _discountType;
+  late final TextEditingController _discountValue;
   bool _saving = false;
 
   @override
@@ -70,6 +76,7 @@ class _CatalogNodeFormDialogState extends State<CatalogNodeFormDialog> {
     _name = TextEditingController(text: e?.name ?? '');
     _description = TextEditingController(text: e?.description ?? '');
     _imageUrl = TextEditingController(text: e?.imageUrl ?? '');
+    _mobileImageUrl = TextEditingController(text: e?.mobileImageUrl ?? '');
     _iconKey = TextEditingController(text: e?.iconKey ?? '');
     _sortOrder = TextEditingController(text: (e?.sortOrder ?? 0).toString());
     _basePrice = TextEditingController(
@@ -82,6 +89,12 @@ class _CatalogNodeFormDialogState extends State<CatalogNodeFormDialog> {
     );
     _isActive = e?.isActive ?? true;
     _isBookable = e?.isBookable ?? false;
+    _discountType = e?.discountType ?? 'percentage';
+    _discountValue = TextEditingController(
+      text: (e != null && e.discountValue > 0)
+          ? e.discountValue.toStringAsFixed(0)
+          : '',
+    );
   }
 
   @override
@@ -89,10 +102,12 @@ class _CatalogNodeFormDialogState extends State<CatalogNodeFormDialog> {
     _name.dispose();
     _description.dispose();
     _imageUrl.dispose();
+    _mobileImageUrl.dispose();
     _iconKey.dispose();
     _sortOrder.dispose();
     _basePrice.dispose();
     _minOrderAmount.dispose();
+    _discountValue.dispose();
     super.dispose();
   }
 
@@ -117,6 +132,9 @@ class _CatalogNodeFormDialogState extends State<CatalogNodeFormDialog> {
             _description.text.trim().isEmpty ? null : _description.text.trim(),
         imageUrl:
             _imageUrl.text.trim().isEmpty ? null : _imageUrl.text.trim(),
+        mobileImageUrl: _mobileImageUrl.text.trim().isEmpty
+            ? null
+            : _mobileImageUrl.text.trim(),
         iconKey: _iconKey.text.trim().isEmpty ? null : _iconKey.text.trim(),
         sortOrder: int.tryParse(_sortOrder.text.trim()) ?? 0,
         isActive: _isActive,
@@ -129,6 +147,9 @@ class _CatalogNodeFormDialogState extends State<CatalogNodeFormDialog> {
             _isBookable && _minOrderAmount.text.trim().isNotEmpty
                 ? double.tryParse(_minOrderAmount.text.trim())
                 : null,
+        discountType: _discountType,
+        discountValue:
+            double.tryParse(_discountValue.text.trim()) ?? 0,
       );
       if (mounted) Navigator.of(context).pop();
     } catch (e) {
@@ -250,13 +271,25 @@ class _CatalogNodeFormDialogState extends State<CatalogNodeFormDialog> {
             ),
             const SizedBox(height: 16),
 
-            // Image URL
+            // Web Image URL
             TextFormField(
               controller: _imageUrl,
               decoration: const InputDecoration(
-                labelText: 'Image URL',
+                labelText: 'Web Image URL',
                 hintText: 'https://...',
                 prefixIcon: Icon(Icons.image_outlined),
+              ),
+              keyboardType: TextInputType.url,
+            ),
+            const SizedBox(height: 12),
+
+            // Mobile Image URL
+            TextFormField(
+              controller: _mobileImageUrl,
+              decoration: const InputDecoration(
+                labelText: 'Mobile Image URL',
+                hintText: 'https://... (leave empty to use Web Image URL)',
+                prefixIcon: Icon(Icons.phone_android_outlined),
               ),
               keyboardType: TextInputType.url,
             ),
@@ -381,6 +414,82 @@ class _CatalogNodeFormDialogState extends State<CatalogNodeFormDialog> {
                   inputFormatters: [
                     FilteringTextInputFormatter.allow(
                         RegExp(r'^\d+\.?\d{0,2}')),
+                  ],
+                ),
+
+                const SizedBox(height: 16),
+                const Divider(),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    const Text(
+                      'Discount',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.textPrimary,
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      '(optional)',
+                      style: TextStyle(
+                          fontSize: 12, color: AppColors.textSecondary),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    ToggleButtons(
+                      isSelected: [
+                        _discountType == 'percentage',
+                        _discountType == 'flat',
+                      ],
+                      onPressed: (i) => setState(
+                          () => _discountType = i == 0 ? 'percentage' : 'flat'),
+                      borderRadius: BorderRadius.circular(6),
+                      selectedColor: Colors.white,
+                      fillColor: AppColors.primary,
+                      textStyle: const TextStyle(fontSize: 13),
+                      constraints: const BoxConstraints(
+                          minWidth: 44, minHeight: 42),
+                      children: const [
+                        Padding(
+                          padding: EdgeInsets.symmetric(horizontal: 12),
+                          child: Text('%'),
+                        ),
+                        Padding(
+                          padding: EdgeInsets.symmetric(horizontal: 12),
+                          child: Text('₹'),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: TextFormField(
+                        controller: _discountValue,
+                        decoration: InputDecoration(
+                          labelText: _discountType == 'percentage'
+                              ? 'Discount %'
+                              : 'Discount ₹',
+                          hintText: '0',
+                          prefixText:
+                              _discountType == 'flat' ? '₹ ' : null,
+                          suffixText:
+                              _discountType == 'percentage' ? '%' : null,
+                          contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 12, vertical: 10),
+                        ),
+                        keyboardType: const TextInputType.numberWithOptions(
+                            decimal: true),
+                        inputFormatters: [
+                          FilteringTextInputFormatter.allow(
+                              RegExp(r'^\d*\.?\d{0,2}')),
+                        ],
+                      ),
+                    ),
                   ],
                 ),
 

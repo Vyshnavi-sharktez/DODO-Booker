@@ -14,6 +14,7 @@ class CatalogNodeModel {
   final String slug;
   final String? description;
   final String? imageUrl;
+  final String? mobileImageUrl;
   final String? iconKey;
   final int sortOrder;
   final bool isActive;
@@ -25,6 +26,8 @@ class CatalogNodeModel {
   final double? basePrice;
   final int? estimatedDuration;
   final double? minimumOrderAmount;
+  final String discountType;
+  final double discountValue;
   final double rating;
   final int reviewCount;
 
@@ -74,6 +77,7 @@ class CatalogNodeModel {
     required this.slug,
     this.description,
     this.imageUrl,
+    this.mobileImageUrl,
     this.iconKey,
     required this.sortOrder,
     required this.isActive,
@@ -82,6 +86,8 @@ class CatalogNodeModel {
     this.basePrice,
     this.estimatedDuration,
     this.minimumOrderAmount,
+    this.discountType = 'percentage',
+    this.discountValue = 0,
     this.rating = 0.0,
     this.reviewCount = 0,
     this.childrenCount = 0,
@@ -98,6 +104,17 @@ class CatalogNodeModel {
     this.beforeAfterPairs = const [],
     this.contentBlocks = const [],
   });
+
+  double get discountAmount => basePrice == null
+      ? 0.0
+      : discountType == 'percentage'
+          ? basePrice! * discountValue / 100
+          : discountValue;
+
+  double? get finalPrice =>
+      basePrice == null ? null : (basePrice! - discountAmount).clamp(0.0, double.infinity);
+
+  bool get hasDiscount => discountValue > 0 && basePrice != null;
 
   bool get hasChildren => childrenCount > 0;
 
@@ -123,6 +140,7 @@ class CatalogNodeModel {
       slug: slug,
       description: description,
       imageUrl: imageUrl,
+      mobileImageUrl: mobileImageUrl,
       iconKey: iconKey,
       sortOrder: sortOrder,
       isActive: isActive,
@@ -131,6 +149,8 @@ class CatalogNodeModel {
       basePrice: basePrice,
       estimatedDuration: estimatedDuration,
       minimumOrderAmount: minimumOrderAmount,
+      discountType: discountType,
+      discountValue: discountValue,
       rating: rating,
       reviewCount: reviewCount,
       childrenCount: childrenCount,
@@ -180,6 +200,7 @@ class CatalogNodeModel {
       slug: map['slug'] as String,
       description: map['description'] as String?,
       imageUrl: map['image_url'] as String?,
+      mobileImageUrl: map['mobile_image_url'] as String?,
       iconKey: map['icon_key'] as String?,
       sortOrder: (map['sort_order'] as int?) ?? 0,
       isActive: (map['is_active'] as bool?) ?? true,
@@ -188,6 +209,8 @@ class CatalogNodeModel {
       basePrice: (map['base_price'] as num?)?.toDouble(),
       estimatedDuration: map['estimated_duration'] as int?,
       minimumOrderAmount: (map['minimum_order_amount'] as num?)?.toDouble(),
+      discountType: (map['discount_type'] as String?) ?? 'percentage',
+      discountValue: (map['discount_value'] as num?)?.toDouble() ?? 0,
       rating: (map['rating'] as num?)?.toDouble() ?? 0.0,
       reviewCount: (map['review_count'] as int?) ?? 0,
       childrenCount: (map['children_count'] as int?) ?? 0,

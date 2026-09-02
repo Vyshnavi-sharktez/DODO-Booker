@@ -47,6 +47,19 @@ class ServiceImageRegistry {
     return fallbackUrl(categoryName);
   }
 
+  /// Mobile-aware resolution: uses [mobileImageUrl] when set,
+  /// falls back to [webImageUrl], then the keyword-based Unsplash fallback.
+  static String resolveMobile(
+    String? mobileImageUrl,
+    String? webImageUrl,
+    String? categoryName,
+  ) {
+    if (mobileImageUrl != null && mobileImageUrl.isNotEmpty) {
+      return mobileImageUrl;
+    }
+    return resolve(webImageUrl, categoryName);
+  }
+
   static String _build(String photoId) =>
       'https://images.unsplash.com/$photoId'
       '?auto=format&fit=crop&w=600&q=75';

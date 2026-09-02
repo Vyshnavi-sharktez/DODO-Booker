@@ -277,8 +277,21 @@ class _AddonCard extends StatelessWidget {
 
             // Price
             const SizedBox(height: 6),
+            if (addOn.hasDiscount)
+              Text(
+                '+ ₹${addOn.price.toInt()}',
+                style: tt.bodySmall?.copyWith(
+                  color: isSelected
+                      ? AppColors.gold.withAlpha(153)
+                      : AppColors.textHint,
+                  decoration: TextDecoration.lineThrough,
+                  decorationColor: isSelected
+                      ? AppColors.gold.withAlpha(153)
+                      : AppColors.textHint,
+                ),
+              ),
             Text(
-              '+ ₹${addOn.price.toInt()}',
+              '+ ₹${addOn.finalPrice.toInt()}',
               style: tt.labelMedium?.copyWith(
                 fontWeight: FontWeight.w800,
                 color: isSelected ? AppColors.gold : AppColors.textPrimary,

@@ -40,6 +40,8 @@ class CartItem {
   final bool amcIsRenewal;
   final String? amcPreviousContractId;
   final List<SelectedAddon> addons;
+  // Non-null when the service base had a discount at add-to-cart time (for cart display only).
+  final double? originalUnitPrice;
 
   const CartItem({
     required this.bookingId,
@@ -50,6 +52,7 @@ class CartItem {
     required this.quantity,
     this.minimumOrderAmount,
     this.parentNodeId,
+    this.originalUnitPrice,
     this.isAmc = false,
     this.amcPlanName,
     this.amcRecurrenceInterval,
@@ -72,6 +75,7 @@ class CartItem {
   CartItem copyWith({
     int? quantity,
     double? unitPrice,
+    double? originalUnitPrice,
     List<SelectedAddon>? addons,
     String? parentNodeId,
     bool? isAmc,
@@ -100,6 +104,7 @@ class CartItem {
         quantity: quantity ?? this.quantity,
         addons: addons ?? this.addons,
         minimumOrderAmount: minimumOrderAmount,
+        originalUnitPrice: originalUnitPrice ?? this.originalUnitPrice,
         parentNodeId: parentNodeId ?? this.parentNodeId,
         isAmc: isAmc ?? this.isAmc,
         amcPlanName: amcPlanName ?? this.amcPlanName,
@@ -132,6 +137,7 @@ class CartItem {
         'quantity': quantity,
         if (minimumOrderAmount != null)
           'minimumOrderAmount': minimumOrderAmount,
+        if (originalUnitPrice != null) 'originalUnitPrice': originalUnitPrice,
         if (parentNodeId != null) 'parentNodeId': parentNodeId,
         if (isAmc) 'isAmc': true,
         if (amcPlanName != null) 'amcPlanName': amcPlanName,
@@ -164,6 +170,7 @@ class CartItem {
         unitPrice: (json['unitPrice'] as num).toDouble(),
         quantity: json['quantity'] as int,
         minimumOrderAmount: (json['minimumOrderAmount'] as num?)?.toDouble(),
+        originalUnitPrice: (json['originalUnitPrice'] as num?)?.toDouble(),
         parentNodeId: json['parentNodeId'] as String?,
         isAmc: json['isAmc'] as bool? ?? false,
         amcPlanName: json['amcPlanName'] as String?,

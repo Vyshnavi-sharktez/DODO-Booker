@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../catalog_v2/application/providers/catalog_node_providers.dart';
@@ -13,6 +14,8 @@ class AddonFormDialog extends ConsumerStatefulWidget {
     required double price,
     required bool isActive,
     String? serviceId,
+    String discountType,
+    double discountValue,
   }) onSave;
 
   const AddonFormDialog({
@@ -31,6 +34,8 @@ class _AddonFormDialogState extends ConsumerState<AddonFormDialog> {
   late final TextEditingController _price;
   late bool _isActive;
   String? _selectedServiceId;
+  late String _discountType;
+  late final TextEditingController _discountValue;
   bool _saving = false;
 
   @override
@@ -43,12 +48,19 @@ class _AddonFormDialogState extends ConsumerState<AddonFormDialog> {
     );
     _isActive = e?.isActive ?? true;
     _selectedServiceId = e?.serviceId;
+    _discountType = e?.discountType ?? 'percentage';
+    _discountValue = TextEditingController(
+      text: (e != null && e.discountValue > 0)
+          ? e.discountValue.toStringAsFixed(0)
+          : '',
+    );
   }
 
   @override
   void dispose() {
     _name.dispose();
     _price.dispose();
+    _discountValue.dispose();
     super.dispose();
   }
 
@@ -61,6 +73,8 @@ class _AddonFormDialogState extends ConsumerState<AddonFormDialog> {
         price: double.parse(_price.text.trim()),
         isActive: _isActive,
         serviceId: _selectedServiceId,
+        discountType: _discountType,
+        discountValue: double.tryParse(_discountValue.text.trim()) ?? 0,
       );
       if (mounted) Navigator.of(context).pop();
     } catch (e) {
@@ -191,6 +205,88 @@ class _AddonFormDialogState extends ConsumerState<AddonFormDialog> {
                         value: _isActive,
                         activeColor: AppColors.success,
                         onChanged: (v) => setState(() => _isActive = v),
+                      ),
+                      const SizedBox(height: 20),
+                      const Divider(),
+                      const SizedBox(height: 12),
+                      Row(
+                        children: [
+                          const Text(
+                            'Discount',
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                              color: AppColors.textPrimary,
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            '(optional)',
+                            style: TextStyle(
+                                fontSize: 12,
+                                color: AppColors.textSecondary),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          ToggleButtons(
+                            isSelected: [
+                              _discountType == 'percentage',
+                              _discountType == 'flat',
+                            ],
+                            onPressed: (i) => setState(() =>
+                                _discountType =
+                                    i == 0 ? 'percentage' : 'flat'),
+                            borderRadius: BorderRadius.circular(6),
+                            selectedColor: Colors.white,
+                            fillColor: AppColors.primary,
+                            textStyle: const TextStyle(fontSize: 13),
+                            constraints: const BoxConstraints(
+                                minWidth: 44, minHeight: 42),
+                            children: const [
+                              Padding(
+                                padding:
+                                    EdgeInsets.symmetric(horizontal: 12),
+                                child: Text('%'),
+                              ),
+                              Padding(
+                                padding:
+                                    EdgeInsets.symmetric(horizontal: 12),
+                                child: Text('₹'),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: TextFormField(
+                              controller: _discountValue,
+                              decoration: InputDecoration(
+                                labelText: _discountType == 'percentage'
+                                    ? 'Discount %'
+                                    : 'Discount ₹',
+                                hintText: '0',
+                                prefixText: _discountType == 'flat'
+                                    ? '₹ '
+                                    : null,
+                                suffixText: _discountType == 'percentage'
+                                    ? '%'
+                                    : null,
+                                contentPadding: const EdgeInsets.symmetric(
+                                    horizontal: 12, vertical: 10),
+                              ),
+                              keyboardType:
+                                  const TextInputType.numberWithOptions(
+                                      decimal: true),
+                              inputFormatters: [
+                                FilteringTextInputFormatter.allow(
+                                    RegExp(r'^\d*\.?\d{0,2}')),
+                              ],
+                            ),
+                          ),
+                        ],
                       ),
                     ],
                   ),

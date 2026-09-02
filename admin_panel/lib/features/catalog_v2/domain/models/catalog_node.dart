@@ -13,6 +13,7 @@ class CatalogNode {
   final String slug;
   final String? description;
   final String? imageUrl;
+  final String? mobileImageUrl;
   final String? iconKey;
   final int sortOrder;
 
@@ -27,6 +28,8 @@ class CatalogNode {
   final double? basePrice;
   final int? estimatedDuration;
   final double? minimumOrderAmount;
+  final String discountType;
+  final double discountValue;
   final double? rating;
   final int reviewCount;
 
@@ -53,6 +56,7 @@ class CatalogNode {
     required this.slug,
     this.description,
     this.imageUrl,
+    this.mobileImageUrl,
     this.iconKey,
     required this.sortOrder,
     required this.isActive,
@@ -62,6 +66,8 @@ class CatalogNode {
     this.basePrice,
     this.estimatedDuration,
     this.minimumOrderAmount,
+    this.discountType = 'percentage',
+    this.discountValue = 0,
     this.rating,
     required this.reviewCount,
     this.amcEnabled = false,
@@ -101,6 +107,7 @@ class CatalogNode {
       slug: map['slug'] as String? ?? '',
       description: map['description'] as String?,
       imageUrl: map['image_url'] as String?,
+      mobileImageUrl: map['mobile_image_url'] as String?,
       iconKey: map['icon_key'] as String?,
       sortOrder: map['sort_order'] as int? ?? 0,
       isActive: map['is_active'] as bool? ?? true,
@@ -110,6 +117,8 @@ class CatalogNode {
       basePrice: (map['base_price'] as num?)?.toDouble(),
       estimatedDuration: map['estimated_duration'] as int?,
       minimumOrderAmount: (map['minimum_order_amount'] as num?)?.toDouble(),
+      discountType: (map['discount_type'] as String?) ?? 'percentage',
+      discountValue: (map['discount_value'] as num?)?.toDouble() ?? 0,
       rating: (map['rating'] as num?)?.toDouble(),
       reviewCount: map['review_count'] as int? ?? 0,
       amcEnabled: map['amc_enabled'] as bool? ?? false,
@@ -135,6 +144,7 @@ class CatalogNode {
     String? slug,
     String? description,
     String? imageUrl,
+    String? mobileImageUrl,
     String? iconKey,
     int? sortOrder,
     bool? isActive,
@@ -155,6 +165,7 @@ class CatalogNode {
       slug: slug ?? this.slug,
       description: description ?? this.description,
       imageUrl: imageUrl ?? this.imageUrl,
+      mobileImageUrl: mobileImageUrl ?? this.mobileImageUrl,
       iconKey: iconKey ?? this.iconKey,
       sortOrder: sortOrder ?? this.sortOrder,
       isActive: isActive ?? this.isActive,

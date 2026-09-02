@@ -24,6 +24,8 @@ class ServiceAddonsRepository {
     required double price,
     required bool isActive,
     String? serviceId,
+    String discountType = 'percentage',
+    double discountValue = 0,
   }) async {
     final data = await _supabase
         .from('addons')
@@ -34,6 +36,8 @@ class ServiceAddonsRepository {
           'price': price,
           'is_active': isActive,
           if (serviceId != null) 'service_id': serviceId,
+          'discount_type': discountType,
+          'discount_value': discountValue,
         })
         .select()
         .single();
@@ -47,6 +51,8 @@ class ServiceAddonsRepository {
     required double price,
     required bool isActive,
     Object? serviceId = _nullSentinel,
+    String discountType = 'percentage',
+    double discountValue = 0,
   }) async {
     final data = await _supabase
         .from('addons')
@@ -55,8 +61,9 @@ class ServiceAddonsRepository {
           'description': description,
           'price': price,
           'is_active': isActive,
-          // Explicitly write null to clear service_id when deselected.
           'service_id': serviceId == _nullSentinel ? null : serviceId,
+          'discount_type': discountType,
+          'discount_value': discountValue,
         })
         .eq('id', id)
         .select()

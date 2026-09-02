@@ -248,7 +248,7 @@ class _NodeResult extends StatelessWidget {
           : null,
       trailing: node.isLeafBookable && node.basePrice != null
           ? Text(
-              '₹${node.basePrice!.toInt()}',
+              '₹${(node.finalPrice ?? node.basePrice)!.toInt()}',
               style: const TextStyle(
                 fontWeight: FontWeight.w700,
                 color: AppColors.primary,
