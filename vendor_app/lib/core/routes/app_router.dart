@@ -109,7 +109,11 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: RoutePaths.services,
         name: RouteNames.services,
-        builder: (context, state) => const ServicesPage(),
+        builder: (context, state) {
+          final tab =
+              int.tryParse(state.uri.queryParameters['tab'] ?? '') ?? 0;
+          return ServicesPage(initialTab: tab);
+        },
       ),
       GoRoute(
         path: RoutePaths.addService,

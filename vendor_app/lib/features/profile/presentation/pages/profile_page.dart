@@ -232,7 +232,7 @@ class _ProfileBody extends StatelessWidget {
                   style: Theme.of(context)
                       .textTheme
                       .labelLarge
-                      ?.copyWith(color: AppColors.primary),
+                      ?.copyWith(color: AppColors.textSecondary),
                 ),
               ),
               Card(
@@ -245,7 +245,7 @@ class _ProfileBody extends StatelessWidget {
                 child: ListTile(
                   leading: const Icon(
                     Icons.description_outlined,
-                    color: AppColors.primary,
+                    color: AppColors.textSecondary,
                   ),
                   title: const Text('My Documents'),
                   subtitle: const Text('Aadhaar, PAN, GST, Business License'),
@@ -286,7 +286,7 @@ class _InfoSection extends StatelessWidget {
               style: Theme.of(context)
                   .textTheme
                   .labelLarge
-                  ?.copyWith(color: AppColors.primary),
+                  ?.copyWith(color: AppColors.textSecondary),
             ),
           ),
           Card(
@@ -319,7 +319,7 @@ class _InfoItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ListTile(
-      leading: Icon(icon, color: AppColors.primary, size: 20),
+      leading: Icon(icon, color: AppColors.textSecondary, size: 20),
       title: Text(
         label,
         style: Theme.of(context)
@@ -365,7 +365,7 @@ class _SubscriptionTile extends ConsumerWidget {
               style: Theme.of(context)
                   .textTheme
                   .labelLarge
-                  ?.copyWith(color: AppColors.primary),
+                  ?.copyWith(color: AppColors.textSecondary),
             ),
           ),
           Card(
@@ -380,7 +380,7 @@ class _SubscriptionTile extends ConsumerWidget {
             child: ListTile(
               leading: Icon(
                 Icons.workspace_premium_rounded,
-                color: expiringSoon ? AppColors.warning : AppColors.primary,
+                color: expiringSoon ? AppColors.warning : AppColors.textSecondary,
               ),
               title: Text(
                 sub?.plan?.name ?? 'My Subscription',

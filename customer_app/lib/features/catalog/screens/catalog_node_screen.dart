@@ -2451,7 +2451,7 @@ class _NodeBookingBar extends ConsumerWidget {
             child: MouseRegion(
               cursor: SystemMouseCursors.click,
               child: GestureDetector(
-                onTap: inCart ? () => openCart(context) : () => _addToCart(ref),
+                onTap: inCart ? () => openCheckout(context, ref) : () => _addToCart(ref),
                 child: Container(
                   padding: const EdgeInsets.symmetric(vertical: 13),
                   decoration: BoxDecoration(
@@ -2459,7 +2459,7 @@ class _NodeBookingBar extends ConsumerWidget {
                       borderRadius: BorderRadius.circular(100)),
                   child: Center(
                     child: Text(
-                      inCart ? '🛒  View Cart' : '🛒  Add to Cart',
+                      inCart ? '🛒  Proceed to Checkout' : '🛒  Add to Cart',
                       style: GoogleFonts.poppins(
                           fontSize: 13,
                           fontWeight: FontWeight.w600,

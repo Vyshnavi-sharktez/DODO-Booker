@@ -26,4 +26,8 @@ class ServicesRepositoryImpl implements IServicesRepository {
   @override
   Future<void> toggleService(String vendorServiceId, bool isActive) =>
       _datasource.toggleService(vendorServiceId, isActive);
+
+  @override
+  Future<void> removeVendorService(String vendorServiceId) =>
+      _datasource.removeVendorService(vendorServiceId);
 }

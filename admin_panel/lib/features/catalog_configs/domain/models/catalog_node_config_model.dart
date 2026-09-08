@@ -3,6 +3,7 @@ class CatalogNodeConfigModel {
   final String module;
   final String? relationshipId;
   final String? nodeId;
+  final String? customServiceId;
   final Map<String, dynamic> config;
   final bool isEnabled;
   final String? notes;
@@ -12,6 +13,7 @@ class CatalogNodeConfigModel {
     required this.module,
     this.relationshipId,
     this.nodeId,
+    this.customServiceId,
     required this.config,
     required this.isEnabled,
     this.notes,
@@ -25,6 +27,7 @@ class CatalogNodeConfigModel {
       module: map['module'] as String,
       relationshipId: map['relationship_id'] as String?,
       nodeId: map['node_id'] as String?,
+      customServiceId: map['custom_service_id'] as String?,
       config: (map['config'] as Map<dynamic, dynamic>?)
               ?.cast<String, dynamic>() ??
           {},
@@ -38,6 +41,7 @@ class CatalogNodeConfigModel {
       'module': module,
       if (relationshipId != null) 'relationship_id': relationshipId,
       if (nodeId != null) 'node_id': nodeId,
+      if (customServiceId != null) 'custom_service_id': customServiceId,
       'config': config,
       'is_enabled': isEnabled,
       if (notes != null) 'notes': notes,

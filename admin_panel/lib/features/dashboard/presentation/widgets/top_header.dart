@@ -11,6 +11,8 @@ import '../../../bookings/presentation/widgets/booking_details_dialog.dart';
 import '../../../catalog_v2/application/providers/catalog_node_providers.dart';
 import '../../../customer_questions/application/providers/customer_questions_providers.dart';
 import '../../../service_faqs/presentation/widgets/node_faqs_dialog.dart';
+import '../../../vendor_service_requests/application/providers/vendor_service_requests_providers.dart';
+import '../../../vendor_service_requests/presentation/widgets/service_request_detail_dialog.dart';
 
 final _timeFmt = DateFormat('dd MMM, h:mm a');
 
@@ -131,6 +133,32 @@ class _NotificationsPanelDialogState
     }
 
     final router = GoRouter.of(context);
+
+    if (n.entityType == 'vendor_service_request' && n.entityId != null) {
+      var request =
+          (ref.read(vendorServiceRequestsNotifierProvider).valueOrNull ?? [])
+              .where((r) => r.id == n.entityId)
+              .firstOrNull;
+      if (request == null) {
+        try {
+          request = await ref
+              .read(vendorServiceRequestsRepositoryProvider)
+              .fetchById(n.entityId!);
+        } catch (_) {}
+      }
+      if (!mounted) return;
+      Navigator.of(context).pop();
+      if (request != null) {
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (_) => ServiceRequestDetailDialog(request: request!),
+        );
+      } else {
+        router.go('/dashboard/vendor-service-requests');
+      }
+      return;
+    }
 
     if (n.entityType == 'booking' || n.notificationType == 'vendor_accepted') {
       Navigator.of(context).pop();

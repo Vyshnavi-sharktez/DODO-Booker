@@ -33,6 +33,9 @@ class CartSyncService {
   }
 
   Future<void> upsertItem(CartItem item) async {
+    // Custom service items have no catalog_nodes entry; cart_items.service_id
+    // is a FK to catalog_nodes so syncing would fail.  Local persistence only.
+    if (item.isCustomService) return;
     try {
       final customerId = await _customerId();
       if (customerId == null) {

@@ -106,6 +106,24 @@ class CatalogService {
     }
   }
 
+  /// FAQs for a vendor custom service (keyed by custom_service_id).
+  Future<List<FaqModel>> fetchFaqsForCustomService(String customServiceId) async {
+    if (!_ready) return [];
+    try {
+      final data = await _db
+          .from('service_faqs')
+          .select()
+          .eq('custom_service_id', customServiceId)
+          .order('sort_order', ascending: true);
+      return (data as List)
+          .map((e) => FaqModel.fromJson(e as Map<String, dynamic>))
+          .toList();
+    } catch (e) {
+      debugPrint('[CatalogService] fetchFaqsForCustomService($customServiceId) error: $e');
+      return [];
+    }
+  }
+
   /// Answered customer questions for a node, scoped to [parentNodeId].
   /// Only questions asked within the same parent context are returned, so a
   /// shared sub-service (e.g. "AC Cleaning") shows distinct Q&A sets under

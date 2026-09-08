@@ -61,12 +61,80 @@ class CheckoutService {
     debugPrint('[DODO][Checkout] Address object — id=${address.id}  lat=${address.latitude}  lng=${address.longitude}  full="${address.fullAddress}"');
     debugPrint('[DODO][Checkout] Booking payload — lat=${address.latitude}  lng=${address.longitude}');
 
+    // ── Custom service active-status enforcement ─────────────────────────────
+    // Validates every custom service in the cart is still active before any
+    // DB write occurs. This mirrors the trigger on booking_items but surfaces
+    // a human-readable message instead of a raw Postgres exception.
+    final customServiceIds = items
+        .where((i) => i.isCustomService && i.customServiceId != null)
+        .map((i) => i.customServiceId!)
+        .toList();
+    if (customServiceIds.isNotEmpty) {
+      final rows = await _client
+          .from('vendor_service_requests')
+          .select('id, service_name, is_active')
+          .inFilter('id', customServiceIds);
+      for (final row in rows as List) {
+        final isActive = (row as Map<String, dynamic>)['is_active'] as bool? ?? false;
+        if (!isActive) {
+          final name = row['service_name'] as String? ?? 'A service';
+          throw Exception(
+            '"$name" is no longer available. Please remove it from your cart before checking out.',
+          );
+        }
+      }
+    }
+
+    // ── Catalog service active-status enforcement ────────────────────────────
+    // Use check_node_availability RPC (no coords) so path-scoped pauses on
+    // catalog_node_relationships are caught, not just catalog_nodes status.
+    // Fallback: when parentNodeId is null the RPC skips relationship edges —
+    // explicitly query catalog_node_relationships to catch path-scoped pauses.
+    final checkedAvail = <String>{};
+    for (final item in items.where((i) => !i.isCustomService)) {
+      final key = '${item.serviceId}:${item.parentNodeId}';
+      if (checkedAvail.contains(key)) continue;
+      checkedAvail.add(key);
+
+      bool isUnavailable = false;
+
+      final avail = await _client.rpc('check_node_availability', params: {
+        'p_node_id': item.serviceId,
+        'p_parent_id': item.parentNodeId,
+      });
+      if (avail is Map) {
+        final status =
+            (avail as Map<String, dynamic>)['status'] as String? ?? 'active';
+        if (status != 'active') isUnavailable = true;
+      }
+
+      if (!isUnavailable && item.parentNodeId == null) {
+        final relRows = await _client
+            .from('catalog_node_relationships')
+            .select('availability_status')
+            .eq('child_id', item.serviceId);
+        isUnavailable = (relRows as List).any((r) {
+          final s =
+              (r as Map<String, dynamic>)['availability_status'] as String? ??
+                  'active';
+          return s != 'active';
+        });
+      }
+
+      if (isUnavailable) {
+        throw Exception(
+          '"${item.serviceName}" is no longer available. Please remove it from your cart before checking out.',
+        );
+      }
+    }
+
     // ── Location-availability enforcement ────────────────────────────────────
+    // Custom service items have no catalog_nodes entry, so location restriction
+    // checks are skipped for them — only DODO catalog items are checked.
     final checked = <String>{};
     if (address.latitude == null || address.longitude == null) {
-      // No coordinates: block if the service has any location restrictions —
-      // eligibility cannot be verified without coordinates.
       for (final item in items) {
+        if (item.isCustomService) continue;
         if (checked.contains(item.serviceId)) continue;
         checked.add(item.serviceId);
         final rows = await _client
@@ -83,6 +151,7 @@ class CheckoutService {
       }
     } else {
       for (final item in items) {
+        if (item.isCustomService) continue;
         if (checked.contains(item.serviceId)) continue;
         checked.add(item.serviceId);
         try {
@@ -222,7 +291,11 @@ class CheckoutService {
     // Option B AMC lifecycle: if the DB trigger created an unscheduled pending
     // placeholder for the next visit, UPDATE that row instead of INSERTing.
     final primaryItem = items.isNotEmpty ? items.first : null;
-    final hasPv = preferredVendorId != null;
+    // Custom service items must be assigned directly to their owning vendor.
+    final customServiceVendorId =
+        items.cast<CartItem?>().firstWhere((i) => i!.isCustomService, orElse: () => null)?.vendorId;
+    final effectiveVendorId = customServiceVendorId ?? preferredVendorId;
+    final hasPv = effectiveVendorId != null;
 
     String? pendingVisitId;
     if (amcContractId != null) {
@@ -249,7 +322,7 @@ class CheckoutService {
         'status': hasPv ? 'assigned' : 'pending',
         if (hasPv) 'assignment_type': 'External Vendor',
         'preferred_vendor_id': ?preferredVendorId,
-        'vendor_id': ?preferredVendorId,
+        'vendor_id': ?effectiveVendorId,
         if (pvFee > 0) 'preferred_vendor_fee_amount': pvFee,
       }).eq('id', pendingVisitId);
       bookingData = Map<String, dynamic>.from(
@@ -270,7 +343,9 @@ class CheckoutService {
         'latitude': ?address.latitude,
         'longitude': ?address.longitude,
         'scheduled_time': slot.label,
-        if (primaryItem != null) 'service_id': primaryItem.serviceId,
+        // Only set service_id for DODO catalog items (custom service items have no catalog_nodes entry).
+        if (primaryItem != null && !primaryItem.isCustomService)
+          'service_id': primaryItem.serviceId,
         'payment_method': paymentMethod,
         'payment_status': paymentStatus,
         if (surge > 0 && surgeName != null) 'surge_fee_name': surgeName,
@@ -278,8 +353,8 @@ class CheckoutService {
         if (surge > 0 && surgeValue != null) 'surge_fee_value': surgeValue,
         if (surge > 0) 'surge_fee_amount': surge,
         'preferred_vendor_id': ?preferredVendorId,
-        // Set vendor_id = preferred vendor so booking skips admin assignment queue.
-        'vendor_id': ?preferredVendorId,
+        // Set vendor_id so booking skips admin assignment queue (preferred vendor or custom service vendor).
+        'vendor_id': ?effectiveVendorId,
         if (pvFee > 0) 'preferred_vendor_fee_amount': pvFee,
         if (amcItem != null) ...{
           'is_amc': true,
@@ -303,16 +378,19 @@ class CheckoutService {
     final bookingId = bookingData['id'] as String;
 
     // ── INSERT booking_items (one row per cart item) ──────────────────────────
-    // booking_items.service_id has a FK to catalog_nodes(id).
-    // item.serviceId is the catalog_node UUID for all items.
+    // DODO items: service_id = catalog_nodes.id
+    // Custom service items: custom_service_id = vendor_service_requests.id, service_id null
     final rows = items
         .map((item) => {
               'booking_id': bookingId,
-              'service_id': item.serviceId,
+              if (item.isCustomService)
+                'custom_service_id': item.customServiceId
+              else
+                'service_id': item.serviceId,
               'quantity': item.quantity,
               'unit_price': item.unitPrice,
               'total_price': item.totalPrice,
-              if (item.parentNodeId != null)
+              if (!item.isCustomService && item.parentNodeId != null)
                 'catalog_parent_node_id': item.parentNodeId,
             })
         .toList();

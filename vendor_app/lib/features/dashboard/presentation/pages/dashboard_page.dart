@@ -15,6 +15,10 @@ import '../../domain/models/dashboard_stats.dart';
 import '../providers/dashboard_provider.dart';
 import '../widgets/stats_card.dart';
 
+// Black/dark gradient for the welcome hero card.
+const _heroStart = Color(0xFF111111);
+const _heroEnd   = Color(0xFF2A2A2A);
+
 class DashboardPage extends ConsumerWidget {
   const DashboardPage({super.key});
 
@@ -48,210 +52,197 @@ class DashboardPage extends ConsumerWidget {
           }
           return RefreshIndicator(
             onRefresh: () async => ref.invalidate(dashboardStatsProvider),
-            child: SingleChildScrollView(
-              physics: const AlwaysScrollableScrollPhysics(),
-              padding: const EdgeInsets.fromLTRB(16, 20, 16, 40),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // ── Welcome ────────────────────────────────────────────────
-                  _WelcomeHeader(greeting: greeting, name: vendorName),
-                  const SizedBox(height: 16),
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final isWide = constraints.maxWidth > 560;
+                final hPad = isWide ? 24.0 : 16.0;
 
-                  // ── Online / Offline toggle ────────────────────────────────
-                  const _OnlineStatusToggle(),
-                  const SizedBox(height: 8),
-
-                  // ── Overview ───────────────────────────────────────────────
-                  const _SectionHeader('Overview'),
-                  const SizedBox(height: 12),
-                  Row(
+                return SingleChildScrollView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  padding: EdgeInsets.fromLTRB(hPad, 24, hPad, 48),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Expanded(
-                        child: StatsCard(
-                          label: 'Assigned',
-                          value: '${stats.assignedCount}',
-                          icon: Icons.assignment_ind_outlined,
-                          color: AppColors.statusAssigned,
-                          onTap: () => context.goNamed(
-                            RouteNames.bookings,
-                            queryParameters: {'tab': '0'},
-                          ),
-                        ),
+                      // ── Welcome ──────────────────────────────────────────────
+                      _WelcomeHeader(
+                        greeting: greeting,
+                        name: vendorName,
+                        onRefresh: () => ref.invalidate(dashboardStatsProvider),
                       ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: StatsCard(
-                          label: 'In Progress',
-                          value: '${stats.inProgressCount}',
-                          icon: Icons.pending_actions_outlined,
-                          color: AppColors.statusInProgress,
-                          onTap: () => context.goNamed(
-                            RouteNames.bookings,
-                            queryParameters: {'tab': '1'},
+                      const SizedBox(height: 20),
+
+                      // ── Online / Offline toggle ──────────────────────────────
+                      const _OnlineStatusToggle(),
+                      const SizedBox(height: 24),
+
+                      // ── Overview stats ───────────────────────────────────────
+                      const _SectionHeader('Overview'),
+                      const SizedBox(height: 12),
+                      _StatsGrid(
+                        isWide: isWide,
+                        children: [
+                          StatsCard(
+                            label: 'Assigned',
+                            value: '${stats.assignedCount}',
+                            icon: Icons.assignment_ind_outlined,
+                            color: AppColors.statusAssigned,
+                            onTap: () => context.goNamed(
+                              RouteNames.bookings,
+                              queryParameters: {'tab': '0'},
+                            ),
                           ),
-                        ),
+                          StatsCard(
+                            label: 'In Progress',
+                            value: '${stats.inProgressCount}',
+                            icon: Icons.pending_actions_outlined,
+                            color: AppColors.statusInProgress,
+                            onTap: () => context.goNamed(
+                              RouteNames.bookings,
+                              queryParameters: {'tab': '1'},
+                            ),
+                          ),
+                          StatsCard(
+                            label: 'Completed',
+                            value: '${stats.completedCount}',
+                            icon: Icons.check_circle_outline_rounded,
+                            color: AppColors.statusCompleted,
+                            onTap: () => context.goNamed(
+                              RouteNames.bookings,
+                              queryParameters: {'tab': '2'},
+                            ),
+                          ),
+                          StatsCard(
+                            label: 'Rejected',
+                            value: '${stats.rejectedCount}',
+                            icon: Icons.cancel_outlined,
+                            color: AppColors.error,
+                            onTap: () => context.goNamed(
+                              RouteNames.bookings,
+                              queryParameters: {'tab': '3'},
+                            ),
+                          ),
+                          StatsCard(
+                            label: 'Total Earnings',
+                            value: FormatUtils.compact(stats.totalEarnings),
+                            icon: Icons.account_balance_wallet_outlined,
+                            color: AppColors.success,
+                          ),
+                          StatsCard(
+                            label: "Today's Bookings",
+                            value: '${stats.todayCount}',
+                            icon: Icons.today_outlined,
+                            color: const Color(0xFFDD6B20),
+                            onTap: () => context.goNamed(
+                              RouteNames.bookings,
+                              queryParameters: {'tab': '5'},
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 28),
+
+                      // ── Earnings ─────────────────────────────────────────────
+                      const _SectionHeader('Earnings'),
+                      const SizedBox(height: 12),
+                      _EarningsRow(
+                        today: stats.todayEarnings,
+                        weekly: stats.weeklyEarnings,
+                        monthly: stats.monthlyEarnings,
+                      ),
+                      const SizedBox(height: 28),
+
+                      // ── Performance ──────────────────────────────────────────
+                      const _SectionHeader('Performance'),
+                      const SizedBox(height: 12),
+                      GridView.count(
+                        crossAxisCount: 3,
+                        crossAxisSpacing: 12,
+                        mainAxisSpacing: 12,
+                        childAspectRatio: 1.1,
+                        shrinkWrap: true,
+                        physics: const NeverScrollableScrollPhysics(),
+                        children: [
+                          _PerformanceCard(
+                            label: 'Completion',
+                            value:
+                                '${stats.completionRate.toStringAsFixed(1)}%',
+                            icon: Icons.check_circle_outline_rounded,
+                            color: AppColors.success,
+                          ),
+                          _PerformanceCard(
+                            label: 'Rejection',
+                            value:
+                                '${stats.rejectionRate.toStringAsFixed(1)}%',
+                            icon: Icons.cancel_outlined,
+                            color: AppColors.error,
+                          ),
+                          _PerformanceCard(
+                            label: 'Unread',
+                            value: '$unreadCount',
+                            icon: Icons.notifications_outlined,
+                            color: AppColors.warning,
+                            onTap: () =>
+                                context.push(RoutePaths.notifications),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 28),
+
+                      // ── Upcoming Schedule ────────────────────────────────────
+                      const _SectionHeader('Upcoming Schedule'),
+                      const SizedBox(height: 12),
+                      stats.upcomingBookings.isEmpty
+                          ? const _EmptyUpcoming()
+                          : _UpcomingSchedule(
+                              bookings: stats.upcomingBookings),
+                      const SizedBox(height: 28),
+
+                      // ── Recent Activity ──────────────────────────────────────
+                      const _SectionHeader('Recent Activity'),
+                      const SizedBox(height: 12),
+                      stats.recentBookings.isEmpty
+                          ? const _EmptyRecent()
+                          : _RecentActivity(bookings: stats.recentBookings),
+                      const SizedBox(height: 28),
+
+                      // ── Quick Actions ────────────────────────────────────────
+                      const _SectionHeader('Quick Actions'),
+                      const SizedBox(height: 12),
+                      GridView.count(
+                        crossAxisCount: isWide ? 4 : 2,
+                        crossAxisSpacing: 12,
+                        mainAxisSpacing: 12,
+                        childAspectRatio: isWide ? 2.8 : 2.4,
+                        shrinkWrap: true,
+                        physics: const NeverScrollableScrollPhysics(),
+                        children: [
+                          _QuickAction(
+                            label: 'Manage Services',
+                            icon: Icons.home_repair_service_outlined,
+                            onTap: () => context.go(RoutePaths.services),
+                          ),
+                          _QuickAction(
+                            label: 'View Bookings',
+                            icon: Icons.book_online_outlined,
+                            onTap: () => context.go(RoutePaths.bookings),
+                          ),
+                          _QuickAction(
+                            label: 'Edit Profile',
+                            icon: Icons.person_outline_rounded,
+                            onTap: () => context.go(RoutePaths.profile),
+                          ),
+                          _QuickAction(
+                            label: 'Notifications',
+                            icon: Icons.notifications_outlined,
+                            onTap: () =>
+                                context.push(RoutePaths.notifications),
+                          ),
+                        ],
                       ),
                     ],
                   ),
-                  const SizedBox(height: 12),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: StatsCard(
-                          label: 'Completed',
-                          value: '${stats.completedCount}',
-                          icon: Icons.check_circle_outline_rounded,
-                          color: AppColors.statusCompleted,
-                          onTap: () => context.goNamed(
-                            RouteNames.bookings,
-                            queryParameters: {'tab': '2'},
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: StatsCard(
-                          label: 'Rejected',
-                          value: '${stats.rejectedCount}',
-                          icon: Icons.cancel_outlined,
-                          color: AppColors.error,
-                          onTap: () => context.goNamed(
-                            RouteNames.bookings,
-                            queryParameters: {'tab': '3'},
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: StatsCard(
-                          label: 'Total Earnings',
-                          value: FormatUtils.compact(stats.totalEarnings),
-                          icon: Icons.account_balance_wallet_outlined,
-                          color: AppColors.success,
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: StatsCard(
-                          label: "Today's Bookings",
-                          value: '${stats.todayCount}',
-                          icon: Icons.today_outlined,
-                          color: const Color(0xFFDD6B20),
-                          onTap: () => context.goNamed(
-                            RouteNames.bookings,
-                            queryParameters: {'tab': '5'},
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 28),
-
-                  // ── Earnings ───────────────────────────────────────────────
-                  const _SectionHeader('Earnings'),
-                  const SizedBox(height: 12),
-                  _EarningsCard(
-                    today: stats.todayEarnings,
-                    weekly: stats.weeklyEarnings,
-                    monthly: stats.monthlyEarnings,
-                  ),
-                  const SizedBox(height: 28),
-
-                  // ── Performance ────────────────────────────────────────────
-                  const _SectionHeader('Performance'),
-                  const SizedBox(height: 12),
-                  GridView.count(
-                    crossAxisCount: 3,
-                    crossAxisSpacing: 12,
-                    mainAxisSpacing: 0,
-                    childAspectRatio: 1.1,
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    children: [
-                      _PerformanceCard(
-                        label: 'Completion',
-                        value:
-                            '${stats.completionRate.toStringAsFixed(1)}%',
-                        icon: Icons.check_circle_outline_rounded,
-                        color: AppColors.success,
-                      ),
-                      _PerformanceCard(
-                        label: 'Rejection',
-                        value:
-                            '${stats.rejectionRate.toStringAsFixed(1)}%',
-                        icon: Icons.cancel_outlined,
-                        color: AppColors.error,
-                      ),
-                      _PerformanceCard(
-                        label: 'Unread',
-                        value: '$unreadCount',
-                        icon: Icons.notifications_outlined,
-                        color: AppColors.warning,
-                        onTap: () =>
-                            context.push(RoutePaths.notifications),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 28),
-
-                  // ── Upcoming Schedule ──────────────────────────────────────
-                  const _SectionHeader('Upcoming Schedule'),
-                  const SizedBox(height: 12),
-                  stats.upcomingBookings.isEmpty
-                      ? const _EmptyUpcoming()
-                      : _UpcomingSchedule(
-                          bookings: stats.upcomingBookings),
-                  const SizedBox(height: 28),
-
-                  // ── Recent Activity ────────────────────────────────────────
-                  const _SectionHeader('Recent Activity'),
-                  const SizedBox(height: 12),
-                  stats.recentBookings.isEmpty
-                      ? const _EmptyRecent()
-                      : _RecentActivity(bookings: stats.recentBookings),
-                  const SizedBox(height: 28),
-
-                  // ── Quick Actions ──────────────────────────────────────────
-                  const _SectionHeader('Quick Actions'),
-                  const SizedBox(height: 12),
-                  GridView.count(
-                    crossAxisCount: 2,
-                    crossAxisSpacing: 12,
-                    mainAxisSpacing: 12,
-                    childAspectRatio: 2.4,
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    children: [
-                      _QuickAction(
-                        label: 'Manage Services',
-                        icon: Icons.home_repair_service_outlined,
-                        onTap: () => context.go(RoutePaths.services),
-                      ),
-                      _QuickAction(
-                        label: 'View Bookings',
-                        icon: Icons.book_online_outlined,
-                        onTap: () => context.go(RoutePaths.bookings),
-                      ),
-                      _QuickAction(
-                        label: 'Edit Profile',
-                        icon: Icons.person_outline_rounded,
-                        onTap: () => context.go(RoutePaths.profile),
-                      ),
-                      _QuickAction(
-                        label: 'Notifications',
-                        icon: Icons.notifications_outlined,
-                        onTap: () =>
-                            context.push(RoutePaths.notifications),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
+                );
+              },
             ),
           );
         },
@@ -267,28 +258,52 @@ class DashboardPage extends ConsumerWidget {
   }
 }
 
+// ── Responsive stats grid ─────────────────────────────────────────────────────
+
+class _StatsGrid extends StatelessWidget {
+  const _StatsGrid({required this.isWide, required this.children});
+
+  final bool isWide;
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) {
+    return GridView.count(
+      crossAxisCount: isWide ? 4 : 2,
+      crossAxisSpacing: 12,
+      mainAxisSpacing: 12,
+      mainAxisExtent: 128,
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      children: children,
+    );
+  }
+}
+
 // ── Welcome header ────────────────────────────────────────────────────────────
 
 class _WelcomeHeader extends StatelessWidget {
-  const _WelcomeHeader({required this.greeting, required this.name});
+  const _WelcomeHeader({
+    required this.greeting,
+    required this.name,
+    required this.onRefresh,
+  });
 
   final String greeting;
   final String name;
+  final VoidCallback onRefresh;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.fromLTRB(24, 20, 20, 20),
       decoration: BoxDecoration(
-        color: AppColors.primary,
+        gradient: const LinearGradient(
+          colors: [_heroStart, _heroEnd],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
         borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: AppColors.primary.withValues(alpha: 0.28),
-            blurRadius: 16,
-            offset: const Offset(0, 4),
-          ),
-        ],
       ),
       child: Row(
         children: [
@@ -297,36 +312,28 @@ class _WelcomeHeader extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  greeting,
-                  style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.62),
-                    fontSize: 13,
-                    fontWeight: FontWeight.w400,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  name,
+                  '$greeting, $name 👋',
                   style: const TextStyle(
                     color: Colors.white,
-                    fontSize: 22,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: -0.3,
+                    fontSize: 20,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: -0.2,
                   ),
                 ),
-                const SizedBox(height: 8),
+                const SizedBox(height: 6),
                 Row(
                   children: [
                     Icon(
                       Icons.calendar_today_outlined,
                       size: 11,
-                      color: Colors.white.withValues(alpha: 0.50),
+                      color: Colors.white.withValues(alpha: 0.55),
                     ),
                     const SizedBox(width: 5),
                     Text(
-                      DateFormat('EEE, d MMMM yyyy').format(DateTime.now()),
+                      'DODO Vendor Portal — '
+                      '${DateFormat('dd MMM yyyy').format(DateTime.now())}',
                       style: TextStyle(
-                        color: Colors.white.withValues(alpha: 0.50),
+                        color: Colors.white.withValues(alpha: 0.55),
                         fontSize: 12,
                       ),
                     ),
@@ -335,20 +342,45 @@ class _WelcomeHeader extends StatelessWidget {
               ],
             ),
           ),
-          Container(
-            width: 48,
-            height: 48,
-            decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.10),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: const Icon(
-              Icons.store_rounded,
-              color: Colors.white,
-              size: 24,
-            ),
+          const SizedBox(width: 12),
+          _HeroButton(
+            icon: Icons.refresh_rounded,
+            onTap: onRefresh,
+            tooltip: 'Refresh',
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _HeroButton extends StatelessWidget {
+  const _HeroButton({
+    required this.icon,
+    required this.onTap,
+    required this.tooltip,
+  });
+
+  final IconData icon;
+  final VoidCallback onTap;
+  final String tooltip;
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: tooltip,
+      child: Material(
+        color: Colors.white.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(10),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(10),
+          child: SizedBox(
+            width: 40,
+            height: 40,
+            child: Icon(icon, color: Colors.white, size: 20),
+          ),
+        ),
       ),
     );
   }
@@ -368,7 +400,7 @@ class _SectionHeader extends StatelessWidget {
           width: 3,
           height: 16,
           decoration: BoxDecoration(
-            color: AppColors.primary,
+            color: AppColors.textPrimary,
             borderRadius: BorderRadius.circular(2),
           ),
         ),
@@ -386,10 +418,10 @@ class _SectionHeader extends StatelessWidget {
   }
 }
 
-// ── Earnings card ─────────────────────────────────────────────────────────────
+// ── Earnings row — 3 individual cards ─────────────────────────────────────────
 
-class _EarningsCard extends StatelessWidget {
-  const _EarningsCard({
+class _EarningsRow extends StatelessWidget {
+  const _EarningsRow({
     required this.today,
     required this.weekly,
     required this.monthly,
@@ -401,87 +433,85 @@ class _EarningsCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppColors.border.withValues(alpha: 0.7)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
-            blurRadius: 10,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Column(
-        children: [
-          Container(
-            height: 3,
-            decoration: const BoxDecoration(
-              gradient: LinearGradient(
-                colors: [AppColors.primary, AppColors.accent],
-              ),
-              borderRadius: BorderRadius.vertical(top: Radius.circular(13)),
-            ),
-          ),
-          Padding(
-            padding:
-                const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
-            child: Row(
-              children: [
-                _EarningsColumn(label: 'Today', amount: today),
-                _vDivider(),
-                _EarningsColumn(label: 'This Week', amount: weekly),
-                _vDivider(),
-                _EarningsColumn(label: 'This Month', amount: monthly),
-              ],
-            ),
-          ),
-        ],
-      ),
+    return Row(
+      children: [
+        _EarningsCell(
+          label: "Today",
+          amount: today,
+          icon: Icons.today_rounded,
+        ),
+        const SizedBox(width: 12),
+        _EarningsCell(
+          label: 'This Week',
+          amount: weekly,
+          icon: Icons.date_range_rounded,
+        ),
+        const SizedBox(width: 12),
+        _EarningsCell(
+          label: 'This Month',
+          amount: monthly,
+          icon: Icons.calendar_month_rounded,
+        ),
+      ],
     );
   }
-
-  Widget _vDivider() => Container(
-        width: 1,
-        height: 38,
-        color: AppColors.border,
-        margin: const EdgeInsets.symmetric(horizontal: 10),
-      );
 }
 
-class _EarningsColumn extends StatelessWidget {
-  const _EarningsColumn({required this.label, required this.amount});
+class _EarningsCell extends StatelessWidget {
+  const _EarningsCell({
+    required this.label,
+    required this.amount,
+    required this.icon,
+  });
 
   final String label;
   final double amount;
+  final IconData icon;
 
   @override
   Widget build(BuildContext context) {
     return Expanded(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          Text(
-            FormatUtils.compact(amount),
-            style: const TextStyle(
-              fontSize: 17,
-              fontWeight: FontWeight.w700,
-              color: AppColors.textPrimary,
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: AppColors.border),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(icon, size: 16, color: AppColors.textSecondary),
+                const Spacer(),
+                Icon(
+                  Icons.trending_up_rounded,
+                  size: 14,
+                  color: AppColors.success.withValues(alpha: 0.8),
+                ),
+              ],
             ),
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: 3),
-          Text(
-            label,
-            style: const TextStyle(
-              fontSize: 11,
-              color: AppColors.textSecondary,
+            const SizedBox(height: 12),
+            Text(
+              FormatUtils.compact(amount),
+              style: const TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.w700,
+                color: AppColors.textPrimary,
+                height: 1.0,
+              ),
             ),
-            textAlign: TextAlign.center,
-          ),
-        ],
+            const SizedBox(height: 3),
+            Text(
+              label,
+              style: const TextStyle(
+                fontSize: 11,
+                color: AppColors.textSecondary,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -506,67 +536,53 @@ class _PerformanceCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
+    return Material(
+      color: AppColors.surface,
+      borderRadius: BorderRadius.circular(14),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(14),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: AppColors.border),
           ),
-        ],
-      ),
-      child: Material(
-        color: Colors.transparent,
-        borderRadius: BorderRadius.circular(12),
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(12),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(
-                  color: AppColors.border.withValues(alpha: 0.7)),
-            ),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Container(
-                  width: 32,
-                  height: 32,
-                  decoration: BoxDecoration(
-                    color: color.withValues(alpha: 0.10),
-                    shape: BoxShape.circle,
-                  ),
-                  child: Icon(icon, size: 17, color: color),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Container(
+                width: 34,
+                height: 34,
+                decoration: BoxDecoration(
+                  color: color.withValues(alpha: 0.10),
+                  shape: BoxShape.circle,
                 ),
-                const SizedBox(height: 6),
-                Text(
-                  value,
-                  style: const TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.textPrimary,
-                    height: 1.1,
-                  ),
-                  textAlign: TextAlign.center,
+                child: Icon(icon, size: 17, color: color),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                value,
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.textPrimary,
+                  height: 1.1,
                 ),
-                const SizedBox(height: 2),
-                Text(
-                  label,
-                  style: const TextStyle(
-                    fontSize: 10,
-                    color: AppColors.textSecondary,
-                  ),
-                  textAlign: TextAlign.center,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 2),
+              Text(
+                label,
+                style: const TextStyle(
+                  fontSize: 10,
+                  color: AppColors.textSecondary,
                 ),
-              ],
-            ),
+                textAlign: TextAlign.center,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ],
           ),
         ),
       ),
@@ -586,14 +602,7 @@ class _UpcomingSchedule extends StatelessWidget {
       decoration: BoxDecoration(
         color: AppColors.surface,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppColors.border.withValues(alpha: 0.7)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
+        border: Border.all(color: AppColors.border),
       ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(13),
@@ -642,7 +651,7 @@ class _UpcomingTile extends StatelessWidget {
               child: const Icon(
                 Icons.calendar_today_outlined,
                 size: 18,
-                color: AppColors.primary,
+                color: AppColors.textSecondary,
               ),
             ),
             const SizedBox(width: 12),
@@ -685,38 +694,9 @@ class _EmptyUpcoming extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 32),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppColors.border.withValues(alpha: 0.7)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: const Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.event_available_outlined,
-                size: 36, color: AppColors.textHint),
-            SizedBox(height: 10),
-            Text(
-              'No upcoming bookings',
-              style: TextStyle(
-                fontSize: 13,
-                color: AppColors.textSecondary,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ],
-        ),
-      ),
+    return _EmptyCard(
+      icon: Icons.event_available_outlined,
+      label: 'No upcoming bookings',
     );
   }
 }
@@ -733,14 +713,7 @@ class _RecentActivity extends StatelessWidget {
       decoration: BoxDecoration(
         color: AppColors.surface,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppColors.border.withValues(alpha: 0.7)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
+        border: Border.all(color: AppColors.border),
       ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(13),
@@ -831,30 +804,39 @@ class _EmptyRecent extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    return _EmptyCard(
+      icon: Icons.book_online_outlined,
+      label: 'No bookings yet',
+    );
+  }
+}
+
+// ── Shared empty card ─────────────────────────────────────────────────────────
+
+class _EmptyCard extends StatelessWidget {
+  const _EmptyCard({required this.icon, required this.label});
+
+  final IconData icon;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(vertical: 32),
+      padding: const EdgeInsets.symmetric(vertical: 36),
       decoration: BoxDecoration(
         color: AppColors.surface,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppColors.border.withValues(alpha: 0.7)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
+        border: Border.all(color: AppColors.border),
       ),
-      child: const Center(
+      child: Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.book_online_outlined,
-                size: 36, color: AppColors.textHint),
-            SizedBox(height: 10),
+            Icon(icon, size: 36, color: AppColors.textHint),
+            const SizedBox(height: 10),
             Text(
-              'No bookings yet',
-              style: TextStyle(
+              label,
+              style: const TextStyle(
                 fontSize: 13,
                 color: AppColors.textSecondary,
                 fontWeight: FontWeight.w500,
@@ -882,26 +864,16 @@ class _QuickAction extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
+    return Material(
+      color: AppColors.surface,
+      borderRadius: BorderRadius.circular(12),
       child: Clickable(
         onTap: onTap,
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-                color: AppColors.border.withValues(alpha: 0.7)),
+            border: Border.all(color: AppColors.border),
           ),
           child: Row(
             children: [
@@ -912,7 +884,7 @@ class _QuickAction extends StatelessWidget {
                   color: AppColors.primaryLight,
                   borderRadius: BorderRadius.circular(8),
                 ),
-                child: Icon(icon, size: 17, color: AppColors.primary),
+                child: Icon(icon, size: 17, color: AppColors.textSecondary),
               ),
               const SizedBox(width: 10),
               Expanded(
@@ -1034,26 +1006,27 @@ class _OnlineStatusToggleState extends ConsumerState<_OnlineStatusToggle> {
     if (profile == null || vendorUser == null) return const SizedBox.shrink();
 
     final isOnline = profile.isOnline;
-    final statusColor = isOnline ? AppColors.success : AppColors.textSecondary;
+    final statusColor =
+        isOnline ? AppColors.success : AppColors.textSecondary;
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: BoxDecoration(
         color: isOnline
-            ? AppColors.success.withValues(alpha: 0.07)
+            ? AppColors.success.withValues(alpha: 0.06)
             : AppColors.background,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
           color: isOnline
-              ? AppColors.success.withValues(alpha: 0.35)
+              ? AppColors.success.withValues(alpha: 0.30)
               : AppColors.border,
         ),
       ),
       child: Row(
         children: [
           Container(
-            width: 10,
-            height: 10,
+            width: 13,
+            height: 13,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
               color: statusColor,
@@ -1067,7 +1040,7 @@ class _OnlineStatusToggleState extends ConsumerState<_OnlineStatusToggle> {
                 Text(
                   isOnline ? 'Online' : 'Offline',
                   style: TextStyle(
-                    fontSize: 14,
+                    fontSize: 16,
                     fontWeight: FontWeight.w700,
                     color: statusColor,
                   ),
@@ -1077,7 +1050,7 @@ class _OnlineStatusToggleState extends ConsumerState<_OnlineStatusToggle> {
                       ? 'Available for new booking assignments'
                       : 'Not receiving new assignments',
                   style: const TextStyle(
-                    fontSize: 11,
+                    fontSize: 12,
                     color: AppColors.textSecondary,
                   ),
                 ),
@@ -1087,20 +1060,24 @@ class _OnlineStatusToggleState extends ConsumerState<_OnlineStatusToggle> {
           const SizedBox(width: 8),
           _saving
               ? const SizedBox(
-                  width: 36,
-                  height: 20,
+                  width: 52,
+                  height: 32,
                   child: Center(
                     child: SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2),
+                      width: 22,
+                      height: 22,
+                      child: CircularProgressIndicator(strokeWidth: 2.5),
                     ),
                   ),
                 )
-              : Switch(
-                  value: isOnline,
-                  onChanged: (_) => _toggle(vendorUser.id, isOnline),
-                  activeColor: AppColors.success,
+              : Transform.scale(
+                  scale: 1.4,
+                  alignment: Alignment.centerRight,
+                  child: Switch(
+                    value: isOnline,
+                    onChanged: (_) => _toggle(vendorUser.id, isOnline),
+                    activeThumbColor: AppColors.success,
+                  ),
                 ),
         ],
       ),

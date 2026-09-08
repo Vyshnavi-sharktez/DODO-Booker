@@ -90,6 +90,46 @@ class CatalogNodeConfigsRepository {
     await _client.from('catalog_node_configs').delete().eq('id', id);
   }
 
+  /// Fetches all configs for a vendor custom service across all modules.
+  Future<List<CatalogNodeConfigModel>> fetchForCustomService(
+    String customServiceId,
+  ) async {
+    final rows = await _client
+        .from('catalog_node_configs')
+        .select()
+        .eq('custom_service_id', customServiceId);
+    return rows
+        .map((r) => CatalogNodeConfigModel.fromMap(r as Map<String, dynamic>))
+        .toList();
+  }
+
+  /// Upserts a config row scoped to a vendor custom service.
+  /// Uses SELECT → UPDATE-or-INSERT because PostgREST cannot target partial
+  /// unique indexes (uidx_catalog_node_configs_custom_service_module).
+  Future<void> upsertForCustomService(CatalogNodeConfigModel cfg) async {
+    final existing = await _client
+        .from('catalog_node_configs')
+        .select('id')
+        .eq('module', cfg.module)
+        .eq('custom_service_id', cfg.customServiceId!)
+        .maybeSingle();
+
+    final payload = <String, dynamic>{
+      'config': cfg.config,
+      'is_enabled': cfg.isEnabled,
+      'notes': cfg.notes,
+    };
+
+    if (existing != null) {
+      await _client
+          .from('catalog_node_configs')
+          .update(payload)
+          .eq('id', existing['id'] as String);
+    } else {
+      await _client.from('catalog_node_configs').insert(cfg.toInsertMap());
+    }
+  }
+
   /// Returns all node-scoped vendor_subscription configs with their catalog
   /// node names. Used by the admin Subscription Plans overview tab.
   Future<List<Map<String, dynamic>>> fetchAllCatalogVsConfigs() async {

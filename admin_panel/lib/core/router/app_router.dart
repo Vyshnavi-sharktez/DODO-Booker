@@ -46,6 +46,8 @@ import '../../features/gps_audit/presentation/pages/gps_analytics_page.dart';
 import '../../features/warranties/presentation/pages/warranty_claims_page.dart';
 import '../../features/warranties/presentation/pages/warranty_analytics_page.dart';
 import '../../features/call_monitoring/presentation/pages/call_sessions_page.dart';
+import '../../features/vendor_service_requests/presentation/pages/vendor_service_requests_page.dart';
+import '../../features/vendor_catalog/presentation/pages/vendor_catalog_page.dart';
 import '../../shared/pages/unauthorized_page.dart';
 import '../rbac/permission_guard.dart';
 
@@ -445,6 +447,20 @@ final routerProvider = Provider<GoRouter>((ref) {
             name: 'amcSchedulingRequests',
             pageBuilder: (context, state) => const NoTransitionPage(
               child: AmcSchedulingRequestsPage(),
+            ),
+          ),
+          GoRoute(
+            path: '/dashboard/vendor-service-requests',
+            name: 'vendorServiceRequests',
+            pageBuilder: (context, state) => const NoTransitionPage(
+              child: VendorServiceRequestsPage(),
+            ),
+          ),
+          GoRoute(
+            path: '/dashboard/vendor-catalog',
+            name: 'vendorCatalog',
+            pageBuilder: (context, state) => const NoTransitionPage(
+              child: VendorCatalogPage(),
             ),
           ),
         ],

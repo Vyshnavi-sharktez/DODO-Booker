@@ -4,9 +4,20 @@ import '../constants/app_colors.dart';
 abstract final class AppTheme {
   static ThemeData get light => ThemeData(
         useMaterial3: true,
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: AppColors.primary,
+        colorScheme: ColorScheme.light(
+          primary: AppColors.primary,
+          onPrimary: Colors.white,
+          primaryContainer: AppColors.primaryLight,
+          onPrimaryContainer: AppColors.textPrimary,
+          secondary: AppColors.textSecondary,
+          onSecondary: Colors.white,
+          secondaryContainer: AppColors.background,
+          onSecondaryContainer: AppColors.textPrimary,
           surface: AppColors.surface,
+          onSurface: AppColors.textPrimary,
+          outline: AppColors.border,
+          error: AppColors.error,
+          onError: Colors.white,
         ),
         scaffoldBackgroundColor: AppColors.background,
         appBarTheme: const AppBarTheme(
@@ -46,6 +57,7 @@ abstract final class AppTheme {
         filledButtonTheme: FilledButtonThemeData(
           style: FilledButton.styleFrom(
             backgroundColor: AppColors.primary,
+            foregroundColor: Colors.white,
             minimumSize: const Size.fromHeight(52),
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(10),
@@ -56,6 +68,17 @@ abstract final class AppTheme {
             ),
           ),
         ),
+        textButtonTheme: TextButtonThemeData(
+          style: TextButton.styleFrom(
+            foregroundColor: AppColors.textPrimary,
+          ),
+        ),
+        outlinedButtonTheme: OutlinedButtonThemeData(
+          style: OutlinedButton.styleFrom(
+            foregroundColor: AppColors.textPrimary,
+            side: const BorderSide(color: AppColors.border),
+          ),
+        ),
         listTileTheme: const ListTileThemeData(
           mouseCursor: WidgetStateMouseCursor.clickable,
         ),
@@ -63,6 +86,29 @@ abstract final class AppTheme {
           color: AppColors.border,
           thickness: 1,
           space: 1,
+        ),
+        navigationBarTheme: NavigationBarThemeData(
+          backgroundColor: AppColors.surface,
+          indicatorColor: AppColors.primaryLight,
+          labelTextStyle: WidgetStateProperty.resolveWith((states) {
+            if (states.contains(WidgetState.selected)) {
+              return const TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: AppColors.textPrimary,
+              );
+            }
+            return const TextStyle(
+              fontSize: 12,
+              color: AppColors.textSecondary,
+            );
+          }),
+          iconTheme: WidgetStateProperty.resolveWith((states) {
+            if (states.contains(WidgetState.selected)) {
+              return const IconThemeData(color: AppColors.textPrimary);
+            }
+            return const IconThemeData(color: AppColors.textSecondary);
+          }),
         ),
       );
 }

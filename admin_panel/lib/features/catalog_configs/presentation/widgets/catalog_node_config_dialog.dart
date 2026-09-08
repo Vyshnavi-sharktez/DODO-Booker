@@ -1,33 +1,28 @@
-import 'package:file_picker/file_picker.dart';
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../../core/theme/app_theme.dart';
-import '../../../catalog_v2/application/providers/catalog_node_providers.dart';
-import '../../../service_attributes/domain/models/service_attribute.dart';
-import '../../../service_attributes/presentation/widgets/attribute_form_dialog.dart';
 import '../../../vendor_subscriptions/domain/models/subscription_plan.dart'
     show kBillingCycles;
 import '../../data/catalog_node_configs_repository.dart';
 import '../../domain/models/catalog_node_config_model.dart';
 
-// ═══════════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 // CatalogNodeConfigDialog
 //
 // Allows admin staff to set per-path or per-node module configuration
 // (Tax, Loyalty, Scheduling, Commission) for a catalog node.
 //
 // Two scopes (admin must choose explicitly):
-//   "This path only"        — relationship-scoped; affects this node ONLY when
+//   "This path only"        â€” relationship-scoped; affects this node ONLY when
 //                             accessed via the specific parent shown in the title.
 //                             Never leaks to the same node under another parent.
-//   "All occurrences"       — node-scoped; affects this node regardless of the
+//   "All occurrences"       â€” node-scoped; affects this node regardless of the
 //                             path the customer used to navigate to it.
 //
 // parentNodeId and parentNodeName are null when the tile has no parent context
 // (root-level tiles), in which case only node-scoped config is available.
-// ═══════════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
 class CatalogNodeConfigDialog extends StatefulWidget {
   final String nodeId;
@@ -72,7 +67,7 @@ class _CatalogNodeConfigDialogState extends State<CatalogNodeConfigDialog>
   // Defaults to relationship-scoped when a parent context exists.
   final Map<String, bool> _useRelScope = {};
 
-  // Scope as it was when _loadData() last ran — used to detect conversions in _save().
+  // Scope as it was when _loadData() last ran â€” used to detect conversions in _save().
   final Map<String, bool> _savedScope = {};
 
   // Effective resolved config per module when no direct override exists.
@@ -99,7 +94,7 @@ class _CatalogNodeConfigDialogState extends State<CatalogNodeConfigDialog>
 
   // Scheduling
   bool _schedEnabled = true;
-  final List<bool> _schedDays = List.filled(7, true); // Sun–Sat
+  final List<bool> _schedDays = List.filled(7, true); // Sunâ€“Sat
   final _schedMaxCtrl = TextEditingController(text: '5');
   final _schedSlotsCtrl = TextEditingController();
 
@@ -119,7 +114,7 @@ class _CatalogNodeConfigDialogState extends State<CatalogNodeConfigDialog>
   final Map<String, TextEditingController> _pvFeeControllers = {};
   List<Map<String, dynamic>> _pvVendors = []; // loaded from DB
 
-  // Vendor Subscription — plan config embedded in catalog_node_configs JSONB
+  // Vendor Subscription â€” plan config embedded in catalog_node_configs JSONB
   bool _vsEnabled = false;
   final _vsNameCtrl = TextEditingController();
   final _vsDescCtrl = TextEditingController();
@@ -140,27 +135,20 @@ class _CatalogNodeConfigDialogState extends State<CatalogNodeConfigDialog>
 
   static const _modules = [
     'tax', 'loyalty', 'scheduling', 'commission', 'surge', 'preferred_vendors',
-    'vendor_subscription', 'content', 'attributes',
+    'vendor_subscription',
   ];
   static const _tabLabels = [
     'Tax', 'Loyalty', 'Scheduling', 'Platform Commission', 'Surge Fee', 'Preferred Vendors',
-    'Vendor Subscription', 'Content', 'Attributes',
+    'Vendor Subscription',
   ];
   static const _dayLabels = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
-  // ── Content tab state ─────────────────────────────────────────────────────
-  List<String> _includedItems = [];
-  List<String> _excludedItems = [];
-  List<Map<String, String>> _beforeAfterPairs = [];
-  List<Map<String, dynamic>> _contentBlocks = [];
-  bool _contentSaving = false;
-  String? _contentError;
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(
-        length: 9, vsync: this, initialIndex: widget.initialTabIndex);
+        length: 7, vsync: this, initialIndex: widget.initialTabIndex.clamp(0, 6));
     for (final m in _modules) {
       _applyToChildren[m] = false;
     }
@@ -215,11 +203,11 @@ class _CatalogNodeConfigDialogState extends State<CatalogNodeConfigDialog>
             relCfgs.where((c) => c.module == m).firstOrNull;
         _nodeConfigs[m] =
             nodeCfgs.where((c) => c.module == m).firstOrNull;
-        // A3: rel-scoped override exists → "This path only".
-        // A4: node-scoped override exists (no rel) → "All occurrences".
-        // A5: no override → default to path scope when parent context available.
+        // A3: rel-scoped override exists â†’ "This path only".
+        // A4: node-scoped override exists (no rel) â†’ "All occurrences".
+        // A5: no override â†’ default to path scope when parent context available.
         // vendor_subscription is always node-scoped (subscription config belongs
-        // to the catalog node itself, not any specific parent→child path).
+        // to the catalog node itself, not any specific parentâ†’child path).
         if (m == 'vendor_subscription') {
           _useRelScope[m] = false;
           _savedScope[m] = false;
@@ -285,9 +273,6 @@ class _CatalogNodeConfigDialogState extends State<CatalogNodeConfigDialog>
       _populatePreferredVendors();
       _populateVendorSubscription();
 
-      // Load per-node content fields
-      await _loadContent();
-
       if (mounted) setState(() => _loading = false);
     } catch (e) {
       if (mounted) setState(() {
@@ -298,7 +283,7 @@ class _CatalogNodeConfigDialogState extends State<CatalogNodeConfigDialog>
   }
 
   /// Reloads configs and repopulates form fields after save/delete.
-  /// Does NOT touch [_useRelScope] — the admin's scope choice is preserved.
+  /// Does NOT touch [_useRelScope] â€” the admin's scope choice is preserved.
   Future<void> _refreshConfigs() async {
     List<CatalogNodeConfigModel> relCfgs = [];
     List<CatalogNodeConfigModel> nodeCfgs = [];
@@ -371,7 +356,7 @@ class _CatalogNodeConfigDialogState extends State<CatalogNodeConfigDialog>
               .toSet() ??
           {};
       debugPrint('[DODO][SchedCfg] days parsed=$days');
-      // Always apply working_days from DB — removing the old `if (days.isNotEmpty)` guard
+      // Always apply working_days from DB â€” removing the old `if (days.isNotEmpty)` guard
       // that caused the loop to be skipped when working_days is [] or null, leaving
       // _schedDays at its previous value instead of reflecting the saved state.
       for (int i = 0; i < 7; i++) {
@@ -419,7 +404,7 @@ class _CatalogNodeConfigDialogState extends State<CatalogNodeConfigDialog>
             e['id'] as String: (e['fee'] as num?)?.toDouble() ?? 0.0,
         };
       } else {
-        // Old format: vendor_ids — seed fees from global vendor data
+        // Old format: vendor_ids â€” seed fees from global vendor data
         _pvSelectedIds = (cfg.config['vendor_ids'] as List<dynamic>?)
                 ?.map((e) => e.toString())
                 .toSet() ??
@@ -466,14 +451,14 @@ class _CatalogNodeConfigDialogState extends State<CatalogNodeConfigDialog>
       return;
     }
 
-    // ── All confirmations happen HERE, before any database write ──────────────
+    // â”€â”€ All confirmations happen HERE, before any database write â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     String? bulkMode; // null = normal save, otherwise 'subtree_only' | 'shared_everywhere'
 
     if (applyToChildren) {
       if (!mounted) return;
       final tabLabel = _tabLabels[_modules.indexOf(module)];
 
-      // Step 1: first warning — confirm intent to override child items.
+      // Step 1: first warning â€” confirm intent to override child items.
       final firstOk = await showDialog<bool>(
         context: context,
         builder: (ctx) => AlertDialog(
@@ -502,7 +487,7 @@ class _CatalogNodeConfigDialogState extends State<CatalogNodeConfigDialog>
       if (!mounted) return;
 
       if (sharedCount > 0) {
-        // Step 3: mode-choice dialog — only shown when shared descendants exist.
+        // Step 3: mode-choice dialog â€” only shown when shared descendants exist.
         final chosen = await _showSharedModeDialog(sharedCount, tabLabel);
         // Cancel at step 3: do nothing.
         if (chosen == null || !mounted) return;
@@ -511,7 +496,7 @@ class _CatalogNodeConfigDialogState extends State<CatalogNodeConfigDialog>
         bulkMode = 'subtree_only';
       }
     }
-    // ── All confirmations complete. Now write. ────────────────────────────────
+    // â”€â”€ All confirmations complete. Now write. â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     setState(() {
       _saving = true;
@@ -533,7 +518,7 @@ class _CatalogNodeConfigDialogState extends State<CatalogNodeConfigDialog>
       await _repo.upsert(model);
 
       // Scope conversion: delete the old-scope config when the admin switched.
-      // Only runs after a successful upsert — never deletes if the save failed.
+      // Only runs after a successful upsert â€” never deletes if the save failed.
       final wasUseRel = _savedScope[module] ?? useRel;
       if (useRel != wasUseRel) {
         final oldConfig = wasUseRel ? _relConfigs[module] : _nodeConfigs[module];
@@ -660,7 +645,7 @@ class _CatalogNodeConfigDialogState extends State<CatalogNodeConfigDialog>
       _creatingOverride[module] = false;
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('${_tabLabels[_modules.indexOf(module)]} settings removed — default settings will apply.')),
+          SnackBar(content: Text('${_tabLabels[_modules.indexOf(module)]} settings removed â€” default settings will apply.')),
         );
       }
     } catch (e) {
@@ -767,7 +752,7 @@ class _CatalogNodeConfigDialogState extends State<CatalogNodeConfigDialog>
   Widget build(BuildContext context) {
     final hasParent = widget.parentNodeId != null;
     final pathLabel = hasParent
-        ? '${widget.parentNodeName ?? 'Parent'} → ${widget.nodeName}'
+        ? '${widget.parentNodeName ?? 'Parent'} â†’ ${widget.nodeName}'
         : widget.nodeName;
 
     return Dialog(
@@ -777,7 +762,7 @@ class _CatalogNodeConfigDialogState extends State<CatalogNodeConfigDialog>
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            // ── Header ─────────────────────────────────────────────────────
+            // â”€â”€ Header â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
             Container(
               padding: const EdgeInsets.fromLTRB(20, 16, 12, 12),
               decoration: const BoxDecoration(
@@ -822,7 +807,7 @@ class _CatalogNodeConfigDialogState extends State<CatalogNodeConfigDialog>
               const Expanded(
                   child: Center(child: CircularProgressIndicator()))
             else ...[
-              // ── Tabs ───────────────────────────────────────────────────
+              // â”€â”€ Tabs â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
               TabBar(
                 controller: _tabController,
                 isScrollable: true,
@@ -872,9 +857,6 @@ class _CatalogNodeConfigDialogState extends State<CatalogNodeConfigDialog>
   }
 
   Widget _buildModuleTab(String module) {
-    if (module == 'content') return _buildContentTab();
-    if (module == 'attributes') return _buildAttributesTab();
-
     final hasParent = widget.parentNodeId != null && _relationshipId != null;
     final useRel = _useRelScope[module] ?? false;
     final existing = _activeConfig(module);
@@ -892,7 +874,7 @@ class _CatalogNodeConfigDialogState extends State<CatalogNodeConfigDialog>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // ── Global disabled banner ────────────────────────────────────
+          // â”€â”€ Global disabled banner â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
           if (!globallyEnabled) ...[
             Container(
               width: double.infinity,
@@ -935,7 +917,7 @@ class _CatalogNodeConfigDialogState extends State<CatalogNodeConfigDialog>
             const SizedBox(height: 16),
           ],
 
-          // ── Scope selector ────────────────────────────────────────────
+          // â”€â”€ Scope selector â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
           if (module == 'vendor_subscription') ...[
             Container(
               padding: const EdgeInsets.all(10),
@@ -950,7 +932,7 @@ class _CatalogNodeConfigDialogState extends State<CatalogNodeConfigDialog>
                   SizedBox(width: 6),
                   Expanded(
                     child: Text(
-                      'Vendor Subscription config is always node-scoped — it applies only to this catalog node.',
+                      'Vendor Subscription config is always node-scoped â€” it applies only to this catalog node.',
                       style: TextStyle(
                           fontSize: 11, color: AppColors.textSecondary),
                     ),
@@ -983,7 +965,7 @@ class _CatalogNodeConfigDialogState extends State<CatalogNodeConfigDialog>
                     ),
                     subtitle: Text(
                       'Use this setting only for '
-                      '${widget.parentNodeName ?? 'this category'} → ${widget.nodeName}.',
+                      '${widget.parentNodeName ?? 'this category'} â†’ ${widget.nodeName}.',
                       style: const TextStyle(fontSize: 11),
                     ),
                     value: true,
@@ -1035,7 +1017,7 @@ class _CatalogNodeConfigDialogState extends State<CatalogNodeConfigDialog>
                   const SizedBox(width: 6),
                   Expanded(
                     child: Text(
-                      'No category selected — this setting applies to '
+                      'No category selected â€” this setting applies to '
                       '${widget.nodeName} everywhere in the catalog.',
                       style: const TextStyle(
                           fontSize: 11, color: AppColors.textSecondary),
@@ -1047,7 +1029,7 @@ class _CatalogNodeConfigDialogState extends State<CatalogNodeConfigDialog>
             const SizedBox(height: 16),
           ],
 
-          // ── Inherited config card (read-only) ─────────────────────────
+          // â”€â”€ Inherited config card (read-only) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
           // Only shown when no direct override exists AND an ancestor has a config.
           if (!showForm) ...[
             _buildInheritedCard(module, inherited),
@@ -1062,7 +1044,7 @@ class _CatalogNodeConfigDialogState extends State<CatalogNodeConfigDialog>
             ),
           ],
 
-          // ── Edit form (direct override or creating new) ────────────────
+          // â”€â”€ Edit form (direct override or creating new) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
           if (showForm) ...[
             _buildModuleFields(module),
 
@@ -1117,7 +1099,7 @@ class _CatalogNodeConfigDialogState extends State<CatalogNodeConfigDialog>
               Padding(
                 padding: const EdgeInsets.only(top: 8),
                 child: Text(
-                  'No custom settings — default ${_tabLabels[_modules.indexOf(module)]} settings will apply.',
+                  'No custom settings â€” default ${_tabLabels[_modules.indexOf(module)]} settings will apply.',
                   style: const TextStyle(
                       fontSize: 11, color: AppColors.textSecondary),
                 ),
@@ -1147,7 +1129,7 @@ class _CatalogNodeConfigDialogState extends State<CatalogNodeConfigDialog>
     }
   }
 
-  // ── Inherited config helpers ────────────────────────────────────────────────
+  // â”€â”€ Inherited config helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   Widget _buildInheritedCard(String module, Map<String, dynamic>? cfg) {
     if (cfg == null) return const SizedBox.shrink();
@@ -1202,9 +1184,9 @@ class _CatalogNodeConfigDialogState extends State<CatalogNodeConfigDialog>
         final value = cfg['tax_value'] as num? ?? 0;
         return [
           'Tax name: $name',
-          'Type: ${type == 'percentage' ? 'Percentage (%)' : 'Fixed (₹)'}',
+          'Type: ${type == 'percentage' ? 'Percentage (%)' : 'Fixed (â‚¹)'}',
           '${type == 'percentage' ? 'Rate' : 'Amount'}: $value'
-              '${type == 'percentage' ? '%' : ' ₹'}',
+              '${type == 'percentage' ? '%' : ' â‚¹'}',
         ];
       case 'loyalty':
         final enabled = cfg['earn_enabled'] as bool? ?? true;
@@ -1214,13 +1196,13 @@ class _CatalogNodeConfigDialogState extends State<CatalogNodeConfigDialog>
           final pts = cfg['fixed_points'];
           return [
             'Earn rule: Fixed points',
-            'Points per booking: ${pts ?? '—'}',
+            'Points per booking: ${pts ?? 'â€”'}',
           ];
         } else if (rule == 'percentage') {
           final per = cfg['earn_per_100'];
           return [
-            'Earn rule: Points per ₹100 spent',
-            'Points per ₹100: ${per ?? '—'}',
+            'Earn rule: Points per â‚¹100 spent',
+            'Points per â‚¹100: ${per ?? 'â€”'}',
           ];
         }
         return ['Earn rule: Global rate'];
@@ -1235,7 +1217,7 @@ class _CatalogNodeConfigDialogState extends State<CatalogNodeConfigDialog>
         final max = cfg['max_bookings_per_slot'] as num? ?? 5;
         final slots =
             (cfg['slots'] as List<dynamic>?)?.cast<String>().join(', ') ??
-                '—';
+                'â€”';
         return [
           if (days.isNotEmpty) 'Working days: $days',
           'Max bookings per slot: $max',
@@ -1245,9 +1227,9 @@ class _CatalogNodeConfigDialogState extends State<CatalogNodeConfigDialog>
         final type = cfg['commission_type'] as String? ?? 'percentage';
         final value = cfg['commission_value'] as num? ?? 0;
         return [
-          'Type: ${type == 'percentage' ? 'Percentage (%)' : 'Fixed (₹)'}',
+          'Type: ${type == 'percentage' ? 'Percentage (%)' : 'Fixed (â‚¹)'}',
           '${type == 'percentage' ? 'Rate' : 'Amount'}: $value'
-              '${type == 'percentage' ? '%' : ' ₹'}',
+              '${type == 'percentage' ? '%' : ' â‚¹'}',
         ];
       case 'surge':
         final sName = cfg['surge_name'] as String? ?? 'Surge Fee';
@@ -1255,9 +1237,9 @@ class _CatalogNodeConfigDialogState extends State<CatalogNodeConfigDialog>
         final sValue = cfg['surge_value'] as num? ?? 0;
         return [
           'Charge name: $sName',
-          'Type: ${sType == 'percentage' ? 'Percentage (%)' : 'Fixed (₹)'}',
+          'Type: ${sType == 'percentage' ? 'Percentage (%)' : 'Fixed (â‚¹)'}',
           '${sType == 'percentage' ? 'Rate' : 'Amount'}: $sValue'
-              '${sType == 'percentage' ? '%' : ' ₹'}',
+              '${sType == 'percentage' ? '%' : ' â‚¹'}',
         ];
       case 'preferred_vendors':
         final pvEnabled = cfg['is_enabled'] as bool? ?? false;
@@ -1282,7 +1264,7 @@ class _CatalogNodeConfigDialogState extends State<CatalogNodeConfigDialog>
           'Vendor Subscription: Enabled',
           if (vsName.isNotEmpty) 'Plan name: $vsName',
           'Billing cycle: $vsCycle ($vsDur days)',
-          if (vsSubFee != null) 'Subscription fee: ₹$vsSubFee',
+          if (vsSubFee != null) 'Subscription fee: â‚¹$vsSubFee',
           'Status: ${vsActive ? 'Active' : 'Inactive'}',
         ];
       default:
@@ -1410,14 +1392,14 @@ class _CatalogNodeConfigDialogState extends State<CatalogNodeConfigDialog>
         SegmentedButton<String>(
           segments: const [
             ButtonSegment(value: 'percentage', label: Text('Percentage (%)')),
-            ButtonSegment(value: 'fixed', label: Text('Fixed (₹)')),
+            ButtonSegment(value: 'fixed', label: Text('Fixed (â‚¹)')),
           ],
           selected: {_taxType},
           onSelectionChanged: (s) =>
               setState(() => _taxType = s.first),
         ),
         const SizedBox(height: 12),
-        _label(_taxType == 'percentage' ? 'Tax Rate (%)' : 'Fixed Amount (₹)'),
+        _label(_taxType == 'percentage' ? 'Tax Rate (%)' : 'Fixed Amount (â‚¹)'),
         const SizedBox(height: 4),
         TextField(
           controller: _taxValueCtrl,
@@ -1455,7 +1437,7 @@ class _CatalogNodeConfigDialogState extends State<CatalogNodeConfigDialog>
             DropdownMenuItem(value: 'global', child: Text('Global rate')),
             DropdownMenuItem(value: 'fixed', child: Text('Fixed points')),
             DropdownMenuItem(
-                value: 'percentage', child: Text('Points per ₹100')),
+                value: 'percentage', child: Text('Points per â‚¹100')),
           ],
           onChanged: (v) => setState(() => _loyaltyRule = v ?? 'global'),
         ),
@@ -1471,7 +1453,7 @@ class _CatalogNodeConfigDialogState extends State<CatalogNodeConfigDialog>
           ),
         ] else if (_loyaltyRule == 'percentage') ...[
           const SizedBox(height: 12),
-          _label('Points per ₹100 spent'),
+          _label('Points per â‚¹100 spent'),
           const SizedBox(height: 4),
           TextField(
             controller: _loyaltyPercentCtrl,
@@ -1542,7 +1524,7 @@ class _CatalogNodeConfigDialogState extends State<CatalogNodeConfigDialog>
         SegmentedButton<String>(
           segments: const [
             ButtonSegment(value: 'percentage', label: Text('Percentage (%)')),
-            ButtonSegment(value: 'fixed', label: Text('Fixed (₹)')),
+            ButtonSegment(value: 'fixed', label: Text('Fixed (â‚¹)')),
           ],
           selected: {_commType},
           onSelectionChanged: (s) =>
@@ -1550,7 +1532,7 @@ class _CatalogNodeConfigDialogState extends State<CatalogNodeConfigDialog>
         ),
         const SizedBox(height: 12),
         _label(
-            _commType == 'percentage' ? 'Platform Commission Rate (%)' : 'Fixed Amount (₹)'),
+            _commType == 'percentage' ? 'Platform Commission Rate (%)' : 'Fixed Amount (â‚¹)'),
         const SizedBox(height: 4),
         TextField(
           controller: _commValueCtrl,
@@ -1582,14 +1564,14 @@ class _CatalogNodeConfigDialogState extends State<CatalogNodeConfigDialog>
         SegmentedButton<String>(
           segments: const [
             ButtonSegment(value: 'percentage', label: Text('Percentage (%)')),
-            ButtonSegment(value: 'fixed', label: Text('Fixed (₹)')),
+            ButtonSegment(value: 'fixed', label: Text('Fixed (â‚¹)')),
           ],
           selected: {_surgeType},
           onSelectionChanged: (s) =>
               setState(() => _surgeType = s.first),
         ),
         const SizedBox(height: 12),
-        _label(_surgeType == 'percentage' ? 'Surge Rate (%)' : 'Fixed Amount (₹)'),
+        _label(_surgeType == 'percentage' ? 'Surge Rate (%)' : 'Fixed Amount (â‚¹)'),
         const SizedBox(height: 4),
         TextField(
           controller: _surgeValueCtrl,
@@ -1673,10 +1655,10 @@ class _CatalogNodeConfigDialogState extends State<CatalogNodeConfigDialog>
               }).toList(),
             ),
 
-          // ── Per-vendor fee inputs ─────────────────────────────────────
+          // â”€â”€ Per-vendor fee inputs â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
           if (_pvSelectedIds.isNotEmpty) ...[
             const SizedBox(height: 16),
-            _label('Additional Fee per Vendor (₹)'),
+            _label('Additional Fee per Vendor (â‚¹)'),
             const SizedBox(height: 8),
             ..._pvVendors
                 .where((v) => _pvSelectedIds.contains(v['id'] as String))
@@ -1700,7 +1682,7 @@ class _CatalogNodeConfigDialogState extends State<CatalogNodeConfigDialog>
                       child: TextField(
                         controller: ctrl,
                         decoration: _inputDeco('e.g. 200')
-                            .copyWith(prefixText: '₹ '),
+                            .copyWith(prefixText: 'â‚¹ '),
                         keyboardType: const TextInputType.numberWithOptions(
                             decimal: true),
                         inputFormatters: [
@@ -1747,179 +1729,6 @@ class _CatalogNodeConfigDialogState extends State<CatalogNodeConfigDialog>
       _vsCommissionPctCtrl.text =
           commPct != null ? (commPct as num).toStringAsFixed(0) : '';
     }
-  }
-
-  // ── Content tab helpers ───────────────────────────────────────────────────
-
-  Future<void> _loadContent() async {
-    try {
-      final row = await Supabase.instance.client
-          .from('catalog_nodes')
-          .select('included_items, excluded_items, before_after_pairs, content_blocks')
-          .eq('id', widget.nodeId)
-          .single();
-      _includedItems =
-          List<String>.from((row['included_items'] as List<dynamic>?) ?? []);
-      _excludedItems =
-          List<String>.from((row['excluded_items'] as List<dynamic>?) ?? []);
-      _beforeAfterPairs =
-          ((row['before_after_pairs'] as List<dynamic>?) ?? [])
-              .map((e) => Map<String, String>.from(
-                  (e as Map).map((k, v) => MapEntry(k.toString(), v.toString()))))
-              .toList();
-      _contentBlocks =
-          ((row['content_blocks'] as List<dynamic>?) ?? [])
-              .map((e) => Map<String, dynamic>.from(e as Map))
-              .toList();
-    } catch (_) {
-      // Columns may not exist yet on older DB — gracefully default to empty.
-      _includedItems = [];
-      _excludedItems = [];
-      _beforeAfterPairs = [];
-      _contentBlocks = [];
-    }
-  }
-
-  Future<void> _saveContent() async {
-    if (_contentSaving) return;
-    setState(() {
-      _contentSaving = true;
-      _contentError = null;
-    });
-    try {
-      await Supabase.instance.client.from('catalog_nodes').update({
-        'included_items': _includedItems,
-        'excluded_items': _excludedItems,
-        'before_after_pairs': _beforeAfterPairs,
-        'content_blocks': _contentBlocks,
-      }).eq('id', widget.nodeId);
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Content saved successfully')),
-      );
-      Navigator.of(context).pop();
-    } catch (e) {
-      if (!mounted) return;
-      final msg = e.toString().replaceFirst('Exception: ', '');
-      setState(() {
-        _contentSaving = false;
-        _contentError = msg;
-      });
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(msg)),
-      );
-    }
-  }
-
-  Widget _buildContentTab() {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // ── What's Included ──────────────────────────────────────────────
-          _ContentSectionHeader(
-            icon: Icons.check_circle_outline_rounded,
-            label: "What's Included",
-            color: AppColors.success,
-          ),
-          const SizedBox(height: 10),
-          _EditableItemList(
-            items: _includedItems,
-            onChanged: (updated) => setState(() => _includedItems = updated),
-            addLabel: 'Add included item',
-          ),
-          const SizedBox(height: 24),
-          const Divider(color: AppColors.border),
-          const SizedBox(height: 20),
-
-          // ── What's Excluded ──────────────────────────────────────────────
-          _ContentSectionHeader(
-            icon: Icons.cancel_outlined,
-            label: "What's Excluded",
-            color: AppColors.error,
-          ),
-          const SizedBox(height: 10),
-          _EditableItemList(
-            items: _excludedItems,
-            onChanged: (updated) => setState(() => _excludedItems = updated),
-            addLabel: 'Add excluded item',
-          ),
-          const SizedBox(height: 24),
-          const Divider(color: AppColors.border),
-          const SizedBox(height: 20),
-
-          // ── Before & After ───────────────────────────────────────────────
-          _ContentSectionHeader(
-            icon: Icons.compare_rounded,
-            label: 'Before & After',
-            color: AppColors.accent,
-          ),
-          const SizedBox(height: 10),
-          _BeforeAfterEditor(
-            pairs: _beforeAfterPairs,
-            nodeId: widget.nodeId,
-            onChanged: (updated) => setState(() => _beforeAfterPairs = updated),
-          ),
-          const SizedBox(height: 24),
-          const Divider(color: AppColors.border),
-          const SizedBox(height: 20),
-
-          // ── Customer Content ─────────────────────────────────────────────
-          _ContentSectionHeader(
-            icon: Icons.view_agenda_outlined,
-            label: 'Customer Content',
-            color: AppColors.primary,
-          ),
-          const SizedBox(height: 4),
-          const Text(
-            'Flexible blocks displayed on the service page. Each block can be text, image, or both.',
-            style: TextStyle(fontSize: 11, color: AppColors.textSecondary),
-          ),
-          const SizedBox(height: 12),
-          _ContentBlocksEditor(
-            blocks: _contentBlocks,
-            nodeId: widget.nodeId,
-            onChanged: (updated) => setState(() => _contentBlocks = updated),
-          ),
-          const SizedBox(height: 28),
-
-          // ── Save ─────────────────────────────────────────────────────────
-          if (_contentError != null) ...[
-            Text(_contentError!,
-                style: const TextStyle(color: AppColors.error, fontSize: 12)),
-            const SizedBox(height: 8),
-          ],
-          SizedBox(
-            width: double.infinity,
-            child: FilledButton(
-              onPressed: _contentSaving ? null : _saveContent,
-              style: FilledButton.styleFrom(
-                backgroundColor: AppColors.primary,
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8)),
-                minimumSize: const Size.fromHeight(44),
-              ),
-              child: _contentSaving
-                  ? const SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(
-                          strokeWidth: 2, color: Colors.white))
-                  : const Text('Save Content',
-                      style: TextStyle(fontWeight: FontWeight.w600)),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildAttributesTab() {
-    return _AttributesTabContent(
-      nodeId: widget.nodeId,
-      nodeName: widget.nodeName,
-    );
   }
 
   Widget _buildVendorSubscriptionFields() {
@@ -2189,9 +1998,9 @@ class _CatalogNodeConfigDialogState extends State<CatalogNodeConfigDialog>
       );
 }
 
-// ── AMC plan entry with per-plan TextEditingControllers ──────────────────────
+// â”€â”€ AMC plan entry with per-plan TextEditingControllers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-// ── Shared-mode option card used inside the mode-choice dialog ─────────────────
+// â”€â”€ Shared-mode option card used inside the mode-choice dialog â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class _SharedModeOption extends StatelessWidget {
   const _SharedModeOption({
@@ -2265,1318 +2074,3 @@ class _SharedModeOption extends StatelessWidget {
   }
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// Content tab private widgets
-// ═══════════════════════════════════════════════════════════════════════════════
-
-const _kNodeContentBucket = 'booking-photos';
-
-Future<bool> _confirmDelete(BuildContext context) async {
-  final result = await showDialog<bool>(
-    context: context,
-    builder: (ctx) => AlertDialog(
-      title: const Text('Are you sure you want to delete this?'),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(ctx).pop(false),
-          child: const Text('Cancel'),
-        ),
-        TextButton(
-          onPressed: () => Navigator.of(ctx).pop(true),
-          style: TextButton.styleFrom(foregroundColor: AppColors.error),
-          child: const Text('Delete'),
-        ),
-      ],
-    ),
-  );
-  return result ?? false;
-}
-
-class _ContentSectionHeader extends StatelessWidget {
-  const _ContentSectionHeader({
-    required this.icon,
-    required this.label,
-    required this.color,
-  });
-  final IconData icon;
-  final String label;
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Icon(icon, size: 16, color: color),
-        const SizedBox(width: 6),
-        Text(
-          label,
-          style: TextStyle(
-            fontSize: 13,
-            fontWeight: FontWeight.w700,
-            color: AppColors.textPrimary,
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-// ── Editable text list with add / delete / reorder ──────────────────────────
-
-class _EditableItemList extends StatefulWidget {
-  const _EditableItemList({
-    required this.items,
-    required this.onChanged,
-    required this.addLabel,
-  });
-  final List<String> items;
-  final ValueChanged<List<String>> onChanged;
-  final String addLabel;
-
-  @override
-  State<_EditableItemList> createState() => _EditableItemListState();
-}
-
-class _EditableItemListState extends State<_EditableItemList> {
-  late List<String> _items;
-  bool _adding = false;
-  final _addCtrl = TextEditingController();
-  int? _editingIndex;
-  late final TextEditingController _editCtrl = TextEditingController();
-
-  @override
-  void initState() {
-    super.initState();
-    _items = List.from(widget.items);
-  }
-
-  @override
-  void didUpdateWidget(_EditableItemList old) {
-    super.didUpdateWidget(old);
-    if (old.items != widget.items) {
-      _items = List.from(widget.items);
-    }
-  }
-
-  @override
-  void dispose() {
-    _addCtrl.dispose();
-    _editCtrl.dispose();
-    super.dispose();
-  }
-
-  void _commit() {
-    final text = _addCtrl.text.trim();
-    if (text.isNotEmpty) {
-      setState(() {
-        _items.add(text);
-        _addCtrl.clear();
-        _adding = false;
-      });
-      widget.onChanged(List.from(_items));
-    } else {
-      setState(() => _adding = false);
-    }
-  }
-
-  void _startEdit(int i) {
-    setState(() {
-      _editingIndex = i;
-      _editCtrl.text = _items[i];
-    });
-  }
-
-  void _commitEdit(int i) {
-    final text = _editCtrl.text.trim();
-    if (text.isNotEmpty && text != _items[i]) {
-      setState(() => _items[i] = text);
-      widget.onChanged(List.from(_items));
-    }
-    setState(() => _editingIndex = null);
-  }
-
-  void _delete(int i) {
-    setState(() => _items.removeAt(i));
-    widget.onChanged(List.from(_items));
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        if (_items.isEmpty && !_adding)
-          const Padding(
-            padding: EdgeInsets.only(bottom: 8),
-            child: Text('No items yet.',
-                style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
-          ),
-        if (_items.isNotEmpty)
-          ReorderableListView.builder(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            buildDefaultDragHandles: false,
-            itemCount: _items.length,
-            onReorder: (oldIdx, newIdx) {
-              if (newIdx > oldIdx) newIdx--;
-              setState(() {
-                final item = _items.removeAt(oldIdx);
-                _items.insert(newIdx, item);
-                if (_editingIndex == oldIdx) {
-                  _editingIndex = newIdx;
-                }
-              });
-              widget.onChanged(List.from(_items));
-            },
-            proxyDecorator: (child, _, __) => Material(
-                elevation: 4,
-                borderRadius: BorderRadius.circular(6),
-                child: child),
-            itemBuilder: (_, i) {
-              final isEditing = _editingIndex == i;
-              return Container(
-                key: ValueKey('item_$i'),
-                margin: const EdgeInsets.only(bottom: 4),
-                decoration: BoxDecoration(
-                  color: AppColors.background,
-                  borderRadius: BorderRadius.circular(6),
-                  border: Border.all(color: AppColors.border),
-                ),
-                child: Row(
-                  children: [
-                    ReorderableDragStartListener(
-                      index: i,
-                      child: const Padding(
-                        padding: EdgeInsets.symmetric(horizontal: 8),
-                        child: Icon(Icons.drag_handle_rounded,
-                            size: 16, color: AppColors.textSecondary),
-                      ),
-                    ),
-                    Expanded(
-                      child: isEditing
-                          ? TextField(
-                              controller: _editCtrl,
-                              autofocus: true,
-                              style: const TextStyle(fontSize: 13),
-                              decoration: const InputDecoration(
-                                  isDense: true,
-                                  border: InputBorder.none,
-                                  contentPadding: EdgeInsets.symmetric(
-                                      horizontal: 4, vertical: 6)),
-                              onSubmitted: (_) => _commitEdit(i),
-                            )
-                          : GestureDetector(
-                              onDoubleTap: () => _startEdit(i),
-                              child: Padding(
-                                padding:
-                                    const EdgeInsets.symmetric(vertical: 10),
-                                child: Text(_items[i],
-                                    style: const TextStyle(fontSize: 13)),
-                              ),
-                            ),
-                    ),
-                    if (isEditing)
-                      IconButton(
-                        icon: const Icon(Icons.check_rounded,
-                            size: 16, color: AppColors.success),
-                        onPressed: () => _commitEdit(i),
-                        tooltip: 'Save',
-                        padding: const EdgeInsets.all(8),
-                        constraints: const BoxConstraints(),
-                      )
-                    else
-                      IconButton(
-                        icon: const Icon(Icons.edit_outlined,
-                            size: 14, color: AppColors.textSecondary),
-                        onPressed: () => _startEdit(i),
-                        tooltip: 'Edit (or double-tap)',
-                        padding: const EdgeInsets.all(8),
-                        constraints: const BoxConstraints(),
-                      ),
-                    IconButton(
-                      icon: const Icon(Icons.close_rounded,
-                          size: 14, color: AppColors.error),
-                      onPressed: () async {
-                        if (await _confirmDelete(context)) {
-                          _delete(i);
-                          if (mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                  content: Text('Deleted successfully')),
-                            );
-                          }
-                        }
-                      },
-                      tooltip: 'Remove',
-                      padding: const EdgeInsets.all(8),
-                      constraints: const BoxConstraints(),
-                    ),
-                  ],
-                ),
-              );
-            },
-          ),
-        if (_adding) ...[
-          Container(
-            margin: const EdgeInsets.only(bottom: 6),
-            decoration: BoxDecoration(
-              color: AppColors.background,
-              borderRadius: BorderRadius.circular(6),
-              border: Border.all(color: AppColors.accent),
-            ),
-            child: Row(
-              children: [
-                const SizedBox(width: 12),
-                Expanded(
-                  child: TextField(
-                    controller: _addCtrl,
-                    autofocus: true,
-                    style: const TextStyle(fontSize: 13),
-                    decoration: const InputDecoration(
-                      isDense: true,
-                      border: InputBorder.none,
-                      hintText: 'Enter item…',
-                      contentPadding:
-                          EdgeInsets.symmetric(vertical: 10),
-                    ),
-                    onSubmitted: (_) => _commit(),
-                  ),
-                ),
-                TextButton(
-                  onPressed: _commit,
-                  style: TextButton.styleFrom(
-                      foregroundColor: AppColors.accent,
-                      padding: const EdgeInsets.symmetric(horizontal: 10)),
-                  child: const Text('Add', style: TextStyle(fontSize: 12)),
-                ),
-                TextButton(
-                  onPressed: () => setState(() {
-                    _adding = false;
-                    _addCtrl.clear();
-                  }),
-                  style: TextButton.styleFrom(
-                      foregroundColor: AppColors.textSecondary,
-                      padding: const EdgeInsets.symmetric(horizontal: 8)),
-                  child: const Text('Cancel', style: TextStyle(fontSize: 12)),
-                ),
-              ],
-            ),
-          ),
-        ],
-        TextButton.icon(
-          onPressed: () => setState(() => _adding = true),
-          icon: const Icon(Icons.add_rounded, size: 14),
-          label: Text(widget.addLabel,
-              style: const TextStyle(fontSize: 12)),
-          style: TextButton.styleFrom(
-            foregroundColor: AppColors.accent,
-            padding: const EdgeInsets.symmetric(horizontal: 0, vertical: 4),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-// ── Before & After image pair editor ─────────────────────────────────────────
-
-class _BeforeAfterEditor extends StatefulWidget {
-  const _BeforeAfterEditor({
-    required this.pairs,
-    required this.onChanged,
-    required this.nodeId,
-  });
-  final List<Map<String, String>> pairs;
-  final ValueChanged<List<Map<String, String>>> onChanged;
-  final String nodeId;
-
-  @override
-  State<_BeforeAfterEditor> createState() => _BeforeAfterEditorState();
-}
-
-class _BeforeAfterEditorState extends State<_BeforeAfterEditor> {
-  late List<Map<String, String>> _pairs;
-
-  @override
-  void initState() {
-    super.initState();
-    _pairs = widget.pairs.map((p) => Map<String, String>.from(p)).toList();
-  }
-
-  @override
-  void didUpdateWidget(_BeforeAfterEditor old) {
-    super.didUpdateWidget(old);
-    if (old.pairs != widget.pairs) {
-      _pairs = widget.pairs.map((p) => Map<String, String>.from(p)).toList();
-    }
-  }
-
-  void _addPair() {
-    setState(() => _pairs.add({'before_url': '', 'after_url': ''}));
-    widget.onChanged(List.from(_pairs));
-  }
-
-  void _deletePair(int i) {
-    setState(() => _pairs.removeAt(i));
-    widget.onChanged(List.from(_pairs));
-  }
-
-  void _setUrl(int i, String key, String url) {
-    setState(() => _pairs[i] = Map.from(_pairs[i])..[key] = url);
-    widget.onChanged(List.from(_pairs));
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        if (_pairs.isEmpty)
-          const Padding(
-            padding: EdgeInsets.only(bottom: 8),
-            child: Text('No pairs yet.',
-                style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
-          ),
-        ReorderableListView.builder(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          buildDefaultDragHandles: false,
-          itemCount: _pairs.length,
-          onReorder: (oldIdx, newIdx) {
-            if (newIdx > oldIdx) newIdx--;
-            setState(() {
-              final pair = _pairs.removeAt(oldIdx);
-              _pairs.insert(newIdx, pair);
-            });
-            widget.onChanged(List.from(_pairs));
-          },
-          proxyDecorator: (child, _, __) => Material(
-              elevation: 4,
-              borderRadius: BorderRadius.circular(8),
-              child: child),
-          itemBuilder: (_, i) {
-            final pair = _pairs[i];
-            return Container(
-              key: ValueKey('pair_$i'),
-              margin: const EdgeInsets.only(bottom: 10),
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: AppColors.background,
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: AppColors.border),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      ReorderableDragStartListener(
-                        index: i,
-                        child: const Icon(Icons.drag_handle_rounded,
-                            size: 16, color: AppColors.textSecondary),
-                      ),
-                      const SizedBox(width: 6),
-                      Text('Pair ${i + 1}',
-                          style: const TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                              color: AppColors.textSecondary)),
-                      const Spacer(),
-                      IconButton(
-                        icon: const Icon(Icons.close_rounded,
-                            size: 14, color: AppColors.error),
-                        onPressed: () async {
-                          if (await _confirmDelete(context)) {
-                            _deletePair(i);
-                            if (mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                    content: Text('Deleted successfully')),
-                              );
-                            }
-                          }
-                        },
-                        tooltip: 'Remove pair',
-                        padding: const EdgeInsets.all(4),
-                        constraints: const BoxConstraints(),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 10),
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(
-                        child: _ImageUploadField(
-                          label: 'Before',
-                          url: pair['before_url'] ?? '',
-                          nodeId: widget.nodeId,
-                          onChanged: (url) => _setUrl(i, 'before_url', url),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: _ImageUploadField(
-                          label: 'After',
-                          url: pair['after_url'] ?? '',
-                          nodeId: widget.nodeId,
-                          onChanged: (url) => _setUrl(i, 'after_url', url),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            );
-          },
-        ),
-        TextButton.icon(
-          onPressed: _addPair,
-          icon: const Icon(Icons.add_photo_alternate_outlined, size: 14),
-          label: const Text('Add Before/After Pair',
-              style: TextStyle(fontSize: 12)),
-          style: TextButton.styleFrom(
-            foregroundColor: AppColors.accent,
-            padding: const EdgeInsets.symmetric(horizontal: 0, vertical: 4),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-// ── Single image upload field ─────────────────────────────────────────────────
-
-class _ImageUploadField extends StatefulWidget {
-  const _ImageUploadField({
-    required this.label,
-    required this.url,
-    required this.nodeId,
-    required this.onChanged,
-  });
-  final String label;
-  final String url;
-  final String nodeId;
-  final ValueChanged<String> onChanged;
-
-  @override
-  State<_ImageUploadField> createState() => _ImageUploadFieldState();
-}
-
-class _ImageUploadFieldState extends State<_ImageUploadField> {
-  bool _uploading = false;
-
-  Future<void> _pick() async {
-    final result = await FilePicker.platform.pickFiles(
-      type: FileType.image,
-      allowMultiple: false,
-      withData: true,
-    );
-    if (result == null || result.files.isEmpty) return;
-    final file = result.files.first;
-    final bytes = file.bytes;
-    if (bytes == null) return;
-
-    final ext = (file.extension ?? 'jpg').toLowerCase();
-    final ts = DateTime.now().millisecondsSinceEpoch;
-    final safeName = file.name.replaceAll(RegExp(r'[^a-zA-Z0-9._-]'), '_');
-    final path = 'node-content/${widget.nodeId}/$ts.$safeName';
-    setState(() => _uploading = true);
-    try {
-      final mime = const {
-            'jpg': 'image/jpeg',
-            'jpeg': 'image/jpeg',
-            'png': 'image/png',
-            'gif': 'image/gif',
-            'webp': 'image/webp',
-          }[ext] ??
-          'image/jpeg';
-      await Supabase.instance.client.storage
-          .from(_kNodeContentBucket)
-          .uploadBinary(path, bytes,
-              fileOptions: FileOptions(contentType: mime, upsert: true));
-      final url = Supabase.instance.client.storage
-          .from(_kNodeContentBucket)
-          .getPublicUrl(path);
-      if (mounted) {
-        setState(() => _uploading = false);
-        widget.onChanged(url);
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() => _uploading = false);
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('Upload failed: $e'),
-          backgroundColor: AppColors.error,
-        ));
-      }
-    }
-  }
-
-  void _clear() => widget.onChanged('');
-
-  @override
-  Widget build(BuildContext context) {
-    final hasImage = widget.url.isNotEmpty;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(widget.label,
-            style: const TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.w600,
-                color: AppColors.textSecondary)),
-        const SizedBox(height: 6),
-        if (hasImage)
-          Stack(
-            children: [
-              ClipRRect(
-                borderRadius: BorderRadius.circular(6),
-                child: Image.network(
-                  widget.url,
-                  height: 90,
-                  width: double.infinity,
-                  fit: BoxFit.cover,
-                  errorBuilder: (_, __, ___) => Container(
-                    height: 90,
-                    decoration: BoxDecoration(
-                      color: AppColors.border,
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    child: const Icon(Icons.broken_image_outlined,
-                        color: AppColors.textSecondary),
-                  ),
-                ),
-              ),
-              Positioned(
-                top: 4,
-                right: 4,
-                child: GestureDetector(
-                  onTap: _clear,
-                  child: Container(
-                    decoration: BoxDecoration(
-                      color: Colors.black54,
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    padding: const EdgeInsets.all(4),
-                    child: const Icon(Icons.close_rounded,
-                        size: 12, color: Colors.white),
-                  ),
-                ),
-              ),
-              Positioned(
-                bottom: 4,
-                right: 4,
-                child: GestureDetector(
-                  onTap: _uploading ? null : _pick,
-                  child: Container(
-                    decoration: BoxDecoration(
-                      color: Colors.black54,
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    padding: const EdgeInsets.all(4),
-                    child: const Icon(Icons.edit_rounded,
-                        size: 12, color: Colors.white),
-                  ),
-                ),
-              ),
-            ],
-          )
-        else
-          GestureDetector(
-            onTap: _uploading ? null : _pick,
-            child: Container(
-              height: 90,
-              width: double.infinity,
-              decoration: BoxDecoration(
-                color: AppColors.background,
-                borderRadius: BorderRadius.circular(6),
-                border: Border.all(
-                    color: AppColors.border, style: BorderStyle.solid),
-              ),
-              child: _uploading
-                  ? const Center(
-                      child: SizedBox(
-                          width: 20,
-                          height: 20,
-                          child: CircularProgressIndicator(
-                              strokeWidth: 2, color: AppColors.accent)))
-                  : const Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(Icons.upload_rounded,
-                            size: 20, color: AppColors.textSecondary),
-                        SizedBox(height: 4),
-                        Text('Upload',
-                            style: TextStyle(
-                                fontSize: 11,
-                                color: AppColors.textSecondary)),
-                      ],
-                    ),
-            ),
-          ),
-      ],
-    );
-  }
-}
-
-// ── Customer Content blocks editor ────────────────────────────────────────────
-
-class _ContentBlocksEditor extends StatefulWidget {
-  const _ContentBlocksEditor({
-    required this.blocks,
-    required this.nodeId,
-    required this.onChanged,
-  });
-  final List<Map<String, dynamic>> blocks;
-  final String nodeId;
-  final ValueChanged<List<Map<String, dynamic>>> onChanged;
-
-  @override
-  State<_ContentBlocksEditor> createState() => _ContentBlocksEditorState();
-}
-
-class _ContentBlocksEditorState extends State<_ContentBlocksEditor> {
-  late List<Map<String, dynamic>> _blocks;
-
-  @override
-  void initState() {
-    super.initState();
-    _blocks = widget.blocks.map((b) => Map<String, dynamic>.from(b)).toList();
-  }
-
-  @override
-  void didUpdateWidget(_ContentBlocksEditor old) {
-    super.didUpdateWidget(old);
-    if (old.blocks != widget.blocks) {
-      _blocks = widget.blocks.map((b) => Map<String, dynamic>.from(b)).toList();
-    }
-  }
-
-  void _addBlock(String type) {
-    final block = <String, dynamic>{
-      'id': DateTime.now().millisecondsSinceEpoch.toString(),
-      'type': type,
-      'text': '',
-      'image_url': '',
-    };
-    setState(() => _blocks.add(block));
-    widget.onChanged(List.from(_blocks));
-  }
-
-  void _deleteBlock(int i) {
-    setState(() => _blocks.removeAt(i));
-    widget.onChanged(List.from(_blocks));
-  }
-
-  void _updateBlock(int i, Map<String, dynamic> updated) {
-    setState(() => _blocks[i] = updated);
-    widget.onChanged(List.from(_blocks));
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        if (_blocks.isEmpty)
-          const Padding(
-            padding: EdgeInsets.only(bottom: 10),
-            child: Text('No content blocks yet.',
-                style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
-          )
-        else
-          ReorderableListView.builder(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            buildDefaultDragHandles: false,
-            itemCount: _blocks.length,
-            onReorder: (oldIdx, newIdx) {
-              if (newIdx > oldIdx) newIdx--;
-              setState(() {
-                final b = _blocks.removeAt(oldIdx);
-                _blocks.insert(newIdx, b);
-              });
-              widget.onChanged(List.from(_blocks));
-            },
-            proxyDecorator: (child, _, __) => Material(
-              elevation: 3,
-              borderRadius: BorderRadius.circular(8),
-              child: child,
-            ),
-            itemBuilder: (_, i) => _ContentBlockItem(
-              key: ValueKey(_blocks[i]['id'] ?? 'block_$i'),
-              block: _blocks[i],
-              index: i,
-              nodeId: widget.nodeId,
-              onChanged: (updated) => _updateBlock(i, updated),
-              onDelete: () => _deleteBlock(i),
-            ),
-          ),
-        const SizedBox(height: 8),
-        Row(
-          children: [
-            const Text('Add:',
-                style: TextStyle(fontSize: 11, color: AppColors.textSecondary)),
-            const SizedBox(width: 8),
-            _AddBlockChip(
-                label: 'Text',
-                icon: Icons.text_fields_rounded,
-                onTap: () => _addBlock('text')),
-            const SizedBox(width: 6),
-            _AddBlockChip(
-                label: 'Image',
-                icon: Icons.image_outlined,
-                onTap: () => _addBlock('image')),
-            const SizedBox(width: 6),
-            _AddBlockChip(
-                label: 'Image + Text',
-                icon: Icons.article_outlined,
-                onTap: () => _addBlock('image_text')),
-          ],
-        ),
-      ],
-    );
-  }
-}
-
-class _ContentBlockItem extends StatefulWidget {
-  const _ContentBlockItem({
-    super.key,
-    required this.block,
-    required this.index,
-    required this.nodeId,
-    required this.onChanged,
-    required this.onDelete,
-  });
-  final Map<String, dynamic> block;
-  final int index;
-  final String nodeId;
-  final ValueChanged<Map<String, dynamic>> onChanged;
-  final VoidCallback onDelete;
-
-  @override
-  State<_ContentBlockItem> createState() => _ContentBlockItemState();
-}
-
-class _ContentBlockItemState extends State<_ContentBlockItem> {
-  late TextEditingController _textCtrl;
-  late String _type;
-  late String _imageUrl;
-
-  @override
-  void initState() {
-    super.initState();
-    _type = (widget.block['type'] as String?) ?? 'text';
-    _textCtrl =
-        TextEditingController(text: (widget.block['text'] as String?) ?? '');
-    _imageUrl = (widget.block['image_url'] as String?) ?? '';
-  }
-
-  @override
-  void dispose() {
-    _textCtrl.dispose();
-    super.dispose();
-  }
-
-  void _emit() {
-    widget.onChanged({
-      ...widget.block,
-      'type': _type,
-      'text': _textCtrl.text,
-      'image_url': _imageUrl,
-    });
-  }
-
-  static (String, Color) _typeLabel(String type) {
-    if (type == 'image') return ('Image', AppColors.primary);
-    if (type == 'image_text') return ('Image + Text', AppColors.accent);
-    return ('Text', AppColors.success);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final hasText = _type != 'image';
-    final hasImage = _type != 'text';
-    final (badgeLabel, badgeColor) = _typeLabel(_type);
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: AppColors.background,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: AppColors.border),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              ReorderableDragStartListener(
-                index: widget.index,
-                child: const Padding(
-                  padding: EdgeInsets.only(right: 8),
-                  child: Icon(Icons.drag_handle_rounded,
-                      size: 16, color: AppColors.textSecondary),
-                ),
-              ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-                decoration: BoxDecoration(
-                  color: badgeColor.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(4),
-                ),
-                child: Text(badgeLabel,
-                    style: TextStyle(
-                        fontSize: 10,
-                        fontWeight: FontWeight.w700,
-                        color: badgeColor)),
-              ),
-              const Spacer(),
-              _BlockTypeSwitcher(
-                selected: _type,
-                onChanged: (t) {
-                  setState(() => _type = t);
-                  _emit();
-                },
-              ),
-              const SizedBox(width: 4),
-              GestureDetector(
-                onTap: () async {
-                  if (await _confirmDelete(context)) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Deleted successfully')),
-                    );
-                    widget.onDelete();
-                  }
-                },
-                child: const Padding(
-                  padding: EdgeInsets.all(4),
-                  child: Icon(Icons.close_rounded,
-                      size: 14, color: AppColors.error),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          if (hasImage) ...[
-            _ImageUploadField(
-              label: 'Image',
-              url: _imageUrl,
-              nodeId: widget.nodeId,
-              onChanged: (url) {
-                setState(() => _imageUrl = url);
-                _emit();
-              },
-            ),
-            if (hasText) const SizedBox(height: 10),
-          ],
-          if (hasText) ...[
-            const Text('Text',
-                style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
-                    color: AppColors.textSecondary)),
-            const SizedBox(height: 4),
-            TextField(
-              controller: _textCtrl,
-              maxLines: 3,
-              style: const TextStyle(fontSize: 13),
-              decoration: InputDecoration(
-                isDense: true,
-                hintText: 'Enter text content…',
-                contentPadding: const EdgeInsets.all(10),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(6),
-                  borderSide:
-                      const BorderSide(color: AppColors.border, width: 0.8),
-                ),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(6),
-                  borderSide:
-                      const BorderSide(color: AppColors.border, width: 0.8),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(6),
-                  borderSide:
-                      const BorderSide(color: AppColors.primary, width: 1.4),
-                ),
-              ),
-              onChanged: (_) => _emit(),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-}
-
-class _BlockTypeSwitcher extends StatelessWidget {
-  const _BlockTypeSwitcher({required this.selected, required this.onChanged});
-  final String selected;
-  final ValueChanged<String> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        _TypeBtn(Icons.text_fields_rounded, 'Text only', selected == 'text',
-            () => onChanged('text')),
-        _TypeBtn(Icons.image_outlined, 'Image only', selected == 'image',
-            () => onChanged('image')),
-        _TypeBtn(Icons.article_outlined, 'Image + Text',
-            selected == 'image_text', () => onChanged('image_text')),
-      ],
-    );
-  }
-}
-
-class _TypeBtn extends StatelessWidget {
-  const _TypeBtn(this.icon, this.tooltip, this.active, this.onTap);
-  final IconData icon;
-  final String tooltip;
-  final bool active;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Tooltip(
-      message: tooltip,
-      child: GestureDetector(
-        onTap: onTap,
-        child: Container(
-          margin: const EdgeInsets.symmetric(horizontal: 1),
-          padding: const EdgeInsets.all(5),
-          decoration: BoxDecoration(
-            color: active
-                ? AppColors.primary.withValues(alpha: 0.12)
-                : Colors.transparent,
-            borderRadius: BorderRadius.circular(4),
-          ),
-          child: Icon(icon,
-              size: 14,
-              color: active ? AppColors.primary : AppColors.textSecondary),
-        ),
-      ),
-    );
-  }
-}
-
-class _AddBlockChip extends StatelessWidget {
-  const _AddBlockChip({
-    required this.label,
-    required this.icon,
-    required this.onTap,
-  });
-  final String label;
-  final IconData icon;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-        decoration: BoxDecoration(
-          color: AppColors.background,
-          borderRadius: BorderRadius.circular(100),
-          border: Border.all(color: AppColors.border),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 12, color: AppColors.textSecondary),
-            const SizedBox(width: 5),
-            Text(label,
-                style: const TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
-                    color: AppColors.textPrimary)),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// Attributes tab — reuses catalogNodeAttributesNotifierProvider +
-// AttributeFormDialog from the catalog_v2 attributes system.
-// ═══════════════════════════════════════════════════════════════════════════════
-
-class _AttributesTabContent extends ConsumerStatefulWidget {
-  const _AttributesTabContent({
-    required this.nodeId,
-    required this.nodeName,
-  });
-
-  final String nodeId;
-  final String nodeName;
-
-  @override
-  ConsumerState<_AttributesTabContent> createState() =>
-      _AttributesTabContentState();
-}
-
-class _AttributesTabContentState extends ConsumerState<_AttributesTabContent> {
-  @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) {
-        ref
-            .read(catalogNodeAttributesNotifierProvider.notifier)
-            .loadForNode(widget.nodeId);
-      }
-    });
-  }
-
-  void _openCreate() {
-    final notifier =
-        ref.read(catalogNodeAttributesNotifierProvider.notifier);
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (_) => AttributeFormDialog(
-        serviceId: widget.nodeId,
-        serviceName: widget.nodeName,
-        onSave: ({
-          required serviceId,
-          required name,
-          required price,
-          required discountType,
-          required discountValue,
-        }) async {
-          final attrId = await notifier.createAttribute(
-            nodeId: serviceId,
-            name: name,
-            fieldType: 'dropdown',
-            isRequired: false,
-          );
-          await notifier.createOption(
-            attributeId: attrId,
-            optionName: name,
-            priceAdjustment: price,
-            discountType: discountType,
-            discountValue: discountValue,
-          );
-        },
-      ),
-    );
-  }
-
-  void _openEdit(ServiceAttribute attr) {
-    final notifier =
-        ref.read(catalogNodeAttributesNotifierProvider.notifier);
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (_) => AttributeFormDialog(
-        existing: attr,
-        serviceId: widget.nodeId,
-        serviceName: widget.nodeName,
-        onSave: ({
-          required serviceId,
-          required name,
-          required price,
-          required discountType,
-          required discountValue,
-        }) async {
-          await notifier.updateAttribute(
-            attr.id,
-            name: name,
-            fieldType: 'dropdown',
-            isRequired: false,
-          );
-          if (attr.options.isNotEmpty) {
-            await notifier.updateOption(
-              attr.options.first.id,
-              optionName: name,
-              priceAdjustment: price,
-              discountType: discountType,
-              discountValue: discountValue,
-            );
-          } else {
-            await notifier.createOption(
-              attributeId: attr.id,
-              optionName: name,
-              priceAdjustment: price,
-              discountType: discountType,
-              discountValue: discountValue,
-            );
-          }
-        },
-      ),
-    );
-  }
-
-  Future<void> _delete(ServiceAttribute attr) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        title: const Text('Delete Attribute'),
-        content: Text('Delete "${attr.name}"?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: AppColors.error),
-            onPressed: () => Navigator.of(ctx).pop(true),
-            child: const Text('Delete'),
-          ),
-        ],
-      ),
-    );
-    if (confirmed != true || !mounted) return;
-    await ref
-        .read(catalogNodeAttributesNotifierProvider.notifier)
-        .deleteAttribute(attr.id);
-    if (mounted) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text('Attribute deleted.')));
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final attrsAsync = ref.watch(catalogNodeAttributesNotifierProvider);
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
-          child: SizedBox(
-            width: double.infinity,
-            child: OutlinedButton.icon(
-              onPressed: _openCreate,
-              icon: const Icon(Icons.add, size: 16),
-              label: const Text('Add Entry'),
-              style: OutlinedButton.styleFrom(
-                foregroundColor: AppColors.accent,
-                side: const BorderSide(color: AppColors.accent),
-                padding: const EdgeInsets.symmetric(vertical: 10),
-              ),
-            ),
-          ),
-        ),
-        Expanded(
-          child: attrsAsync.when(
-            loading: () =>
-                const Center(child: CircularProgressIndicator()),
-            error: (e, _) => const Center(
-              child: Text('Error loading attributes.',
-                  style: TextStyle(color: AppColors.error)),
-            ),
-            data: (attrs) {
-              if (attrs.isEmpty) {
-                return const Center(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.tune_outlined,
-                          size: 40, color: AppColors.textSecondary),
-                      SizedBox(height: 12),
-                      Text('No attributes yet.',
-                          style: TextStyle(color: AppColors.textSecondary)),
-                    ],
-                  ),
-                );
-              }
-              return ListView.separated(
-                padding: const EdgeInsets.fromLTRB(20, 4, 20, 20),
-                itemCount: attrs.length,
-                separatorBuilder: (_, __) => const SizedBox(height: 8),
-                itemBuilder: (_, i) => _AttributeRow(
-                  key: ValueKey(attrs[i].id),
-                  attr: attrs[i],
-                  onEdit: _openEdit,
-                  onDelete: _delete,
-                ),
-              );
-            },
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-// Each entry row — shows name + price with edit/delete buttons.
-class _AttributeRow extends StatelessWidget {
-  const _AttributeRow({
-    super.key,
-    required this.attr,
-    required this.onEdit,
-    required this.onDelete,
-  });
-
-  final ServiceAttribute attr;
-  final void Function(ServiceAttribute) onEdit;
-  final void Function(ServiceAttribute) onDelete;
-
-  @override
-  Widget build(BuildContext context) {
-    final price = attr.options.isNotEmpty
-        ? attr.options.first.priceAdjustment
-        : 0.0;
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      decoration: BoxDecoration(
-        color: AppColors.background,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: AppColors.border),
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  attr.name,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.w600,
-                    fontSize: 13,
-                    color: AppColors.textPrimary,
-                  ),
-                ),
-                if (price > 0) ...[
-                  const SizedBox(height: 2),
-                  Text(
-                    '₹${price.toStringAsFixed(0)}',
-                    style: const TextStyle(
-                        fontSize: 12, color: AppColors.textSecondary),
-                  ),
-                ],
-              ],
-            ),
-          ),
-          IconButton(
-            icon: const Icon(Icons.edit_outlined, size: 15),
-            tooltip: 'Edit entry',
-            color: AppColors.textSecondary,
-            onPressed: () => onEdit(attr),
-            padding: EdgeInsets.zero,
-            constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
-          ),
-          IconButton(
-            icon: const Icon(Icons.delete_outline, size: 15),
-            tooltip: 'Delete entry',
-            color: AppColors.error,
-            onPressed: () => onDelete(attr),
-            padding: EdgeInsets.zero,
-            constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
-          ),
-        ],
-      ),
-    );
-  }
-}
