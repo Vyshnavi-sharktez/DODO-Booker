@@ -24,10 +24,12 @@ class BookingsService {
     is_amc, amc_contract_id, amc_plan_name, amc_recurrence_interval, amc_visit_number,
     booking_items(
       service_id,
+      custom_service_id,
       quantity,
       unit_price,
       total_price,
-      catalog_nodes!booking_items_service_id_catalog_fkey(id, name)
+      catalog_nodes!booking_items_service_id_catalog_fkey(id, name),
+      vendor_service_requests!booking_items_custom_service_id_fkey(id, service_name)
     )
   ''';
 

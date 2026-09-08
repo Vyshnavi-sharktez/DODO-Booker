@@ -8,6 +8,8 @@ import '../../../core/constants/app_colors.dart';
 import '../../../core/utils/icon_registry.dart';
 import '../../../features/catalog/models/catalog_node_model.dart';
 import '../../../features/catalog/utils/catalog_launcher.dart';
+import '../../../features/vendor_custom_service/models/vendor_custom_service_model.dart';
+import '../../../features/vendor_custom_service/widgets/vendor_custom_service_sheet.dart';
 
 class SearchScreen extends StatefulWidget {
   final String initialQuery;
@@ -25,6 +27,7 @@ class _SearchScreenState extends State<SearchScreen> {
 
   bool _loading = false;
   List<CatalogNodeModel> _results = [];
+  List<VendorCustomServiceModel> _customResults = [];
   String _lastQuery = '';
 
   static bool get _ready =>
@@ -65,6 +68,7 @@ class _SearchScreenState extends State<SearchScreen> {
     if (query.length < 2) {
       setState(() {
         _results = [];
+        _customResults = [];
         _loading = false;
       });
       return;
@@ -82,18 +86,23 @@ class _SearchScreenState extends State<SearchScreen> {
     }
     try {
       final db = Supabase.instance.client;
-      final data = await db
-          .from('catalog_nodes_view')
-          .select()
-          .eq('is_active', true)
-          .ilike('name', '%$query%')
-          .order('sort_order', ascending: true)
-          .limit(25);
+      // Run both sources in parallel; DODO catalog results appear first.
+      final results = await Future.wait<dynamic>([
+        db
+            .from('catalog_nodes_view')
+            .select()
+            .eq('is_active', true)
+            .ilike('name', '%$query%')
+            .order('sort_order', ascending: true)
+            .limit(25),
+        VendorCustomServiceModel.search(query),
+      ]);
       if (!mounted) return;
       setState(() {
-        _results = (data as List)
+        _results = (results[0] as List)
             .map((e) => CatalogNodeModel.fromMap(e as Map<String, dynamic>))
             .toList();
+        _customResults = results[1] as List<VendorCustomServiceModel>;
         _loading = false;
       });
     } catch (_) {
@@ -106,7 +115,7 @@ class _SearchScreenState extends State<SearchScreen> {
     final tt = Theme.of(context).textTheme;
     final query = _controller.text.trim();
     final hasQuery = query.length >= 2;
-    final hasResults = _results.isNotEmpty;
+    final hasResults = _results.isNotEmpty || _customResults.isNotEmpty;
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -184,18 +193,105 @@ class _SearchScreenState extends State<SearchScreen> {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        Text(
-          'Results',
-          style: tt.titleSmall?.copyWith(fontWeight: FontWeight.w700),
-        ),
-        const SizedBox(height: 8),
-        ..._results.map(
-          (node) => _NodeResult(
-            node: node,
-            onTap: () => openCatalogNode(context, node),
+        // ── DODO catalog results (always first) ─────────────────────────────
+        if (_results.isNotEmpty) ...[
+          Text(
+            'Results',
+            style: tt.titleSmall?.copyWith(fontWeight: FontWeight.w700),
           ),
-        ),
+          const SizedBox(height: 8),
+          ..._results.map(
+            (node) => _NodeResult(
+              node: node,
+              onTap: () => openCatalogNode(context, node),
+            ),
+          ),
+        ],
+
+        // ── Vendor Specific Catalog results (always after DODO) ─────────────
+        if (_customResults.isNotEmpty) ...[
+          if (_results.isNotEmpty) ...[
+            const SizedBox(height: 16),
+            const Divider(height: 1, color: Color(0xFFECE7DE)),
+            const SizedBox(height: 14),
+          ],
+          Text(
+            'From Vendor Catalog',
+            style: tt.titleSmall?.copyWith(fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(height: 8),
+          ..._customResults.map(
+            (svc) => _CustomServiceResult(
+              service: svc,
+              onTap: () => VendorCustomServiceSheet.show(context, svc),
+            ),
+          ),
+        ],
       ],
+    );
+  }
+}
+
+// ── Vendor custom service result row ─────────────────────────────────────────
+
+class _CustomServiceResult extends StatelessWidget {
+  final VendorCustomServiceModel service;
+  final VoidCallback onTap;
+
+  const _CustomServiceResult({required this.service, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return ListTile(
+      contentPadding:
+          const EdgeInsets.symmetric(horizontal: 4, vertical: 0),
+      leading: Container(
+        width: 40,
+        height: 40,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(10),
+          color: AppColors.surfaceVariant,
+        ),
+        child: service.imageUrl != null
+            ? ClipRRect(
+                borderRadius: BorderRadius.circular(10),
+                child: Image.network(
+                  service.imageUrl!,
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, __, ___) => const Icon(
+                    Icons.home_repair_service_outlined,
+                    size: 20,
+                    color: AppColors.textHint,
+                  ),
+                ),
+              )
+            : const Icon(
+                Icons.home_repair_service_outlined,
+                size: 20,
+                color: AppColors.textHint,
+              ),
+      ),
+      title: Text(
+        service.serviceName,
+        style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 14),
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+      ),
+      subtitle: Text(
+        service.vendorName,
+        style: const TextStyle(fontSize: 12),
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+      ),
+      trailing: Text(
+        service.formattedPrice,
+        style: const TextStyle(
+          fontWeight: FontWeight.w700,
+          color: AppColors.textPrimary,
+          fontSize: 13,
+        ),
+      ),
+      onTap: onTap,
     );
   }
 }

@@ -397,24 +397,17 @@ class _SidebarRow extends StatefulWidget {
 }
 
 class _SidebarRowState extends State<_SidebarRow> {
-  bool _hovered = false;
-
   @override
   Widget build(BuildContext context) {
     final active = widget.isActive;
     return MouseRegion(
       cursor: SystemMouseCursors.click,
-      onEnter: (_) => setState(() => _hovered = true),
-      onExit: (_) => setState(() => _hovered = false),
       child: GestureDetector(
         onTap: widget.onTap,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 130),
+        child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
           decoration: BoxDecoration(
-            color: active || _hovered
-                ? const Color(0xFFF7F7F7)
-                : Colors.transparent,
+            color: active ? _kTextDark : Colors.transparent,
             borderRadius: BorderRadius.circular(12),
           ),
           child: Row(
@@ -424,7 +417,7 @@ class _SidebarRowState extends State<_SidebarRow> {
                 child: Icon(
                   IconRegistry.resolve(widget.node.iconKey, widget.node.name),
                   size: 16,
-                  color: active ? _kTextDark : _kTextMuted,
+                  color: active ? Colors.white : _kTextMuted,
                 ),
               ),
               const SizedBox(width: 10),
@@ -435,7 +428,7 @@ class _SidebarRowState extends State<_SidebarRow> {
                     fontSize: 14,
                     fontWeight:
                         active ? FontWeight.w600 : FontWeight.w500,
-                    color: active ? _kTextDark : _kTextMid,
+                    color: active ? Colors.white : _kTextMid,
                   ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
@@ -447,7 +440,7 @@ class _SidebarRowState extends State<_SidebarRow> {
                   '${widget.node.childrenCount}',
                   style: GoogleFonts.inter(
                     fontSize: 12,
-                    color: _kTextMuted,
+                    color: active ? Colors.white70 : _kTextMuted,
                   ),
                 ),
             ],
@@ -2029,7 +2022,7 @@ class _CartPanel extends ConsumerWidget {
                 MouseRegion(
                   cursor: SystemMouseCursors.click,
                   child: GestureDetector(
-                    onTap: () => openCart(context),
+                    onTap: () => openCheckout(context, ref),
                     child: Container(
                       padding: const EdgeInsets.symmetric(vertical: 13),
                       decoration: BoxDecoration(
@@ -2038,7 +2031,7 @@ class _CartPanel extends ConsumerWidget {
                       ),
                       child: Center(
                         child: Text(
-                          'View Cart',
+                          'Proceed to Checkout',
                           style: GoogleFonts.poppins(
                             fontSize: 13,
                             fontWeight: FontWeight.w600,

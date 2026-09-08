@@ -7,6 +7,8 @@ import '../../features/catalog/models/catalog_node_model.dart';
 import '../../features/catalog/providers/catalog_providers.dart';
 import '../../features/catalog/utils/catalog_launcher.dart';
 import '../../features/home/services/home_providers.dart';
+import '../../features/vendor_custom_service/models/vendor_custom_service_model.dart';
+import '../../features/vendor_custom_service/widgets/vendor_custom_service_sheet.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Public API
@@ -161,6 +163,14 @@ class _NavSearchCoreState extends State<_NavSearchCore> {
               ctrl: _ctrl,
               compact: true,
               onNodeTap: _onNodeTap,
+              onCustomServiceTap: (svc) {
+                _focusCloseTimer?.cancel();
+                _focus.unfocus();
+                _close();
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  if (mounted) VendorCustomServiceSheet.show(context, svc);
+                });
+              },
               onTrendingTap: _onTrendingTap,
               onClose: _close,
               onResultsChanged: (r) { _panelResults = r; },
@@ -259,6 +269,7 @@ class _SearchPanel extends ConsumerStatefulWidget {
   /// false → expanded mode (fills parent, white background, no border).
   final bool compact;
   final void Function(CatalogNodeModel) onNodeTap;
+  final void Function(VendorCustomServiceModel) onCustomServiceTap;
   final void Function(String) onTrendingTap;
   final VoidCallback onClose;
   final ValueChanged<List<CatalogNodeModel>>? onResultsChanged;
@@ -267,6 +278,7 @@ class _SearchPanel extends ConsumerStatefulWidget {
     required this.ctrl,
     required this.compact,
     required this.onNodeTap,
+    required this.onCustomServiceTap,
     required this.onTrendingTap,
     required this.onClose,
     this.onResultsChanged,
@@ -279,6 +291,7 @@ class _SearchPanel extends ConsumerStatefulWidget {
 class _SearchPanelState extends ConsumerState<_SearchPanel> {
   String _lastQuery = '';
   List<CatalogNodeModel> _results = [];
+  List<VendorCustomServiceModel> _customResults = [];
   bool _isLoading = false;
   Timer? _timer;
 
@@ -303,7 +316,7 @@ class _SearchPanelState extends ConsumerState<_SearchPanel> {
     _timer?.cancel();
 
     if (q.length < 2) {
-      if (mounted) setState(() { _results = []; _isLoading = false; });
+      if (mounted) setState(() { _results = []; _customResults = []; _isLoading = false; });
       widget.onResultsChanged?.call([]);
       return;
     }
@@ -314,14 +327,18 @@ class _SearchPanelState extends ConsumerState<_SearchPanel> {
 
   Future<void> _runSearch(String query) async {
     if (!mounted) return;
-    final results =
-        await ref.read(catalogServiceProvider).searchNodes(query);
+    final fetched = await Future.wait<dynamic>([
+      ref.read(catalogServiceProvider).searchNodes(query),
+      VendorCustomServiceModel.search(query),
+    ]);
     if (!mounted) return;
+    final nodes = fetched[0] as List<CatalogNodeModel>;
     setState(() {
-      _results = results;
+      _results = nodes;
+      _customResults = fetched[1] as List<VendorCustomServiceModel>;
       _isLoading = false;
     });
-    widget.onResultsChanged?.call(results);
+    widget.onResultsChanged?.call(nodes);
   }
 
   @override
@@ -337,8 +354,10 @@ class _SearchPanelState extends ConsumerState<_SearchPanel> {
             compact: widget.compact,
             query: _lastQuery,
             results: _results,
+            customResults: _customResults,
             isLoading: _isLoading,
             onNodeTap: widget.onNodeTap,
+            onCustomServiceTap: widget.onCustomServiceTap,
           );
     final content = Column(
       mainAxisSize:
@@ -602,15 +621,19 @@ class _ResultsSection extends StatelessWidget {
   final bool compact;
   final String query;
   final List<CatalogNodeModel> results;
+  final List<VendorCustomServiceModel> customResults;
   final bool isLoading;
   final void Function(CatalogNodeModel) onNodeTap;
+  final void Function(VendorCustomServiceModel) onCustomServiceTap;
 
   const _ResultsSection({
     required this.compact,
     required this.query,
     required this.results,
+    required this.customResults,
     required this.isLoading,
     required this.onNodeTap,
+    required this.onCustomServiceTap,
   });
 
   @override
@@ -626,7 +649,7 @@ class _ResultsSection extends StatelessWidget {
     );
 
     // Loading and empty states are small — no scroll container needed.
-    if (isLoading || results.isEmpty) {
+    if (isLoading || (results.isEmpty && customResults.isEmpty)) {
       final body = isLoading
           ? const Padding(
               padding: EdgeInsets.all(24),
@@ -668,22 +691,32 @@ class _ResultsSection extends StatelessWidget {
       );
     }
 
-    // Scrollable results list — shrinkWrap off so the ListView can scroll.
-    final list = Scrollbar(
-      thumbVisibility: false,
-      child: ListView.separated(
-        padding: const EdgeInsets.symmetric(vertical: 4),
-        itemCount: results.length,
-        separatorBuilder: (_, $i) => const Divider(
-          height: 1,
-          indent: 62,
-          color: AppColors.border,
-        ),
-        itemBuilder: (ctx, i) => _ResultRow(
+    // Scrollable results list — catalog nodes first, vendor services after.
+    final items = <Widget>[
+      for (int i = 0; i < results.length; i++) ...[
+        if (i > 0)
+          const Divider(height: 1, indent: 62, color: AppColors.border),
+        _ResultRow(
           node: results[i],
           query: query,
           onTap: () => onNodeTap(results[i]),
         ),
+      ],
+      for (int i = 0; i < customResults.length; i++) ...[
+        if (i > 0 || results.isNotEmpty)
+          const Divider(height: 1, indent: 62, color: AppColors.border),
+        _VendorServiceRow(
+          service: customResults[i],
+          query: query,
+          onTap: () => onCustomServiceTap(customResults[i]),
+        ),
+      ],
+    ];
+    final list = Scrollbar(
+      thumbVisibility: false,
+      child: ListView(
+        padding: const EdgeInsets.symmetric(vertical: 4),
+        children: items,
       ),
     );
 
@@ -739,8 +772,6 @@ class _ResultRowState extends State<_ResultRow> {
     final price = node.basePrice != null
         ? '₹${(node.finalPrice ?? node.basePrice)!.toStringAsFixed(0)}'
         : null;
-    final hasRating = node.rating > 0 && node.reviewCount > 0;
-
     return MouseRegion(
       cursor: SystemMouseCursors.click,
       onEnter: (_) => setState(() => _hovered = true),
@@ -793,62 +824,140 @@ class _ResultRowState extends State<_ResultRow> {
                       overflow: TextOverflow.ellipsis,
                     ),
                     const SizedBox(height: 3),
-                    Row(
-                      children: [
-                        if (node.parentName != null) ...[
-                          Flexible(
-                            child: Text.rich(
-                              TextSpan(
-                                children: _highlight(
-                                  node.parentName!,
-                                  widget.query,
-                                ),
-                              ),
-                              style: const TextStyle(
-                                fontSize: 11.5,
-                                color: AppColors.textSecondary,
-                              ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                          const _Dot(),
-                        ],
-                        if (hasRating) ...[
-                          const Icon(Icons.star_rounded,
-                              size: 11,
-                              color: Color(0xFFF59E0B)),
-                          const SizedBox(width: 2),
-                          Text(
-                            node.rating.toStringAsFixed(1),
-                            style: const TextStyle(
-                              fontSize: 11.5,
-                              fontWeight: FontWeight.w600,
-                              color: AppColors.textSecondary,
-                            ),
-                          ),
-                          const _Dot(),
-                        ],
-                        if (price != null)
-                          Text(
-                            price,
-                            style: const TextStyle(
-                              fontSize: 11.5,
-                              fontWeight: FontWeight.w600,
-                              color: AppColors.textPrimary,
-                            ),
-                          ),
-                      ],
+                    const Text(
+                      'DODO Service',
+                      style: TextStyle(
+                        fontSize: 11.5,
+                        color: AppColors.textSecondary,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ],
                 ),
               ),
 
               const SizedBox(width: 8),
+              if (price != null) ...[
+                Text(
+                  price,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.textPrimary,
+                  ),
+                ),
+                const SizedBox(width: 6),
+              ],
               Icon(
                 node.hasChildren
                     ? Icons.arrow_forward_ios_rounded
                     : Icons.open_in_new_rounded,
+                size: 12,
+                color: AppColors.textHint,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Vendor custom service result row
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _VendorServiceRow extends StatefulWidget {
+  final VendorCustomServiceModel service;
+  final String query;
+  final VoidCallback onTap;
+
+  const _VendorServiceRow({
+    required this.service,
+    required this.query,
+    required this.onTap,
+  });
+
+  @override
+  State<_VendorServiceRow> createState() => _VendorServiceRowState();
+}
+
+class _VendorServiceRowState extends State<_VendorServiceRow> {
+  bool _hovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final svc = widget.service;
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      child: GestureDetector(
+        onTap: widget.onTap,
+        behavior: HitTestBehavior.opaque,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          color: _hovered ? const Color(0x0A000000) : Colors.transparent,
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          child: Row(
+            children: [
+              ClipRRect(
+                borderRadius: BorderRadius.circular(8),
+                child: svc.imageUrl != null
+                    ? Image.network(
+                        svc.imageUrl!,
+                        width: 44,
+                        height: 44,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, _, _) =>
+                            const _ImagePlaceholder(size: 44),
+                      )
+                    : const _ImagePlaceholder(size: 44),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text.rich(
+                      TextSpan(
+                        children: _highlight(svc.serviceName, widget.query),
+                      ),
+                      style: const TextStyle(
+                        fontSize: 13.5,
+                        fontWeight: FontWeight.w500,
+                        color: AppColors.textPrimary,
+                        height: 1.3,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      svc.vendorName,
+                      style: const TextStyle(
+                        fontSize: 11.5,
+                        color: AppColors.textSecondary,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                svc.formattedPrice,
+                style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.textPrimary,
+                ),
+              ),
+              const SizedBox(width: 6),
+              const Icon(
+                Icons.open_in_new_rounded,
                 size: 12,
                 color: AppColors.textHint,
               ),
@@ -938,6 +1047,14 @@ class _MobileSearchModalState extends State<_MobileSearchModal> {
     // Open in next frame so the dialog pop is committed before pushing the modal.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (parentCtx.mounted) openCatalogNode(parentCtx, node);
+    });
+  }
+
+  void _onCustomServiceTap(VendorCustomServiceModel svc) {
+    final parentCtx = widget.parentContext;
+    Navigator.pop(context);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (parentCtx.mounted) VendorCustomServiceSheet.show(parentCtx, svc);
     });
   }
 
@@ -1034,6 +1151,7 @@ class _MobileSearchModalState extends State<_MobileSearchModal> {
               ctrl: _ctrl,
               compact: false,
               onNodeTap: _onNodeTap,
+              onCustomServiceTap: _onCustomServiceTap,
               onTrendingTap: _onTrendingTap,
               onClose: () => Navigator.pop(context),
               onResultsChanged: (r) { _panelResults = r; },
@@ -1119,22 +1237,6 @@ class _ImagePlaceholder extends StatelessWidget {
   }
 }
 
-class _Dot extends StatelessWidget {
-  const _Dot();
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 5),
-      child: Container(
-        width: 3,
-        height: 3,
-        decoration: const BoxDecoration(
-            color: AppColors.textHint, shape: BoxShape.circle),
-      ),
-    );
-  }
-}
 
 class _SmallIconBtn extends StatefulWidget {
   final IconData icon;

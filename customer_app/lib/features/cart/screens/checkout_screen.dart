@@ -16,10 +16,12 @@ import '../../../features/address/screens/address_screen.dart';
 import '../../../features/bookings/utils/my_bookings_launcher.dart';
 import '../../../features/address/services/address_providers.dart';
 import '../../catalog/services/catalog_service.dart';
+import '../../../models/addon_model.dart';
 import '../models/cart_item.dart';
 import '../providers/cart_provider.dart';
 import '../services/checkout_service.dart';
 import '../widgets/payment_selection_sheet.dart';
+import '../widgets/service_unavailable_dialog.dart';
 import '../../bookings/services/bookings_providers.dart';
 import '../../loyalty/models/loyalty_settings_model.dart';
 import '../../loyalty/providers/loyalty_providers.dart';
@@ -189,6 +191,18 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         );
         return;
       }
+    }
+
+    // ── Active-status pre-check (catalog + custom services) ─────────────────
+    // Refreshes is_active from the DB for every cart item before proceeding.
+    // Inactive items are auto-removed and the customer sees a clear message.
+    // Mirrors the backend triggers on booking_items but surfaces the error
+    // before any payment or booking write occurs.
+    final removedNames = await _validateCartServices(items);
+    if (!mounted) return;
+    if (removedNames.isNotEmpty) {
+      await showServiceUnavailableDialog(context, serviceNames: removedNames);
+      return;
     }
 
     // ── Location availability pre-check ─────────────────────────────────────
@@ -383,6 +397,97 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     }
   }
 
+  /// Checks whether every item in [items] is still active (both DODO catalog
+  /// services and vendor custom services). Removes inactive items from the cart
+  /// and returns their display names. Returns an empty list when all are active.
+  Future<List<String>> _validateCartServices(List<CartItem> items) async {
+    final db = Supabase.instance.client;
+    final removed = <String>[];
+
+    // ── Vendor custom services ───────────────────────────────────────────────
+    final customItems = items
+        .where((i) => i.isCustomService && i.customServiceId != null)
+        .toList();
+    if (customItems.isNotEmpty) {
+      try {
+        final ids = customItems.map((i) => i.customServiceId!).toList();
+        final rows = await db
+            .from('vendor_service_requests')
+            .select('id, service_name, is_active')
+            .inFilter('id', ids);
+        for (final row in rows as List) {
+          final r = row as Map<String, dynamic>;
+          if (!(r['is_active'] as bool? ?? false)) {
+            final name = r['service_name'] as String? ?? 'A service';
+            final id = r['id'] as String;
+            final cartItem = customItems.firstWhere(
+              (i) => i.customServiceId == id,
+              orElse: () => customItems.first,
+            );
+            ref.read(cartProvider.notifier).removeFromCart(cartItem.bookingId);
+            removed.add(name);
+          }
+        }
+      } catch (e) {
+        debugPrint('[DODO][Checkout] Custom service active check failed (non-fatal): $e');
+      }
+    }
+
+    // ── DODO catalog services ────────────────────────────────────────────────
+    // Uses check_node_availability RPC (no coords) so path-scoped pauses on
+    // catalog_node_relationships are caught, not just catalog_nodes status.
+    final seen = <String>{};
+    for (final item in items.where((i) => !i.isCustomService)) {
+      final key = '${item.serviceId}:${item.parentNodeId}';
+      if (seen.contains(key)) continue;
+      seen.add(key);
+      try {
+        bool isUnavailable = false;
+
+        final result = await db.rpc('check_node_availability', params: {
+          'p_node_id': item.serviceId,
+          'p_parent_id': item.parentNodeId,
+        });
+        if (result is Map) {
+          final status =
+              (result as Map<String, dynamic>)['status'] as String? ?? 'active';
+          if (status != 'active') isUnavailable = true;
+        }
+
+        // Fallback when parentNodeId is unknown: the RPC skips relationship
+        // edges without a parent — check them directly.
+        if (!isUnavailable && item.parentNodeId == null) {
+          final relRows = await db
+              .from('catalog_node_relationships')
+              .select('availability_status')
+              .eq('child_id', item.serviceId);
+          isUnavailable = (relRows as List).any((r) {
+            final s =
+                (r as Map<String, dynamic>)['availability_status'] as String? ??
+                    'active';
+            return s != 'active';
+          });
+        }
+
+        if (isUnavailable) {
+          for (final cartItem in items.where(
+            (i) =>
+                !i.isCustomService &&
+                i.serviceId == item.serviceId &&
+                i.parentNodeId == item.parentNodeId,
+          )) {
+            ref.read(cartProvider.notifier).removeFromCart(cartItem.bookingId);
+          }
+          removed.add(item.serviceName);
+        }
+      } catch (e) {
+        debugPrint('[DODO][Checkout] Catalog availability check failed (non-fatal): $e');
+      }
+    }
+
+    return removed;
+  }
+
   /// Returns a customer-facing error string if any cart item is unavailable
   /// at [_selectedAddress], or null if all items are available.
   ///
@@ -552,15 +657,8 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
 
     // ── Shared list content ─────────────────────────────────────────────────
     final listChildren = <Widget>[
-      // Cart Items (read-only review)
-      _SectionCard(
-        title: 'Order Summary',
-        child: Column(
-          children: [
-            ...items.map((item) => _OrderItemRow(item: item)),
-          ],
-        ),
-      ),
+      // Order Summary — collapsible with quantity controls
+      _OrderSummarySection(items: items),
       const SizedBox(height: 16),
 
       // Address
@@ -880,88 +978,351 @@ class _SectionCard extends StatelessWidget {
   }
 }
 
-// ── Order item row (read-only) ────────────────────────────────────────────────
+// ── Order Summary — collapsible with cart controls ────────────────────────────
 
-class _OrderItemRow extends StatelessWidget {
-  final CartItem item;
+class _OrderSummarySection extends ConsumerStatefulWidget {
+  final List<CartItem> items;
+  const _OrderSummarySection({required this.items});
 
-  const _OrderItemRow({required this.item});
+  @override
+  ConsumerState<_OrderSummarySection> createState() =>
+      _OrderSummarySectionState();
+}
+
+class _OrderSummarySectionState
+    extends ConsumerState<_OrderSummarySection> {
+  bool _expanded = true;
 
   @override
   Widget build(BuildContext context) {
     final tt = Theme.of(context).textTheme;
-    final addonsTotal = item.addons.fold(0.0, (s, a) => s + a.addonPrice);
+    final items = widget.items;
+    final totalQty = items.fold<int>(0, (s, i) => s + i.quantity);
+    final subtotal = ref.watch(cartSubtotalProvider);
+
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.border, width: 0.8),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withAlpha(6),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // ── Clickable header ──────────────────────────────────────────────
+          InkWell(
+            borderRadius: _expanded
+                ? const BorderRadius.vertical(top: Radius.circular(16))
+                : BorderRadius.circular(16),
+            onTap: () => setState(() => _expanded = !_expanded),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+              child: Row(
+                children: [
+                  Text(
+                    'Order Summary',
+                    style: tt.titleSmall
+                        ?.copyWith(fontWeight: FontWeight.w700),
+                  ),
+                  const SizedBox(width: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 7, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: AppColors.primary.withAlpha(15),
+                      borderRadius: BorderRadius.circular(100),
+                    ),
+                    child: Text(
+                      '$totalQty',
+                      style: tt.labelSmall?.copyWith(
+                        color: AppColors.primary,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                  const Spacer(),
+                  Text(
+                    '₹${subtotal.toInt()}',
+                    style: tt.labelMedium?.copyWith(
+                      color: AppColors.textSecondary,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  AnimatedRotation(
+                    turns: _expanded ? 0.5 : 0.0,
+                    duration: const Duration(milliseconds: 200),
+                    child: const Icon(
+                      Icons.keyboard_arrow_down_rounded,
+                      size: 18,
+                      color: AppColors.textHint,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+
+          // ── Expandable items ──────────────────────────────────────────────
+          if (_expanded) ...[
+            const Divider(
+                color: AppColors.divider, height: 0, thickness: 0.8),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+              child: Column(
+                children:
+                    items.map((item) => _CheckoutItemTile(item: item)).toList(),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+// ── Checkout item tile (quantity controls + remove + add-on breakdown) ───────
+
+class _CheckoutItemTile extends ConsumerWidget {
+  final CartItem item;
+  const _CheckoutItemTile({required this.item});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final tt = Theme.of(context).textTheme;
+    final notifier = ref.read(cartProvider.notifier);
+    final addonsTotal =
+        item.addons.fold(0.0, (s, a) => s + a.addonPrice);
     final basePrice = item.unitPrice - addonsTotal;
-    final originalAddonsTotal = item.addons.fold(
-        0.0, (s, a) => s + (a.originalAddonPrice ?? a.addonPrice));
-    final originalBase = item.originalUnitPrice ?? basePrice;
-    final originalPerUnit = originalBase + originalAddonsTotal;
-    final hasDiscount = originalPerUnit > item.unitPrice + 0.01;
 
     return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.only(bottom: 12),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          _CheckoutThumbnail(imageUrl: item.imageUrl),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // ── Main line: name / subtext / stepper / total ───────────
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            item.serviceName,
+                            style: tt.bodySmall
+                                ?.copyWith(fontWeight: FontWeight.w600),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          if (item.isAmc)
+                            const _CheckoutAmcLabel()
+                          else
+                            Text(
+                              item.addons.isEmpty
+                                  ? '₹${item.unitPrice.toInt()} per unit'
+                                  : '₹${basePrice.toInt()} base',
+                              style: tt.labelSmall?.copyWith(
+                                  color: AppColors.textSecondary),
+                            ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    _CheckoutQtyStepper(
+                      quantity: item.quantity,
+                      onDecrement: () => notifier.updateQuantity(
+                          item.bookingId, item.quantity - 1),
+                      onIncrement: () => notifier.updateQuantity(
+                          item.bookingId, item.quantity + 1),
+                    ),
+                    const SizedBox(width: 10),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(
+                          '₹${item.totalPrice.toInt()}',
+                          style: tt.labelMedium?.copyWith(
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.primary,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        GestureDetector(
+                          behavior: HitTestBehavior.opaque,
+                          onTap: () =>
+                              notifier.removeFromCart(item.bookingId),
+                          child: const Padding(
+                            padding: EdgeInsets.all(2),
+                            child: Icon(Icons.close_rounded,
+                                size: 15, color: AppColors.textHint),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+
+                // ── Add-on breakdown (mirrors cart screen expanded view) ──
+                if (item.addons.isNotEmpty) ...[
+                  const SizedBox(height: 5),
+                  ...item.addons.map((a) => _CheckoutAddonRow(addon: a)),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CheckoutAddonRow extends StatelessWidget {
+  final SelectedAddon addon;
+  const _CheckoutAddonRow({required this.addon});
+
+  @override
+  Widget build(BuildContext context) {
+    final tt = Theme.of(context).textTheme;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 3),
+      child: Row(
+        children: [
           Expanded(
             child: Text(
-              item.serviceName,
-              style: tt.bodySmall?.copyWith(color: AppColors.textPrimary),
-              maxLines: 2,
+              '+ ${addon.addonName}',
+              style: tt.labelSmall
+                  ?.copyWith(color: AppColors.textSecondary),
+              maxLines: 1,
               overflow: TextOverflow.ellipsis,
             ),
           ),
-          const SizedBox(width: 8),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.baseline,
-                textBaseline: TextBaseline.alphabetic,
-                children: [
-                  Text(
-                    '${item.quantity} × ₹${item.unitPrice.toInt()}',
-                    style: tt.labelSmall
-                        ?.copyWith(color: AppColors.textSecondary),
-                  ),
-                  if (hasDiscount) ...[
-                    const SizedBox(width: 4),
-                    Text(
-                      '₹${originalPerUnit.toInt()}',
-                      style: tt.labelSmall?.copyWith(
-                        color: AppColors.textHint,
-                        decoration: TextDecoration.lineThrough,
-                        decorationColor: AppColors.textHint,
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-            ],
-          ),
-          const SizedBox(width: 8),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Text(
-                '₹${item.totalPrice.toInt()}',
-                style: tt.labelMedium?.copyWith(
-                  fontWeight: FontWeight.w700,
-                  color: AppColors.textPrimary,
-                ),
-              ),
-              if (hasDiscount)
-                Text(
-                  '₹${(originalPerUnit * item.quantity).toInt()}',
-                  style: tt.labelSmall?.copyWith(
-                    color: AppColors.textHint,
-                    decoration: TextDecoration.lineThrough,
-                    decorationColor: AppColors.textHint,
-                  ),
-                ),
-            ],
+          Text(
+            '₹${addon.addonPrice.toInt()}',
+            style: tt.labelSmall
+                ?.copyWith(color: AppColors.textSecondary),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _CheckoutThumbnail extends StatelessWidget {
+  final String? imageUrl;
+  const _CheckoutThumbnail({this.imageUrl});
+
+  @override
+  Widget build(BuildContext context) {
+    if (imageUrl != null && imageUrl!.isNotEmpty) {
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(8),
+        child: Image.network(
+          imageUrl!,
+          width: 48,
+          height: 48,
+          fit: BoxFit.cover,
+          errorBuilder: (_, __, ___) => _placeholder(),
+        ),
+      );
+    }
+    return _placeholder();
+  }
+
+  Widget _placeholder() => Container(
+        width: 48,
+        height: 48,
+        decoration: BoxDecoration(
+          color: AppColors.primaryLight,
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: const Icon(
+          Icons.home_repair_service_rounded,
+          size: 22,
+          color: AppColors.primary,
+        ),
+      );
+}
+
+class _CheckoutAmcLabel extends StatelessWidget {
+  const _CheckoutAmcLabel();
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      'AMC',
+      style: Theme.of(context).textTheme.labelSmall?.copyWith(
+            color: const Color(0xFF3182CE),
+            fontWeight: FontWeight.w700,
+          ),
+    );
+  }
+}
+
+class _CheckoutQtyStepper extends StatelessWidget {
+  final int quantity;
+  final VoidCallback onDecrement;
+  final VoidCallback onIncrement;
+
+  const _CheckoutQtyStepper({
+    required this.quantity,
+    required this.onDecrement,
+    required this.onIncrement,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final tt = Theme.of(context).textTheme;
+    return Container(
+      decoration: BoxDecoration(
+        border: Border.all(color: AppColors.border),
+        borderRadius: BorderRadius.circular(7),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _CheckoutQtyBtn(icon: Icons.remove_rounded, onTap: onDecrement),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 10),
+            child: Text(
+              '$quantity',
+              style: tt.labelMedium?.copyWith(fontWeight: FontWeight.w700),
+            ),
+          ),
+          _CheckoutQtyBtn(icon: Icons.add_rounded, onTap: onIncrement),
+        ],
+      ),
+    );
+  }
+}
+
+class _CheckoutQtyBtn extends StatelessWidget {
+  final IconData icon;
+  final VoidCallback onTap;
+  const _CheckoutQtyBtn({required this.icon, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 7),
+        child: Icon(icon, size: 14, color: AppColors.primary),
       ),
     );
   }

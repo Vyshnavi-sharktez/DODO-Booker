@@ -16,6 +16,17 @@ class ServiceFaqsRepository {
         .toList();
   }
 
+  Future<List<ServiceFaq>> fetchForCustomService(String customServiceId) async {
+    final data = await _supabase
+        .from('service_faqs')
+        .select()
+        .eq('custom_service_id', customServiceId)
+        .order('sort_order', ascending: true);
+    return (data as List)
+        .map((r) => ServiceFaq.fromMap(r as Map<String, dynamic>))
+        .toList();
+  }
+
   Future<ServiceFaq> create({
     required String serviceId,
     required String question,
@@ -26,6 +37,25 @@ class ServiceFaqsRepository {
         .from('service_faqs')
         .insert({
           'service_id': serviceId,
+          'question': question,
+          'answer': answer,
+          'sort_order': sortOrder,
+        })
+        .select()
+        .single();
+    return ServiceFaq.fromMap(data);
+  }
+
+  Future<ServiceFaq> createForCustomService({
+    required String customServiceId,
+    required String question,
+    required String answer,
+    required int sortOrder,
+  }) async {
+    final data = await _supabase
+        .from('service_faqs')
+        .insert({
+          'custom_service_id': customServiceId,
           'question': question,
           'answer': answer,
           'sort_order': sortOrder,

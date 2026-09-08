@@ -6,4 +6,5 @@ abstract class IServicesRepository {
   Future<List<CatalogService>> getCatalogServices();
   Future<void> assignServices(String vendorId, List<String> serviceIds);
   Future<void> toggleService(String vendorServiceId, bool isActive);
+  Future<void> removeVendorService(String vendorServiceId);
 }

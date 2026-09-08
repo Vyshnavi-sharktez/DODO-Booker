@@ -65,3 +65,60 @@ final serviceFaqsNotifierProvider = StateNotifierProvider.family<
     serviceId,
   ),
 );
+
+// ── Vendor custom service FAQs ─────────────────────────────────────────────────
+
+class CustomServiceFaqsNotifier
+    extends StateNotifier<AsyncValue<List<ServiceFaq>>> {
+  final ServiceFaqsRepository _repo;
+  final String _customServiceId;
+
+  CustomServiceFaqsNotifier(this._repo, this._customServiceId)
+      : super(const AsyncValue.loading()) {
+    _load();
+  }
+
+  Future<void> _load() async {
+    state = const AsyncValue.loading();
+    state = await AsyncValue.guard(
+        () => _repo.fetchForCustomService(_customServiceId));
+  }
+
+  Future<void> refresh() => _load();
+
+  Future<void> create({required String question, required String answer}) async {
+    final current = state.valueOrNull ?? [];
+    final nextOrder = current.isEmpty
+        ? 0
+        : current.map((f) => f.sortOrder).reduce((a, b) => a > b ? a : b) + 1;
+    await _repo.createForCustomService(
+      customServiceId: _customServiceId,
+      question: question,
+      answer: answer,
+      sortOrder: nextOrder,
+    );
+    await _load();
+  }
+
+  Future<void> update(String id,
+      {required String question,
+      required String answer,
+      required int sortOrder}) async {
+    await _repo.update(id,
+        question: question, answer: answer, sortOrder: sortOrder);
+    await _load();
+  }
+
+  Future<void> delete(String id) async {
+    await _repo.delete(id);
+    await _load();
+  }
+}
+
+final customServiceFaqsNotifierProvider = StateNotifierProvider.family<
+    CustomServiceFaqsNotifier, AsyncValue<List<ServiceFaq>>, String>(
+  (ref, customServiceId) => CustomServiceFaqsNotifier(
+    ref.watch(serviceFaqsRepositoryProvider),
+    customServiceId,
+  ),
+);

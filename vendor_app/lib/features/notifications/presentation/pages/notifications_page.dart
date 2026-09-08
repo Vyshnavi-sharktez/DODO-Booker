@@ -53,6 +53,13 @@ class _NotificationsPageState extends ConsumerState<NotificationsPage> {
         n.notificationType == 'wallet_penalty') {
       debugPrint('[NOTIF][Vendor] navigating → ${RouteNames.wallet}');
       router.pushNamed(RouteNames.wallet);
+    } else if (n.entityType == 'vendor_service_request' ||
+        n.notificationType == 'vendor_service_request') {
+      debugPrint('[NOTIF][Vendor] navigating → ${RouteNames.services} tab=2 (request_id=${n.entityId})');
+      router.pushNamed(
+        RouteNames.services,
+        queryParameters: {'tab': '2'},
+      );
     }
   }
 

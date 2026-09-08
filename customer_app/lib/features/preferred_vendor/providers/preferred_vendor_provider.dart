@@ -55,6 +55,8 @@ final preferredVendorsForServiceProvider = FutureProvider.autoDispose
     'p_vendor_ids': vendorIds,
     'p_lat': key.lat,
     'p_lng': key.lng,
+    // Only show vendors who have an active vendor_services row for this service.
+    'p_service_ids': [key.serviceId],
   };
   if (vendorFees != null) rpcParams['p_vendor_fees'] = vendorFees;
 

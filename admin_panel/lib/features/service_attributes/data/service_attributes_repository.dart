@@ -186,6 +186,39 @@ class ServiceAttributesRepository {
     return ServiceAttribute.fromMap(data);
   }
 
+  Future<List<ServiceAttribute>> fetchByCustomService(
+      String customServiceId) async {
+    final data = await _supabase
+        .from('service_attributes')
+        .select('*, $_optionsSelect')
+        .eq('custom_service_id', customServiceId)
+        .order('name', ascending: true)
+        .order('sort_order',
+            referencedTable: 'service_attribute_options', ascending: true);
+    return (data as List<dynamic>)
+        .map((r) => ServiceAttribute.fromMap(r as Map<String, dynamic>))
+        .toList();
+  }
+
+  Future<ServiceAttribute> createAttributeForCustomService({
+    required String customServiceId,
+    required String name,
+    required String fieldType,
+    required bool isRequired,
+  }) async {
+    final data = await _supabase
+        .from('service_attributes')
+        .insert({
+          'custom_service_id': customServiceId,
+          'name': name,
+          'field_type': fieldType,
+          'is_required': isRequired,
+        })
+        .select('*, $_optionsSelect')
+        .single();
+    return ServiceAttribute.fromMap(data);
+  }
+
   /// Lightweight fetch for the service picker — returns only id + name.
   Future<List<({String id, String name})>> fetchServiceDropdowns() async {
     final data = await _supabase

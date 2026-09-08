@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 
 abstract final class AppColors {
-  // Brand
-  static const Color primary = Color(0xFF1A73E8);
-  static const Color primaryLight = Color(0xFFE8F0FE);
+  // Brand — black/white theme
+  static const Color primary = Color(0xFF111111);
+  static const Color primaryLight = Color(0xFFF0F0F0);
   static const Color accent = Color(0xFF34A853);
 
   // Semantic
@@ -22,7 +22,7 @@ abstract final class AppColors {
   static const Color textSecondary = Color(0xFF5F6368);
   static const Color textHint = Color(0xFF9AA0A6);
 
-  // Booking status
+  // Booking status — kept for semantic meaning
   static const Color statusPending = Color(0xFFFBBC04);
   static const Color statusAssigned = Color(0xFF4285F4);
   static const Color statusInProgress = Color(0xFF9C27B0);

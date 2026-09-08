@@ -77,7 +77,7 @@ class _RejectDialogState extends ConsumerState<RejectDialog> {
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       titlePadding: const EdgeInsets.fromLTRB(24, 24, 24, 0),
       contentPadding: const EdgeInsets.fromLTRB(24, 16, 24, 0),
-      actionsPadding: const EdgeInsets.fromLTRB(24, 8, 24, 16),
+      actionsPadding: const EdgeInsets.fromLTRB(24, 0, 24, 16),
       title: Row(
         children: [
           Icon(
@@ -225,23 +225,43 @@ class _RejectDialogState extends ConsumerState<RejectDialog> {
         ),
       ),
       actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(null),
-          child: const Text('Cancel'),
-        ),
-        FilledButton(
-          onPressed: _canConfirm
-              ? () => Navigator.of(context).pop(_effectiveReason)
-              : null,
-          style: FilledButton.styleFrom(
-            backgroundColor: AppColors.error,
-            disabledBackgroundColor: AppColors.error.withValues(alpha: 0.3),
-          ),
-          child: Text(
-            hasPenalty
-                ? 'Proceed & Pay ₹${_penaltyAmount.toStringAsFixed(2)}'
-                : 'Reject',
-          ),
+        Row(
+          children: [
+            Expanded(
+              child: OutlinedButton(
+                onPressed: () => Navigator.of(context).pop(null),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: AppColors.error,
+                  side: const BorderSide(color: AppColors.error),
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8)),
+                ),
+                child: const Text('Cancel'),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: FilledButton(
+                onPressed: _canConfirm
+                    ? () => Navigator.of(context).pop(_effectiveReason)
+                    : null,
+                style: FilledButton.styleFrom(
+                  backgroundColor: AppColors.error,
+                  disabledBackgroundColor:
+                      AppColors.error.withValues(alpha: 0.3),
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8)),
+                ),
+                child: Text(
+                  hasPenalty
+                      ? 'Proceed & Pay ₹${_penaltyAmount.toStringAsFixed(2)}'
+                      : 'Reject',
+                ),
+              ),
+            ),
+          ],
         ),
       ],
     );

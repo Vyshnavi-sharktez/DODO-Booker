@@ -75,6 +75,7 @@ class _ReviewModalState extends ConsumerState<ReviewModal> {
           );
       ref.invalidate(bookingReviewProvider(widget.bookingId));
       ref.invalidate(reviewsForServiceProvider);
+      ref.invalidate(reviewsForCustomServiceProvider);
       ref.invalidate(myBookingsProvider);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

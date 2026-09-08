@@ -3,9 +3,11 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/cart_item.dart';
 import '../../../features/catalog/models/catalog_node_model.dart';
 import '../../../features/amc/models/amc_plan_model.dart';
+import '../../../features/vendor_custom_service/models/vendor_custom_service_model.dart';
 import '../../../models/addon_model.dart';
 import '../services/cart_sync_service.dart';
 
@@ -233,14 +235,39 @@ class CartNotifier extends StateNotifier<List<CartItem>> {
         orElse: () => throw StateError('bookingId not found: $bookingId'));
     final serviceId = item.serviceId;
     final parentNodeId = item.parentNodeId;
+    final isCustom = item.isCustomService;
     state = state.where((i) => i.bookingId != bookingId).toList();
     _save();
-    // Delete the remote row only when no other local item shares the same
-    // catalog occurrence (serviceId + parentNodeId).
-    if (!state.any((i) =>
-        i.serviceId == serviceId && i.parentNodeId == parentNodeId)) {
+    // Custom service items are never synced to cart_items (no catalog_nodes FK).
+    if (!isCustom &&
+        !state.any((i) =>
+            i.serviceId == serviceId && i.parentNodeId == parentNodeId)) {
       unawaited(_sync.deleteItem(serviceId, parentNodeId));
     }
+  }
+
+  /// Adds a vendor custom service to the cart.
+  /// Custom service items use [customServiceId] at checkout and are NOT synced
+  /// to the remote cart_items table (which has a catalog_nodes FK on service_id).
+  void addCustomServiceToCart(VendorCustomServiceModel service) {
+    // Deduplicate: one item per vendor custom service in the cart.
+    if (state.any((i) => i.customServiceId == service.id)) {
+      return;
+    }
+    final bookingId = '${service.id}_${DateTime.now().millisecondsSinceEpoch}';
+    final newItem = CartItem(
+      bookingId: bookingId,
+      serviceId: service.id,
+      serviceName: service.serviceName,
+      imageUrl: service.imageUrl,
+      unitPrice: service.activePrice,
+      quantity: 1,
+      customServiceId: service.id,
+      vendorId: service.vendorId,
+    );
+    state = [...state, newItem];
+    _save();
+    // Remote sync skipped: cart_items.service_id is a FK to catalog_nodes.
   }
 
   void updateAddons(
@@ -277,6 +304,111 @@ class CartNotifier extends StateNotifier<List<CartItem>> {
     _save();
     final updated = state.firstWhere((i) => i.bookingId == bookingId);
     unawaited(_sync.upsertItem(updated));
+  }
+
+  /// Checks all non-custom DODO cart items against the [check_node_availability]
+  /// RPC. Items whose service has been paused or deactivated are removed from
+  /// the cart (both local state and remote cart_items). Returns the display
+  /// names of every removed service so the caller can show the appropriate UI.
+  ///
+  /// Custom-service items are intentionally excluded — their Active/Inactive
+  /// flow is handled separately and must not be touched here.
+  Future<List<String>> pruneUnavailableNativeServices() async {
+    final client = Supabase.instance.client;
+    final removed = <String>[];
+
+    // ── Custom services: batch-check is_active on vendor_service_requests ────
+    final customItems = state
+        .where((i) => i.isCustomService && i.customServiceId != null)
+        .toList();
+    if (customItems.isNotEmpty) {
+      try {
+        final ids = customItems.map((i) => i.customServiceId!).toList();
+        final rows = await client
+            .from('vendor_service_requests')
+            .select('id, service_name, is_active')
+            .inFilter('id', ids);
+        for (final row in rows as List) {
+          final r = row as Map<String, dynamic>;
+          if (!(r['is_active'] as bool? ?? false)) {
+            final id = r['id'] as String;
+            final name = r['service_name'] as String? ?? 'A service';
+            // Snapshot before removal — removeFromCart mutates state.
+            final toRemove = state
+                .where((i) => i.isCustomService && i.customServiceId == id)
+                .toList();
+            for (final affected in toRemove) {
+              removeFromCart(affected.bookingId);
+            }
+            removed.add(name);
+          }
+        }
+      } catch (e) {
+        debugPrint('[DODO][Cart] pruneUnavailableNativeServices (custom): $e');
+      }
+    }
+
+    // ── DODO catalog services: check_node_availability RPC ───────────────────
+    final nativeItems = state.where((i) => !i.isCustomService).toList();
+    if (nativeItems.isEmpty) return removed;
+
+    final seen = <String>{};
+
+    for (final item in nativeItems) {
+      final key = '${item.serviceId}:${item.parentNodeId}';
+      if (seen.contains(key)) continue;
+      seen.add(key);
+      try {
+        bool isUnavailable = false;
+
+        // Primary check: walks ancestor path (and checks relationship-scoped
+        // availability when parentNodeId is set).
+        final result = await client.rpc('check_node_availability', params: {
+          'p_node_id': item.serviceId,
+          'p_parent_id': item.parentNodeId,
+        });
+        final status = result is Map
+            ? ((result as Map<String, dynamic>)['status'] as String? ?? 'active')
+            : 'active';
+        if (status != 'active') {
+          isUnavailable = true;
+        }
+
+        // Fallback when parentNodeId is unknown: the RPC cannot check
+        // relationship-scoped availability without a parent. Explicitly query
+        // catalog_node_relationships so admin's path-scoped pauses are caught.
+        if (!isUnavailable && item.parentNodeId == null) {
+          final relRows = await client
+              .from('catalog_node_relationships')
+              .select('availability_status')
+              .eq('child_id', item.serviceId);
+          isUnavailable = (relRows as List).any((r) {
+            final s =
+                (r as Map<String, dynamic>)['availability_status'] as String? ??
+                    'active';
+            return s != 'active';
+          });
+        }
+
+        if (isUnavailable) {
+          // Snapshot affected items before removal — removeFromCart mutates state.
+          final toRemove = state
+              .where((i) =>
+                  !i.isCustomService &&
+                  i.serviceId == item.serviceId &&
+                  i.parentNodeId == item.parentNodeId)
+              .toList();
+          for (final affected in toRemove) {
+            removeFromCart(affected.bookingId);
+          }
+          removed.add(item.serviceName);
+        }
+      } catch (e) {
+        debugPrint('[DODO][Cart] pruneUnavailableNativeServices: $e');
+      }
+    }
+
+    return removed;
   }
 
   void clearCart() {

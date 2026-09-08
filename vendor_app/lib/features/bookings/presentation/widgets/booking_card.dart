@@ -28,20 +28,16 @@ class BookingCard extends ConsumerStatefulWidget {
 class _BookingCardState extends ConsumerState<BookingCard> {
   bool _updating = false;
   bool _rejecting = false;
-  bool _verifying = false;
 
   // Mirrors the booking's new status immediately after any successful API call,
   // so the correct next-step UI appears without waiting for the provider refetch.
   Booking? _localBooking;
 
-  final TextEditingController _otpController = TextEditingController();
-  String? _otpError;
-
   // Prefers locally-set state; falls back to the parent-supplied booking.
   Booking get _booking => _localBooking ?? widget.booking;
 
   // True while any async action is in-flight — prevents double-taps.
-  bool get _busy => _updating || _rejecting || _verifying;
+  bool get _busy => _updating || _rejecting;
 
   // Called by every handler after a successful API call.
   // Updates local state immediately and invalidates the provider in the background.
@@ -52,12 +48,6 @@ class _BookingCardState extends ConsumerState<BookingCard> {
       dispatchStatus: newStatus == 'accepted' ? 'accepted' : _booking.dispatchStatus,
     ));
     ref.invalidate(vendorBookingsProvider);
-  }
-
-  @override
-  void dispose() {
-    _otpController.dispose();
-    super.dispose();
   }
 
   // Returns "#<booking_number>" when available, otherwise "#<first-8-uuid-chars>".
@@ -298,110 +288,67 @@ class _BookingCardState extends ConsumerState<BookingCard> {
     }
   }
 
-  // ── Verify customer OTP ───────────────────────────────────────────────────
+  // ── Verify customer OTP via dialog ────────────────────────────────────────
 
-  Future<void> _handleVerifyOtp() async {
-    // ── Diagnostic checkpoint 1: confirm function was reached ────────────────
-    debugPrint('[OTP][VERIFY] ══════════ _handleVerifyOtp() ENTERED ══════════');
-    debugPrint('[OTP][VERIFY] State at entry — _busy=$_busy '
-        '_updating=$_updating _verifying=$_verifying _rejecting=$_rejecting');
-
-    // ── Diagnostic checkpoint 2: inspect the raw TextField value ─────────────
-    final rawText = _otpController.text;
-    final otp = rawText.trim();
-    debugPrint('[OTP][VERIFY] TextField raw  : "$rawText"');
-    debugPrint('[OTP][VERIFY] TextField trim : "$otp"');
-    debugPrint('[OTP][VERIFY] codeUnits      : ${rawText.codeUnits}');
-    debugPrint('[OTP][VERIFY] trimmed length : ${otp.length}');
-
-    if (otp.length != 6) {
-      debugPrint('[OTP][VERIFY] ✗ Validation failed: length ${otp.length} ≠ 6 — aborting');
-      setState(() => _otpError = 'Enter the 6-digit OTP');
+  Future<void> _handleShowOtpDialog() async {
+    debugPrint('[OTP][DIALOG] Opening — bookingId=${_booking.id}');
+    final verified = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => _OtpVerifyDialog(
+        onVerify: (otp) => ref
+            .read(verifyCompletionOtpUseCaseProvider)
+            .call(_booking.id, otp),
+      ),
+    );
+    if (verified != true || !mounted) {
+      debugPrint('[OTP][DIALOG] Cancelled or unmounted');
       return;
     }
-    debugPrint('[OTP][VERIFY] ✓ Validation passed');
 
-    setState(() {
-      _verifying = true;
-      _otpError = null;
-    });
-    debugPrint('[OTP][VERIFY] _verifying=true set — calling use case…');
+    debugPrint('[OTP][DIALOG] ✓ Verified — applying completed status');
+    _applyStatusUpdate('completed');
 
-    try {
-      // ── Diagnostic checkpoint 3: confirm use case is invoked ─────────────
-      debugPrint('[OTP][VERIFY] Invoking verifyCompletionOtpUseCaseProvider '
-          '— bookingId=${_booking.id} otp="$otp"');
-      final verified = await ref
-          .read(verifyCompletionOtpUseCaseProvider)
-          .call(_booking.id, otp);
-      debugPrint('[OTP][VERIFY] Use case returned: verified=$verified');
+    if (_booking.isCod) {
+      Future.microtask(() { if (mounted) _showCodCashConfirmationDialog(); });
+    }
 
-      if (!mounted) {
-        debugPrint('[OTP][VERIFY] Widget unmounted after await — returning');
-        return;
-      }
+    final completedBy =
+        _isDodoBooking ? 'DODO Team ($_vendorName)' : 'Vendor $_vendorName';
+    final titleAdmin = _booking.isWarrantyRework
+        ? 'Warranty Rework Completed'
+        : 'Booking Completed';
+    final msgAdmin = _booking.isWarrantyRework
+        ? 'Vendor $_vendorName completed warranty rework $_bookingRef via OTP.'
+        : '$completedBy completed booking $_bookingRef via OTP.';
+    ref.read(bookingsRepositoryProvider).createAdminNotification(
+      title: titleAdmin,
+      message: msgAdmin,
+      notificationType: 'booking_completed',
+      entityId: _booking.id,
+    ).ignore();
 
-      if (!verified) {
-        debugPrint('[OTP][VERIFY] ✗ OTP rejected — showing error to user');
-        setState(() {
-          _otpError = 'Incorrect OTP. Please try again.';
-          _verifying = false;
-        });
-        return;
-      }
+    final titleCust = _booking.isWarrantyRework
+        ? 'Warranty Rework Completed'
+        : 'Service Completed';
+    final msgCust = _booking.isWarrantyRework
+        ? 'Your warranty rework service has been completed successfully.'
+        : 'Your service has been completed. You can now rate the experience.';
+    ref.read(bookingsRepositoryProvider).createCustomerNotification(
+      customerId: _booking.customerId,
+      title: titleCust,
+      message: msgCust,
+      notificationType: 'booking_completed',
+      entityId: _booking.id,
+    ).ignore();
 
-      debugPrint('[OTP][VERIFY] ✓ OTP accepted — updating status to completed');
-      _applyStatusUpdate('completed');
-
-      if (_booking.isCod) {
-        Future.microtask(() => _showCodCashConfirmationDialog());
-      }
-
-      final completedBy = _isDodoBooking ? 'DODO Team ($_vendorName)' : 'Vendor $_vendorName';
-      final titleAdmin = _booking.isWarrantyRework ? 'Warranty Rework Completed' : 'Booking Completed';
-      final msgAdmin = _booking.isWarrantyRework
-          ? 'Vendor $_vendorName completed warranty rework $_bookingRef via OTP.'
-          : '$completedBy completed booking $_bookingRef via OTP.';
-      ref.read(bookingsRepositoryProvider).createAdminNotification(
-        title: titleAdmin,
-        message: msgAdmin,
-        notificationType: 'booking_completed',
-        entityId: _booking.id,
-      ).ignore();
-
-      final titleCust = _booking.isWarrantyRework ? 'Warranty Rework Completed' : 'Service Completed';
-      final msgCust = _booking.isWarrantyRework
-          ? 'Your warranty rework service has been completed successfully.'
-          : 'Your service has been completed. You can now rate the experience.';
-      ref.read(bookingsRepositoryProvider).createCustomerNotification(
-        customerId: _booking.customerId,
-        title: titleCust,
-        message: msgCust,
-        notificationType: 'booking_completed',
-        entityId: _booking.id,
-      ).ignore();
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Booking $_bookingRef completed successfully.'),
-            backgroundColor: AppColors.success,
-          ),
-        );
-      }
-
-      if (_booking.isCod) {
-        Future.microtask(() => _showCodCashConfirmationDialog());
-      }
-    } catch (e) {
-      debugPrint('[OTP] verifyCompletionOtp ERROR: $e');
-      if (mounted) {
-        setState(() {
-          _otpError = 'Verification failed: $e';
-        });
-      }
-    } finally {
-      if (mounted) setState(() => _verifying = false);
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Booking $_bookingRef completed successfully.'),
+          backgroundColor: AppColors.success,
+        ),
+      );
     }
   }
 
@@ -565,14 +512,9 @@ class _BookingCardState extends ConsumerState<BookingCard> {
     final showOtpPanel = isAwaitingVerification;
     final isRejected = _booking.status == 'rejected';
 
-    // Diagnostic: log button state on every rebuild for OTP panel cards.
-    if (showOtpPanel) {
-      debugPrint(
-        '[OTP][BUILD] Card rebuilt — bookingId=${_booking.id} '
-        '_busy=$_busy (_updating=$_updating '
-        '_verifying=$_verifying _rejecting=$_rejecting) '
-        '→ Verify button is ${_busy ? "DISABLED (onPressed=null)" : "ENABLED"}',
-      );
+    if (isAwaitingVerification) {
+      debugPrint('[OTP][BUILD] Card rebuilt — bookingId=${_booking.id} '
+          '_busy=$_busy → OTP button ${_busy ? "DISABLED" : "ENABLED"}');
     }
 
     return Card(
@@ -1003,81 +945,19 @@ class _BookingCardState extends ConsumerState<BookingCard> {
             // ── Actions: Enter OTP (awaiting_verification — both roles) ──────
             if (showOtpPanel) ...[
               const SizedBox(height: 12),
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: AppColors.warning.withValues(alpha: 0.08),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(
-                    color: AppColors.warning.withValues(alpha: 0.35),
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton.icon(
+                  onPressed: _busy ? null : _handleShowOtpDialog,
+                  style: FilledButton.styleFrom(
+                    backgroundColor: AppColors.warning,
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
                   ),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        const Icon(
-                          Icons.lock_clock_rounded,
-                          size: 15,
-                          color: AppColors.warning,
-                        ),
-                        const SizedBox(width: 6),
-                        Text(
-                          'Enter OTP from customer',
-                          style: theme.textTheme.labelMedium?.copyWith(
-                            color: AppColors.warning,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 10),
-                    TextField(
-                      controller: _otpController,
-                      keyboardType: TextInputType.number,
-                      maxLength: 6,
-                      textAlign: TextAlign.center,
-                      style: theme.textTheme.titleLarge?.copyWith(
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: 10,
-                      ),
-                      decoration: InputDecoration(
-                        counterText: '',
-                        hintText: '_ _ _ _ _ _',
-                        hintStyle: TextStyle(
-                          letterSpacing: 6,
-                          color: AppColors.textHint,
-                        ),
-                        errorText: _otpError,
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                      ),
-                      onChanged: (_) {
-                        if (_otpError != null) {
-                          setState(() => _otpError = null);
-                        }
-                      },
-                    ),
-                    const SizedBox(height: 10),
-                    SizedBox(
-                      width: double.infinity,
-                      child: FilledButton(
-                        onPressed: _busy ? null : _handleVerifyOtp,
-                        style: FilledButton.styleFrom(
-                          backgroundColor: AppColors.success,
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                        ),
-                        child: _verifying
-                            ? const _Spinner(color: Colors.white)
-                            : const Text('Verify & Complete'),
-                      ),
-                    ),
-                  ],
+                  icon: const Icon(Icons.lock_clock_rounded, size: 16),
+                  label: const Text('Enter Customer OTP'),
                 ),
               ),
             ],
@@ -2132,15 +2012,176 @@ class _ConfirmDialog extends StatelessWidget {
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       title: Text(title),
       content: Text(message),
+      actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
       actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(false),
-          child: const Text('Cancel'),
+        Row(
+          children: [
+            Expanded(
+              child: OutlinedButton(
+                onPressed: () => Navigator.of(context).pop(false),
+                style: OutlinedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8)),
+                ),
+                child: const Text('Cancel'),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: FilledButton(
+                onPressed: () => Navigator.of(context).pop(true),
+                style: FilledButton.styleFrom(
+                  backgroundColor: confirmColor,
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8)),
+                ),
+                child: Text(confirmLabel),
+              ),
+            ),
+          ],
         ),
-        FilledButton(
-          onPressed: () => Navigator.of(context).pop(true),
-          style: FilledButton.styleFrom(backgroundColor: confirmColor),
-          child: Text(confirmLabel),
+      ],
+    );
+  }
+}
+
+// ── OTP verification dialog ────────────────────────────────────────────────────
+
+class _OtpVerifyDialog extends StatefulWidget {
+  const _OtpVerifyDialog({required this.onVerify});
+
+  final Future<bool> Function(String otp) onVerify;
+
+  @override
+  State<_OtpVerifyDialog> createState() => _OtpVerifyDialogState();
+}
+
+class _OtpVerifyDialogState extends State<_OtpVerifyDialog> {
+  final _ctrl = TextEditingController();
+  String? _error;
+  bool _verifying = false;
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    final otp = _ctrl.text.trim();
+    debugPrint('[OTP][DIALOG] _submit — raw="${_ctrl.text}" trim="$otp" len=${otp.length}');
+    if (otp.length != 6) {
+      setState(() => _error = 'Enter the 6-digit OTP');
+      return;
+    }
+    setState(() {
+      _verifying = true;
+      _error = null;
+    });
+    try {
+      final ok = await widget.onVerify(otp);
+      if (!mounted) return;
+      if (ok) {
+        Navigator.of(context).pop(true);
+      } else {
+        setState(() {
+          _error = 'Incorrect OTP. Please try again.';
+          _verifying = false;
+        });
+      }
+    } catch (e) {
+      debugPrint('[OTP][DIALOG] onVerify ERROR: $e');
+      if (!mounted) return;
+      setState(() {
+        _error = 'Verification failed: $e';
+        _verifying = false;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return AlertDialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      title: const Row(
+        children: [
+          Icon(Icons.lock_clock_rounded, color: AppColors.warning, size: 20),
+          SizedBox(width: 8),
+          Text('Enter Customer OTP'),
+        ],
+      ),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            'Ask the customer for their 6-digit OTP to confirm service completion.',
+            style: theme.textTheme.bodySmall
+                ?.copyWith(color: AppColors.textSecondary),
+          ),
+          const SizedBox(height: 16),
+          TextField(
+            controller: _ctrl,
+            keyboardType: TextInputType.number,
+            maxLength: 6,
+            textAlign: TextAlign.center,
+            autofocus: true,
+            style: theme.textTheme.titleLarge?.copyWith(
+              fontWeight: FontWeight.w800,
+              letterSpacing: 10,
+            ),
+            decoration: InputDecoration(
+              counterText: '',
+              hintText: '_ _ _ _ _ _',
+              hintStyle: TextStyle(
+                letterSpacing: 6,
+                color: AppColors.textHint,
+              ),
+              errorText: _error,
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+            ),
+            onChanged: (_) {
+              if (_error != null) setState(() => _error = null);
+            },
+          ),
+        ],
+      ),
+      actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+      actions: [
+        Row(
+          children: [
+            Expanded(
+              child: OutlinedButton(
+                onPressed:
+                    _verifying ? null : () => Navigator.of(context).pop(null),
+                style: OutlinedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8)),
+                ),
+                child: const Text('Cancel'),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: FilledButton(
+                onPressed: _verifying ? null : _submit,
+                style: FilledButton.styleFrom(
+                  backgroundColor: AppColors.success,
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8)),
+                ),
+                child: _verifying
+                    ? const _Spinner(color: Colors.white)
+                    : const Text('Verify & Complete'),
+              ),
+            ),
+          ],
         ),
       ],
     );

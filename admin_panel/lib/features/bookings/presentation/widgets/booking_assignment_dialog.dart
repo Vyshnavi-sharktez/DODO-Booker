@@ -92,6 +92,25 @@ final _vendorSubscribedProvider =
   return {for (final r in rows as List) r['vendor_id'] as String};
 });
 
+/// Returns the set of vendor IDs that cover every service in the given list,
+/// either by exact service_id match or by having registered a parent/ancestor
+/// node.  Delegates to the get_eligible_vendor_ids_for_services RPC so that
+/// ancestor matching is performed server-side via catalog_node_relationships.
+///
+/// Keyed by sorted, pipe-joined service IDs for stable provider family caching.
+/// Returns an empty set when the key is empty (no service IDs on the booking),
+/// which causes the filter to be skipped in the dialog.
+final _vendorServiceEligibleProvider =
+    FutureProvider.autoDispose.family<Set<String>, String>((ref, key) async {
+  if (key.isEmpty) return const {};
+  final serviceIds = key.split('|').map((s) => s.trim()).toList();
+  final result = await Supabase.instance.client.rpc(
+    'get_eligible_vendor_ids_for_services',
+    params: {'p_service_ids': serviceIds},
+  ) as List?;
+  return (result ?? []).map((id) => id as String).toSet();
+});
+
 enum _AssigneeType { vendor, team, unassigned }
 
 // ── Dialog ─────────────────────────────────────────────────────────────────────
@@ -544,6 +563,31 @@ class _BookingAssignmentDialogState
     final allVendors = vendorsAsync.valueOrNull ?? <Vendor>[];
     final allTeams = dodoTeamsAsync.valueOrNull ?? <DodoTeam>[];
 
+    // Build the cache key for the service-eligibility provider: sorted,
+    // pipe-joined service IDs from the booking's line items.
+    final serviceIds = widget.booking.items
+        .map((i) => i.serviceId)
+        .where((id) => id.isNotEmpty)
+        .toSet()
+        .toList()
+      ..sort();
+    final serviceKey = serviceIds.join('|');
+
+    // Fetch vendor IDs that provide every service in this booking.
+    // While loading, treat as "all eligible" so the list isn't blank.
+    // When the key is empty (no items on booking), skip the filter entirely.
+    final serviceEligibleIds = serviceKey.isEmpty
+        ? null
+        : ref.watch(_vendorServiceEligibleProvider(serviceKey)).valueOrNull;
+
+    // Apply service eligibility: exclude vendors not in the eligible set.
+    // Skip when key is empty or data hasn't loaded yet (null = still loading).
+    final serviceFilteredVendors = (serviceEligibleIds == null)
+        ? allVendors
+        : allVendors
+            .where((v) => serviceEligibleIds.contains(v.id))
+            .toList();
+
     // Vendors that are active but have no active subscription are ineligible
     // for COD assignment. Empty when enforcement is off or data is still loading.
     final codIneligibleVendorIds = (codEnforced && subscribedVendorIds != null)
@@ -553,10 +597,17 @@ class _BookingAssignmentDialogState
             .toSet()
         : const <String>{};
 
+    // True when service eligibility data is loaded and confirms that no vendor
+    // in the system provides every service on this booking.  Used to show a
+    // more accurate empty-state message than the generic area message.
+    final noServiceVendors = serviceKey.isNotEmpty &&
+        serviceEligibleIds != null &&
+        serviceEligibleIds.isEmpty;
+
     final vendorResult = VendorAssignmentService.rankVendorAssigneesByServingAreas(
       bookingLat: widget.booking.latitude,
       bookingLng: widget.booking.longitude,
-      vendors: allVendors,
+      vendors: serviceFilteredVendors,
       servingAreas: servingAreasAsync.valueOrNull ?? <VendorServingArea>[],
       assignmentsMap: assignmentsAsync.valueOrNull ?? {},
       busyVendorIds: busyVendorIds,
@@ -603,6 +654,7 @@ class _BookingAssignmentDialogState
                           contractId: widget.booking.isAmc
                               ? (widget.booking.amcContractId ?? '')
                               : '',
+                          noServiceVendors: noServiceVendors,
                         ),
 
                       if (_assigneeType == _AssigneeType.team)
@@ -841,6 +893,7 @@ class _BookingAssignmentDialogState
     required List<Vendor> allVendors,
     bool codEnforced = false,
     String contractId = '',
+    bool noServiceVendors = false,
   }) {
     if (isLoading) {
       return const Center(
@@ -1027,13 +1080,20 @@ class _BookingAssignmentDialogState
           if (amcRecommendedSection != null) const SizedBox(height: 12),
           ?addressRow,
           if (addressRow != null) const SizedBox(height: 8),
-          _InfoBanner(
-            icon: Icons.search_off_rounded,
-            color: AppColors.textSecondary,
-            message: 'No vendors are assigned to serve this area.',
-            actionLabel: 'Show All Vendors',
-            onAction: () => setState(() => _showAllVendors = true),
-          ),
+          if (noServiceVendors)
+            _InfoBanner(
+              icon: Icons.search_off_rounded,
+              color: AppColors.textSecondary,
+              message: 'No vendors are currently serving this service.',
+            )
+          else
+            _InfoBanner(
+              icon: Icons.search_off_rounded,
+              color: AppColors.textSecondary,
+              message: 'No vendors are assigned to serve this area.',
+              actionLabel: 'Show All Vendors',
+              onAction: () => setState(() => _showAllVendors = true),
+            ),
         ],
       );
     }

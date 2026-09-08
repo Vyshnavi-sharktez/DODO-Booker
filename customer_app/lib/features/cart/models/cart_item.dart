@@ -43,6 +43,14 @@ class CartItem {
   // Non-null when the service base had a discount at add-to-cart time (for cart display only).
   final double? originalUnitPrice;
 
+  /// Set when this item is a vendor custom service (vendor_service_requests).
+  /// customServiceId = vendor_service_requests.id written to booking_items.custom_service_id.
+  /// vendorId = the owning vendor, used for direct booking assignment at checkout.
+  final String? customServiceId;
+  final String? vendorId;
+
+  bool get isCustomService => customServiceId != null;
+
   const CartItem({
     required this.bookingId,
     required this.serviceId,
@@ -53,6 +61,8 @@ class CartItem {
     this.minimumOrderAmount,
     this.parentNodeId,
     this.originalUnitPrice,
+    this.customServiceId,
+    this.vendorId,
     this.isAmc = false,
     this.amcPlanName,
     this.amcRecurrenceInterval,
@@ -78,6 +88,8 @@ class CartItem {
     double? originalUnitPrice,
     List<SelectedAddon>? addons,
     String? parentNodeId,
+    String? customServiceId,
+    String? vendorId,
     bool? isAmc,
     String? amcPlanName,
     String? amcRecurrenceInterval,
@@ -106,6 +118,8 @@ class CartItem {
         minimumOrderAmount: minimumOrderAmount,
         originalUnitPrice: originalUnitPrice ?? this.originalUnitPrice,
         parentNodeId: parentNodeId ?? this.parentNodeId,
+        customServiceId: customServiceId ?? this.customServiceId,
+        vendorId: vendorId ?? this.vendorId,
         isAmc: isAmc ?? this.isAmc,
         amcPlanName: amcPlanName ?? this.amcPlanName,
         amcRecurrenceInterval:
@@ -139,6 +153,8 @@ class CartItem {
           'minimumOrderAmount': minimumOrderAmount,
         if (originalUnitPrice != null) 'originalUnitPrice': originalUnitPrice,
         if (parentNodeId != null) 'parentNodeId': parentNodeId,
+        if (customServiceId != null) 'customServiceId': customServiceId,
+        if (vendorId != null) 'vendorId': vendorId,
         if (isAmc) 'isAmc': true,
         if (amcPlanName != null) 'amcPlanName': amcPlanName,
         if (amcRecurrenceInterval != null)
@@ -172,6 +188,8 @@ class CartItem {
         minimumOrderAmount: (json['minimumOrderAmount'] as num?)?.toDouble(),
         originalUnitPrice: (json['originalUnitPrice'] as num?)?.toDouble(),
         parentNodeId: json['parentNodeId'] as String?,
+        customServiceId: json['customServiceId'] as String?,
+        vendorId: json['vendorId'] as String?,
         isAmc: json['isAmc'] as bool? ?? false,
         amcPlanName: json['amcPlanName'] as String?,
         amcRecurrenceInterval: json['amcRecurrenceInterval'] as String?,

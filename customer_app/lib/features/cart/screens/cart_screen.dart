@@ -7,12 +7,13 @@ import '../../../core/widgets/clickable.dart';
 import '../../../core/widgets/page_sheet.dart';
 import '../models/cart_item.dart';
 import '../providers/cart_provider.dart';
+import '../widgets/service_unavailable_dialog.dart';
 import '../../auth/utils/auth_modal_gate.dart';
 import '../../tax/models/tax_settings_model.dart';
 import '../../tax/providers/tax_provider.dart';
 import 'checkout_screen.dart';
 
-class CartScreen extends ConsumerWidget {
+class CartScreen extends ConsumerStatefulWidget {
   /// When [true], renders without a [Scaffold] / [AppBar] so it can be hosted
   /// inside [PageSheet] on desktop. All business logic and providers are shared.
   final bool inModal;
@@ -20,11 +21,16 @@ class CartScreen extends ConsumerWidget {
   const CartScreen({super.key, this.inModal = false});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<CartScreen> createState() => _CartScreenState();
+}
+
+class _CartScreenState extends ConsumerState<CartScreen> {
+  @override
+  Widget build(BuildContext context) {
     final items = ref.watch(cartProvider);
     final subtotal = ref.watch(cartSubtotalProvider);
 
-    if (inModal) {
+    if (widget.inModal) {
       return _ModalBody(items: items, subtotal: subtotal);
     }
 
@@ -979,9 +985,17 @@ class _CheckoutBar extends ConsumerWidget {
                   onPressed: canCheckout
                       ? () async {
                           final ok = await requireAuth(context, ref);
-                          if (ok && context.mounted) {
-                            context.push('/cart/checkout');
+                          if (!ok || !context.mounted) return;
+                          final removed = await ref
+                              .read(cartProvider.notifier)
+                              .pruneUnavailableNativeServices();
+                          if (!context.mounted) return;
+                          if (removed.isNotEmpty) {
+                            await showServiceUnavailableDialog(context,
+                                serviceNames: removed);
+                            return;
                           }
+                          context.push('/cart/checkout');
                         }
                       : null,
                   style: FilledButton.styleFrom(
@@ -1070,6 +1084,15 @@ class _ModalCheckoutBar extends ConsumerWidget {
                       ? () async {
                           final ok = await requireAuth(context, ref);
                           if (!ok || !context.mounted) return;
+                          final removed = await ref
+                              .read(cartProvider.notifier)
+                              .pruneUnavailableNativeServices();
+                          if (!context.mounted) return;
+                          if (removed.isNotEmpty) {
+                            await showServiceUnavailableDialog(context,
+                                serviceNames: removed);
+                            return;
+                          }
                           PageSheet.show(
                             context,
                             title: 'Checkout',

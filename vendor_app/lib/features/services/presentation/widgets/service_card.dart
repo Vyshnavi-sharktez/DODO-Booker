@@ -1,32 +1,47 @@
 import 'package:flutter/material.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/utils/format_utils.dart';
+import '../../../../core/widgets/confirmation_dialog.dart';
 import '../../domain/models/assigned_service.dart';
 
 class ServiceCard extends StatefulWidget {
   const ServiceCard({
     super.key,
     required this.service,
-    required this.onToggle,
+    required this.onRemove,
   });
 
   final AssignedService service;
-  final Future<void> Function(bool) onToggle;
+  final Future<void> Function() onRemove;
 
   @override
   State<ServiceCard> createState() => _ServiceCardState();
 }
 
 class _ServiceCardState extends State<ServiceCard> {
-  bool _toggling = false;
+  bool _removing = false;
 
-  Future<void> _handleToggle(bool value) async {
-    if (_toggling) return;
-    setState(() => _toggling = true);
+  Future<void> _handleRemove() async {
+    if (_removing) return;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (_) => ConfirmationDialog(
+        title: 'Remove Service',
+        message: 'Are you sure you want to remove '
+            '"${widget.service.serviceName}" from your services?',
+        confirmLabel: 'Remove',
+        isDestructive: true,
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
+
+    setState(() => _removing = true);
     try {
-      await widget.onToggle(value);
+      await widget.onRemove();
     } finally {
-      if (mounted) setState(() => _toggling = false);
+      if (mounted) setState(() => _removing = false);
     }
   }
 
@@ -43,9 +58,9 @@ class _ServiceCardState extends State<ServiceCard> {
         side: const BorderSide(color: AppColors.border),
       ),
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.fromLTRB(16, 14, 8, 14),
         child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
             Expanded(
               child: Column(
@@ -71,43 +86,32 @@ class _ServiceCardState extends State<ServiceCard> {
                     ),
                   ],
                   const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      Text(
-                        FormatUtils.currency(s.basePrice),
-                        style: theme.textTheme.bodyMedium?.copyWith(
-                          fontWeight: FontWeight.w700,
-                          color: AppColors.primary,
-                        ),
-                      ),
-                      if (s.customPrice != null) ...[
-                        const SizedBox(width: 8),
-                        Text(
-                          'Custom: ${FormatUtils.currency(s.customPrice!)}',
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: AppColors.textSecondary,
-                          ),
-                        ),
-                      ],
-                    ],
+                  Text(
+                    FormatUtils.currency(s.basePrice),
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.primary,
+                    ),
                   ),
                 ],
               ),
             ),
-            const SizedBox(width: 8),
-            if (_toggling)
+            const SizedBox(width: 4),
+            if (_removing)
               const Padding(
-                padding: EdgeInsets.only(top: 6),
+                padding: EdgeInsets.symmetric(horizontal: 12),
                 child: SizedBox(
-                  width: 24,
-                  height: 24,
-                  child: CircularProgressIndicator(strokeWidth: 2.5),
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2),
                 ),
               )
             else
-              Switch(
-                value: s.isActive,
-                onChanged: _handleToggle,
+              IconButton(
+                icon: const Icon(Icons.delete_outline_rounded),
+                color: AppColors.textHint,
+                tooltip: 'Remove service',
+                onPressed: _handleRemove,
               ),
           ],
         ),

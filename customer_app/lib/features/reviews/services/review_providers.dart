@@ -17,3 +17,9 @@ final reviewsForServiceProvider =
     FutureProvider.family<List<ReviewModel>, String>((ref, serviceId) {
   return ref.read(reviewServiceProvider).fetchReviewsForService(serviceId);
 });
+
+/// Fetches all reviews for a given vendor custom service ID.
+final reviewsForCustomServiceProvider =
+    FutureProvider.family<List<ReviewModel>, String>((ref, customServiceId) {
+  return ref.read(reviewServiceProvider).fetchReviewsForCustomService(customServiceId);
+});

@@ -194,6 +194,18 @@ const _navItems = <_NavItem>[
     requiredPermission: 'booking.view',
   ),
   _NavItem(
+    label: 'Service Requests',
+    icon: Icons.post_add_rounded,
+    route: '/dashboard/vendor-service-requests',
+    requiredPermission: 'vendor.view',
+  ),
+  _NavItem(
+    label: 'Vendor Catalog',
+    icon: Icons.storefront_rounded,
+    route: '/dashboard/vendor-catalog',
+    requiredPermission: 'vendor.view',
+  ),
+  _NavItem(
     label: 'Subscriptions',
     icon: Icons.workspace_premium_rounded,
     route: '/dashboard/vendor-subscriptions',

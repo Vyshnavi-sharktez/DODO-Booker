@@ -1564,10 +1564,10 @@ class _WebDetailBookingBar extends ConsumerWidget {
             // Row that contains a Spacer (Flexible child).
             inCart
                 ? FilledButton.icon(
-                    onPressed: () => openCart(context),
+                    onPressed: () => openCheckout(context, ref),
                     icon: const Icon(Icons.shopping_cart_rounded, size: 16),
                     label: const Text(
-                      'View Cart',
+                      'Proceed to Checkout',
                       style: TextStyle(
                           fontSize: 14, fontWeight: FontWeight.w600),
                     ),

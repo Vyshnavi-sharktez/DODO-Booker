@@ -32,6 +32,30 @@ class ReviewService {
     return ReviewModel.fromJson(rows.first as Map<String, dynamic>);
   }
 
+  /// Returns all reviews for a vendor custom service (two-step via booking_items join).
+  Future<List<ReviewModel>> fetchReviewsForCustomService(String customServiceId) async {
+    final items = await _client
+        .from('booking_items')
+        .select('booking_id')
+        .eq('custom_service_id', customServiceId);
+
+    final bookingIds = (items as List)
+        .map((e) => e['booking_id'] as String)
+        .toList();
+
+    if (bookingIds.isEmpty) return [];
+
+    final data = await _client
+        .from('customer_reviews')
+        .select('*, customers(full_name)')
+        .inFilter('booking_id', bookingIds)
+        .order('created_at', ascending: false);
+
+    return (data as List)
+        .map((e) => ReviewModel.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
   /// Returns all reviews for a service (two-step via booking_items join).
   Future<List<ReviewModel>> fetchReviewsForService(String serviceId) async {
     // Step 1 — get booking_ids associated with this service
@@ -105,6 +129,10 @@ class ReviewService {
     for (final serviceId in serviceIds) {
       await _updateServiceRating(serviceId, rating);
     }
+    final customServiceIds = await _getCustomServiceIdsForBooking(bookingId);
+    for (final id in customServiceIds) {
+      await _updateCustomServiceRating(id, rating);
+    }
   }
 
   Future<List<String>> _getServiceIdsForBooking(String bookingId) async {
@@ -116,6 +144,39 @@ class ReviewService {
         .map((e) => e['service_id'] as String?)
         .whereType<String>()
         .toList();
+  }
+
+  Future<List<String>> _getCustomServiceIdsForBooking(String bookingId) async {
+    final data = await _client
+        .from('booking_items')
+        .select('custom_service_id')
+        .eq('booking_id', bookingId);
+    return (data as List)
+        .map((e) => e['custom_service_id'] as String?)
+        .whereType<String>()
+        .toList();
+  }
+
+  Future<void> _updateCustomServiceRating(
+      String customServiceId, int newRating) async {
+    final row = await _client
+        .from('vendor_service_requests')
+        .select('rating, review_count')
+        .eq('id', customServiceId)
+        .maybeSingle();
+
+    if (row == null) return;
+
+    final currentRating = (row['rating'] as num?)?.toDouble() ?? 0.0;
+    final currentCount = (row['review_count'] as int?) ?? 0;
+    final newCount = currentCount + 1;
+    final updatedRating =
+        ((currentRating * currentCount) + newRating) / newCount;
+
+    await _client.from('vendor_service_requests').update({
+      'rating': double.parse(updatedRating.toStringAsFixed(2)),
+      'review_count': newCount,
+    }).eq('id', customServiceId);
   }
 
   Future<void> _updateServiceRating(String serviceId, int newRating) async {

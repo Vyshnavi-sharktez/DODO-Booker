@@ -45,8 +45,12 @@ class VendorSettlementRepository {
     for (final item in items) {
       final serviceId = item['service_id'] as String? ?? '';
       final parentNodeId = item['catalog_parent_node_id'] as String?;
+      final customServiceId = item['custom_service_id'] as String?;
       final totalPrice = (item['total_price'] as num?)?.toDouble() ?? 0.0;
-      final config = scopedConfigs['$serviceId:$parentNodeId'];
+      final configKey = (serviceId.isEmpty && customServiceId != null)
+          ? 'custom:$customServiceId'
+          : '$serviceId:$parentNodeId';
+      final config = scopedConfigs[configKey];
 
       if (config != null) {
         scoped += _applyRate(config, totalPrice);
@@ -78,10 +82,14 @@ class VendorSettlementRepository {
     for (final item in items) {
       final serviceId = item['service_id'] as String? ?? '';
       final parentNodeId = item['catalog_parent_node_id'] as String?;
+      final customServiceId = item['custom_service_id'] as String?;
       final price = (item['total_price'] as num?)?.toDouble() ?? 0.0;
       if (price <= 0) continue;
 
-      final config = scopedConfigs['$serviceId:$parentNodeId'];
+      final configKey = (serviceId.isEmpty && customServiceId != null)
+          ? 'custom:$customServiceId'
+          : '$serviceId:$parentNodeId';
+      final config = scopedConfigs[configKey];
       if (config != null) {
         hasScopedItems = true;
         total += _applyRate(config, price);
@@ -102,30 +110,35 @@ class VendorSettlementRepository {
 
   // ── Scoped config resolution ───────────────────────────────────────────────
 
+  // pairs: key → (serviceId_or_null, parentNodeId_or_null, customServiceId_or_null)
   Future<void> _batchResolveScopedCommission(
-    Map<String, (String, String?)> pairs,
+    Map<String, (String?, String?, String?)> pairs,
     Map<String, Map<String, dynamic>?> out,
   ) async {
     if (pairs.isEmpty) return;
     await Future.wait(pairs.entries.map((entry) async {
-      final (serviceId, parentNodeId) = entry.value;
+      final (serviceId, parentNodeId, customServiceId) = entry.value;
       try {
+        final params = <String, dynamic>{
+          'p_module': 'commission',
+          'p_service_id': serviceId,
+          'p_parent_id': parentNodeId,
+        };
+        if (customServiceId != null) {
+          params['p_custom_service_id'] = customServiceId;
+        }
         final result = await _supabase.rpc(
           'resolve_catalog_module_config',
-          params: {
-            'p_module': 'commission',
-            'p_service_id': serviceId,
-            'p_parent_id': parentNodeId,
-          },
+          params: params,
         );
         out[entry.key] = result as Map<String, dynamic>?;
         debugPrint(
-          '[DODO][Settlement] scoped commission: $serviceId:$parentNodeId → '
+          '[DODO][Settlement] scoped commission: ${customServiceId != null ? "custom:$customServiceId" : "$serviceId:$parentNodeId"} → '
           '${result == null ? "null (fallback)" : result.toString()}',
         );
       } catch (e) {
         debugPrint('[DODO][Settlement] scoped commission RPC failed '
-            'for $serviceId:$parentNodeId — $e');
+            'for ${entry.key} — $e');
         out[entry.key] = null;
       }
     }));
@@ -185,7 +198,7 @@ class VendorSettlementRepository {
 
     final itemsFuture = _supabase
         .from('booking_items')
-        .select('booking_id, service_id, catalog_parent_node_id, total_price')
+        .select('booking_id, service_id, catalog_parent_node_id, total_price, custom_service_id')
         .inFilter('booking_id', bookingIds);
     final settledFuture = _supabase
         .from('vendor_settlement_bookings')
@@ -221,7 +234,7 @@ class VendorSettlementRepository {
     }
 
     final itemsByBooking = <String, List<Map<String, dynamic>>>{};
-    final uniquePairs = <String, (String, String?)>{};
+    final uniquePairs = <String, (String?, String?, String?)>{};
     for (final item in itemsData as List) {
       final bid = item['booking_id'] as String? ?? '';
       if (bid.isNotEmpty) {
@@ -229,8 +242,11 @@ class VendorSettlementRepository {
       }
       final serviceId = item['service_id'] as String? ?? '';
       final parentNodeId = item['catalog_parent_node_id'] as String?;
+      final customServiceId = item['custom_service_id'] as String?;
       if (serviceId.isNotEmpty) {
-        uniquePairs['$serviceId:$parentNodeId'] = (serviceId, parentNodeId);
+        uniquePairs['$serviceId:$parentNodeId'] = (serviceId, parentNodeId, null);
+      } else if (customServiceId != null && customServiceId.isNotEmpty) {
+        uniquePairs['custom:$customServiceId'] = (null, null, customServiceId);
       }
     }
 
@@ -380,7 +396,7 @@ class VendorSettlementRepository {
     if (bookingIds.isNotEmpty) {
       final itemsFuture2 = _supabase
           .from('booking_items')
-          .select('booking_id, service_id, catalog_parent_node_id, total_price')
+          .select('booking_id, service_id, catalog_parent_node_id, total_price, custom_service_id')
           .inFilter('booking_id', bookingIds);
       final settledFuture2 = _supabase
           .from('vendor_settlement_bookings')
@@ -408,14 +424,17 @@ class VendorSettlementRepository {
     }
 
     final itemsByBooking = <String, List<Map<String, dynamic>>>{};
-    final uniquePairs = <String, (String, String?)>{};
+    final uniquePairs = <String, (String?, String?, String?)>{};
     for (final item in items) {
       final bid = item['booking_id'] as String? ?? '';
       if (bid.isNotEmpty) itemsByBooking.putIfAbsent(bid, () => []).add(item);
       final serviceId = item['service_id'] as String? ?? '';
       final parentNodeId = item['catalog_parent_node_id'] as String?;
+      final customServiceId = item['custom_service_id'] as String?;
       if (serviceId.isNotEmpty) {
-        uniquePairs['$serviceId:$parentNodeId'] = (serviceId, parentNodeId);
+        uniquePairs['$serviceId:$parentNodeId'] = (serviceId, parentNodeId, null);
+      } else if (customServiceId != null && customServiceId.isNotEmpty) {
+        uniquePairs['custom:$customServiceId'] = (null, null, customServiceId);
       }
     }
 
@@ -534,7 +553,7 @@ class VendorSettlementRepository {
     if (bookingIds.isNotEmpty) {
       final itemsFuture2 = _supabase
           .from('booking_items')
-          .select('booking_id, service_id, catalog_parent_node_id, total_price')
+          .select('booking_id, service_id, catalog_parent_node_id, total_price, custom_service_id')
           .inFilter('booking_id', bookingIds);
       final settledFuture2 = _supabase
           .from('vendor_settlement_bookings')
@@ -557,15 +576,18 @@ class VendorSettlementRepository {
       rulesIndex.globalRule,
     );
 
-    final uniquePairs = <String, (String, String?)>{};
+    final uniquePairs = <String, (String?, String?, String?)>{};
     final itemsByBooking = <String, List<Map<String, dynamic>>>{};
     for (final item in items) {
       final bid = item['booking_id'] as String? ?? '';
       if (bid.isNotEmpty) itemsByBooking.putIfAbsent(bid, () => []).add(item);
       final serviceId = item['service_id'] as String? ?? '';
       final parentNodeId = item['catalog_parent_node_id'] as String?;
+      final customServiceId = item['custom_service_id'] as String?;
       if (serviceId.isNotEmpty) {
-        uniquePairs['$serviceId:$parentNodeId'] = (serviceId, parentNodeId);
+        uniquePairs['$serviceId:$parentNodeId'] = (serviceId, parentNodeId, null);
+      } else if (customServiceId != null && customServiceId.isNotEmpty) {
+        uniquePairs['custom:$customServiceId'] = (null, null, customServiceId);
       }
     }
 

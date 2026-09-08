@@ -74,9 +74,10 @@ class _BookingsPageState extends ConsumerState<BookingsPage>
             color: Theme.of(context).colorScheme.surface,
             child: TabBar(
               controller: _tabController,
-              labelColor: AppColors.primary,
+              labelColor: AppColors.textPrimary,
               unselectedLabelColor: AppColors.textSecondary,
-              indicatorColor: AppColors.primary,
+              indicatorColor: AppColors.textPrimary,
+              dividerColor: AppColors.border,
               isScrollable: true,
               tabAlignment: TabAlignment.start,
               tabs: _tabs.map((t) => Tab(text: t)).toList(),

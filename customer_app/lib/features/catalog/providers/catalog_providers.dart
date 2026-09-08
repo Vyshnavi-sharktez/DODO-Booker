@@ -43,6 +43,12 @@ final catalogNodeFaqsProvider =
   return [...results[0], ...results[1]];
 });
 
+/// FAQs for a vendor custom service, keyed by custom_service_id.
+final customServiceFaqsProvider =
+    FutureProvider.family<List<FaqModel>, String>((ref, customServiceId) {
+  return ref.read(catalogServiceProvider).fetchFaqsForCustomService(customServiceId);
+});
+
 /// Effective availability of a node for a given parent context.
 /// Pass parentId = node.parentId as fallback when the true path is unknown
 /// (deep-link entry) so the canonical path is used instead.

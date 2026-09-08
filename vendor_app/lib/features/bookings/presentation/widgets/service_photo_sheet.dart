@@ -25,13 +25,9 @@ class ServicePhotoSheet extends ConsumerStatefulWidget {
     required String bookingId,
     required String imageType,
   }) {
-    return showModalBottomSheet<bool>(
+    return showDialog<bool>(
       context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
+      barrierDismissible: false,
       builder: (_) => ServicePhotoSheet(
         bookingId: bookingId,
         imageType: imageType,
@@ -151,147 +147,142 @@ class _ServicePhotoSheetState extends ConsumerState<ServicePhotoSheet> {
     final theme = Theme.of(context);
     final canDone = _urls.isNotEmpty && !_isUploading;
 
-    return Padding(
-      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
-      child: ConstrainedBox(
-        constraints: BoxConstraints(
-          maxHeight: MediaQuery.of(context).size.height * 0.75,
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // Drag handle
-            Center(
-              child: Container(
-                width: 40,
-                height: 4,
-                margin: const EdgeInsets.only(top: 12, bottom: 16),
-                decoration: BoxDecoration(
-                  color: Colors.grey[300],
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-            ),
-
-            // Header
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: Row(
-                children: [
-                  Icon(
-                    widget.imageType == 'before'
-                        ? Icons.photo_camera_outlined
-                        : Icons.camera_enhance_outlined,
-                    color: AppColors.primary,
-                    size: 22,
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          _title,
-                          style: theme.textTheme.titleMedium
-                              ?.copyWith(fontWeight: FontWeight.w700),
-                        ),
-                        Text(
-                          _subtitle,
-                          style: theme.textTheme.bodySmall
-                              ?.copyWith(color: AppColors.textSecondary),
-                        ),
-                      ],
+    return Dialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+      child: Padding(
+        padding:
+            EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.of(context).size.height * 0.75,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Header
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
+                child: Row(
+                  children: [
+                    Icon(
+                      widget.imageType == 'before'
+                          ? Icons.photo_camera_outlined
+                          : Icons.camera_enhance_outlined,
+                      color: AppColors.primary,
+                      size: 22,
                     ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 16),
-            const Divider(height: 1),
-
-            // Photo grid / empty state
-            Flexible(
-              child: _urls.isEmpty && !_isUploading
-                  ? InkWell(
-                      onTap: _addPhoto,
-                      child: SizedBox(
-                        width: double.infinity,
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 40),
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(Icons.add_photo_alternate_outlined,
-                                  size: 52, color: AppColors.textHint),
-                              const SizedBox(height: 12),
-                              Text(
-                                'Tap to add a photo',
-                                style: theme.textTheme.bodyMedium?.copyWith(
-                                  color: AppColors.textSecondary,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    )
-                  : SingleChildScrollView(
-                      padding: const EdgeInsets.all(16),
-                      child: Wrap(
-                        spacing: 10,
-                        runSpacing: 10,
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          ..._urls.map((url) => _PhotoTile(url: url)),
-                          if (_isUploading)
-                            const _UploadingTile()
-                          else
-                            _AddPhotoTile(onTap: _addPhoto),
+                          Text(
+                            _title,
+                            style: theme.textTheme.titleMedium
+                                ?.copyWith(fontWeight: FontWeight.w700),
+                          ),
+                          Text(
+                            _subtitle,
+                            style: theme.textTheme.bodySmall
+                                ?.copyWith(color: AppColors.textSecondary),
+                          ),
                         ],
                       ),
                     ),
-            ),
-
-            const Divider(height: 1),
-
-            // Footer
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton(
-                      onPressed: () => Navigator.of(context).pop(null),
-                      style: OutlinedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(8)),
-                      ),
-                      child: const Text('Cancel'),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: FilledButton(
-                      onPressed: canDone
-                          ? () => Navigator.of(context).pop(true)
-                          : null,
-                      style: FilledButton.styleFrom(
-                        backgroundColor: AppColors.primary,
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(8)),
-                      ),
-                      child: Text(
-                        _urls.isEmpty
-                            ? 'Done'
-                            : 'Done (${_urls.length} photo${_urls.length == 1 ? '' : 's'})',
-                      ),
-                    ),
-                  ),
-                ],
+                  ],
+                ),
               ),
-            ),
-          ],
+              const Divider(height: 1),
+
+              // Photo grid / empty state
+              Flexible(
+                child: _urls.isEmpty && !_isUploading
+                    ? InkWell(
+                        onTap: _addPhoto,
+                        child: SizedBox(
+                          width: double.infinity,
+                          child: Padding(
+                            padding:
+                                const EdgeInsets.symmetric(vertical: 40),
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.add_photo_alternate_outlined,
+                                    size: 52, color: AppColors.textHint),
+                                const SizedBox(height: 12),
+                                Text(
+                                  'Tap to add a photo',
+                                  style: theme.textTheme.bodyMedium
+                                      ?.copyWith(
+                                    color: AppColors.textSecondary,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      )
+                    : SingleChildScrollView(
+                        padding: const EdgeInsets.all(16),
+                        child: Wrap(
+                          spacing: 10,
+                          runSpacing: 10,
+                          children: [
+                            ..._urls.map((url) => _PhotoTile(url: url)),
+                            if (_isUploading)
+                              const _UploadingTile()
+                            else
+                              _AddPhotoTile(onTap: _addPhoto),
+                          ],
+                        ),
+                      ),
+              ),
+
+              const Divider(height: 1),
+
+              // Footer
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: () => Navigator.of(context).pop(null),
+                        style: OutlinedButton.styleFrom(
+                          padding:
+                              const EdgeInsets.symmetric(vertical: 14),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8)),
+                        ),
+                        child: const Text('Cancel'),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: FilledButton(
+                        onPressed: canDone
+                            ? () => Navigator.of(context).pop(true)
+                            : null,
+                        style: FilledButton.styleFrom(
+                          backgroundColor: AppColors.primary,
+                          padding:
+                              const EdgeInsets.symmetric(vertical: 14),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8)),
+                        ),
+                        child: Text(
+                          _urls.isEmpty
+                              ? 'Done'
+                              : 'Done (${_urls.length} photo${_urls.length == 1 ? '' : 's'})',
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

@@ -341,3 +341,105 @@ final catalogNodeAttributesNotifierProvider = StateNotifierProvider<
     ref.watch(serviceAttributesRepositoryProvider),
   );
 });
+
+// ── Custom-service attributes notifier ────────────────────────────────────────
+// Scoped to vendor_service_requests rows via service_attributes.custom_service_id.
+
+class CustomServiceAttributesNotifier
+    extends StateNotifier<AsyncValue<List<ServiceAttribute>>> {
+  final ServiceAttributesRepository _repo;
+  String? _currentCustomServiceId;
+
+  CustomServiceAttributesNotifier(this._repo)
+      : super(const AsyncValue.data([]));
+
+  Future<void> loadForCustomService(String customServiceId) async {
+    _currentCustomServiceId = customServiceId;
+    await _reload();
+  }
+
+  Future<void> _reload() async {
+    if (_currentCustomServiceId == null) return;
+    state = const AsyncValue.loading();
+    state = await AsyncValue.guard(
+      () => _repo.fetchByCustomService(_currentCustomServiceId!),
+    );
+  }
+
+  Future<String> createAttribute({
+    required String customServiceId,
+    required String name,
+    required String fieldType,
+    required bool isRequired,
+  }) async {
+    final attr = await _repo.createAttributeForCustomService(
+      customServiceId: customServiceId,
+      name: name,
+      fieldType: fieldType,
+      isRequired: isRequired,
+    );
+    await _reload();
+    return attr.id;
+  }
+
+  Future<String> updateAttribute(
+    String id, {
+    required String name,
+    required String fieldType,
+    required bool isRequired,
+  }) async {
+    await _repo.updateAttributeName(id,
+        name: name, fieldType: fieldType, isRequired: isRequired);
+    await _reload();
+    return id;
+  }
+
+  Future<void> deleteAttribute(String id) async {
+    await _repo.deleteAttribute(id);
+    await _reload();
+  }
+
+  Future<void> createOption({
+    required String attributeId,
+    required String optionName,
+    required double priceAdjustment,
+    String discountType = 'percentage',
+    double discountValue = 0,
+  }) async {
+    final attrs = state.valueOrNull ?? [];
+    final attr = attrs.where((a) => a.id == attributeId).firstOrNull;
+    final nextSortOrder = attr?.options.length ?? 0;
+    await _repo.createOption(
+      attributeId: attributeId,
+      optionName: optionName,
+      priceAdjustment: priceAdjustment,
+      sortOrder: nextSortOrder,
+      discountType: discountType,
+      discountValue: discountValue,
+    );
+    await _reload();
+  }
+
+  Future<void> updateOption(
+    String optionId, {
+    required String optionName,
+    required double priceAdjustment,
+    String discountType = 'percentage',
+    double discountValue = 0,
+  }) async {
+    await _repo.updateOption(optionId,
+        optionName: optionName,
+        priceAdjustment: priceAdjustment,
+        discountType: discountType,
+        discountValue: discountValue);
+    await _reload();
+  }
+}
+
+final customServiceAttributesNotifierProvider = StateNotifierProvider<
+    CustomServiceAttributesNotifier,
+    AsyncValue<List<ServiceAttribute>>>((ref) {
+  return CustomServiceAttributesNotifier(
+    ref.watch(serviceAttributesRepositoryProvider),
+  );
+});
