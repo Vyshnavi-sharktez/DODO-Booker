@@ -152,7 +152,7 @@ class CatalogService {
     }
   }
 
-  /// Submits a customer question for a service and notifies admins.
+  /// Submits a customer question for a DODO catalog service and notifies admins.
   Future<void> submitQuestion({
     required String serviceId,
     String? parentNodeId,
@@ -188,6 +188,79 @@ class CatalogService {
       if (parentNodeId != null) 'parent_node_id': parentNodeId,
       'customer_question_id': questionId,
     });
+  }
+
+  /// Submits a customer question for a vendor custom service.
+  /// Notifies both the owning vendor and admins.
+  Future<void> submitCustomServiceQuestion({
+    required String customServiceId,
+    required String vendorId,
+    required String serviceName,
+    required String customerId,
+    String? customerName,
+    String? customerPhone,
+    required String question,
+  }) async {
+    if (!_ready) return;
+    final questionId = const Uuid().v4();
+    await _db.from('customer_questions').insert({
+      'id': questionId,
+      'custom_service_id': customServiceId,
+      'vendor_id': vendorId,
+      'customer_id': customerId,
+      if (customerName != null) 'customer_name': customerName,
+      if (customerPhone != null) 'customer_phone': customerPhone,
+      'question': question,
+      'status': 'pending',
+    });
+    final preview =
+        question.length > 80 ? '${question.substring(0, 80)}…' : question;
+    final who = customerName?.isNotEmpty == true ? customerName! : 'A customer';
+    final notifications = [
+      {
+        'user_type': 'vendor',
+        'user_id': vendorId,
+        'title': 'New Customer Question',
+        'message': '$who asked about $serviceName: "$preview"',
+        'notification_type': 'new_customer_question',
+        'is_read': false,
+        'entity_type': 'customer_question',
+        'entity_id': customServiceId,
+        'customer_question_id': questionId,
+      },
+      {
+        'user_type': 'admin',
+        'title': 'New Customer Question',
+        'message': '$who asked about $serviceName: "$preview"',
+        'notification_type': 'new_customer_question',
+        'is_read': false,
+        'entity_type': 'custom_service_question',
+        'entity_id': customServiceId,
+        'customer_question_id': questionId,
+      },
+    ];
+    await _db.from('notifications').insert(notifications);
+  }
+
+  /// Answered customer questions for a custom service, displayed in the FAQ block.
+  Future<List<FaqModel>> fetchAnsweredQuestionsForCustomService(
+      String customServiceId) async {
+    if (!_ready) return [];
+    try {
+      final data = await _db
+          .from('customer_questions')
+          .select('id, question, answer')
+          .eq('custom_service_id', customServiceId)
+          .eq('status', 'answered')
+          .order('answered_at', ascending: true);
+      return (data as List)
+          .map((e) => FaqModel.fromJson(e as Map<String, dynamic>))
+          .toList();
+    } catch (e) {
+      debugPrint(
+          '[CatalogService] fetchAnsweredQuestionsForCustomService($customServiceId) error: $e');
+      return [];
+    }
   }
 
   /// Checks the effective availability of [nodeId] accessed via [parentId].

@@ -207,7 +207,18 @@ class VendorCustomServiceScreen extends ConsumerWidget {
                                 const EdgeInsets.symmetric(horizontal: 20),
                             child: FaqSection(faqs: faqs),
                           ),
-                        const SizedBox(height: 8),
+                        const Padding(
+                          padding: EdgeInsets.fromLTRB(20, 8, 20, 4),
+                          child: SizedBox.shrink(),
+                        ),
+                        Padding(
+                          padding: const EdgeInsets.only(left: 20, bottom: 12),
+                          child: AskQuestionLink(
+                            customServiceId: service.id,
+                            vendorId: service.vendorId,
+                            serviceName: service.serviceName,
+                          ),
+                        ),
                         _AccordionSection(
                           label: service.reviewCount > 0
                               ? 'Reviews (${service.reviewCount})'
@@ -283,7 +294,14 @@ class VendorCustomServiceScreen extends ConsumerWidget {
                     padding: const EdgeInsets.symmetric(horizontal: 20),
                     child: FaqSection(faqs: faqs),
                   ),
-                const SizedBox(height: 8),
+                Padding(
+                  padding: const EdgeInsets.only(left: 20, top: 8, bottom: 12),
+                  child: AskQuestionLink(
+                    customServiceId: service.id,
+                    vendorId: service.vendorId,
+                    serviceName: service.serviceName,
+                  ),
+                ),
                 _AccordionSection(
                   label: service.reviewCount > 0
                       ? 'Reviews (${service.reviewCount})'
@@ -378,6 +396,12 @@ class _WebScaffold extends ConsumerWidget {
                 style: TextStyle(fontSize: 13, color: _kMuted))
           else
             FaqSection(faqs: faqs),
+          const SizedBox(height: 8),
+          AskQuestionLink(
+            customServiceId: service.id,
+            vendorId: service.vendorId,
+            serviceName: service.serviceName,
+          ),
           const SizedBox(height: 16),
           Text(
             service.reviewCount > 0

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../domain/models/subscription_plan.dart';
+import '../../domain/subscription_feature_registry.dart';
 
 class PlanFormDialog extends StatefulWidget {
   const PlanFormDialog({super.key, this.existing, required this.onSave});
@@ -31,13 +32,14 @@ class _PlanFormDialogState extends State<PlanFormDialog> {
   late final TextEditingController _joiningFeeCtrl;
   late final TextEditingController _subFeeCtrl;
   late final TextEditingController _sortCtrl;
-  late final TextEditingController _commissionPctCtrl;
   late String _billingCycle;
   late bool _isActive;
-  late bool _allowCod;
-  late bool _allowBookingAssignment;
-  late bool _priorityListing;
   bool _saving = false;
+  // One entry per feature — toggle features use bool, percent/quantity features
+  // use a TextEditingController. Maps are keyed by SubscriptionFeature.key.
+  final Map<String, bool> _toggleValues = {};
+  final Map<String, TextEditingController> _percentCtrls = {};
+  final Map<String, TextEditingController> _quantityCtrls = {};
 
   @override
   void initState() {
@@ -51,15 +53,43 @@ class _PlanFormDialogState extends State<PlanFormDialog> {
     _subFeeCtrl = TextEditingController(
         text: p?.subscriptionFee != null ? p!.subscriptionFee!.toStringAsFixed(2) : '');
     _sortCtrl = TextEditingController(text: '${p?.sortOrder ?? 0}');
-    _commissionPctCtrl = TextEditingController(
-        text: (p != null && p.reducedCommissionPct != 0)
-            ? p.reducedCommissionPct.toStringAsFixed(0)
-            : '');
     _billingCycle = p?.billingCycle ?? 'monthly';
     _isActive = p?.isActive ?? true;
-    _allowCod = p?.allowCod ?? false;
-    _allowBookingAssignment = p?.allowBookingAssignment ?? false;
-    _priorityListing = p?.priorityListing ?? false;
+    for (final feature in kSubscriptionFeatures) {
+      if (feature.type == SubscriptionFeatureType.toggle) {
+        _toggleValues[feature.key] =
+            (p?.permissions[feature.key] as bool?) ??
+                (feature.defaultValue as bool);
+        if (feature.limitKey != null) {
+          final raw = p?.permissions[feature.limitKey!];
+          final intVal = (raw as num?)?.toInt();
+          _quantityCtrls[feature.limitKey!] = TextEditingController(
+            text: intVal != null ? '$intVal' : '',
+          );
+        }
+      } else if (feature.type == SubscriptionFeatureType.percent) {
+        final raw = p?.permissions[feature.key];
+        final numVal = (raw as num?)?.toDouble() ?? 0.0;
+        _toggleValues[feature.key] = p != null && numVal != 0;
+        _percentCtrls[feature.key] = TextEditingController(
+          text: (p != null && numVal != 0) ? numVal.toStringAsFixed(0) : '',
+        );
+      } else if (feature.type == SubscriptionFeatureType.quantity) {
+        final raw = p?.permissions[feature.key];
+        if (raw == false) {
+          _toggleValues[feature.key] = false;
+          _quantityCtrls[feature.key] = TextEditingController(text: '');
+        } else if (raw is num) {
+          _toggleValues[feature.key] = true;
+          _quantityCtrls[feature.key] =
+              TextEditingController(text: '${raw.toInt()}');
+        } else {
+          // null/absent: new plan → OFF; existing plan → ON + unlimited
+          _toggleValues[feature.key] = p != null;
+          _quantityCtrls[feature.key] = TextEditingController(text: '');
+        }
+      }
+    }
   }
 
   @override
@@ -70,7 +100,12 @@ class _PlanFormDialogState extends State<PlanFormDialog> {
     _joiningFeeCtrl.dispose();
     _subFeeCtrl.dispose();
     _sortCtrl.dispose();
-    _commissionPctCtrl.dispose();
+    for (final ctrl in _percentCtrls.values) {
+      ctrl.dispose();
+    }
+    for (final ctrl in _quantityCtrls.values) {
+      ctrl.dispose();
+    }
     super.dispose();
   }
 
@@ -78,13 +113,36 @@ class _PlanFormDialogState extends State<PlanFormDialog> {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _saving = true);
     try {
-      final perms = <String, dynamic>{
-        'allow_cod': _allowCod,
-        'allow_booking_assignment': _allowBookingAssignment,
-        'priority_listing': _priorityListing,
-        if (_commissionPctCtrl.text.trim().isNotEmpty)
-          'reduced_commission_pct': double.parse(_commissionPctCtrl.text.trim()),
-      };
+      final perms = <String, dynamic>{};
+      for (final feature in kSubscriptionFeatures) {
+        if (feature.type == SubscriptionFeatureType.toggle) {
+          perms[feature.key] =
+              _toggleValues[feature.key] ?? (feature.defaultValue as bool);
+          if (feature.limitKey != null) {
+            final text = _quantityCtrls[feature.limitKey!]!.text.trim();
+            if (text.isNotEmpty) {
+              perms[feature.limitKey!] = int.parse(text);
+            }
+          }
+        } else if (feature.type == SubscriptionFeatureType.percent) {
+          if (_toggleValues[feature.key] == true) {
+            final text = _percentCtrls[feature.key]!.text.trim();
+            if (text.isNotEmpty) {
+              perms[feature.key] = double.parse(text);
+            }
+          }
+        } else if (feature.type == SubscriptionFeatureType.quantity) {
+          if (_toggleValues[feature.key] == true) {
+            final text = _quantityCtrls[feature.key]!.text.trim();
+            if (text.isNotEmpty) {
+              perms[feature.key] = int.parse(text);
+            }
+            // empty → key absent → unlimited (feature on, no cap)
+          } else {
+            perms[feature.key] = false; // explicitly disabled
+          }
+        }
+      }
       await widget.onSave(
         name: _nameCtrl.text.trim(),
         description: _descCtrl.text.trim().isEmpty ? null : _descCtrl.text.trim(),
@@ -217,7 +275,7 @@ class _PlanFormDialogState extends State<PlanFormDialog> {
                     children: [
                       Expanded(
                         child: _field('Joining Fee', _joiningFeeCtrl,
-                            hint: '0.00 (optional)',
+                            hint: 'Enter 0 for free',
                             keyboardType: const TextInputType.numberWithOptions(decimal: true),
                             validator: (v) {
                               if (v?.trim().isEmpty == true) return null;
@@ -228,7 +286,7 @@ class _PlanFormDialogState extends State<PlanFormDialog> {
                       const SizedBox(width: 12),
                       Expanded(
                         child: _field('Subscription Fee', _subFeeCtrl,
-                            hint: '0.00 (optional)',
+                            hint: 'Enter 0 for free',
                             keyboardType: const TextInputType.numberWithOptions(decimal: true),
                             validator: (v) {
                               if (v?.trim().isEmpty == true) return null;
@@ -247,36 +305,34 @@ class _PlanFormDialogState extends State<PlanFormDialog> {
                           fontSize: 13,
                           color: AppColors.textPrimary)),
                   const SizedBox(height: 10),
-                  _permissionTile(
-                    'Allow COD',
-                    'Vendor can accept Cash on Delivery payments',
-                    _allowCod,
-                    (v) => setState(() => _allowCod = v),
-                  ),
-                  _permissionTile(
-                    'Allow Booking Assignment',
-                    'Admin can manually assign bookings to this vendor',
-                    _allowBookingAssignment,
-                    (v) => setState(() => _allowBookingAssignment = v),
-                  ),
-                  _permissionTile(
-                    'Priority Listing',
-                    'Vendor appears higher in customer search results',
-                    _priorityListing,
-                    (v) => setState(() => _priorityListing = v),
-                  ),
-                  const SizedBox(height: 10),
-                  _field('Reduced Commission %', _commissionPctCtrl,
-                      hint: 'Leave empty for default platform rate',
-                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                      validator: (v) {
-                        if (v?.trim().isEmpty == true) return null;
-                        final d = double.tryParse(v!);
-                        if (d == null || d < 0 || d > 100) {
-                          return 'Must be 0–100';
-                        }
-                        return null;
-                      }),
+                  for (final feature in kSubscriptionFeatures)
+                    if (feature.type == SubscriptionFeatureType.toggle)
+                      _permissionTile(
+                        feature.label,
+                        feature.description,
+                        _toggleValues[feature.key] ??
+                            (feature.defaultValue as bool),
+                        (v) => setState(() => _toggleValues[feature.key] = v),
+                        limitCtrl: feature.limitKey != null
+                            ? _quantityCtrls[feature.limitKey!]
+                            : null,
+                      )
+                    else if (feature.type == SubscriptionFeatureType.percent)
+                      _percentTile(
+                        feature.label,
+                        feature.description,
+                        _toggleValues[feature.key] ?? false,
+                        (v) => setState(() => _toggleValues[feature.key] = v),
+                        _percentCtrls[feature.key]!,
+                      )
+                    else if (feature.type == SubscriptionFeatureType.quantity)
+                      _quantityTile(
+                        feature.label,
+                        feature.description,
+                        _toggleValues[feature.key] ?? false,
+                        (v) => setState(() => _toggleValues[feature.key] = v),
+                        _quantityCtrls[feature.key]!,
+                      ),
                   const SizedBox(height: 14),
 
                   // Sort + Active row
@@ -391,31 +447,214 @@ class _PlanFormDialogState extends State<PlanFormDialog> {
     );
   }
 
-  Widget _permissionTile(
-      String title, String subtitle, bool value, ValueChanged<bool> onChanged) {
+  Widget _quantityTile(
+      String title, String subtitle, bool value, ValueChanged<bool> onChanged,
+      TextEditingController ctrl) {
     return Container(
       margin: const EdgeInsets.only(bottom: 6),
       decoration: BoxDecoration(
         color: value
-            ? AppColors.primary.withValues(alpha: 0.04)
+            ? AppColors.success.withValues(alpha: 0.05)
             : AppColors.background,
         borderRadius: BorderRadius.circular(10),
         border: Border.all(
           color: value
-              ? AppColors.primary.withValues(alpha: 0.3)
+              ? AppColors.success.withValues(alpha: 0.35)
               : AppColors.border,
         ),
       ),
-      child: SwitchListTile(
-        dense: true,
-        title: Text(title,
-            style: const TextStyle(
-                fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
-        subtitle: Text(subtitle,
-            style: const TextStyle(fontSize: 11, color: AppColors.textSecondary)),
-        value: value,
-        onChanged: onChanged,
-        activeColor: AppColors.primary,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          SwitchListTile(
+            dense: true,
+            title: Text(title,
+                style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.textPrimary)),
+            subtitle: Text(subtitle,
+                style: const TextStyle(
+                    fontSize: 11, color: AppColors.textSecondary)),
+            value: value,
+            onChanged: onChanged,
+            activeColor: AppColors.success,
+          ),
+          if (value) ...[
+            Divider(
+              height: 1,
+              thickness: 1,
+              color: AppColors.success.withValues(alpha: 0.2),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
+              child: Row(
+                children: [
+                  _label('Limit'),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: TextFormField(
+                      controller: ctrl,
+                      keyboardType: TextInputType.number,
+                      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                      style: const TextStyle(
+                          fontSize: 13, color: AppColors.textPrimary),
+                      decoration:
+                          _inputDecoration(hint: 'Leave empty for no limit'),
+                      validator: (v) {
+                        if (v?.trim().isEmpty == true) return null;
+                        final n = int.tryParse(v!);
+                        if (n == null || n < 1) return 'Must be ≥ 1';
+                        return null;
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _percentTile(
+      String title, String subtitle, bool value, ValueChanged<bool> onChanged,
+      TextEditingController ctrl) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 6),
+      decoration: BoxDecoration(
+        color: value
+            ? AppColors.success.withValues(alpha: 0.05)
+            : AppColors.background,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(
+          color: value
+              ? AppColors.success.withValues(alpha: 0.35)
+              : AppColors.border,
+        ),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          SwitchListTile(
+            dense: true,
+            title: Text(title,
+                style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.textPrimary)),
+            subtitle: Text(subtitle,
+                style: const TextStyle(
+                    fontSize: 11, color: AppColors.textSecondary)),
+            value: value,
+            onChanged: onChanged,
+            activeColor: AppColors.success,
+          ),
+          if (value) ...[
+            Divider(
+              height: 1,
+              thickness: 1,
+              color: AppColors.success.withValues(alpha: 0.2),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
+              child: Row(
+                children: [
+                  _label('Rate (%)'),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: TextFormField(
+                      controller: ctrl,
+                      keyboardType: const TextInputType.numberWithOptions(
+                          decimal: true),
+                      style: const TextStyle(
+                          fontSize: 13, color: AppColors.textPrimary),
+                      decoration: _inputDecoration(
+                          hint: 'Leave empty for default (0–100)'),
+                      validator: (v) {
+                        if (v?.trim().isEmpty == true) return null;
+                        final d = double.tryParse(v!);
+                        if (d == null || d < 0 || d > 100) {
+                          return 'Must be 0–100';
+                        }
+                        return null;
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _permissionTile(
+      String title, String subtitle, bool value, ValueChanged<bool> onChanged,
+      {TextEditingController? limitCtrl}) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 6),
+      decoration: BoxDecoration(
+        color: value
+            ? AppColors.success.withValues(alpha: 0.05)
+            : AppColors.background,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(
+          color: value
+              ? AppColors.success.withValues(alpha: 0.35)
+              : AppColors.border,
+        ),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          SwitchListTile(
+            dense: true,
+            title: Text(title,
+                style: const TextStyle(
+                    fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
+            subtitle: Text(subtitle,
+                style: const TextStyle(fontSize: 11, color: AppColors.textSecondary)),
+            value: value,
+            onChanged: onChanged,
+            activeColor: AppColors.success,
+          ),
+          if (limitCtrl != null) ...[
+            Divider(
+              height: 1,
+              thickness: 1,
+              color: value
+                  ? AppColors.success.withValues(alpha: 0.2)
+                  : AppColors.border,
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
+              child: Row(
+                children: [
+                  _label('Limit'),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: TextFormField(
+                      controller: limitCtrl,
+                      keyboardType: TextInputType.number,
+                      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                      style: const TextStyle(fontSize: 13, color: AppColors.textPrimary),
+                      decoration: _inputDecoration(hint: 'Leave empty for no limit'),
+                      validator: (v) {
+                        if (v?.trim().isEmpty == true) return null;
+                        final n = int.tryParse(v!);
+                        if (n == null || n < 1) return 'Must be ≥ 1';
+                        return null;
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ],
       ),
     );
   }

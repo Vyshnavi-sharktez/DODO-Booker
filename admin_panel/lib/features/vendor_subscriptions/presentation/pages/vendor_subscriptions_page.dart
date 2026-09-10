@@ -313,6 +313,13 @@ class _PlansTab extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final plansAsync = ref.watch(plansNotifierProvider);
+    final linkedPlanIds = ref
+            .watch(vendorSubscriptionsNotifierProvider)
+            .valueOrNull
+            ?.where((s) => s.planId != null)
+            .map((s) => s.planId!)
+            .toSet() ??
+        const <String>{};
     return plansAsync.when(
       loading: () => const Center(child: CircularProgressIndicator()),
       error: (e, _) => _ErrorRetry(
@@ -348,6 +355,7 @@ class _PlansTab extends ConsumerWidget {
                       separatorBuilder: (_, __) => const SizedBox(height: 12),
                       itemBuilder: (_, i) => _PlanCard(
                         plan: plans[i],
+                        canDelete: !linkedPlanIds.contains(plans[i].id),
                         onEdit: () => onEdit(plans[i]),
                         onDelete: () => onDelete(plans[i]),
                         onToggle: () => ref
@@ -367,12 +375,14 @@ class _PlansTab extends ConsumerWidget {
 class _PlanCard extends StatelessWidget {
   const _PlanCard({
     required this.plan,
+    required this.canDelete,
     required this.onEdit,
     required this.onDelete,
     required this.onToggle,
   });
 
   final SubscriptionPlan plan;
+  final bool canDelete;
   final VoidCallback onEdit;
   final VoidCallback onDelete;
   final VoidCallback onToggle;
@@ -430,12 +440,13 @@ class _PlanCard extends StatelessWidget {
                 tooltip: plan.isActive ? 'Deactivate' : 'Activate',
                 onPressed: onToggle,
               ),
-              IconButton(
-                icon: const Icon(Icons.delete_outline_rounded,
-                    size: 18, color: AppColors.error),
-                tooltip: 'Delete',
-                onPressed: onDelete,
-              ),
+              if (canDelete)
+                IconButton(
+                  icon: const Icon(Icons.delete_outline_rounded,
+                      size: 18, color: AppColors.error),
+                  tooltip: 'Delete',
+                  onPressed: onDelete,
+                ),
             ],
           ),
           const SizedBox(height: 12),

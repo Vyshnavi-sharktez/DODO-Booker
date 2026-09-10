@@ -144,6 +144,59 @@ class VendorSettlementRepository {
     }));
   }
 
+  // ── Subscription commission reduction ─────────────────────────────────────
+
+  static double _applyReducedCommission(double commission, double reducedPct) {
+    if (reducedPct <= 0 || reducedPct >= 100) return commission;
+    return commission * (1 - reducedPct / 100);
+  }
+
+  Future<double> _fetchVendorReducedPct(String vendorId) async {
+    try {
+      final rows = await _supabase
+          .from('vendor_subscriptions')
+          .select('subscription_plans!inner(permissions)')
+          .eq('vendor_id', vendorId)
+          .isFilter('catalog_node_id', null)
+          .eq('status', 'active')
+          .gt('expiry_date', DateTime.now().toIso8601String())
+          .limit(1);
+      if ((rows as List).isEmpty) return 0.0;
+      final planRaw = rows.first['subscription_plans'];
+      if (planRaw is! Map) return 0.0;
+      final perms = planRaw['permissions'];
+      if (perms is! Map) return 0.0;
+      return (perms['reduced_commission_pct'] as num?)?.toDouble() ?? 0.0;
+    } catch (_) {
+      return 0.0;
+    }
+  }
+
+  Future<Map<String, double>> _fetchAllReducedPcts() async {
+    try {
+      final rows = await _supabase
+          .from('vendor_subscriptions')
+          .select('vendor_id, subscription_plans!inner(permissions)')
+          .isFilter('catalog_node_id', null)
+          .eq('status', 'active')
+          .gt('expiry_date', DateTime.now().toIso8601String());
+      final result = <String, double>{};
+      for (final row in rows as List) {
+        final vid = row['vendor_id'] as String? ?? '';
+        if (vid.isEmpty) continue;
+        final planRaw = row['subscription_plans'];
+        if (planRaw is! Map) continue;
+        final perms = planRaw['permissions'];
+        if (perms is! Map) continue;
+        final pct = (perms['reduced_commission_pct'] as num?)?.toDouble() ?? 0.0;
+        if (pct > 0) result[vid] = pct;
+      }
+      return result;
+    } catch (_) {
+      return {};
+    }
+  }
+
   // ── Rule index helpers ─────────────────────────────────────────────────────
 
   static ({
@@ -195,6 +248,8 @@ class VendorSettlementRepository {
     if ((bookingsData as List).isEmpty) return [];
 
     final bookingIds = bookingsData.map((b) => b['id'] as String).toList();
+
+    final reducedPctFuture = _fetchVendorReducedPct(vendorId);
 
     final itemsFuture = _supabase
         .from('booking_items')
@@ -260,6 +315,7 @@ class VendorSettlementRepository {
     );
     final scopedConfigs = <String, Map<String, dynamic>?>{};
     await _batchResolveScopedCommission(uniquePairs, scopedConfigs);
+    final reducedPct = await reducedPctFuture;
 
     final settledByBookingId = <String, Map<String, dynamic>>{};
     for (final s in settledData) {
@@ -316,7 +372,7 @@ class VendorSettlementRepository {
           scopedConfigs: scopedConfigs,
           fallbackRule: fallbackRule,
         );
-        commissionAmount = result.commission;
+        commissionAmount = _applyReducedCommission(result.commission, reducedPct);
         // Vendor receives the pre-tax service amount minus commission.
         // Tax is never included in the vendor receivable.
         netVendorAmount =
@@ -381,6 +437,7 @@ class VendorSettlementRepository {
         .from('commission_rules')
         .select('rule_type, target_id, commission_type, commission_value')
         .eq('is_enabled', true);
+    final reducedPctsFuture = _fetchAllReducedPcts();
 
     final vendors = await vendorsFuture;
     final bookings = await bookingsFuture;
@@ -449,6 +506,7 @@ class VendorSettlementRepository {
 
     final scopedConfigs = <String, Map<String, dynamic>?>{};
     await _batchResolveScopedCommission(uniquePairs, scopedConfigs);
+    final reducedPctsMap = await reducedPctsFuture;
 
     return (vendors as List).map<VendorEarningsSummary>((v) {
       final vendorId = v['id'] as String;
@@ -462,6 +520,7 @@ class VendorSettlementRepository {
         rulesIndex.categoryRules,
         rulesIndex.globalRule,
       );
+      final reducedPct = reducedPctsMap[vendorId] ?? 0.0;
 
       var pendingOrdersCount = 0;
       var paidOrdersCount = 0;
@@ -480,10 +539,13 @@ class VendorSettlementRepository {
           paidOrdersCount++;
           totalPaid += settledNet[bookingId]!;
         } else {
-          final commission = _computeVendorCommission(
-            items: bookingItems,
-            scopedConfigs: scopedConfigs,
-            fallbackRule: fallbackRule,
+          final commission = _applyReducedCommission(
+            _computeVendorCommission(
+              items: bookingItems,
+              scopedConfigs: scopedConfigs,
+              fallbackRule: fallbackRule,
+            ),
+            reducedPct,
           );
           pendingOrdersCount++;
           totalPending += (subtotal - commission).clamp(0.0, double.infinity);
@@ -518,6 +580,8 @@ class VendorSettlementRepository {
   Future<VendorEarningsSummary?> fetchEarningsSummaryForVendor(
       String vendorId) async {
     if (vendorId.isEmpty) return null;
+
+    final reducedPctFuture2 = _fetchVendorReducedPct(vendorId);
 
     final vendorFuture = _supabase
         .from('vendors')
@@ -593,6 +657,7 @@ class VendorSettlementRepository {
 
     final scopedConfigs = <String, Map<String, dynamic>?>{};
     await _batchResolveScopedCommission(uniquePairs, scopedConfigs);
+    final reducedPct2 = await reducedPctFuture2;
 
     var pendingOrdersCount = 0;
     var paidOrdersCount = 0;
@@ -610,10 +675,13 @@ class VendorSettlementRepository {
         paidOrdersCount++;
         totalPaid += settledNet[bookingId]!;
       } else {
-        final commission = _computeVendorCommission(
-          items: bookingItems,
-          scopedConfigs: scopedConfigs,
-          fallbackRule: fallbackRule,
+        final commission = _applyReducedCommission(
+          _computeVendorCommission(
+            items: bookingItems,
+            scopedConfigs: scopedConfigs,
+            fallbackRule: fallbackRule,
+          ),
+          reducedPct2,
         );
         pendingOrdersCount++;
         totalPending += (subtotal - commission).clamp(0.0, double.infinity);

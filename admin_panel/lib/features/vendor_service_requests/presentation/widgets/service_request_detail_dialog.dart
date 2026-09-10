@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/theme/app_theme.dart';
+import '../../../service_faqs/presentation/widgets/custom_service_faqs_dialog.dart';
 import '../../application/providers/vendor_service_requests_providers.dart';
 import '../../domain/models/vendor_service_request.dart';
 
@@ -308,13 +309,31 @@ class _ServiceRequestDetailDialogState
     );
   }
 
-  Widget _closeOnly() => Align(
-        alignment: Alignment.centerRight,
-        child: OutlinedButton(
+  Widget _closeOnly() {
+    final r = widget.request;
+    final showQA = r.isCompleted && r.isNewService;
+    return Row(
+      mainAxisAlignment:
+          showQA ? MainAxisAlignment.spaceBetween : MainAxisAlignment.end,
+      children: [
+        if (showQA)
+          OutlinedButton.icon(
+            onPressed: () => CustomServiceFaqsDialog.show(
+              context,
+              customServiceId: r.id,
+              serviceName: r.serviceName,
+              showQuestions: true,
+            ),
+            icon: const Icon(Icons.help_outline_rounded, size: 16),
+            label: const Text('Customer Q&A'),
+          ),
+        OutlinedButton(
           onPressed: () => Navigator.of(context).pop(),
           child: const Text('Close'),
         ),
-      );
+      ],
+    );
+  }
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────

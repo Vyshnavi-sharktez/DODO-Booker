@@ -6,6 +6,7 @@ import '../../../../core/routes/route_names.dart';
 import '../../../../core/widgets/vendor_scaffold.dart';
 import '../../../auth/presentation/providers/auth_controller.dart';
 import '../../domain/models/subscription_plan.dart';
+import '../../domain/subscription_feature_registry.dart';
 import '../providers/subscription_provider.dart';
 
 class PlanConfirmationPage extends ConsumerStatefulWidget {
@@ -307,22 +308,47 @@ class _BreakdownCard extends StatelessWidget {
   }
 }
 
+IconData _featureIcon(String key) => switch (key) {
+      SubscriptionFeatureKeys.allowCod => Icons.local_atm_rounded,
+      SubscriptionFeatureKeys.allowBookingAssignment =>
+        Icons.assignment_ind_rounded,
+      SubscriptionFeatureKeys.priorityListing => Icons.star_rounded,
+      SubscriptionFeatureKeys.reducedCommissionPct => Icons.percent_rounded,
+      SubscriptionFeatureKeys.allowCustomPrice => Icons.price_change_rounded,
+      _ => Icons.check_circle_outlined,
+    };
+
 class _BenefitsList extends StatelessWidget {
   const _BenefitsList({required this.plan});
   final SubscriptionPlan plan;
 
   @override
   Widget build(BuildContext context) {
-    final benefits = <(IconData, String, bool)>[
-      (Icons.local_atm_rounded, 'Cash on Delivery', plan.allowCod),
-      (Icons.assignment_ind_rounded, 'Booking Assignment',
-          plan.allowBookingAssignment),
-      (Icons.star_rounded, 'Priority Listing', plan.priorityListing),
-      if (plan.reducedCommissionPct > 0)
-        (Icons.percent_rounded,
-            '${plan.reducedCommissionPct.toStringAsFixed(0)}% Reduced Commission',
-            true),
-    ];
+    final perms = plan.permissions;
+    final benefits = <(IconData, String, bool)>[];
+    for (final feature in kSubscriptionFeatures) {
+      if (feature.type == SubscriptionFeatureType.toggle) {
+        if (perms[feature.key] != true) continue;
+        benefits.add((_featureIcon(feature.key), feature.label, true));
+      } else if (feature.type == SubscriptionFeatureType.quantity) {
+        if (!plan.isMaxCustomServicesEnabled) continue;
+        final qty = plan.maxCustomServices;
+        final label = qty == null
+            ? '${feature.label} (Unlimited)'
+            : '${feature.label}: $qty';
+        benefits.add((_featureIcon(feature.key), label, true));
+      } else {
+        // percent
+        final val = (perms[feature.key] as num?)?.toDouble() ?? 0.0;
+        if (val > 0) {
+          benefits.add((
+            _featureIcon(feature.key),
+            '${val.toStringAsFixed(0)}% ${feature.label}',
+            true,
+          ));
+        }
+      }
+    }
 
     return Container(
       padding: const EdgeInsets.all(16),

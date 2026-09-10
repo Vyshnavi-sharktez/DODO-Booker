@@ -10,6 +10,7 @@ import '../../../bookings/application/providers/bookings_providers.dart';
 import '../../../bookings/presentation/widgets/booking_details_dialog.dart';
 import '../../../catalog_v2/application/providers/catalog_node_providers.dart';
 import '../../../customer_questions/application/providers/customer_questions_providers.dart';
+import '../../../service_faqs/presentation/widgets/custom_service_faqs_dialog.dart';
 import '../../../service_faqs/presentation/widgets/node_faqs_dialog.dart';
 import '../../../vendor_service_requests/application/providers/vendor_service_requests_providers.dart';
 import '../../../vendor_service_requests/presentation/widgets/service_request_detail_dialog.dart';
@@ -227,6 +228,32 @@ class _NotificationsPanelDialogState
             );
           }
         });
+      }
+      return;
+    }
+
+    if (n.entityType == 'custom_service_question' && n.entityId != null) {
+      // entity_id = vendor_service_requests.id (the custom_service_id)
+      var request =
+          (ref.read(vendorServiceRequestsNotifierProvider).valueOrNull ?? [])
+              .where((r) => r.id == n.entityId)
+              .firstOrNull;
+      if (request == null) {
+        try {
+          request = await ref
+              .read(vendorServiceRequestsRepositoryProvider)
+              .fetchById(n.entityId!);
+        } catch (_) {}
+      }
+      if (!mounted) return;
+      Navigator.of(context).pop();
+      if (request != null) {
+        CustomServiceFaqsDialog.show(
+          context,
+          customServiceId: n.entityId!,
+          serviceName: request.serviceName,
+          showQuestions: true,
+        );
       }
       return;
     }

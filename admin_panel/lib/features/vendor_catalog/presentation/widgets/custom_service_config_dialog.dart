@@ -6,6 +6,7 @@ import '../../../catalog_configs/data/catalog_node_configs_repository.dart';
 import '../../../catalog_configs/domain/models/catalog_node_config_model.dart';
 import '../../../vendor_subscriptions/domain/models/subscription_plan.dart'
     show kBillingCycles;
+import '../../../vendor_subscriptions/domain/subscription_feature_registry.dart';
 
 // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 // CustomServiceConfigDialog â€” 7-tab module configuration for a vendor custom
@@ -100,11 +101,10 @@ class _CustomServiceConfigDialogState extends State<CustomServiceConfigDialog>
   final _vsDurationCtrl = TextEditingController(text: '30');
   final _vsJoiningFeeCtrl = TextEditingController();
   final _vsSubFeeCtrl = TextEditingController();
-  final _vsCommissionPctCtrl = TextEditingController();
   bool _vsIsActive = true;
-  bool _vsAllowCod = false;
-  bool _vsAllowAssignment = false;
-  bool _vsPriorityListing = false;
+  // Permission state keyed by SubscriptionFeature.key (from registry).
+  final Map<String, bool> _vsToggleValues = {};
+  final Map<String, TextEditingController> _vsPercentCtrls = {};
 
   // Global master-switch states (null = still loading)
   bool? _globalTaxEnabled;
@@ -148,7 +148,9 @@ class _CustomServiceConfigDialogState extends State<CustomServiceConfigDialog>
     _vsDurationCtrl.dispose();
     _vsJoiningFeeCtrl.dispose();
     _vsSubFeeCtrl.dispose();
-    _vsCommissionPctCtrl.dispose();
+    for (final ctrl in _vsPercentCtrls.values) {
+      ctrl.dispose();
+    }
     super.dispose();
   }
 
@@ -337,6 +339,17 @@ class _CustomServiceConfigDialogState extends State<CustomServiceConfigDialog>
   }
 
   void _populateVendorSubscription() {
+    // Ensure all feature entries exist before the build accesses them.
+    for (final feature in kSubscriptionFeatures) {
+      if (feature.type == SubscriptionFeatureType.toggle) {
+        _vsToggleValues.putIfAbsent(
+            feature.key, () => feature.defaultValue as bool);
+      } else {
+        _vsPercentCtrls.putIfAbsent(
+            feature.key, () => TextEditingController());
+      }
+    }
+
     final cfg = _configs['vendor_subscription'];
     if (cfg != null) {
       _vsEnabled = cfg.config['is_enabled'] as bool? ?? false;
@@ -354,12 +367,17 @@ class _CustomServiceConfigDialogState extends State<CustomServiceConfigDialog>
       _vsIsActive = cfg.config['is_active'] as bool? ?? true;
       final perms =
           (cfg.config['permissions'] as Map?)?.cast<String, dynamic>() ?? {};
-      _vsAllowCod = perms['allow_cod'] == true;
-      _vsAllowAssignment = perms['allow_booking_assignment'] == true;
-      _vsPriorityListing = perms['priority_listing'] == true;
-      final commPct = perms['reduced_commission_pct'];
-      _vsCommissionPctCtrl.text =
-          commPct != null ? (commPct as num).toStringAsFixed(0) : '';
+      for (final feature in kSubscriptionFeatures) {
+        if (feature.type == SubscriptionFeatureType.toggle) {
+          _vsToggleValues[feature.key] =
+              (perms[feature.key] as bool?) ?? (feature.defaultValue as bool);
+        } else {
+          final raw = perms[feature.key];
+          final numVal = (raw as num?)?.toDouble() ?? 0.0;
+          _vsPercentCtrls[feature.key]!.text =
+              numVal != 0 ? numVal.toStringAsFixed(0) : '';
+        }
+      }
     }
   }
 
@@ -484,14 +502,18 @@ class _CustomServiceConfigDialogState extends State<CustomServiceConfigDialog>
               .toList(),
         };
       case 'vendor_subscription':
-        final perms = <String, dynamic>{
-          'allow_cod': _vsAllowCod,
-          'allow_booking_assignment': _vsAllowAssignment,
-          'priority_listing': _vsPriorityListing,
-          if (_vsCommissionPctCtrl.text.trim().isNotEmpty)
-            'reduced_commission_pct':
-                double.tryParse(_vsCommissionPctCtrl.text.trim()) ?? 0.0,
-        };
+        final perms = <String, dynamic>{};
+        for (final feature in kSubscriptionFeatures) {
+          if (feature.type == SubscriptionFeatureType.toggle) {
+            perms[feature.key] =
+                _vsToggleValues[feature.key] ?? (feature.defaultValue as bool);
+          } else {
+            final text = (_vsPercentCtrls[feature.key]?.text ?? '').trim();
+            if (text.isNotEmpty) {
+              perms[feature.key] = double.tryParse(text) ?? 0.0;
+            }
+          }
+        }
         return {
           'is_enabled': _vsEnabled,
           'name': _vsNameCtrl.text.trim(),
@@ -1172,33 +1194,27 @@ class _CustomServiceConfigDialogState extends State<CustomServiceConfigDialog>
                   fontWeight: FontWeight.w600,
                   color: AppColors.textSecondary)),
           const SizedBox(height: 8),
-          _vsPermTile(
-            'Allow COD',
-            'Vendor can accept Cash on Delivery payments',
-            _vsAllowCod,
-            (v) => setState(() => _vsAllowCod = v),
-          ),
-          _vsPermTile(
-            'Allow Booking Assignment',
-            'Admin can manually assign bookings to this vendor',
-            _vsAllowAssignment,
-            (v) => setState(() => _vsAllowAssignment = v),
-          ),
-          _vsPermTile(
-            'Priority Listing',
-            'Vendor appears higher in search results',
-            _vsPriorityListing,
-            (v) => setState(() => _vsPriorityListing = v),
-          ),
-          const SizedBox(height: 10),
-          _label('Reduced Commission % (optional)'),
-          const SizedBox(height: 4),
-          TextField(
-            controller: _vsCommissionPctCtrl,
-            keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            decoration: _inputDeco('Leave empty for default rate'),
-          ),
-          const SizedBox(height: 14),
+          for (final feature in kSubscriptionFeatures)
+            if (feature.type == SubscriptionFeatureType.toggle)
+              _vsPermTile(
+                feature.label,
+                feature.description,
+                _vsToggleValues[feature.key] ??
+                    (feature.defaultValue as bool),
+                (v) => setState(() => _vsToggleValues[feature.key] = v),
+              )
+            else ...[
+              const SizedBox(height: 10),
+              _label('${feature.label} % (optional)'),
+              const SizedBox(height: 4),
+              TextField(
+                controller: _vsPercentCtrls[feature.key]!,
+                keyboardType:
+                    const TextInputType.numberWithOptions(decimal: true),
+                decoration: _inputDeco('Leave empty for default rate'),
+              ),
+              const SizedBox(height: 14),
+            ],
           Row(
             children: [
               Switch(

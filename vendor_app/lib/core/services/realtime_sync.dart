@@ -12,13 +12,17 @@ import '../../features/subscription/presentation/providers/subscription_provider
 
 /// Manages all Supabase Realtime subscriptions for the vendor app.
 ///
-/// Two channels are maintained:
-///   bookings  — PostgresChangeEvent.all  — invalidates booking + dashboard providers.
+/// Channels maintained:
+///   bookings      — PostgresChangeEvent.all    — invalidates booking + dashboard providers.
 ///   notifications — PostgresChangeEvent.insert — invalidates vendorNotificationsProvider.
+///   settings      — PostgresChangeEvent.all    — invalidates subscriptionSettingsProvider.
+///   subscription  — PostgresChangeEvent.all    — invalidates mySubscriptionProvider
+///                   (scoped to the vendor's own vendor_subscriptions row).
 ///
-/// The bookings channel carries no user-level filter (handled by query-level
-/// filtering in the providers). The notifications channel is filtered by
-/// `user_id = vendorId` to avoid waking up on other vendors' events.
+/// Subscription permissions are snapshotted into vendor_subscriptions at
+/// purchase time.  Admin changes to subscription_plans do NOT affect active
+/// vendor subscriptions, so there is intentionally no channel watching
+/// subscription_plans.
 ///
 /// The channel is created under the Supabase anon key (this app uses custom
 /// phone auth — there is no Supabase Auth session/JWT).  The `_authSub`
@@ -197,6 +201,7 @@ class VendorRealtimeSync {
   void refetchAll() {
     _invalidateBookings();
     _ref.invalidate(subscriptionSettingsProvider);
+    _ref.invalidate(mySubscriptionProvider);
   }
 
   void dispose() {

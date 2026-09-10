@@ -10,6 +10,8 @@ import '../../../../core/widgets/error_view.dart';
 import '../../../../core/widgets/vendor_scaffold.dart';
 import '../../../../core/widgets/confirmation_dialog.dart';
 import '../../../auth/presentation/providers/auth_controller.dart';
+import '../../../customer_questions/domain/models/customer_question_model.dart';
+import '../../../customer_questions/presentation/providers/customer_questions_provider.dart';
 import '../../domain/models/assigned_service.dart';
 import '../../domain/models/catalog_service.dart';
 import '../../domain/models/vendor_service_request_model.dart';
@@ -1286,12 +1288,13 @@ class _MyServicesWide extends ConsumerStatefulWidget {
 }
 
 class _MyServicesWideState extends ConsumerState<_MyServicesWide> {
-  int _subTab = 0; // 0 = DODO Services, 1 = Custom Services
+  int _subTab = 0; // 0 = DODO Services, 1 = Custom Services, 2 = Questions
 
   @override
   Widget build(BuildContext context) {
     final catalogRaw = ref.watch(catalogServicesProvider).valueOrNull ?? [];
     final allRequests = ref.watch(myServiceRequestsProvider).valueOrNull ?? [];
+    final vendorId = ref.watch(currentVendorUserProvider)?.id ?? '';
 
     final customServices =
         allRequests.where((r) => r.isActiveCustomService).toList();
@@ -1313,6 +1316,15 @@ class _MyServicesWideState extends ConsumerState<_MyServicesWide> {
       }
     }
 
+    final pendingQuestionsCount = vendorId.isEmpty
+        ? 0
+        : ref
+                .watch(vendorQuestionsNotifierProvider(vendorId))
+                .valueOrNull
+                ?.where((q) => q.isPending)
+                .length ??
+            0;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -1321,6 +1333,7 @@ class _MyServicesWideState extends ConsumerState<_MyServicesWide> {
           selected: _subTab,
           dodoCount: widget.vendorAsync.valueOrNull?.length ?? 0,
           customCount: customServices.length,
+          questionsCount: pendingQuestionsCount,
           onSelect: (i) => setState(() => _subTab = i),
         ),
 
@@ -1487,6 +1500,11 @@ class _MyServicesWideState extends ConsumerState<_MyServicesWide> {
                         ),
                       ],
                     ),
+
+              // ── 2: Questions ──────────────────────────────────────────────
+              vendorId.isEmpty
+                  ? const SizedBox.shrink()
+                  : _VendorQuestionsPanel(vendorId: vendorId),
             ],
           ),
         ),
@@ -2007,7 +2025,7 @@ class _MyServicesNarrow extends ConsumerStatefulWidget {
 }
 
 class _MyServicesNarrowState extends ConsumerState<_MyServicesNarrow> {
-  int _subTab = 0; // 0 = DODO Services, 1 = Custom Services
+  int _subTab = 0; // 0 = DODO Services, 1 = Custom Services, 2 = Questions
   final Set<String> _expandedMyParents = {};
 
   @override
@@ -2015,6 +2033,7 @@ class _MyServicesNarrowState extends ConsumerState<_MyServicesNarrow> {
     final servicesAsync = ref.watch(vendorServicesProvider);
     final catalogRaw = ref.watch(catalogServicesProvider).valueOrNull ?? [];
     final allRequests = ref.watch(myServiceRequestsProvider).valueOrNull ?? [];
+    final vendorId = ref.watch(currentVendorUserProvider)?.id ?? '';
 
     final Map<String, List<CatalogService>> catalogChildrenOf = {};
     for (final cat in catalogRaw) {
@@ -2037,6 +2056,14 @@ class _MyServicesNarrowState extends ConsumerState<_MyServicesNarrow> {
     };
 
     final dodoCount = servicesAsync.valueOrNull?.length ?? 0;
+    final pendingQuestionsCount = vendorId.isEmpty
+        ? 0
+        : ref
+                .watch(vendorQuestionsNotifierProvider(vendorId))
+                .valueOrNull
+                ?.where((q) => q.isPending)
+                .length ??
+            0;
 
     return Column(
       children: [
@@ -2045,6 +2072,7 @@ class _MyServicesNarrowState extends ConsumerState<_MyServicesNarrow> {
           selected: _subTab,
           dodoCount: dodoCount,
           customCount: customServices.length,
+          questionsCount: pendingQuestionsCount,
           onSelect: (i) => setState(() => _subTab = i),
         ),
 
@@ -2167,6 +2195,11 @@ class _MyServicesNarrowState extends ConsumerState<_MyServicesNarrow> {
                         ),
                       ),
                     ),
+
+              // ── 2: Questions ──────────────────────────────────────────────
+              vendorId.isEmpty
+                  ? const SizedBox.shrink()
+                  : _VendorQuestionsPanel(vendorId: vendorId),
             ],
           ),
         ),
@@ -2176,7 +2209,7 @@ class _MyServicesNarrowState extends ConsumerState<_MyServicesNarrow> {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// My Services sub-tab bar: DODO Services | Custom Services
+// My Services sub-tab bar: DODO Services | Custom Services | Questions
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _MyServicesSubTabBar extends StatelessWidget {
@@ -2184,12 +2217,14 @@ class _MyServicesSubTabBar extends StatelessWidget {
     required this.selected,
     required this.dodoCount,
     required this.customCount,
+    required this.questionsCount,
     required this.onSelect,
   });
 
   final int selected;
   final int dodoCount;
   final int customCount;
+  final int questionsCount;
   final void Function(int) onSelect;
 
   @override
@@ -2212,6 +2247,12 @@ class _MyServicesSubTabBar extends StatelessWidget {
             count: customCount,
             isSelected: selected == 1,
             onTap: () => onSelect(1),
+          ),
+          _SubTab(
+            label: 'Questions',
+            count: questionsCount,
+            isSelected: selected == 2,
+            onTap: () => onSelect(2),
           ),
         ],
       ),
@@ -2502,6 +2543,8 @@ class _CustomServiceRowState extends ConsumerState<_CustomServiceRow> {
   Widget build(BuildContext context) {
     final s = widget.service;
     final pending = widget.hasPendingAction;
+    final sub = ref.watch(mySubscriptionProvider).valueOrNull;
+    final canCustomPrice = sub != null && sub.isActive && (sub.plan?.allowCustomPrice ?? false);
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
@@ -2583,10 +2626,10 @@ class _CustomServiceRowState extends ConsumerState<_CustomServiceRow> {
                       IconButton(
                         icon: const Icon(Icons.edit_outlined, size: 26),
                         tooltip: pending ? 'Request pending' : 'Edit price',
-                        color: pending
+                        color: (pending || !canCustomPrice)
                             ? AppColors.textHint
                             : AppColors.textSecondary,
-                        onPressed: pending ? null : _requestPriceChange,
+                        onPressed: (pending || !canCustomPrice) ? null : _requestPriceChange,
                       ),
                       IconButton(
                         icon: const Icon(Icons.delete_outline_rounded, size: 26),
@@ -2844,6 +2887,8 @@ class _CustomServiceNarrowCardState
   Widget build(BuildContext context) {
     final s = widget.service;
     final pending = widget.hasPendingAction;
+    final sub = ref.watch(mySubscriptionProvider).valueOrNull;
+    final canCustomPrice = sub != null && sub.isActive && (sub.plan?.allowCustomPrice ?? false);
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -2918,8 +2963,8 @@ class _CustomServiceNarrowCardState
                 IconButton(
                   icon: const Icon(Icons.edit_outlined, size: 18),
                   tooltip: pending ? 'Request pending' : 'Edit price',
-                  color: pending ? AppColors.textHint : AppColors.textSecondary,
-                  onPressed: pending ? null : _requestPriceChange,
+                  color: (pending || !canCustomPrice) ? AppColors.textHint : AppColors.textSecondary,
+                  onPressed: (pending || !canCustomPrice) ? null : _requestPriceChange,
                 ),
                 IconButton(
                   icon: const Icon(Icons.delete_outline_rounded, size: 18),
@@ -3934,6 +3979,34 @@ class _CreateServiceDialogState extends ConsumerState<_CreateServiceDialog> {
 
     setState(() => _submitting = true);
     try {
+      // Enforce max_custom_services limit before inserting.
+      final sub = ref.read(mySubscriptionProvider).valueOrNull;
+      if (sub?.plan?.isMaxCustomServicesEnabled == false) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text(
+                'Custom service creation is not included in your plan.'),
+            backgroundColor: AppColors.error,
+          ));
+        }
+        return;
+      }
+      final limit = sub?.plan?.maxCustomServices;
+      if (limit != null) {
+        final requests = ref.read(myServiceRequestsProvider).valueOrNull ?? [];
+        final usedCount =
+            requests.where((r) => r.isActiveCustomService).length;
+        if (usedCount >= limit) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+              content: Text('Custom service limit ($limit) reached.'),
+              backgroundColor: AppColors.error,
+            ));
+          }
+          return;
+        }
+      }
+
       final ds = ref.read(servicesDatasourceProvider);
 
       String? imageUrl;
@@ -3987,6 +4060,16 @@ class _CreateServiceDialogState extends ConsumerState<_CreateServiceDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final sub = ref.watch(mySubscriptionProvider).valueOrNull;
+    final featureEnabled = sub?.plan?.isMaxCustomServicesEnabled ?? true;
+    final limit = featureEnabled ? sub?.plan?.maxCustomServices : null;
+    final usedCount = (featureEnabled && limit != null)
+        ? (ref.watch(myServiceRequestsProvider).valueOrNull ?? [])
+            .where((r) => r.isActiveCustomService)
+            .length
+        : 0;
+    final atLimit = !featureEnabled || (limit != null && usedCount >= limit);
+
     return Dialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 40),
@@ -4025,6 +4108,172 @@ class _CreateServiceDialogState extends ConsumerState<_CreateServiceDialog> {
                 'Submit a request to add a new service to the catalog.',
                 style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
               ),
+              if (!featureEnabled || limit != null) ...[
+                const SizedBox(height: 8),
+                if (!featureEnabled)
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: AppColors.error.withAlpha(18),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: AppColors.error.withAlpha(80)),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            const Icon(Icons.block_rounded,
+                                size: 15, color: AppColors.error),
+                            const SizedBox(width: 6),
+                            const Text(
+                              'Not Included in Your Plan',
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w700,
+                                color: AppColors.error,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 6),
+                        const Text(
+                          'Custom service creation is not included in your current subscription plan.',
+                          style: TextStyle(
+                              fontSize: 12, color: AppColors.textPrimary),
+                        ),
+                        const SizedBox(height: 3),
+                        Text(
+                          sub?.isActive == true
+                              ? 'You can switch to a plan that includes this feature when your current subscription expires.'
+                              : 'Upgrade your plan to unlock custom service creation.',
+                          style: const TextStyle(
+                              fontSize: 12, color: AppColors.textSecondary),
+                        ),
+                        const SizedBox(height: 10),
+                        GestureDetector(
+                          onTap: () {
+                            Navigator.of(context).pop();
+                            context.push(RoutePaths.browsePlans);
+                          },
+                          child: const Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                'View Plans',
+                                style: TextStyle(
+                                  fontSize: 12.5,
+                                  fontWeight: FontWeight.w600,
+                                  color: AppColors.primary,
+                                ),
+                              ),
+                              SizedBox(width: 3),
+                              Icon(Icons.arrow_forward_rounded,
+                                  size: 14, color: AppColors.primary),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  )
+                else if (atLimit)
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: AppColors.error.withAlpha(18),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: AppColors.error.withAlpha(80)),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            const Icon(Icons.block_rounded,
+                                size: 15, color: AppColors.error),
+                            const SizedBox(width: 6),
+                            const Text(
+                              'Custom Service Limit Reached',
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w700,
+                                color: AppColors.error,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          "You've used $usedCount of $limit custom "
+                          'service${limit == 1 ? '' : 's'} allowed by your plan.',
+                          style: const TextStyle(
+                              fontSize: 12, color: AppColors.textPrimary),
+                        ),
+                        const SizedBox(height: 3),
+                        Text(
+                          sub?.isActive == true
+                              ? 'You can switch to a higher-tier plan when your current subscription expires.'
+                              : 'Upgrade your subscription plan to create more custom services.',
+                          style: const TextStyle(
+                              fontSize: 12, color: AppColors.textSecondary),
+                        ),
+                        const SizedBox(height: 10),
+                        GestureDetector(
+                          onTap: () {
+                            Navigator.of(context).pop();
+                            context.push(RoutePaths.browsePlans);
+                          },
+                          child: const Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                'View Plans',
+                                style: TextStyle(
+                                  fontSize: 12.5,
+                                  fontWeight: FontWeight.w600,
+                                  color: AppColors.primary,
+                                ),
+                              ),
+                              SizedBox(width: 3),
+                              Icon(Icons.arrow_forward_rounded,
+                                  size: 14, color: AppColors.primary),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  )
+                else
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                    decoration: BoxDecoration(
+                      color: AppColors.success.withAlpha(18),
+                      borderRadius: BorderRadius.circular(8),
+                      border:
+                          Border.all(color: AppColors.success.withAlpha(80)),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.check_circle_outline_rounded,
+                            size: 14, color: AppColors.success),
+                        const SizedBox(width: 6),
+                        Text(
+                          '$usedCount of $limit custom '
+                          'service${limit == 1 ? '' : 's'} used',
+                          style: const TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.success,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+              ],
               const SizedBox(height: 20),
               const Divider(height: 1),
               const SizedBox(height: 20),
@@ -4094,7 +4343,7 @@ class _CreateServiceDialogState extends ConsumerState<_CreateServiceDialog> {
                   const SizedBox(width: 12),
                   Expanded(
                     child: FilledButton(
-                      onPressed: _submitting ? null : _submit,
+                      onPressed: (_submitting || atLimit) ? null : _submit,
                       style: FilledButton.styleFrom(
                         backgroundColor: AppColors.primary,
                         fixedSize: const Size.fromHeight(44),
@@ -4263,5 +4512,356 @@ class _DialogImagePicker extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Vendor Questions Panel — shows customer questions for vendor's custom services
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _VendorQuestionsPanel extends ConsumerStatefulWidget {
+  const _VendorQuestionsPanel({required this.vendorId});
+  final String vendorId;
+
+  @override
+  ConsumerState<_VendorQuestionsPanel> createState() =>
+      _VendorQuestionsPanelState();
+}
+
+class _VendorQuestionsPanelState
+    extends ConsumerState<_VendorQuestionsPanel> {
+  @override
+  Widget build(BuildContext context) {
+    final questionsAsync =
+        ref.watch(vendorQuestionsNotifierProvider(widget.vendorId));
+    final notifier =
+        ref.read(vendorQuestionsNotifierProvider(widget.vendorId).notifier);
+
+    return questionsAsync.when(
+      loading: () => const Center(child: CircularProgressIndicator()),
+      error: (e, _) => Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.error_outline_rounded,
+                color: AppColors.textSecondary, size: 40),
+            const SizedBox(height: 12),
+            const Text('Failed to load questions',
+                style: TextStyle(color: AppColors.textSecondary)),
+            const SizedBox(height: 8),
+            TextButton(
+              onPressed: notifier.refresh,
+              child: const Text('Retry'),
+            ),
+          ],
+        ),
+      ),
+      data: (questions) {
+        if (questions.isEmpty) {
+          return const Center(
+            child: Padding(
+              padding: EdgeInsets.all(32),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.help_outline_rounded,
+                      size: 52, color: AppColors.textSecondary),
+                  SizedBox(height: 12),
+                  Text(
+                    'No customer questions yet',
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.textPrimary,
+                    ),
+                  ),
+                  SizedBox(height: 6),
+                  Text(
+                    'Questions from customers about your custom services will appear here.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                        fontSize: 13, color: AppColors.textSecondary),
+                  ),
+                ],
+              ),
+            ),
+          );
+        }
+        return RefreshIndicator(
+          onRefresh: notifier.refresh,
+          child: ListView.separated(
+            padding: const EdgeInsets.all(16),
+            itemCount: questions.length,
+            separatorBuilder: (_, __) => const SizedBox(height: 8),
+            itemBuilder: (ctx, i) => _VendorQuestionTile(
+              question: questions[i],
+              onAnswer: () => _openAnswerSheet(ctx, notifier, questions[i]),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _openAnswerSheet(
+    BuildContext context,
+    VendorQuestionsNotifier notifier,
+    CustomerQuestionModel question,
+  ) async {
+    final confirmed = await showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => _VendorAnswerSheet(question: question),
+    );
+    if (confirmed != null && confirmed.isNotEmpty) {
+      try {
+        await notifier.answerQuestion(
+            questionId: question.id, answer: confirmed);
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Answer published.'),
+              backgroundColor: AppColors.success,
+              duration: Duration(seconds: 2),
+            ),
+          );
+        }
+      } catch (e) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Failed to publish: $e'),
+              backgroundColor: AppColors.error,
+            ),
+          );
+        }
+      }
+    }
+  }
+}
+
+class _VendorQuestionTile extends StatelessWidget {
+  const _VendorQuestionTile({
+    required this.question,
+    required this.onAnswer,
+  });
+
+  final CustomerQuestionModel question;
+  final VoidCallback onAnswer;
+
+  @override
+  Widget build(BuildContext context) {
+    final isPending = question.isPending;
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: isPending
+              ? const Color(0xFFF59E0B).withValues(alpha: 0.5)
+              : AppColors.border,
+        ),
+      ),
+      padding: const EdgeInsets.all(14),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(
+                isPending
+                    ? Icons.help_outline_rounded
+                    : Icons.check_circle_outline_rounded,
+                size: 16,
+                color: isPending
+                    ? const Color(0xFFF59E0B)
+                    : AppColors.success,
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      question.question,
+                      style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.textPrimary,
+                      ),
+                    ),
+                    if (question.customerName != null) ...[
+                      const SizedBox(height: 3),
+                      Text(
+                        'from ${question.customerName}',
+                        style: const TextStyle(
+                          fontSize: 11,
+                          color: AppColors.textSecondary,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              if (isPending)
+                GestureDetector(
+                  onTap: onAnswer,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 12, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: AppColors.primary.withValues(alpha: 0.08),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Text(
+                      'Answer',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.primary,
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          if (question.isAnswered && question.answer != null) ...[
+            const SizedBox(height: 10),
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF0FAF4),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                    color: AppColors.success.withValues(alpha: 0.3)),
+              ),
+              child: Text(
+                question.answer!,
+                style: const TextStyle(
+                  fontSize: 12,
+                  color: AppColors.textSecondary,
+                  height: 1.5,
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _VendorAnswerSheet extends StatefulWidget {
+  const _VendorAnswerSheet({required this.question});
+
+  final CustomerQuestionModel question;
+
+  @override
+  State<_VendorAnswerSheet> createState() => _VendorAnswerSheetState();
+}
+
+class _VendorAnswerSheetState extends State<_VendorAnswerSheet> {
+  late final TextEditingController _ctrl;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = TextEditingController(text: widget.question.answer ?? '');
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final bottom = MediaQuery.viewInsetsOf(context).bottom;
+    return Container(
+      padding: EdgeInsets.fromLTRB(20, 24, 20, 24 + bottom),
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Answer Question',
+            style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w700,
+                color: AppColors.textPrimary),
+          ),
+          const SizedBox(height: 10),
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: AppColors.background,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Text(
+              widget.question.question,
+              style: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w500,
+                  color: AppColors.textPrimary),
+            ),
+          ),
+          const SizedBox(height: 14),
+          TextField(
+            controller: _ctrl,
+            maxLines: 4,
+            autofocus: true,
+            decoration: InputDecoration(
+              hintText: 'Write your answer here…',
+              hintStyle: const TextStyle(color: AppColors.textHint),
+              border:
+                  OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: const BorderSide(color: AppColors.border),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: const BorderSide(color: AppColors.primary),
+              ),
+              contentPadding: const EdgeInsets.all(12),
+              errorText: _error,
+            ),
+          ),
+          const SizedBox(height: 16),
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton(
+              onPressed: _submit,
+              style: FilledButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                minimumSize: const Size.fromHeight(48),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12)),
+              ),
+              child: const Text('Publish Answer',
+                  style: TextStyle(fontWeight: FontWeight.w600)),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _submit() {
+    final answer = _ctrl.text.trim();
+    if (answer.isEmpty) {
+      setState(() => _error = 'Please enter your answer.');
+      return;
+    }
+    Navigator.of(context).pop(answer);
   }
 }
