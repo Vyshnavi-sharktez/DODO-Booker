@@ -100,10 +100,28 @@ class _FaqItemState extends State<_FaqItem> {
 
 /// Renders "Have a question? Ask us →" in gold. Tapping it gates auth, then
 /// opens [_QuestionSheet] which submits to the customer_questions table.
+///
+/// For DODO catalog services provide [serviceId] + optional [parentId].
+/// For custom (vendor) services provide [customServiceId], [vendorId], and
+/// [serviceName] instead.
 class AskQuestionLink extends ConsumerWidget {
-  const AskQuestionLink({super.key, required this.serviceId, this.parentId});
-  final String serviceId;
+  const AskQuestionLink({
+    super.key,
+    this.serviceId,
+    this.parentId,
+    this.customServiceId,
+    this.vendorId,
+    this.serviceName,
+  }) : assert(
+          (serviceId != null) != (customServiceId != null),
+          'Provide exactly one of serviceId or customServiceId',
+        );
+
+  final String? serviceId;
   final String? parentId;
+  final String? customServiceId;
+  final String? vendorId;
+  final String? serviceName;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -135,16 +153,32 @@ class AskQuestionLink extends ConsumerWidget {
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (_) => _QuestionSheet(
-        onSubmit: (question) => ref.read(catalogServiceProvider).submitQuestion(
-              serviceId: serviceId,
-              parentNodeId: parentId,
+        onSubmit: (question) {
+          final svc = ref.read(catalogServiceProvider);
+          if (customServiceId != null) {
+            return svc.submitCustomServiceQuestion(
+              customServiceId: customServiceId!,
+              vendorId: vendorId!,
+              serviceName: serviceName ?? 'this service',
               customerId: profile.id,
               customerName:
                   profile.fullName.isNotEmpty ? profile.fullName : null,
               customerPhone:
                   profile.mobileNumber.isNotEmpty ? profile.mobileNumber : null,
               question: question,
-            ),
+            );
+          }
+          return svc.submitQuestion(
+            serviceId: serviceId!,
+            parentNodeId: parentId,
+            customerId: profile.id,
+            customerName:
+                profile.fullName.isNotEmpty ? profile.fullName : null,
+            customerPhone:
+                profile.mobileNumber.isNotEmpty ? profile.mobileNumber : null,
+            question: question,
+          );
+        },
       ),
     );
 

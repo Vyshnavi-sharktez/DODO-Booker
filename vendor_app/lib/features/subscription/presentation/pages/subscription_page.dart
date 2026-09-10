@@ -8,6 +8,7 @@ import '../../../../core/widgets/vendor_scaffold.dart';
 import '../../data/subscription_repository.dart';
 import '../../domain/models/subscription_plan.dart';
 import '../../domain/models/vendor_subscription.dart';
+import '../../domain/subscription_feature_registry.dart';
 import '../providers/subscription_provider.dart';
 
 class SubscriptionPage extends ConsumerWidget {
@@ -66,7 +67,7 @@ class SubscriptionPage extends ConsumerWidget {
                     : _SubscriptionBody(
                         sub: sub,
                         onBrowsePlans: () => _browsePlans(context),
-                        onCancel: () => _cancelSubscription(context, ref, sub.id),
+                        onCancel: null,
                       ),
               ),
               // ── Catalog subscriptions ────────────────────────────────────
@@ -85,10 +86,7 @@ class SubscriptionPage extends ConsumerWidget {
                                 padding: const EdgeInsets.only(bottom: 14),
                                 child: _CatalogSubCard(
                                   sub: cs,
-                                  onCancel: cs.isActive
-                                      ? () => _cancelSubscription(
-                                          context, ref, cs.id)
-                                      : null,
+                                  onCancel: null,
                                 ),
                               )),
                         ],
@@ -105,47 +103,6 @@ class SubscriptionPage extends ConsumerWidget {
     context.push(RoutePaths.browsePlans);
   }
 
-  Future<void> _cancelSubscription(
-      BuildContext context, WidgetRef ref, String subscriptionId) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Cancel Subscription'),
-        content: const Text(
-          'Are you sure you want to cancel your subscription?\n\n'
-          'You will lose access to premium features immediately. '
-          'You can purchase a new plan at any time.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Keep Subscription'),
-          ),
-          FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: AppColors.error),
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Cancel Subscription'),
-          ),
-        ],
-      ),
-    );
-    if (confirmed != true || !context.mounted) return;
-    try {
-      await ref
-          .read(subscriptionRepositoryProvider)
-          .cancelSubscription(subscriptionId);
-      ref.invalidate(mySubscriptionProvider);
-    } catch (e) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(e.toString().replaceFirst('Exception: ', '')),
-            backgroundColor: AppColors.error,
-          ),
-        );
-      }
-    }
-  }
 }
 
 // ── Subscription body ─────────────────────────────────────────────────────────
@@ -154,11 +111,11 @@ class _SubscriptionBody extends StatelessWidget {
   const _SubscriptionBody({
     required this.sub,
     required this.onBrowsePlans,
-    required this.onCancel,
+    this.onCancel,
   });
   final VendorSubscription sub;
   final VoidCallback onBrowsePlans;
-  final VoidCallback onCancel;
+  final VoidCallback? onCancel;
 
   @override
   Widget build(BuildContext context) {
@@ -181,7 +138,6 @@ class _SubscriptionBody extends StatelessWidget {
 
         _PlanSummaryCard(
           sub: sub,
-          onRenew: onBrowsePlans,
           onCompletePayment: (info) => context.push(RoutePaths.payment, extra: info),
           onCancel: sub.isActive ? onCancel : null,
         ),
@@ -234,12 +190,10 @@ class _SubscriptionBody extends StatelessWidget {
 class _PlanSummaryCard extends StatelessWidget {
   const _PlanSummaryCard({
     required this.sub,
-    required this.onRenew,
     required this.onCompletePayment,
     this.onCancel,
   });
   final VendorSubscription sub;
-  final VoidCallback onRenew;
   final void Function(PendingPaymentInfo) onCompletePayment;
   final VoidCallback? onCancel;
 
@@ -370,25 +324,6 @@ class _PlanSummaryCard extends StatelessWidget {
                 ),
               ),
             ],
-            if (sub.isActive || sub.isExpiringSoon) ...[
-              const SizedBox(height: 8),
-              SizedBox(
-                width: double.infinity,
-                child: FilledButton.icon(
-                  onPressed: onRenew,
-                  style: FilledButton.styleFrom(
-                    backgroundColor: Colors.white,
-                    foregroundColor: AppColors.primary,
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12)),
-                  ),
-                  icon: const Icon(Icons.refresh_rounded, size: 18),
-                  label: const Text('Renew / Upgrade',
-                      style: TextStyle(fontWeight: FontWeight.w700)),
-                ),
-              ),
-            ],
             if (onCancel != null) ...[
               const SizedBox(height: 8),
               SizedBox(
@@ -459,21 +394,47 @@ class _DateItem extends StatelessWidget {
 
 // ── Benefits card ─────────────────────────────────────────────────────────────
 
+IconData _featureIcon(String key) => switch (key) {
+      SubscriptionFeatureKeys.allowCod => Icons.local_atm_rounded,
+      SubscriptionFeatureKeys.allowBookingAssignment =>
+        Icons.assignment_ind_rounded,
+      SubscriptionFeatureKeys.priorityListing => Icons.star_rounded,
+      SubscriptionFeatureKeys.reducedCommissionPct => Icons.percent_rounded,
+      SubscriptionFeatureKeys.allowCustomPrice => Icons.price_change_rounded,
+      _ => Icons.check_circle_outlined,
+    };
+
 class _BenefitsCard extends StatelessWidget {
   const _BenefitsCard({required this.plan});
   final SubscriptionPlan plan;
 
   @override
   Widget build(BuildContext context) {
-    final benefits = <(IconData, String, bool)>[
-      (Icons.local_atm_rounded, 'Cash on Delivery', plan.allowCod),
-      (Icons.assignment_ind_rounded, 'Booking Assignment', plan.allowBookingAssignment),
-      (Icons.star_rounded, 'Priority Listing', plan.priorityListing),
-      if (plan.reducedCommissionPct > 0)
-        (Icons.percent_rounded,
-            '${plan.reducedCommissionPct.toStringAsFixed(0)}% Reduced Commission',
-            true),
-    ];
+    final perms = plan.permissions;
+    final benefits = <(IconData, String, bool)>[];
+    for (final feature in kSubscriptionFeatures) {
+      if (feature.type == SubscriptionFeatureType.toggle) {
+        if (perms[feature.key] != true) continue;
+        benefits.add((_featureIcon(feature.key), feature.label, true));
+      } else if (feature.type == SubscriptionFeatureType.quantity) {
+        if (!plan.isMaxCustomServicesEnabled) continue;
+        final qty = plan.maxCustomServices;
+        final label = qty == null
+            ? '${feature.label} (Unlimited)'
+            : '${feature.label}: $qty';
+        benefits.add((_featureIcon(feature.key), label, true));
+      } else {
+        // percent
+        final val = (perms[feature.key] as num?)?.toDouble() ?? 0.0;
+        if (val > 0) {
+          benefits.add((
+            _featureIcon(feature.key),
+            '${val.toStringAsFixed(0)}% ${feature.label}',
+            true,
+          ));
+        }
+      }
+    }
 
     return Container(
       padding: const EdgeInsets.all(18),

@@ -105,52 +105,130 @@ class SubscriptionRepository extends BaseRepository {
 
   // ── Purchase flow ─────────────────────────────────────────────────────────
   //
-  // Step 1: purchasePlan   — creates vendor_subscriptions (status=pending_payment)
-  //                          + vendor_subscription_payments (status=pending)
+  // Step 1: purchasePlan   — idempotent entry point for both first purchase
+  //                          and payment retry after failure.
+  //                          • No existing open global sub  → INSERT new row
+  //                          • Existing pending_payment sub → UPDATE plan +
+  //                            permissions, create new payment (retry path)
+  //                          • Existing active sub          → throws, caller
+  //                            shows "already subscribed" message
   // Step 2 (on success):   activateSubscription — marks payment paid + sub active
   // Step 2 (on failure):   recordPaymentFailure — marks payment failed
   //                          (subscription stays pending_payment for retry)
 
-  /// Creates a subscription in 'pending_payment' status and an associated
-  /// pending payment record. Returns the IDs needed to continue the flow.
+  /// Idempotent purchase entry point.
+  ///
+  /// For catalog plans the existing first-purchase INSERT path is unchanged.
+  /// For global plans, checks for an existing open subscription first to
+  /// avoid violating the uq_vs_global_active unique index.
   Future<PendingPaymentInfo> purchasePlan({
     required String vendorId,
     required SubscriptionPlan plan,
   }) async {
     final amount = (plan.joiningFee ?? 0) + (plan.subscriptionFee ?? 0);
 
-    final insertPayload = <String, dynamic>{
-      'vendor_id': vendorId,
-      'status': 'pending_payment',
-      if (plan.isCatalogPlan) ...{
-        'catalog_node_id': plan.catalogNodeId,
-        'subscription_permissions': plan.permissions,
-      } else
-        'plan_id': plan.id,
-    };
+    // Catalog subscriptions: no existing-row check needed (each catalog node
+    // has its own scoped unique index). Use the original INSERT path.
+    if (plan.isCatalogPlan) {
+      return _insertNewSubscription(
+        vendorId: vendorId,
+        plan: plan,
+        amount: amount,
+        extraFields: {'catalog_node_id': plan.catalogNodeId},
+      );
+    }
 
+    // Global subscriptions: check for any open row before inserting.
+    final existing = await supabase
+        .from('vendor_subscriptions')
+        .select('id, status')
+        .eq('vendor_id', vendorId)
+        .isFilter('catalog_node_id', null)
+        .inFilter('status', ['pending_payment', 'pending', 'pending_approval'])
+        .limit(1);
+
+    final existingList = existing as List;
+
+    if (existingList.isNotEmpty) {
+      // Pending row from a previous attempt — reuse it with the new plan.
+      final existingId = existingList.first['id'] as String;
+      await supabase
+          .from('vendor_subscriptions')
+          .update({
+            'plan_id': plan.id,
+            'subscription_permissions': plan.permissions,
+          })
+          .eq('id', existingId);
+
+      final paymentId = await createRetryPayment(
+        subscriptionId: existingId,
+        vendorId: vendorId,
+        amount: amount,
+      );
+
+      return PendingPaymentInfo(
+        subscriptionId: existingId,
+        paymentId: paymentId,
+        amount: amount,
+        planDurationDays: plan.durationDays,
+        planName: plan.name,
+      );
+    }
+
+    // Check for an active subscription (renew / upgrade path).
+    final active = await supabase
+        .from('vendor_subscriptions')
+        .select('id')
+        .eq('vendor_id', vendorId)
+        .isFilter('catalog_node_id', null)
+        .eq('status', 'active')
+        .limit(1);
+
+    if ((active as List).isNotEmpty) {
+      throw Exception(
+        'You already have an active subscription. '
+        'It will remain active until it expires, after which you can renew '
+        'or choose a different plan.',
+      );
+    }
+
+    // No open subscription — standard first-purchase path.
+    return _insertNewSubscription(
+      vendorId: vendorId,
+      plan: plan,
+      amount: amount,
+      extraFields: {'plan_id': plan.id},
+    );
+  }
+
+  /// Inserts a new vendor_subscriptions row and its first payment record.
+  Future<PendingPaymentInfo> _insertNewSubscription({
+    required String vendorId,
+    required SubscriptionPlan plan,
+    required double amount,
+    required Map<String, dynamic> extraFields,
+  }) async {
     final subData = await supabase
         .from('vendor_subscriptions')
-        .insert(insertPayload)
+        .insert({
+          'vendor_id': vendorId,
+          'status': 'pending_payment',
+          'subscription_permissions': plan.permissions,
+          ...extraFields,
+        })
         .select()
         .single();
     final subscriptionId = subData['id'] as String;
 
-    final payData = await supabase
-        .from('vendor_subscription_payments')
-        .insert({
-          'subscription_id': subscriptionId,
-          'vendor_id': vendorId,
-          'payment_type': 'subscription_fee',
-          'amount': amount,
-          'status': 'pending',
-        })
-        .select()
-        .single();
+    final paymentId = await createRetryPayment(
+      subscriptionId: subscriptionId,
+      vendorId: vendorId,
+      amount: amount,
+    );
 
     return PendingPaymentInfo(
       subscriptionId: subscriptionId,
-      paymentId: payData['id'] as String,
+      paymentId: paymentId,
       amount: amount,
       planDurationDays: plan.durationDays,
       planName: plan.name,

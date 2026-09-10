@@ -43,10 +43,15 @@ final catalogNodeFaqsProvider =
   return [...results[0], ...results[1]];
 });
 
-/// FAQs for a vendor custom service, keyed by custom_service_id.
+/// FAQs for a vendor custom service: static service_faqs + answered customer questions.
 final customServiceFaqsProvider =
-    FutureProvider.family<List<FaqModel>, String>((ref, customServiceId) {
-  return ref.read(catalogServiceProvider).fetchFaqsForCustomService(customServiceId);
+    FutureProvider.family<List<FaqModel>, String>((ref, customServiceId) async {
+  final service = ref.read(catalogServiceProvider);
+  final results = await Future.wait([
+    service.fetchFaqsForCustomService(customServiceId),
+    service.fetchAnsweredQuestionsForCustomService(customServiceId),
+  ]);
+  return [...results[0], ...results[1]];
 });
 
 /// Effective availability of a node for a given parent context.

@@ -92,6 +92,32 @@ final _vendorSubscribedProvider =
   return {for (final r in rows as List) r['vendor_id'] as String};
 });
 
+/// Returns the set of vendor IDs whose active global subscription plan does
+/// NOT include allow_booking_assignment = true.  Only vendors that HAVE an
+/// active subscription but whose plan denies the feature are included —
+/// vendors with no active subscription are absent (they fall back to allowed).
+/// Only watched when subscription_enabled setting is true.
+final _vendorAssignmentBlockedProvider =
+    FutureProvider.autoDispose<Set<String>>((ref) async {
+  final rows = await Supabase.instance.client
+      .from('vendor_subscriptions')
+      .select('vendor_id, subscription_plans!inner(permissions)')
+      .isFilter('catalog_node_id', null)
+      .eq('status', 'active')
+      .gt('expiry_date', DateTime.now().toIso8601String());
+  final blocked = <String>{};
+  for (final r in rows as List) {
+    final row = r as Map<String, dynamic>;
+    final planRaw = row['subscription_plans'];
+    final allowed = planRaw is Map &&
+        planRaw['permissions'] is Map &&
+        ((planRaw['permissions'] as Map)['allow_booking_assignment'] == true ||
+            (planRaw['permissions'] as Map)['allow_assignment'] == true);
+    if (!allowed) blocked.add(row['vendor_id'] as String);
+  }
+  return blocked;
+});
+
 /// Returns the set of vendor IDs that cover every service in the given list,
 /// either by exact service_id match or by having registered a parent/ancestor
 /// node.  Delegates to the get_eligible_vendor_ids_for_services RPC so that
@@ -560,6 +586,15 @@ class _BookingAssignmentDialogState
         ? ref.watch(_vendorSubscribedProvider).valueOrNull
         : null;
 
+    // Assignment enforcement: active when subscription module is enabled.
+    // Vendors with an active subscription that lacks allow_booking_assignment
+    // are blocked. Vendors with no subscription keep existing fallback (allowed).
+    final assignmentEnforced = settings['subscription_enabled'] == 'true';
+    final assignmentBlockedIds = assignmentEnforced
+        ? ref.watch(_vendorAssignmentBlockedProvider).valueOrNull ??
+            const <String>{}
+        : const <String>{};
+
     final allVendors = vendorsAsync.valueOrNull ?? <Vendor>[];
     final allTeams = dodoTeamsAsync.valueOrNull ?? <DodoTeam>[];
 
@@ -612,6 +647,7 @@ class _BookingAssignmentDialogState
       assignmentsMap: assignmentsAsync.valueOrNull ?? {},
       busyVendorIds: busyVendorIds,
       codIneligibleVendorIds: codIneligibleVendorIds,
+      assignmentIneligibleVendorIds: assignmentBlockedIds,
     );
 
     final teamResult = VendorAssignmentService.rankTeamAssignees(
@@ -651,6 +687,7 @@ class _BookingAssignmentDialogState
                               assignmentsAsync.hasError,
                           allVendors: allVendors,
                           codEnforced: codEnforced,
+                          assignmentEnforced: assignmentEnforced,
                           contractId: widget.booking.isAmc
                               ? (widget.booking.amcContractId ?? '')
                               : '',
@@ -892,6 +929,7 @@ class _BookingAssignmentDialogState
     required bool hasError,
     required List<Vendor> allVendors,
     bool codEnforced = false,
+    bool assignmentEnforced = false,
     String contractId = '',
     bool noServiceVendors = false,
   }) {
@@ -951,6 +989,16 @@ class _BookingAssignmentDialogState
           )
         : null;
 
+    // Assignment enforcement banner — shown when the subscription module is on.
+    Widget? assignmentBanner = assignmentEnforced
+        ? _InfoBanner(
+            icon: Icons.assignment_late_rounded,
+            color: AppColors.error,
+            message:
+                'Vendors whose active subscription does not include Booking Assignment cannot be selected.',
+          )
+        : null;
+
     // Surface currently-assigned vendor if they are not in the active list
     // (e.g. deactivated after the booking was made).
     final currentInList =
@@ -972,6 +1020,8 @@ class _BookingAssignmentDialogState
         children: [
           ?codBanner,
           if (codBanner != null) const SizedBox(height: 12),
+          ?assignmentBanner,
+          if (assignmentBanner != null) const SizedBox(height: 12),
           ?currentAssigneeNote,
           ?amcRecommendedSection,
           if (amcRecommendedSection != null) const SizedBox(height: 12),
@@ -1031,6 +1081,8 @@ class _BookingAssignmentDialogState
         children: [
           ?codBanner,
           if (codBanner != null) const SizedBox(height: 12),
+          ?assignmentBanner,
+          if (assignmentBanner != null) const SizedBox(height: 12),
           ?currentAssigneeNote,
           ?amcRecommendedSection,
           if (amcRecommendedSection != null) const SizedBox(height: 12),
@@ -1075,6 +1127,8 @@ class _BookingAssignmentDialogState
         children: [
           ?codBanner,
           if (codBanner != null) const SizedBox(height: 12),
+          ?assignmentBanner,
+          if (assignmentBanner != null) const SizedBox(height: 12),
           ?currentAssigneeNote,
           ?amcRecommendedSection,
           if (amcRecommendedSection != null) const SizedBox(height: 12),
@@ -1105,6 +1159,8 @@ class _BookingAssignmentDialogState
         _buildAssignmentHistorySection(),
         ?codBanner,
         if (codBanner != null) const SizedBox(height: 12),
+        ?assignmentBanner,
+        if (assignmentBanner != null) const SizedBox(height: 12),
         ?currentAssigneeNote,
         ?amcRecommendedSection,
         if (amcRecommendedSection != null) const SizedBox(height: 12),
@@ -1291,7 +1347,7 @@ class _BookingAssignmentDialogState
   }) {
     return candidates.map((candidate) {
       final isBusy = candidate.status == AssigneeStatus.busy;
-      final blocked = _saving || isBusy || candidate.ineligibleForCod;
+      final blocked = _saving || isBusy || candidate.ineligibleForCod || candidate.ineligibleForAssignment;
       return _AssigneeCandidateCard(
         candidate: candidate,
         isSelected: selectedId == candidate.id,
@@ -1480,7 +1536,18 @@ class _AssigneeCandidateCard extends StatelessWidget {
                 ),
                 const SizedBox(width: 12),
               ],
-              if (candidate.ineligibleForCod) ...[
+              if (candidate.ineligibleForAssignment) ...[
+                Icon(Icons.assignment_late_rounded,
+                    size: 13, color: AppColors.error),
+                const SizedBox(width: 4),
+                Flexible(
+                  child: Text(
+                    'Assignment Not Permitted · Plan Required',
+                    style: TextStyle(fontSize: 12, color: AppColors.error),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ] else if (candidate.ineligibleForCod) ...[
                 Icon(Icons.credit_card_off_rounded,
                     size: 13, color: AppColors.error),
                 const SizedBox(width: 4),
@@ -1510,7 +1577,7 @@ class _AssigneeCandidateCard extends StatelessWidget {
           ),
           // Secondary busy indicator — only shown when the vendor is also busy,
           // so the admin knows they are blocked for two independent reasons.
-          if (candidate.ineligibleForCod &&
+          if ((candidate.ineligibleForCod || candidate.ineligibleForAssignment) &&
               candidate.status == AssigneeStatus.busy) ...[
             const SizedBox(height: 4),
             Row(

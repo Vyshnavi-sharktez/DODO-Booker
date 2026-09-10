@@ -57,3 +57,43 @@ final customerQuestionsNotifierProvider = StateNotifierProvider.family<
     key.parentNodeId,
   ),
 );
+
+class CustomServiceQuestionsNotifier
+    extends StateNotifier<AsyncValue<List<CustomerQuestion>>> {
+  final CustomerQuestionsRepository _repo;
+  final String _customServiceId;
+  final String _serviceName;
+
+  CustomServiceQuestionsNotifier(
+      this._repo, this._customServiceId, this._serviceName)
+      : super(const AsyncValue.loading()) {
+    _load();
+  }
+
+  Future<void> _load() async {
+    state = const AsyncValue.loading();
+    state = await AsyncValue.guard(
+      () => _repo.fetchForCustomService(_customServiceId),
+    );
+  }
+
+  Future<void> refresh() => _load();
+
+  Future<void> deleteQuestion(String id) async {
+    await _repo.deleteQuestion(id);
+    await _load();
+  }
+}
+
+typedef _CustomKey = ({String customServiceId, String serviceName});
+
+final customServiceQuestionsNotifierProvider = StateNotifierProvider.family<
+    CustomServiceQuestionsNotifier,
+    AsyncValue<List<CustomerQuestion>>,
+    _CustomKey>(
+  (ref, key) => CustomServiceQuestionsNotifier(
+    ref.watch(customerQuestionsRepositoryProvider),
+    key.customServiceId,
+    key.serviceName,
+  ),
+);

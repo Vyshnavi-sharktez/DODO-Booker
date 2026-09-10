@@ -8,6 +8,7 @@ import '../../../../core/widgets/vendor_scaffold.dart';
 import '../../data/subscription_repository.dart';
 import '../../domain/models/subscription_plan.dart';
 import '../../domain/models/vendor_subscription.dart';
+import '../../domain/subscription_feature_registry.dart';
 import '../providers/subscription_provider.dart';
 
 enum _PlanStatus { active, pendingPayment, available, inactive }
@@ -169,6 +170,45 @@ class BrowsePlansPage extends ConsumerWidget {
       ),
     );
   }
+}
+
+// ── Benefit chip helpers ──────────────────────────────────────────────────────
+
+Color _benefitChipColor(String key) => switch (key) {
+      SubscriptionFeatureKeys.allowCod => AppColors.success,
+      SubscriptionFeatureKeys.allowBookingAssignment => const Color(0xFF3182CE),
+      SubscriptionFeatureKeys.priorityListing => const Color(0xFFDD6B20),
+      SubscriptionFeatureKeys.reducedCommissionPct => AppColors.primary,
+      SubscriptionFeatureKeys.allowCustomPrice => const Color(0xFF6B46C1),
+      _ => AppColors.primary,
+    };
+
+List<Widget> _buildBenefitChips(SubscriptionPlan plan) {
+  final chips = <Widget>[];
+  for (final feature in kSubscriptionFeatures) {
+    if (feature.type == SubscriptionFeatureType.toggle) {
+      if (plan.permissions[feature.key] == true) {
+        chips.add(_BenefitChip(feature.label, _benefitChipColor(feature.key)));
+      }
+    } else if (feature.type == SubscriptionFeatureType.quantity) {
+      if (!plan.isMaxCustomServicesEnabled) continue;
+      final qty = plan.maxCustomServices;
+      final label = qty == null
+          ? '${feature.label} (Unlimited)'
+          : '$qty ${feature.label}';
+      chips.add(_BenefitChip(label, _benefitChipColor(feature.key)));
+    } else {
+      // percent
+      final val = (plan.permissions[feature.key] as num?)?.toDouble() ?? 0.0;
+      if (val > 0) {
+        chips.add(_BenefitChip(
+          '-${val.toStringAsFixed(0)}% ${feature.label}',
+          _benefitChipColor(feature.key),
+        ));
+      }
+    }
+  }
+  return chips;
 }
 
 // ── Plan card ─────────────────────────────────────────────────────────────────
@@ -394,18 +434,7 @@ class _PlanCard extends StatelessWidget {
           Wrap(
             spacing: 6,
             runSpacing: 6,
-            children: [
-              if (plan.allowCod) _BenefitChip('COD', AppColors.success),
-              if (plan.allowBookingAssignment)
-                _BenefitChip(
-                    'Booking Assignment', const Color(0xFF3182CE)),
-              if (plan.priorityListing)
-                _BenefitChip('Priority Listing', const Color(0xFFDD6B20)),
-              if (plan.reducedCommissionPct > 0)
-                _BenefitChip(
-                    '-${plan.reducedCommissionPct.toStringAsFixed(0)}% Commission',
-                    AppColors.primary),
-            ],
+            children: _buildBenefitChips(plan),
           ),
           const SizedBox(height: 14),
 

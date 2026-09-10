@@ -54,6 +54,22 @@ class VendorSubscription {
     final planMap = planRaw is Map<String, dynamic> ? planRaw : null;
     final nodeMap = nodeRaw is Map<String, dynamic> ? nodeRaw : null;
     final paymentsList = paymentsRaw is List ? paymentsRaw : null;
+    final snapshotPerms =
+        map['subscription_permissions'] as Map<String, dynamic>?;
+
+    // Build the plan using snapshot permissions when available so admin
+    // changes to subscription_plans do not affect vendors already on the plan.
+    // Falls back to live plan permissions for legacy rows without a snapshot.
+    SubscriptionPlan? plan;
+    if (planMap != null) {
+      if (snapshotPerms != null) {
+        final overridden = Map<String, dynamic>.from(planMap)
+          ..['permissions'] = snapshotPerms;
+        plan = SubscriptionPlan.fromMap(overridden);
+      } else {
+        plan = SubscriptionPlan.fromMap(planMap);
+      }
+    }
 
     return VendorSubscription(
       id: map['id'] as String,
@@ -67,7 +83,7 @@ class VendorSubscription {
       renewalCount: map['renewal_count'] as int? ?? 0,
       notes: map['notes'] as String?,
       createdAt: _parseDate(map['created_at']),
-      plan: planMap != null ? SubscriptionPlan.fromMap(planMap) : null,
+      plan: plan,
       payments: paymentsList == null
           ? []
           : paymentsList

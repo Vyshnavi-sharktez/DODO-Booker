@@ -112,7 +112,9 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (context, state) {
           final tab =
               int.tryParse(state.uri.queryParameters['tab'] ?? '') ?? 0;
-          return ServicesPage(initialTab: tab);
+          final subTab =
+              int.tryParse(state.uri.queryParameters['subTab'] ?? '') ?? 0;
+          return ServicesPage(initialTab: tab, initialSubTab: subTab);
         },
       ),
       GoRoute(

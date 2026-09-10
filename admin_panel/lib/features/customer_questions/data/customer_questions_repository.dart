@@ -35,6 +35,18 @@ class CustomerQuestionsRepository {
         .toList();
   }
 
+  Future<List<CustomerQuestion>> fetchForCustomService(
+      String customServiceId) async {
+    final data = await _db
+        .from('customer_questions')
+        .select()
+        .eq('custom_service_id', customServiceId)
+        .order('created_at', ascending: false);
+    return (data as List)
+        .map((e) => CustomerQuestion.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
   Future<void> answerQuestion(
     CustomerQuestion question, {
     required String serviceName,
@@ -50,6 +62,11 @@ class CustomerQuestionsRepository {
         ? '${question.question.substring(0, 80)}...'
         : question.question;
 
+    final entityId =
+        question.customServiceId ?? question.serviceId ?? question.id;
+    final entityType =
+        question.isCustomServiceQuestion ? 'custom_service_question' : 'service_faq';
+
     await _db.from('notifications').insert({
       'user_type': 'customer',
       'user_id': question.customerId,
@@ -58,8 +75,8 @@ class CustomerQuestionsRepository {
           'Your question about $serviceName: "$preview" has been answered.',
       'notification_type': 'question_answered',
       'is_read': false,
-      'entity_type': 'service_faq',
-      'entity_id': question.serviceId,
+      'entity_type': entityType,
+      'entity_id': entityId,
       'customer_question_id': question.id,
       if (question.parentNodeId != null) 'parent_node_id': question.parentNodeId,
     });

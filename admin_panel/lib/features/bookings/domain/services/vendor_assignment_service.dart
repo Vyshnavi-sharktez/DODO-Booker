@@ -23,6 +23,9 @@ class AssigneeCandidate {
   // True when the booking is COD and this vendor has no active subscription.
   // Selection is disabled in the assignment dialog; backend enforces the same rule.
   final bool ineligibleForCod;
+  // True when this vendor's active subscription plan does not include
+  // allow_booking_assignment. Selection is disabled in the assignment dialog.
+  final bool ineligibleForAssignment;
 
   const AssigneeCandidate({
     required this.id,
@@ -34,12 +37,14 @@ class AssigneeCandidate {
     required this.kind,
     this.vendorTier,
     this.ineligibleForCod = false,
+    this.ineligibleForAssignment = false,
   });
 
   factory AssigneeCandidate.fromVendor(
     Vendor v, {
     double? distanceKm,
     bool ineligibleForCod = false,
+    bool ineligibleForAssignment = false,
   }) =>
       AssigneeCandidate(
         id: v.id,
@@ -53,6 +58,7 @@ class AssigneeCandidate {
         kind: AssigneeKind.vendor,
         vendorTier: v.vendorTier,
         ineligibleForCod: ineligibleForCod,
+        ineligibleForAssignment: ineligibleForAssignment,
       );
 
   factory AssigneeCandidate.fromTeam(DodoTeam t) => AssigneeCandidate(
@@ -215,11 +221,13 @@ class VendorAssignmentService {
     required Map<String, Set<String>> assignmentsMap,
     Set<String> busyVendorIds = const {},
     Set<String> codIneligibleVendorIds = const {},
+    Set<String> assignmentIneligibleVendorIds = const {},
   }) {
     final activeVendors = vendors.where((v) => v.isActive && v.isOnline).toList();
 
     AssigneeCandidate toCandidate(Vendor v) {
-      final ineligible = codIneligibleVendorIds.contains(v.id);
+      final ineligibleCod = codIneligibleVendorIds.contains(v.id);
+      final ineligibleAssignment = assignmentIneligibleVendorIds.contains(v.id);
       if (busyVendorIds.contains(v.id)) {
         return AssigneeCandidate(
           id: v.id,
@@ -230,10 +238,15 @@ class VendorAssignmentService {
           status: AssigneeStatus.busy,
           kind: AssigneeKind.vendor,
           vendorTier: v.vendorTier,
-          ineligibleForCod: ineligible,
+          ineligibleForCod: ineligibleCod,
+          ineligibleForAssignment: ineligibleAssignment,
         );
       }
-      return AssigneeCandidate.fromVendor(v, ineligibleForCod: ineligible);
+      return AssigneeCandidate.fromVendor(
+        v,
+        ineligibleForCod: ineligibleCod,
+        ineligibleForAssignment: ineligibleAssignment,
+      );
     }
 
     if (bookingLat == null || bookingLng == null) {

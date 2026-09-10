@@ -32,6 +32,12 @@ class SubscriptionPlan {
   bool get priorityListing => permissions['priority_listing'] == true;
   double get reducedCommissionPct =>
       (permissions['reduced_commission_pct'] as num?)?.toDouble() ?? 0.0;
+  bool get isMaxCustomServicesEnabled =>
+      permissions['max_custom_services'] != false;
+  int? get maxCustomServices {
+    final v = permissions['max_custom_services'];
+    return v is num ? v.toInt() : null;
+  }
 
   factory SubscriptionPlan.fromMap(Map<String, dynamic> map) {
     return SubscriptionPlan(

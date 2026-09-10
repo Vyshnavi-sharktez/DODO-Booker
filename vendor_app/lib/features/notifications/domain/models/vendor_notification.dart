@@ -8,6 +8,7 @@ class VendorNotification {
     this.bookingId,
     this.entityType,
     this.entityId,
+    this.customerQuestionId,
     this.createdAt,
   });
 
@@ -19,6 +20,7 @@ class VendorNotification {
   final String? bookingId;
   final String? entityType;
   final String? entityId;
+  final String? customerQuestionId;
   final DateTime? createdAt;
 
   factory VendorNotification.fromMap(Map<String, dynamic> map) {
@@ -31,6 +33,7 @@ class VendorNotification {
       bookingId: map['booking_id'] as String?,
       entityType: map['entity_type'] as String?,
       entityId: map['entity_id'] as String?,
+      customerQuestionId: map['customer_question_id'] as String?,
       createdAt: map['created_at'] != null
           ? DateTime.tryParse(map['created_at'] as String)
           : null,
@@ -47,6 +50,7 @@ class VendorNotification {
       bookingId: bookingId,
       entityType: entityType,
       entityId: entityId,
+      customerQuestionId: customerQuestionId,
       createdAt: createdAt,
     );
   }
