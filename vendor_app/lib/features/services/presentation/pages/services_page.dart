@@ -92,8 +92,9 @@ String _subKey(String root, String sub) => '$root␟$sub';
 // ─────────────────────────────────────────────────────────────────────────────
 
 class ServicesPage extends ConsumerStatefulWidget {
-  const ServicesPage({super.key, this.initialTab = 0});
+  const ServicesPage({super.key, this.initialTab = 0, this.initialSubTab = 0});
   final int initialTab;
+  final int initialSubTab;
 
   @override
   ConsumerState<ServicesPage> createState() => _ServicesPageState();
@@ -177,6 +178,7 @@ class _ServicesPageState extends ConsumerState<ServicesPage> {
                     _expandedMyParents.contains(sid)
                       ? _expandedMyParents.remove(sid)
                       : _expandedMyParents.add(sid)),
+                  initialSubTab: widget.initialSubTab,
                 ),
                 _AllServicesWide(
                   catalogAsync: catalogAsync,
@@ -235,7 +237,8 @@ class _ServicesPageState extends ConsumerState<ServicesPage> {
               index: _tab,
               children: [
                 _MyServicesNarrow(
-                    onSwitchToAllServices: () => setState(() => _tab = 1)),
+                    onSwitchToAllServices: () => setState(() => _tab = 1),
+                    initialSubTab: widget.initialSubTab),
                 _AllServicesNarrow(addingIds: _addingIds, onAdd: _addService),
                 _MyRequestsNarrow(requestsAsync: requestsAsync),
               ],
@@ -1276,19 +1279,27 @@ class _MyServicesWide extends ConsumerStatefulWidget {
     required this.onSwitchToAll,
     required this.expandedMyParents,
     required this.onToggleMyParent,
+    this.initialSubTab = 0,
   });
 
   final AsyncValue<List<AssignedService>> vendorAsync;
   final VoidCallback onSwitchToAll;
   final Set<String> expandedMyParents;
   final void Function(String) onToggleMyParent;
+  final int initialSubTab;
 
   @override
   ConsumerState<_MyServicesWide> createState() => _MyServicesWideState();
 }
 
 class _MyServicesWideState extends ConsumerState<_MyServicesWide> {
-  int _subTab = 0; // 0 = DODO Services, 1 = Custom Services, 2 = Questions
+  late int _subTab;
+
+  @override
+  void initState() {
+    super.initState();
+    _subTab = widget.initialSubTab;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -2017,16 +2028,26 @@ class _NarrowTabBtn extends StatelessWidget {
 }
 
 class _MyServicesNarrow extends ConsumerStatefulWidget {
-  const _MyServicesNarrow({required this.onSwitchToAllServices});
+  const _MyServicesNarrow({
+    required this.onSwitchToAllServices,
+    this.initialSubTab = 0,
+  });
   final VoidCallback onSwitchToAllServices;
+  final int initialSubTab;
 
   @override
   ConsumerState<_MyServicesNarrow> createState() => _MyServicesNarrowState();
 }
 
 class _MyServicesNarrowState extends ConsumerState<_MyServicesNarrow> {
-  int _subTab = 0; // 0 = DODO Services, 1 = Custom Services, 2 = Questions
+  late int _subTab;
   final Set<String> _expandedMyParents = {};
+
+  @override
+  void initState() {
+    super.initState();
+    _subTab = widget.initialSubTab;
+  }
 
   @override
   Widget build(BuildContext context) {

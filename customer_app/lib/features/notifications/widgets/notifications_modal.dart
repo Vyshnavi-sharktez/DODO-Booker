@@ -6,6 +6,7 @@ import '../../../core/widgets/app_modal_dialog.dart';
 import '../../../routes/app_router.dart';
 import '../../catalog/providers/catalog_providers.dart';
 import '../../catalog/utils/catalog_launcher.dart';
+import '../../vendor_custom_service/widgets/vendor_custom_service_sheet.dart';
 import '../models/notification_model.dart';
 import '../services/notification_providers.dart';
 
@@ -52,6 +53,19 @@ class _NotificationsModalState extends ConsumerState<NotificationsModal> {
       debugPrint('[NOTIF][Customer] navigating → $route');
       Navigator.of(context).pop();
       GoRouter.of(context).push(route);
+    } else if (n.entityType == 'custom_service_question') {
+      // Vendor answered a custom service question → open the service sheet.
+      // The answered question is visible in the FAQ block (customServiceFaqsProvider
+      // already merges admin FAQs + answered customer questions).
+      final customServiceId = n.entityId!;
+      final targetContext = Navigator.of(context).context;
+      Navigator.of(context).pop();
+      final service = await ref
+          .read(catalogServiceProvider)
+          .fetchCustomServiceById(customServiceId);
+      if (service != null && targetContext.mounted) {
+        VendorCustomServiceSheet.show(targetContext, service);
+      }
     } else if (n.entityType == 'service_faq' ||
         n.entityType == 'customer_question' ||
         n.notificationType == 'question_answered') {

@@ -4,6 +4,7 @@ import 'package:uuid/uuid.dart';
 
 import '../../../core/config/supabase_config.dart';
 import '../../../models/faq_model.dart';
+import '../../vendor_custom_service/models/vendor_custom_service_model.dart';
 import '../models/catalog_node_model.dart';
 
 class CatalogService {
@@ -260,6 +261,56 @@ class CatalogService {
       debugPrint(
           '[CatalogService] fetchAnsweredQuestionsForCustomService($customServiceId) error: $e');
       return [];
+    }
+  }
+
+  /// Fetches a vendor custom service by its ID for deep-link / notification tap.
+  Future<VendorCustomServiceModel?> fetchCustomServiceById(
+      String customServiceId) async {
+    if (!_ready) return null;
+    try {
+      final data = await _db
+          .from('vendor_service_requests')
+          .select(
+              'id, service_name, description, active_price, image_url, vendor_id, '
+              'rating, review_count, included_items, excluded_items, before_after_pairs, '
+              'vendors!vendor_id(business_name)')
+          .eq('id', customServiceId)
+          .inFilter('status', ['completed', 'pending_deletion'])
+          .maybeSingle();
+      if (data == null) return null;
+      final vendor = data['vendors'] as Map<String, dynamic>?;
+      final vendorName = (vendor?['business_name'] as String?) ?? '';
+      return VendorCustomServiceModel(
+        id: data['id'] as String,
+        serviceName: data['service_name'] as String,
+        description: data['description'] as String?,
+        activePrice: double.parse(data['active_price'].toString()),
+        imageUrl: data['image_url'] as String?,
+        vendorId: data['vendor_id'] as String,
+        vendorName: vendorName,
+        rating: data['rating'] != null
+            ? double.parse(data['rating'].toString())
+            : 0.0,
+        reviewCount: (data['review_count'] as int?) ?? 0,
+        includedItems: (data['included_items'] as List<dynamic>?)
+                ?.map((e) => e.toString())
+                .toList() ??
+            [],
+        excludedItems: (data['excluded_items'] as List<dynamic>?)
+                ?.map((e) => e.toString())
+                .toList() ??
+            [],
+        beforeAfterPairs: (data['before_after_pairs'] as List<dynamic>?)
+                ?.map((e) => Map<String, String>.from((e as Map)
+                    .map((k, v) => MapEntry(k.toString(), v.toString()))))
+                .toList() ??
+            [],
+      );
+    } catch (e) {
+      debugPrint(
+          '[CatalogService] fetchCustomServiceById($customServiceId) error: $e');
+      return null;
     }
   }
 

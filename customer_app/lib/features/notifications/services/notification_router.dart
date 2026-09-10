@@ -1,0 +1,48 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+import '../../../routes/app_router.dart';
+import '../../catalog/providers/catalog_providers.dart';
+import '../../catalog/utils/catalog_launcher.dart';
+import '../../vendor_custom_service/utils/custom_service_launcher.dart';
+import '../models/notification_model.dart';
+
+/// Central notification router for the customer app.
+/// Add one case here when a new feature needs notification routing — no widget
+/// files need to change.
+abstract final class CustomerNotificationRouter {
+  static Future<void> handle(
+    BuildContext context,
+    WidgetRef ref,
+    NotificationModel n,
+  ) async {
+    if (n.entityId == null) return;
+
+    if (n.entityType == 'booking') {
+      final route =
+          AppRoutes.notificationBooking.replaceFirst(':id', n.entityId!);
+      Navigator.of(context).pop();
+      GoRouter.of(context).push(route);
+    } else if (n.entityType == 'custom_service_question') {
+      // Vendor answered a question on a custom service → open service sheet.
+      final customServiceId = n.entityId!;
+      final targetContext = Navigator.of(context).context;
+      Navigator.of(context).pop();
+      if (targetContext.mounted) {
+        await openCustomServiceQA(targetContext, customServiceId);
+      }
+    } else if (n.entityType == 'service_faq' ||
+        n.entityType == 'customer_question' ||
+        n.notificationType == 'question_answered') {
+      // Admin answered a question on a catalog service → open catalog node.
+      final serviceId = n.entityId!;
+      final targetContext = Navigator.of(context).context;
+      Navigator.of(context).pop();
+      final node =
+          await ref.read(catalogServiceProvider).fetchNode(serviceId);
+      if (node != null && targetContext.mounted) {
+        openCatalogNode(targetContext, node, parentId: n.parentNodeId);
+      }
+    }
+  }
+}

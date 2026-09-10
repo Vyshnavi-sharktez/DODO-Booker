@@ -74,6 +74,13 @@ class _VendorNotificationsPanelDialogState
         RouteNames.services,
         queryParameters: {'tab': '2'},
       );
+    } else if (n.notificationType == 'new_customer_question' ||
+        n.entityType == 'customer_question') {
+      Navigator.of(context).pop();
+      router.pushNamed(
+        RouteNames.services,
+        queryParameters: {'tab': '0', 'subTab': '2'},
+      );
     }
   }
 
