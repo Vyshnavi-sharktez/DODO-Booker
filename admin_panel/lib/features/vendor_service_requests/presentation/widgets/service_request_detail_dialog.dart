@@ -212,6 +212,22 @@ class _ServiceRequestDetailDialogState
               ),
             ),
           ],
+          const SizedBox(height: 20),
+          const _SectionLabel('Warranty'),
+          const SizedBox(height: 12),
+          _DetailRow('Coverage', r.warrantyEnabled ? 'Enabled' : 'Disabled'),
+          if (r.warrantyEnabled) ...[
+            if (r.warrantyDays != null)
+              _DetailRow('Duration', '${r.warrantyDays} days'),
+            if (r.warrantyCovers != null && r.warrantyCovers!.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              _MultiLineDetail(label: 'Covers', text: r.warrantyCovers!),
+            ],
+            if (r.warrantyExclusions != null && r.warrantyExclusions!.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              _MultiLineDetail(label: 'Does Not Cover', text: r.warrantyExclusions!),
+            ],
+          ],
         ],
 
         if (r.isRejected &&
@@ -410,6 +426,45 @@ class _ReasonBox extends StatelessWidget {
         reason,
         style: const TextStyle(fontSize: 13, color: AppColors.textPrimary),
       ),
+    );
+  }
+}
+
+class _MultiLineDetail extends StatelessWidget {
+  const _MultiLineDetail({required this.label, required this.text});
+  final String label;
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    final lines = text.split('\n').where((l) => l.trim().isNotEmpty).toList();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: const TextStyle(fontSize: 13, color: AppColors.textSecondary),
+        ),
+        const SizedBox(height: 6),
+        ...lines.map(
+          (l) => Padding(
+            padding: const EdgeInsets.only(bottom: 4),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('• ',
+                    style: TextStyle(
+                        fontSize: 13, color: AppColors.textSecondary)),
+                Expanded(
+                  child: Text(l.trim(),
+                      style: const TextStyle(
+                          fontSize: 13, color: AppColors.textPrimary)),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

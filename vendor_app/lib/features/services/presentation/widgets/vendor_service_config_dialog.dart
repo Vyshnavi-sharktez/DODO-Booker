@@ -70,6 +70,9 @@ class _VendorServiceConfigDialogState extends State<VendorServiceConfigDialog>
   late TabController _tabController;
   final _db = Supabase.instance.client;
 
+  // Pending edit proposal (non-null once an edit_service row is created/found)
+  String? _pendingEditId;
+
   // Content state
   bool _contentLoading = true;
   bool _contentSaving = false;
@@ -78,6 +81,14 @@ class _VendorServiceConfigDialogState extends State<VendorServiceConfigDialog>
   List<String> _excludedItems = [];
   List<Map<String, String>> _beforeAfterPairs = [];
 
+  // Warranty state
+  bool _warrantyEnabled = false;
+  final _warrantyDaysCtrl = TextEditingController();
+  final _warrantyCoversCtrl = TextEditingController();
+  final _warrantyExclusionsCtrl = TextEditingController();
+  bool _warrantySaving = false;
+  String? _warrantyError;
+
   // Attributes state
   bool _attrsLoading = true;
   List<_Attr> _attrs = [];
@@ -85,14 +96,16 @@ class _VendorServiceConfigDialogState extends State<VendorServiceConfigDialog>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
-    _loadContent();
-    _loadAttrs();
+    _tabController = TabController(length: 3, vsync: this);
+    _loadContent(); // chains to _loadAttrs() so _pendingEditId is resolved first
   }
 
   @override
   void dispose() {
     _tabController.dispose();
+    _warrantyDaysCtrl.dispose();
+    _warrantyCoversCtrl.dispose();
+    _warrantyExclusionsCtrl.dispose();
     super.dispose();
   }
 
@@ -100,11 +113,29 @@ class _VendorServiceConfigDialogState extends State<VendorServiceConfigDialog>
 
   Future<void> _loadContent() async {
     try {
-      final row = await _db
+      // Check for an existing pending edit_service proposal for this service.
+      final proposalRows = await _db
           .from('vendor_service_requests')
-          .select('included_items, excluded_items, before_after_pairs')
-          .eq('id', widget.serviceId)
-          .single();
+          .select('id, included_items, excluded_items, before_after_pairs, '
+              'warranty_enabled, warranty_days, warranty_covers, warranty_exclusions')
+          .eq('parent_request_id', widget.serviceId)
+          .eq('request_type', 'edit_service')
+          .eq('status', 'pending')
+          .limit(1);
+
+      final Map<String, dynamic> row;
+      if (proposalRows.isNotEmpty) {
+        row = Map<String, dynamic>.from(proposalRows.first);
+        _pendingEditId = row['id'] as String;
+      } else {
+        row = await _db
+            .from('vendor_service_requests')
+            .select('included_items, excluded_items, before_after_pairs, '
+                'warranty_enabled, warranty_days, warranty_covers, warranty_exclusions')
+            .eq('id', widget.serviceId)
+            .single();
+      }
+
       if (!mounted) return;
       setState(() {
         _includedItems =
@@ -116,11 +147,86 @@ class _VendorServiceConfigDialogState extends State<VendorServiceConfigDialog>
                 .map((e) => Map<String, String>.from((e as Map)
                     .map((k, v) => MapEntry(k.toString(), v.toString()))))
                 .toList();
+        _warrantyEnabled = (row['warranty_enabled'] as bool?) ?? false;
+        _warrantyDaysCtrl.text =
+            row['warranty_days'] != null ? row['warranty_days'].toString() : '';
+        _warrantyCoversCtrl.text = (row['warranty_covers'] as String?) ?? '';
+        _warrantyExclusionsCtrl.text =
+            (row['warranty_exclusions'] as String?) ?? '';
         _contentLoading = false;
       });
+      _loadAttrs();
     } catch (_) {
-      if (mounted) setState(() => _contentLoading = false);
+      if (mounted) {
+        setState(() => _contentLoading = false);
+        _loadAttrs();
+      }
     }
+  }
+
+  /// Returns the pending edit proposal ID, creating one if it doesn't exist yet.
+  /// Copies all parent content/warranty and attributes into the new proposal row.
+  Future<String> _ensureProposal() async {
+    if (_pendingEditId != null) return _pendingEditId!;
+
+    // Fetch current parent data to seed the proposal.
+    final parent = await _db
+        .from('vendor_service_requests')
+        .select('vendor_id, service_name, description, price, active_price, '
+            'image_url, included_items, excluded_items, before_after_pairs, '
+            'warranty_enabled, warranty_days, warranty_covers, warranty_exclusions')
+        .eq('id', widget.serviceId)
+        .single();
+
+    final proposalRow = await _db.from('vendor_service_requests').insert({
+      'vendor_id': parent['vendor_id'],
+      'service_name': parent['service_name'],
+      'description': parent['description'],
+      'price': parent['price'],
+      'active_price': parent['active_price'],
+      'image_url': parent['image_url'],
+      'included_items': parent['included_items'] ?? [],
+      'excluded_items': parent['excluded_items'] ?? [],
+      'before_after_pairs': parent['before_after_pairs'] ?? [],
+      'warranty_enabled': parent['warranty_enabled'] ?? false,
+      'warranty_days': parent['warranty_days'],
+      'warranty_covers': parent['warranty_covers'],
+      'warranty_exclusions': parent['warranty_exclusions'],
+      'request_type': 'edit_service',
+      'status': 'pending',
+      'parent_request_id': widget.serviceId,
+    }).select('id').single();
+
+    final proposalId = proposalRow['id'] as String;
+
+    // Copy parent's service_attributes into the proposal.
+    final attrs = await _db
+        .from('service_attributes')
+        .select('*, service_attribute_options(id, option_name, price_adjustment, '
+            'sort_order, discount_type, discount_value)')
+        .eq('custom_service_id', widget.serviceId);
+
+    for (final attr in (attrs as List)) {
+      final newAttr = await _db.from('service_attributes').insert({
+        'custom_service_id': proposalId,
+        'name': attr['name'],
+        'field_type': attr['field_type'],
+        'is_required': attr['is_required'],
+      }).select('id').single();
+      for (final opt in (attr['service_attribute_options'] as List<dynamic>? ?? [])) {
+        await _db.from('service_attribute_options').insert({
+          'attribute_id': newAttr['id'],
+          'option_name': opt['option_name'],
+          'price_adjustment': opt['price_adjustment'],
+          'sort_order': opt['sort_order'],
+          'discount_type': opt['discount_type'],
+          'discount_value': opt['discount_value'],
+        });
+      }
+    }
+
+    if (mounted) setState(() => _pendingEditId = proposalId);
+    return proposalId;
   }
 
   Future<void> _saveContent() async {
@@ -130,21 +236,61 @@ class _VendorServiceConfigDialogState extends State<VendorServiceConfigDialog>
       _contentError = null;
     });
     try {
+      final proposalId = await _ensureProposal();
       await _db.from('vendor_service_requests').update({
         'included_items': _includedItems,
         'excluded_items': _excludedItems,
         'before_after_pairs': _beforeAfterPairs,
-      }).eq('id', widget.serviceId);
+      }).eq('id', proposalId);
       if (!mounted) return;
-      setState(() => _contentSaving = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Content saved.')),
-      );
+      Navigator.of(context).pop();
     } catch (e) {
       if (mounted) {
         setState(() {
           _contentSaving = false;
           _contentError = e.toString().replaceFirst('Exception: ', '');
+        });
+      }
+    }
+  }
+
+  // ── Warranty ───────────────────────────────────────────────────────────────
+
+  Future<void> _saveWarranty() async {
+    if (_warrantySaving) return;
+    if (_warrantyEnabled) {
+      final days = int.tryParse(_warrantyDaysCtrl.text.trim());
+      if (days == null || days <= 0) {
+        setState(() => _warrantyError = 'Enter a valid duration (days > 0).');
+        return;
+      }
+    }
+    setState(() {
+      _warrantySaving = true;
+      _warrantyError = null;
+    });
+    try {
+      final proposalId = await _ensureProposal();
+      await _db.from('vendor_service_requests').update({
+        'warranty_enabled': _warrantyEnabled,
+        'warranty_days': _warrantyEnabled
+            ? int.tryParse(_warrantyDaysCtrl.text.trim())
+            : null,
+        'warranty_covers': _warrantyEnabled && _warrantyCoversCtrl.text.trim().isNotEmpty
+            ? _warrantyCoversCtrl.text.trim()
+            : null,
+        'warranty_exclusions':
+            _warrantyEnabled && _warrantyExclusionsCtrl.text.trim().isNotEmpty
+                ? _warrantyExclusionsCtrl.text.trim()
+                : null,
+      }).eq('id', proposalId);
+      if (!mounted) return;
+      Navigator.of(context).pop();
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _warrantySaving = false;
+          _warrantyError = e.toString().replaceFirst('Exception: ', '');
         });
       }
     }
@@ -160,7 +306,7 @@ class _VendorServiceConfigDialogState extends State<VendorServiceConfigDialog>
             '*, service_attribute_options(id, attribute_id, option_name, '
             'price_adjustment, sort_order, discount_type, discount_value)',
           )
-          .eq('custom_service_id', widget.serviceId)
+          .eq('custom_service_id', _pendingEditId ?? widget.serviceId)
           .order('name', ascending: true);
       if (!mounted) return;
       setState(() {
@@ -180,10 +326,11 @@ class _VendorServiceConfigDialogState extends State<VendorServiceConfigDialog>
     required String discountType,
     required double discountValue,
   }) async {
+    final proposalId = await _ensureProposal();
     final attrData = await _db
         .from('service_attributes')
         .insert({
-          'custom_service_id': widget.serviceId,
+          'custom_service_id': proposalId,
           'name': name,
           'field_type': 'dropdown',
           'is_required': false,
@@ -316,6 +463,36 @@ class _VendorServiceConfigDialogState extends State<VendorServiceConfigDialog>
     }
   }
 
+  // ── Pending banner ─────────────────────────────────────────────────────────
+
+  Widget _pendingBanner() {
+    if (_pendingEditId == null) return const SizedBox.shrink();
+    return Container(
+      margin: const EdgeInsets.fromLTRB(20, 12, 20, 0),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFFBE6),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: const Color(0xFFFFD666)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(Icons.pending_outlined,
+              size: 15, color: Color(0xFFB45309)),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              'Changes pending admin approval. Customers see the current live version until approved.',
+              style: const TextStyle(
+                  fontSize: 12, color: Color(0xFF92400E)),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   // ── Build ──────────────────────────────────────────────────────────────────
 
   @override
@@ -378,6 +555,7 @@ class _VendorServiceConfigDialogState extends State<VendorServiceConfigDialog>
               indicatorColor: AppColors.primary,
               tabs: const [
                 Tab(text: 'Content'),
+                Tab(text: 'Warranty'),
                 Tab(text: 'Attributes / Variants'),
               ],
             ),
@@ -388,6 +566,7 @@ class _VendorServiceConfigDialogState extends State<VendorServiceConfigDialog>
                 controller: _tabController,
                 children: [
                   _buildContentTab(),
+                  _buildWarrantyTab(),
                   _buildAttributesTab(),
                 ],
               ),
@@ -407,6 +586,10 @@ class _VendorServiceConfigDialogState extends State<VendorServiceConfigDialog>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          if (_pendingEditId != null) ...[
+            _pendingBanner(),
+            const SizedBox(height: 16),
+          ],
           _SectionHeader(
             icon: Icons.check_circle_outline_rounded,
             label: "What's Included",
@@ -481,13 +664,132 @@ class _VendorServiceConfigDialogState extends State<VendorServiceConfigDialog>
     );
   }
 
+  Widget _buildWarrantyTab() {
+    if (_contentLoading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    InputDecoration inputDeco(String label) => InputDecoration(
+          labelText: label,
+          isDense: true,
+          contentPadding:
+              const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(8),
+            borderSide:
+                const BorderSide(color: AppColors.border, width: 0.8),
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(8),
+            borderSide:
+                const BorderSide(color: AppColors.border, width: 0.8),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(8),
+            borderSide:
+                const BorderSide(color: AppColors.primary, width: 1.4),
+          ),
+        );
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (_pendingEditId != null) ...[
+            _pendingBanner(),
+            const SizedBox(height: 16),
+          ],
+          SwitchListTile(
+            value: _warrantyEnabled,
+            onChanged: (v) => setState(() {
+              _warrantyEnabled = v;
+              if (!v) {
+                _warrantyDaysCtrl.clear();
+                _warrantyCoversCtrl.clear();
+                _warrantyExclusionsCtrl.clear();
+              }
+            }),
+            title: const Text(
+              'Warranty Coverage',
+              style: TextStyle(
+                  fontWeight: FontWeight.w600,
+                  fontSize: 14,
+                  color: AppColors.textPrimary),
+            ),
+            subtitle: const Text(
+              'Offer a warranty on this service',
+              style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+            ),
+            activeThumbColor: AppColors.success,
+            contentPadding: EdgeInsets.zero,
+          ),
+          if (_warrantyEnabled) ...[
+            const SizedBox(height: 16),
+            TextField(
+              controller: _warrantyDaysCtrl,
+              keyboardType: TextInputType.number,
+              decoration: inputDeco('Duration (Days) *'),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: _warrantyCoversCtrl,
+              maxLines: 4,
+              decoration: inputDeco('Warranty Covers').copyWith(
+                hintText: 'One item per line…',
+                alignLabelWithHint: true,
+              ),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: _warrantyExclusionsCtrl,
+              maxLines: 4,
+              decoration: inputDeco('Warranty Does Not Cover').copyWith(
+                hintText: 'One item per line…',
+                alignLabelWithHint: true,
+              ),
+            ),
+          ],
+          const SizedBox(height: 24),
+          if (_warrantyError != null) ...[
+            Text(_warrantyError!,
+                style:
+                    const TextStyle(color: AppColors.error, fontSize: 12)),
+            const SizedBox(height: 8),
+          ],
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton(
+              onPressed: _warrantySaving ? null : _saveWarranty,
+              style: FilledButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8)),
+                minimumSize: const Size.fromHeight(44),
+              ),
+              child: _warrantySaving
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(
+                          strokeWidth: 2, color: Colors.white))
+                  : const Text('Save Warranty',
+                      style: TextStyle(fontWeight: FontWeight.w600)),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildAttributesTab() {
     if (_attrsLoading) return const Center(child: CircularProgressIndicator());
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        if (_pendingEditId != null) _pendingBanner(),
         Padding(
-          padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+          padding: EdgeInsets.fromLTRB(20, _pendingEditId != null ? 12 : 16, 20, 8),
           child: SizedBox(
             width: double.infinity,
             child: OutlinedButton.icon(

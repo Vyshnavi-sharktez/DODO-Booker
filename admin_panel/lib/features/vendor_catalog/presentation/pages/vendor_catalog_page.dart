@@ -11,6 +11,15 @@ import '../../../vendor_service_requests/presentation/widgets/service_request_de
 import '../widgets/custom_service_config_dialog.dart';
 import '../widgets/custom_service_edit_dialog.dart';
 import '../widgets/custom_service_reviews_dialog.dart';
+import '../widgets/custom_service_view_dialog.dart';
+
+// ── Data ─────────────────────────────────────────────────────────────────────
+
+class _CatalogEntry {
+  const _CatalogEntry({required this.service, this.pendingEdit});
+  final VendorServiceRequest service;
+  final VendorServiceRequest? pendingEdit;
+}
 
 // ── Providers ─────────────────────────────────────────────────────────────────
 
@@ -26,14 +35,20 @@ final _vendorListProvider = FutureProvider<List<Map<String, dynamic>>>((ref) asy
 final _selectedVendorIdProvider = StateProvider<String?>((ref) => null);
 
 final _vendorCatalogProvider =
-    FutureProvider.family<List<VendorServiceRequest>, String>((ref, vendorId) async {
+    FutureProvider.family<List<_CatalogEntry>, String>((ref, vendorId) async {
   final repo = VendorServiceRequestsRepository(Supabase.instance.client);
   final all = await repo.fetchByVendor(vendorId);
-  // Show only active custom services (new_service rows that are live or pending deletion)
-  return all
-      .where((r) =>
-          r.isNewService && (r.isCompleted || r.isPendingDeletion))
+  final liveServices = all
+      .where((r) => r.isNewService && (r.isCompleted || r.isPendingDeletion))
       .toList();
+  final pendingEdits =
+      all.where((r) => r.isEditService && r.isPending).toList();
+  return liveServices.map((svc) {
+    final edit = pendingEdits
+        .where((e) => e.parentRequestId == svc.id)
+        .firstOrNull;
+    return _CatalogEntry(service: svc, pendingEdit: edit);
+  }).toList();
 });
 
 // ── Page ─────────────────────────────────────────────────────────────────────
@@ -198,7 +213,8 @@ class _VendorServiceList extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final asyncServices = ref.watch(_vendorCatalogProvider(vendorId));
+    final asyncServices =
+        ref.watch(_vendorCatalogProvider(vendorId));
 
     return asyncServices.when(
       loading: () => const Center(child: CircularProgressIndicator()),
@@ -260,9 +276,10 @@ class _VendorServiceList extends ConsumerWidget {
                 child: ListView.separated(
                   padding: const EdgeInsets.all(16),
                   itemCount: services.length,
-                  separatorBuilder: (_, __) => const SizedBox(height: 10),
+                  separatorBuilder: (_, _) => const SizedBox(height: 10),
                   itemBuilder: (_, i) => _ServiceCard(
-                    service: services[i],
+                    service: services[i].service,
+                    pendingEdit: services[i].pendingEdit,
                     onUpdated: () =>
                         ref.invalidate(_vendorCatalogProvider(vendorId)),
                   ),
@@ -279,8 +296,13 @@ class _VendorServiceList extends ConsumerWidget {
 // ── Service card ──────────────────────────────────────────────────────────────
 
 class _ServiceCard extends ConsumerStatefulWidget {
-  const _ServiceCard({required this.service, required this.onUpdated});
+  const _ServiceCard({
+    required this.service,
+    required this.onUpdated,
+    this.pendingEdit,
+  });
   final VendorServiceRequest service;
+  final VendorServiceRequest? pendingEdit;
   final VoidCallback onUpdated;
 
   @override
@@ -413,7 +435,7 @@ class _ServiceCardState extends ConsumerState<_ServiceCard> {
                               width: 56,
                               height: 56,
                               fit: BoxFit.cover,
-                              errorBuilder: (_, __, ___) =>
+                              errorBuilder: (_, _, _) =>
                                   const _PlaceholderIcon(),
                             ),
                           ),
@@ -514,6 +536,13 @@ class _ServiceCardState extends ConsumerState<_ServiceCard> {
             ],
           ),
 
+          // ── Pending edit bar ──────────────────────────────────────────
+          if (widget.pendingEdit != null)
+            _PendingEditBar(
+              pendingEdit: widget.pendingEdit!,
+              onAction: widget.onUpdated,
+            ),
+
           // ── Action bar ────────────────────────────────────────────────
           Container(
             decoration: const BoxDecoration(
@@ -521,6 +550,15 @@ class _ServiceCardState extends ConsumerState<_ServiceCard> {
             ),
             child: Row(
               children: [
+                _ActionButton(
+                  icon: Icons.preview_rounded,
+                  label: 'View',
+                  onTap: () => CustomServiceViewDialog.show(
+                    context,
+                    service: service,
+                  ),
+                ),
+                const _ActionDivider(),
                 _ActionButton(
                   icon: Icons.edit_outlined,
                   label: 'Edit',
@@ -575,6 +613,189 @@ class _ServiceCardState extends ConsumerState<_ServiceCard> {
               ],
             ),
           ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Pending edit bar ──────────────────────────────────────────────────────────
+
+class _PendingEditBar extends StatefulWidget {
+  const _PendingEditBar({
+    required this.pendingEdit,
+    required this.onAction,
+  });
+  final VendorServiceRequest pendingEdit;
+  final VoidCallback onAction;
+
+  @override
+  State<_PendingEditBar> createState() => _PendingEditBarState();
+}
+
+class _PendingEditBarState extends State<_PendingEditBar> {
+  bool _actioning = false;
+
+  Future<void> _approve() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Approve Changes?'),
+        content: const Text(
+            'The proposed edits will become live immediately.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Approve'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    setState(() => _actioning = true);
+    try {
+      final repo =
+          VendorServiceRequestsRepository(Supabase.instance.client);
+      await repo.accept(widget.pendingEdit.id);
+      if (mounted) widget.onAction();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+              content: Text('Error: $e'),
+              backgroundColor: AppColors.error),
+        );
+        setState(() => _actioning = false);
+      }
+    }
+  }
+
+  Future<void> _reject() async {
+    final reasonCtrl = TextEditingController();
+    final reason = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Reject Changes'),
+        content: TextField(
+          controller: reasonCtrl,
+          autofocus: true,
+          decoration: const InputDecoration(
+            hintText: 'Reason for rejection (optional)',
+            border: OutlineInputBorder(),
+          ),
+          maxLines: 3,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(null),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            style:
+                FilledButton.styleFrom(backgroundColor: AppColors.error),
+            onPressed: () => Navigator.of(ctx).pop(reasonCtrl.text),
+            child: const Text('Reject'),
+          ),
+        ],
+      ),
+    );
+    reasonCtrl.dispose();
+    if (reason == null || !mounted) return;
+    setState(() => _actioning = true);
+    try {
+      final repo =
+          VendorServiceRequestsRepository(Supabase.instance.client);
+      await repo.reject(widget.pendingEdit.id, reason: reason);
+      if (mounted) widget.onAction();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+              content: Text('Error: $e'),
+              backgroundColor: AppColors.error),
+        );
+        setState(() => _actioning = false);
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: const BoxDecoration(
+        color: Color(0xFFFFFBE6),
+        border: Border.symmetric(
+          horizontal: BorderSide(color: Color(0xFFFFD666)),
+        ),
+      ),
+      padding:
+          const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      child: Row(
+        children: [
+          const Icon(Icons.pending_outlined,
+              size: 15, color: Color(0xFFB45309)),
+          const SizedBox(width: 8),
+          const Expanded(
+            child: Text(
+              'Vendor edit pending approval',
+              style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFF92400E)),
+            ),
+          ),
+          TextButton(
+            onPressed: _actioning
+                ? null
+                : () => CustomServiceViewDialog.show(
+                      context,
+                      service: widget.pendingEdit,
+                      isProposal: true,
+                    ),
+            style: TextButton.styleFrom(
+                foregroundColor: const Color(0xFFB45309),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 8)),
+            child: const Text('View',
+                style: TextStyle(fontSize: 12)),
+          ),
+          const SizedBox(width: 4),
+          if (_actioning)
+            const SizedBox(
+              width: 16,
+              height: 16,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            )
+          else ...[
+            OutlinedButton(
+              onPressed: _reject,
+              style: OutlinedButton.styleFrom(
+                foregroundColor: AppColors.error,
+                side: const BorderSide(color: AppColors.error),
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 12, vertical: 6),
+                visualDensity: VisualDensity.compact,
+              ),
+              child: const Text('Reject',
+                  style: TextStyle(fontSize: 12)),
+            ),
+            const SizedBox(width: 8),
+            FilledButton(
+              onPressed: _approve,
+              style: FilledButton.styleFrom(
+                backgroundColor: AppColors.success,
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 12, vertical: 6),
+                visualDensity: VisualDensity.compact,
+              ),
+              child: const Text('Approve',
+                  style: TextStyle(fontSize: 12)),
+            ),
+          ],
         ],
       ),
     );
