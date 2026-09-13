@@ -309,7 +309,7 @@ class _BookingCardState extends ConsumerState<BookingCard> {
     debugPrint('[OTP][DIALOG] ✓ Verified — applying completed status');
     _applyStatusUpdate('completed');
 
-    if (_booking.isCod) {
+    if (_booking.isCod && !_booking.isWarrantyRework) {
       Future.microtask(() { if (mounted) _showCodCashConfirmationDialog(); });
     }
 
@@ -332,8 +332,8 @@ class _BookingCardState extends ConsumerState<BookingCard> {
         ? 'Warranty Rework Completed'
         : 'Service Completed';
     final msgCust = _booking.isWarrantyRework
-        ? 'Your warranty rework service has been completed successfully.'
-        : 'Your service has been completed. You can now rate the experience.';
+        ? 'Your warranty rework has been completed. Tap to rate your experience.'
+        : 'Your service has been completed. Tap to rate your experience.';
     ref.read(bookingsRepositoryProvider).createCustomerNotification(
       customerId: _booking.customerId,
       title: titleCust,
@@ -963,7 +963,7 @@ class _BookingCardState extends ConsumerState<BookingCard> {
             ],
 
             // ── COD Cash Collection Status (completed COD bookings) ────
-            if (_booking.status == 'completed' && _booking.isCod) ...[
+            if (_booking.status == 'completed' && _booking.isCod && !_booking.isWarrantyRework) ...[
               const SizedBox(height: 12),
               _CodStatusBanner(
                 booking: _booking,
@@ -972,7 +972,7 @@ class _BookingCardState extends ConsumerState<BookingCard> {
             ],
 
             // Rejected / Completed / Cancelled: no action buttons.
-            if (_booking.isCod && _booking.status == 'completed') ...[
+            if (_booking.isCod && _booking.status == 'completed' && !_booking.isWarrantyRework) ...[
               const SizedBox(height: 12),
               Container(
                 padding: const EdgeInsets.all(12),
@@ -1240,6 +1240,7 @@ class _VAmcContract {
   final int completedCount;
   final int quantity;
   final DateTime createdAt;
+  final DateTime? expiresAt;
   final List<_VAmcVisit> visits;
 
   const _VAmcContract({
@@ -1254,21 +1255,12 @@ class _VAmcContract {
     required this.completedCount,
     this.quantity = 1,
     required this.createdAt,
+    this.expiresAt,
     this.visits = const [],
   });
 
   int get remainingCount => (effectiveTotal - completedCount).clamp(0, 9999);
-
-  DateTime? get endDate {
-    final days = switch (packageDuration) {
-      'monthly' => 30,
-      'quarterly' => 91,
-      'half_yearly' => 182,
-      'yearly' => 365,
-      _ => null,
-    };
-    return days != null ? createdAt.add(Duration(days: days)) : null;
-  }
+  bool get isExpired => status == 'expired' || (expiresAt != null && expiresAt!.isBefore(DateTime.now().toUtc()));
 }
 
 // Provider: fetches AMC contract + visits (with vendor names) for a contract ID.
@@ -1283,7 +1275,7 @@ final _vendorAmcContractProvider = FutureProvider.autoDispose
         'plan_name, status, package_duration, '
         'num_visits, total_visits, quantity, '
         'discount_type, discount_value, discount_amount, final_price, '
-        'created_at',
+        'created_at, expires_at',
       )
       .eq('id', contractId)
       .maybeSingle();
@@ -1355,6 +1347,9 @@ final _vendorAmcContractProvider = FutureProvider.autoDispose
     completedCount: completedCount,
     quantity: (raw['quantity'] as num?)?.toInt() ?? 1,
     createdAt: DateTime.parse(raw['created_at'] as String),
+    expiresAt: raw['expires_at'] != null
+        ? DateTime.tryParse(raw['expires_at'] as String)
+        : null,
     visits: visits,
   );
 });
@@ -1504,7 +1499,7 @@ class _AmcDetailRows extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final endDate = contract.endDate;
+    final expiresAt = contract.expiresAt;
     final tt = Theme.of(context).textTheme;
 
     return Column(
@@ -1599,12 +1594,12 @@ class _AmcDetailRows extends StatelessWidget {
                   value: '${contract.quantity}',
                 ),
               ],
-              if (endDate != null) ...[
+              if (expiresAt != null) ...[
                 const SizedBox(height: 8),
                 _AmcInfoRow(
                   icon: Icons.event_rounded,
-                  label: 'Valid till',
-                  value: _fmtDate(endDate.toLocal()),
+                  label: contract.isExpired ? 'Expired on' : 'Valid till',
+                  value: _fmtDate(expiresAt.toLocal()),
                 ),
               ],
             ],
@@ -2008,41 +2003,62 @@ class _ConfirmDialog extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return AlertDialog(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      title: Text(title),
-      content: Text(message),
-      actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-      actions: [
-        Row(
-          children: [
-            Expanded(
-              child: OutlinedButton(
-                onPressed: () => Navigator.of(context).pop(false),
-                style: OutlinedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8)),
+    final tt = Theme.of(context).textTheme;
+    // Use Center+Material+SizedBox instead of Dialog so the column receives a
+    // TIGHT width constraint — Expanded then divides it equally between buttons.
+    return Center(
+      child: Material(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        clipBehavior: Clip.antiAlias,
+        child: SizedBox(
+          width: 360,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(24, 24, 24, 20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title, style: tt.headlineSmall),
+                const SizedBox(height: 14),
+                Text(message, style: tt.bodyMedium),
+                const SizedBox(height: 24),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: () => Navigator.of(context).pop(false),
+                        style: OutlinedButton.styleFrom(
+                          minimumSize: const Size(double.infinity, 48),
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8)),
+                        ),
+                        child: const Text('Cancel'),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: FilledButton(
+                        onPressed: () => Navigator.of(context).pop(true),
+                        style: FilledButton.styleFrom(
+                          backgroundColor: confirmColor,
+                          minimumSize: const Size(double.infinity, 48),
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8)),
+                        ),
+                        child: Text(confirmLabel),
+                      ),
+                    ),
+                  ],
                 ),
-                child: const Text('Cancel'),
-              ),
+              ],
             ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: FilledButton(
-                onPressed: () => Navigator.of(context).pop(true),
-                style: FilledButton.styleFrom(
-                  backgroundColor: confirmColor,
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8)),
-                ),
-                child: Text(confirmLabel),
-              ),
-            ),
-          ],
+          ),
         ),
-      ],
+      ),
     );
   }
 }
@@ -2104,86 +2120,102 @@ class _OtpVerifyDialogState extends State<_OtpVerifyDialog> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return AlertDialog(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      title: const Row(
-        children: [
-          Icon(Icons.lock_clock_rounded, color: AppColors.warning, size: 20),
-          SizedBox(width: 8),
-          Text('Enter Customer OTP'),
-        ],
-      ),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            'Ask the customer for their 6-digit OTP to confirm service completion.',
-            style: theme.textTheme.bodySmall
-                ?.copyWith(color: AppColors.textSecondary),
-          ),
-          const SizedBox(height: 16),
-          TextField(
-            controller: _ctrl,
-            keyboardType: TextInputType.number,
-            maxLength: 6,
-            textAlign: TextAlign.center,
-            autofocus: true,
-            style: theme.textTheme.titleLarge?.copyWith(
-              fontWeight: FontWeight.w800,
-              letterSpacing: 10,
-            ),
-            decoration: InputDecoration(
-              counterText: '',
-              hintText: '_ _ _ _ _ _',
-              hintStyle: TextStyle(
-                letterSpacing: 6,
-                color: AppColors.textHint,
-              ),
-              errorText: _error,
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-              ),
-            ),
-            onChanged: (_) {
-              if (_error != null) setState(() => _error = null);
-            },
-          ),
-        ],
-      ),
-      actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-      actions: [
-        Row(
-          children: [
-            Expanded(
-              child: OutlinedButton(
-                onPressed:
-                    _verifying ? null : () => Navigator.of(context).pop(null),
-                style: OutlinedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8)),
+    return Center(
+      child: Material(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        clipBehavior: Clip.antiAlias,
+        child: SizedBox(
+          width: 360,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(24, 24, 24, 20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    const Icon(Icons.lock_clock_rounded,
+                        color: AppColors.warning, size: 20),
+                    const SizedBox(width: 8),
+                    Text('Enter Customer OTP',
+                        style: theme.textTheme.headlineSmall),
+                  ],
                 ),
-                child: const Text('Cancel'),
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: FilledButton(
-                onPressed: _verifying ? null : _submit,
-                style: FilledButton.styleFrom(
-                  backgroundColor: AppColors.success,
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8)),
+                const SizedBox(height: 16),
+                Text(
+                  'Ask the customer for their 6-digit OTP to confirm service completion.',
+                  style: theme.textTheme.bodySmall
+                      ?.copyWith(color: AppColors.textSecondary),
                 ),
-                child: _verifying
-                    ? const _Spinner(color: Colors.white)
-                    : const Text('Verify & Complete'),
-              ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: _ctrl,
+                  keyboardType: TextInputType.number,
+                  maxLength: 6,
+                  textAlign: TextAlign.center,
+                  autofocus: true,
+                  style: theme.textTheme.titleLarge?.copyWith(
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 10,
+                  ),
+                  decoration: InputDecoration(
+                    counterText: '',
+                    hintText: '_ _ _ _ _ _',
+                    hintStyle: TextStyle(
+                      letterSpacing: 6,
+                      color: AppColors.textHint,
+                    ),
+                    errorText: _error,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                  onChanged: (_) {
+                    if (_error != null) setState(() => _error = null);
+                  },
+                ),
+                const SizedBox(height: 20),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: _verifying
+                            ? null
+                            : () => Navigator.of(context).pop(null),
+                        style: OutlinedButton.styleFrom(
+                          minimumSize: const Size(double.infinity, 48),
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8)),
+                        ),
+                        child: const Text('Cancel'),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: FilledButton(
+                        onPressed: _verifying ? null : _submit,
+                        style: FilledButton.styleFrom(
+                          backgroundColor: AppColors.success,
+                          minimumSize: const Size(double.infinity, 48),
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8)),
+                        ),
+                        child: _verifying
+                            ? const _Spinner(color: Colors.white)
+                            : const Text('Verify & Complete'),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
             ),
-          ],
+          ),
         ),
-      ],
+      ),
     );
   }
 }

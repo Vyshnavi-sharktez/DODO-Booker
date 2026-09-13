@@ -35,7 +35,12 @@ class CartItem {
   final double? amcDiscountAmount;
   final double? amcFinalPrice;
   final String? amcPackageDuration;
+  /// Days value for package_duration = 'custom'. Required for custom plans
+  /// so the DB trigger can compute expires_at correctly.
+  final int? amcPackageDurationValue;
   final String? amcServiceInterval;
+  /// Days value for service_interval = 'custom'. Snapshotted for completeness.
+  final int? amcServiceIntervalValue;
   final int amcQuantity;
   final bool amcIsRenewal;
   final String? amcPreviousContractId;
@@ -75,7 +80,9 @@ class CartItem {
     this.amcDiscountAmount,
     this.amcFinalPrice,
     this.amcPackageDuration,
+    this.amcPackageDurationValue,
     this.amcServiceInterval,
+    this.amcServiceIntervalValue,
     this.amcQuantity = 1,
     this.amcIsRenewal = false,
     this.amcPreviousContractId,
@@ -102,7 +109,9 @@ class CartItem {
     double? amcDiscountAmount,
     double? amcFinalPrice,
     String? amcPackageDuration,
+    int? amcPackageDurationValue,
     String? amcServiceInterval,
+    int? amcServiceIntervalValue,
     int? amcQuantity,
     bool? amcIsRenewal,
     String? amcPreviousContractId,
@@ -133,7 +142,9 @@ class CartItem {
         amcDiscountAmount: amcDiscountAmount ?? this.amcDiscountAmount,
         amcFinalPrice: amcFinalPrice ?? this.amcFinalPrice,
         amcPackageDuration: amcPackageDuration ?? this.amcPackageDuration,
+        amcPackageDurationValue: amcPackageDurationValue ?? this.amcPackageDurationValue,
         amcServiceInterval: amcServiceInterval ?? this.amcServiceInterval,
+        amcServiceIntervalValue: amcServiceIntervalValue ?? this.amcServiceIntervalValue,
         amcQuantity: amcQuantity ?? this.amcQuantity,
         amcIsRenewal: amcIsRenewal ?? this.amcIsRenewal,
         amcPreviousContractId:
@@ -168,7 +179,9 @@ class CartItem {
         if (amcDiscountAmount != null) 'amcDiscountAmount': amcDiscountAmount,
         if (amcFinalPrice != null) 'amcFinalPrice': amcFinalPrice,
         if (amcPackageDuration != null) 'amcPackageDuration': amcPackageDuration,
+        if (amcPackageDurationValue != null) 'amcPackageDurationValue': amcPackageDurationValue,
         if (amcServiceInterval != null) 'amcServiceInterval': amcServiceInterval,
+        if (amcServiceIntervalValue != null) 'amcServiceIntervalValue': amcServiceIntervalValue,
         if (amcQuantity != 1) 'amcQuantity': amcQuantity,
         if (amcIsRenewal) 'amcIsRenewal': true,
         if (amcPreviousContractId != null) 'amcPreviousContractId': amcPreviousContractId,
@@ -202,7 +215,9 @@ class CartItem {
         amcDiscountAmount: (json['amcDiscountAmount'] as num?)?.toDouble(),
         amcFinalPrice: (json['amcFinalPrice'] as num?)?.toDouble(),
         amcPackageDuration: json['amcPackageDuration'] as String?,
+        amcPackageDurationValue: (json['amcPackageDurationValue'] as num?)?.toInt(),
         amcServiceInterval: json['amcServiceInterval'] as String?,
+        amcServiceIntervalValue: (json['amcServiceIntervalValue'] as num?)?.toInt(),
         amcQuantity: (json['amcQuantity'] as num?)?.toInt() ?? 1,
         amcIsRenewal: json['amcIsRenewal'] as bool? ?? false,
         amcPreviousContractId: json['amcPreviousContractId'] as String?,

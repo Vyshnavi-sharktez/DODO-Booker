@@ -1,5 +1,5 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
@@ -19,6 +19,7 @@ import '../../../subscription/presentation/providers/subscription_provider.dart'
 import '../providers/services_provider.dart';
 import '../widgets/service_card.dart';
 import '../widgets/vendor_search_bar.dart';
+import '../widgets/service_content_widgets.dart';
 import '../widgets/vendor_service_config_dialog.dart';
 
 // ── Category palette — assigned by root-category sort index ───────────────────
@@ -3936,10 +3937,24 @@ class _CreateServiceDialogState extends ConsumerState<_CreateServiceDialog> {
   bool _submitting = false;
   String? _priceError;
 
+  // Content state
+  List<String> _includedItems = [];
+  List<String> _excludedItems = [];
+  List<Map<String, String>> _beforeAfterPairs = [];
+  late final String _tempServiceId;
+
+  bool _warrantyEnabled = false;
+  final _warrantyDaysCtrl = TextEditingController();
+  final _warrantyCoversCtrl = TextEditingController();
+  final _warrantyExclusionsCtrl = TextEditingController();
+  String? _warrantyError;
+  final List<_PendingAttr> _pendingAttrs = [];
+
   @override
   void initState() {
     super.initState();
     _priceCtrl.addListener(_onPriceChanged);
+    _tempServiceId = 'new_${DateTime.now().millisecondsSinceEpoch}';
   }
 
   void _onPriceChanged() {
@@ -3961,6 +3976,9 @@ class _CreateServiceDialogState extends ConsumerState<_CreateServiceDialog> {
     _nameCtrl.dispose();
     _descCtrl.dispose();
     _priceCtrl.dispose();
+    _warrantyDaysCtrl.dispose();
+    _warrantyCoversCtrl.dispose();
+    _warrantyExclusionsCtrl.dispose();
     super.dispose();
   }
 
@@ -3994,6 +4012,16 @@ class _CreateServiceDialogState extends ConsumerState<_CreateServiceDialog> {
       setState(() => _priceError = 'Price must contain numbers only.');
       return;
     }
+
+    if (_warrantyEnabled) {
+      final days = int.tryParse(_warrantyDaysCtrl.text.trim());
+      if (days == null || days <= 0) {
+        setState(() =>
+            _warrantyError = 'Enter a valid warranty duration (days > 0).');
+        return;
+      }
+    }
+    setState(() => _warrantyError = null);
 
     final vendor = ref.read(currentVendorUserProvider);
     if (vendor == null) return;
@@ -4043,7 +4071,10 @@ class _CreateServiceDialogState extends ConsumerState<_CreateServiceDialog> {
       final price =
           priceText.isNotEmpty ? double.tryParse(priceText) : null;
 
-      await ds.submitServiceRequest(
+      final warrantyDays = _warrantyEnabled
+          ? int.tryParse(_warrantyDaysCtrl.text.trim())
+          : null;
+      final requestId = await ds.submitServiceRequest(
         vendorId: vendor.id,
         serviceName: name,
         description: _descCtrl.text.trim().isNotEmpty
@@ -4051,7 +4082,33 @@ class _CreateServiceDialogState extends ConsumerState<_CreateServiceDialog> {
             : null,
         price: price,
         imageUrl: imageUrl,
+        warrantyEnabled: _warrantyEnabled,
+        warrantyDays: warrantyDays,
+        warrantyCovers: _warrantyEnabled &&
+                _warrantyCoversCtrl.text.trim().isNotEmpty
+            ? _warrantyCoversCtrl.text.trim()
+            : null,
+        warrantyExclusions: _warrantyEnabled &&
+                _warrantyExclusionsCtrl.text.trim().isNotEmpty
+            ? _warrantyExclusionsCtrl.text.trim()
+            : null,
+        includedItems: _includedItems,
+        excludedItems: _excludedItems,
+        beforeAfterPairs: _beforeAfterPairs,
       );
+      if (_pendingAttrs.isNotEmpty) {
+        await ds.insertServiceAttributes(
+          requestId,
+          _pendingAttrs
+              .map((a) => {
+                    'name': a.name,
+                    'price': a.price,
+                    'discount_type': a.discountType,
+                    'discount_value': a.discountValue,
+                  })
+              .toList(),
+        );
+      }
 
       ref.invalidate(myServiceRequestsProvider);
       if (mounted) {
@@ -4077,6 +4134,24 @@ class _CreateServiceDialogState extends ConsumerState<_CreateServiceDialog> {
     } finally {
       if (mounted) setState(() => _submitting = false);
     }
+  }
+
+  void _openAddAttr() {
+    showDialog<_PendingAttr?>(
+      context: context,
+      builder: (_) => const _PendingAttrDialog(),
+    ).then((attr) {
+      if (attr != null && mounted) setState(() => _pendingAttrs.add(attr));
+    });
+  }
+
+  void _openEditAttr(int index) {
+    showDialog<_PendingAttr?>(
+      context: context,
+      builder: (_) => _PendingAttrDialog(existing: _pendingAttrs[index]),
+    ).then((attr) {
+      if (attr != null && mounted) setState(() => _pendingAttrs[index] = attr);
+    });
   }
 
   @override
@@ -4299,6 +4374,10 @@ class _CreateServiceDialogState extends ConsumerState<_CreateServiceDialog> {
               const Divider(height: 1),
               const SizedBox(height: 20),
 
+              // ── 1: Service Details ────────────────────────────────────
+              const _DialogSectionLabel('1. Service Details'),
+              const SizedBox(height: 12),
+
               // Service Name
               _DialogFieldLabel('Service Name', required: true),
               const SizedBox(height: 6),
@@ -4343,6 +4422,161 @@ class _CreateServiceDialogState extends ConsumerState<_CreateServiceDialog> {
               _DialogImagePicker(
                 pickedBytes: _pickedImageBytes,
                 onTap: _pickImage,
+              ),
+              const SizedBox(height: 20),
+              const Divider(height: 1),
+              const SizedBox(height: 20),
+
+              // ── 2: Content ────────────────────────────────────────────
+              const _DialogSectionLabel('2. Content'),
+              const SizedBox(height: 4),
+              const Text(
+                "Define what's included, excluded, and before/after photos.",
+                style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+              ),
+              const SizedBox(height: 16),
+              ServiceSectionHeader(
+                icon: Icons.check_circle_outline_rounded,
+                label: "What's Included",
+                color: AppColors.success,
+              ),
+              const SizedBox(height: 10),
+              ServiceEditableItemList(
+                items: _includedItems,
+                onChanged: (v) => setState(() => _includedItems = v),
+                addLabel: 'Add included item',
+              ),
+              const SizedBox(height: 20),
+              ServiceSectionHeader(
+                icon: Icons.cancel_outlined,
+                label: "What's Excluded",
+                color: AppColors.error,
+              ),
+              const SizedBox(height: 10),
+              ServiceEditableItemList(
+                items: _excludedItems,
+                onChanged: (v) => setState(() => _excludedItems = v),
+                addLabel: 'Add excluded item',
+              ),
+              const SizedBox(height: 20),
+              ServiceSectionHeader(
+                icon: Icons.compare_rounded,
+                label: 'Before & After',
+                color: AppColors.accent,
+              ),
+              const SizedBox(height: 10),
+              ServiceBeforeAfterEditor(
+                pairs: _beforeAfterPairs,
+                serviceId: _tempServiceId,
+                onChanged: (v) => setState(() => _beforeAfterPairs = v),
+              ),
+              const SizedBox(height: 20),
+              const Divider(height: 1),
+              const SizedBox(height: 20),
+
+              // ── 3: Warranty Coverage ──────────────────────────────────
+              const _DialogSectionLabel('3. Warranty Coverage'),
+              const SizedBox(height: 8),
+              SwitchListTile(
+                value: _warrantyEnabled,
+                onChanged: (v) => setState(() {
+                  _warrantyEnabled = v;
+                  if (!v) {
+                    _warrantyDaysCtrl.clear();
+                    _warrantyCoversCtrl.clear();
+                    _warrantyExclusionsCtrl.clear();
+                    _warrantyError = null;
+                  }
+                }),
+                title: const Text(
+                  'Enable Warranty',
+                  style: TextStyle(
+                      fontSize: 13.5,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.textPrimary),
+                ),
+                subtitle: const Text(
+                  'Offer a warranty on this service',
+                  style: TextStyle(
+                      fontSize: 12, color: AppColors.textSecondary),
+                ),
+                activeThumbColor: AppColors.success,
+                contentPadding: EdgeInsets.zero,
+                dense: true,
+              ),
+              if (_warrantyEnabled) ...[
+                const SizedBox(height: 12),
+                _DialogFieldLabel('Warranty Duration (Days)', required: true),
+                const SizedBox(height: 6),
+                _DialogTextField(
+                  controller: _warrantyDaysCtrl,
+                  hint: 'e.g. 30',
+                  keyboardType: TextInputType.number,
+                ),
+                const SizedBox(height: 12),
+                _DialogFieldLabel('Warranty Covers'),
+                const SizedBox(height: 6),
+                _DialogTextField(
+                  controller: _warrantyCoversCtrl,
+                  hint: 'One item per line...',
+                  maxLines: 3,
+                ),
+                const SizedBox(height: 12),
+                _DialogFieldLabel('Warranty Does Not Cover'),
+                const SizedBox(height: 6),
+                _DialogTextField(
+                  controller: _warrantyExclusionsCtrl,
+                  hint: 'One item per line...',
+                  maxLines: 3,
+                ),
+              ],
+              if (_warrantyError != null) ...[
+                const SizedBox(height: 4),
+                Text(
+                  _warrantyError!,
+                  style: const TextStyle(
+                      fontSize: 11.5, color: AppColors.error),
+                ),
+              ],
+              const SizedBox(height: 20),
+              const Divider(height: 1),
+              const SizedBox(height: 20),
+
+              // ── 4: Attributes / Variants ──────────────────────────────
+              const _DialogSectionLabel('4. Attributes / Variants'),
+              const SizedBox(height: 4),
+              const Text(
+                'Define pricing variants for this service (e.g. "1 AC – ₹800").',
+                style: TextStyle(
+                    fontSize: 12, color: AppColors.textSecondary),
+              ),
+              const SizedBox(height: 12),
+              ..._pendingAttrs.asMap().entries.map((entry) {
+                final i = entry.key;
+                final attr = entry.value;
+                return _PendingAttrRow(
+                  attr: attr,
+                  onEdit: () => _openEditAttr(i),
+                  onDelete: () => setState(() => _pendingAttrs.removeAt(i)),
+                );
+              }),
+              if (_pendingAttrs.isNotEmpty) const SizedBox(height: 4),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: _openAddAttr,
+                  icon: const Icon(Icons.add_rounded, size: 15),
+                  label: const Text('Add Entry'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: AppColors.primary,
+                    side: const BorderSide(color: AppColors.primary),
+                    padding: const EdgeInsets.symmetric(vertical: 10),
+                    textStyle: const TextStyle(
+                        fontSize: 13, fontWeight: FontWeight.w500),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8)),
+                  ),
+                ),
               ),
               const SizedBox(height: 24),
 
@@ -4884,5 +5118,381 @@ class _VendorAnswerSheetState extends State<_VendorAnswerSheet> {
       return;
     }
     Navigator.of(context).pop(answer);
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Section label (Create Service dialog)
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _DialogSectionLabel extends StatelessWidget {
+  const _DialogSectionLabel(this.title);
+  final String title;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Container(
+          width: 3,
+          height: 14,
+          decoration: BoxDecoration(
+            color: AppColors.primary,
+            borderRadius: BorderRadius.circular(2),
+          ),
+        ),
+        const SizedBox(width: 8),
+        Text(
+          title,
+          style: const TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w700,
+            color: AppColors.textPrimary,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Pending attribute model & row (Create Service dialog)
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _PendingAttr {
+  const _PendingAttr({
+    required this.name,
+    required this.price,
+    required this.discountType,
+    required this.discountValue,
+  });
+  final String name;
+  final double price;
+  final String discountType;
+  final double discountValue;
+}
+
+class _PendingAttrRow extends StatelessWidget {
+  const _PendingAttrRow({
+    required this.attr,
+    required this.onEdit,
+    required this.onDelete,
+  });
+  final _PendingAttr attr;
+  final VoidCallback onEdit;
+  final VoidCallback onDelete;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+      decoration: BoxDecoration(
+        color: AppColors.background,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  attr.name,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w600,
+                    fontSize: 13,
+                    color: AppColors.textPrimary,
+                  ),
+                ),
+                if (attr.price > 0) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    '₹${attr.price.toStringAsFixed(0)}',
+                    style: const TextStyle(
+                        fontSize: 12, color: AppColors.textSecondary),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.edit_outlined, size: 15),
+            color: AppColors.textSecondary,
+            onPressed: onEdit,
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+          ),
+          IconButton(
+            icon: const Icon(Icons.delete_outline, size: 15),
+            color: AppColors.error,
+            onPressed: onDelete,
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Add / Edit attribute dialog (Create Service dialog)
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _PendingAttrDialog extends StatefulWidget {
+  const _PendingAttrDialog({this.existing});
+  final _PendingAttr? existing;
+
+  @override
+  State<_PendingAttrDialog> createState() => _PendingAttrDialogState();
+}
+
+class _PendingAttrDialogState extends State<_PendingAttrDialog> {
+  final _formKey = GlobalKey<FormState>();
+  late final TextEditingController _name;
+  late final TextEditingController _price;
+  late final TextEditingController _discountValue;
+  String _discountType = 'percentage';
+
+  @override
+  void initState() {
+    super.initState();
+    final e = widget.existing;
+    _name = TextEditingController(text: e?.name ?? '');
+    _price = TextEditingController(
+        text: (e?.price ?? 0) == 0 ? '' : e!.price.toStringAsFixed(0));
+    _discountType = e?.discountType ?? 'percentage';
+    _discountValue = TextEditingController(
+        text: (e?.discountValue ?? 0) > 0
+            ? e!.discountValue.toStringAsFixed(0)
+            : '');
+  }
+
+  @override
+  void dispose() {
+    _name.dispose();
+    _price.dispose();
+    _discountValue.dispose();
+    super.dispose();
+  }
+
+  InputDecoration _inputDeco(String hint) => InputDecoration(
+        hintText: hint,
+        isDense: true,
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(8),
+          borderSide: const BorderSide(color: AppColors.border, width: 0.8),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(8),
+          borderSide: const BorderSide(color: AppColors.border, width: 0.8),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(8),
+          borderSide: const BorderSide(color: AppColors.primary, width: 1.4),
+        ),
+      );
+
+  @override
+  Widget build(BuildContext context) {
+    final isEdit = widget.existing != null;
+    return Dialog(
+      insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 420),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Container(
+              padding: const EdgeInsets.fromLTRB(24, 20, 16, 20),
+              decoration: const BoxDecoration(
+                color: AppColors.primary,
+                borderRadius:
+                    BorderRadius.vertical(top: Radius.circular(16)),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    isEdit
+                        ? Icons.edit_rounded
+                        : Icons.add_circle_outline_rounded,
+                    color: Colors.white,
+                    size: 20,
+                  ),
+                  const SizedBox(width: 10),
+                  Text(
+                    isEdit ? 'Edit Entry' : 'Add Entry',
+                    style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700),
+                  ),
+                  const Spacer(),
+                  IconButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    icon: const Icon(Icons.close_rounded, color: Colors.white70),
+                    visualDensity: VisualDensity.compact,
+                  ),
+                ],
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.all(24),
+              child: Form(
+                key: _formKey,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    TextFormField(
+                      controller: _name,
+                      decoration:
+                          _inputDeco('e.g. 2 ACs').copyWith(labelText: 'Name *'),
+                      textCapitalization: TextCapitalization.words,
+                      validator: (v) =>
+                          v == null || v.trim().isEmpty ? 'Required' : null,
+                    ),
+                    const SizedBox(height: 16),
+                    TextFormField(
+                      controller: _price,
+                      keyboardType: const TextInputType.numberWithOptions(
+                          decimal: true),
+                      inputFormatters: [
+                        FilteringTextInputFormatter.allow(
+                            RegExp(r'^\d*\.?\d{0,2}')),
+                      ],
+                      decoration: _inputDeco('e.g. 2000').copyWith(
+                        labelText: 'Price (₹) *',
+                        prefixText: '₹ ',
+                      ),
+                      validator: (v) {
+                        if (v == null || v.trim().isEmpty) return 'Required';
+                        if (double.tryParse(v.trim()) == null) {
+                          return 'Enter a valid number';
+                        }
+                        return null;
+                      },
+                    ),
+                    const SizedBox(height: 20),
+                    const Text(
+                      'DISCOUNT (OPTIONAL)',
+                      style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.textSecondary,
+                          letterSpacing: 0.8),
+                    ),
+                    const SizedBox(height: 10),
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        ToggleButtons(
+                          isSelected: [
+                            _discountType == 'percentage',
+                            _discountType == 'flat',
+                          ],
+                          onPressed: (i) => setState(() =>
+                              _discountType =
+                                  i == 0 ? 'percentage' : 'flat'),
+                          borderRadius: BorderRadius.circular(8),
+                          selectedColor: Colors.white,
+                          fillColor: AppColors.primary,
+                          textStyle: const TextStyle(fontSize: 13),
+                          constraints: const BoxConstraints(
+                              minWidth: 48, minHeight: 44),
+                          children: const [
+                            Padding(
+                              padding:
+                                  EdgeInsets.symmetric(horizontal: 10),
+                              child: Text('%'),
+                            ),
+                            Padding(
+                              padding:
+                                  EdgeInsets.symmetric(horizontal: 10),
+                              child: Text('₹'),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: TextFormField(
+                            controller: _discountValue,
+                            keyboardType:
+                                const TextInputType.numberWithOptions(
+                                    decimal: true),
+                            inputFormatters: [
+                              FilteringTextInputFormatter.allow(
+                                  RegExp(r'^\d*\.?\d{0,2}')),
+                            ],
+                            decoration: _inputDeco('0').copyWith(
+                              labelText: _discountType == 'percentage'
+                                  ? 'Discount %'
+                                  : 'Discount ₹',
+                              prefixText:
+                                  _discountType == 'percentage' ? null : '₹ ',
+                              suffixText:
+                                  _discountType == 'percentage' ? '%' : null,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            Container(
+              padding: const EdgeInsets.fromLTRB(24, 12, 24, 20),
+              decoration: const BoxDecoration(
+                border: Border(top: BorderSide(color: AppColors.border)),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  OutlinedButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 20, vertical: 10),
+                      minimumSize: const Size(0, 40),
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
+                    child: const Text('Cancel'),
+                  ),
+                  const SizedBox(width: 12),
+                  FilledButton(
+                    onPressed: () {
+                      if (!_formKey.currentState!.validate()) return;
+                      Navigator.of(context).pop(_PendingAttr(
+                        name: _name.text.trim(),
+                        price:
+                            double.tryParse(_price.text.trim()) ?? 0.0,
+                        discountType: _discountType,
+                        discountValue:
+                            double.tryParse(_discountValue.text.trim()) ??
+                                0.0,
+                      ));
+                    },
+                    style: FilledButton.styleFrom(
+                      backgroundColor: AppColors.primary,
+                      minimumSize: const Size(0, 40),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 24, vertical: 10),
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
+                    child: Text(isEdit ? 'Save Changes' : 'Add Entry'),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }

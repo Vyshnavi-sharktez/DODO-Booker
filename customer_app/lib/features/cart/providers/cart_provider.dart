@@ -172,6 +172,9 @@ class CartNotifier extends StateNotifier<List<CartItem>> {
     bool amcIsRenewal = false,
     String? amcPreviousContractId,
     List<SelectedAddon> addons = const [],
+    // When set, creates/updates the cart item with this exact quantity instead
+    // of the default "increment by 1" behaviour. Used by variant chip steppers.
+    int? quantity,
   }) {
     debugPrint('[DODO][CartSync][1] addToCart() entered — serviceId=${service.id} name=${service.name} parentNodeId=$parentNodeId isAmc=${amcPlan != null}');
     final isAmc = amcPlan != null;
@@ -192,7 +195,11 @@ class CartNotifier extends StateNotifier<List<CartItem>> {
       parentNodeId: parentNodeId,
     );
     if (existing != null) {
-      updateQuantity(existing.bookingId, existing.quantity + 1);
+      // Explicit quantity overrides the default "increment by 1" merge.
+      updateQuantity(
+        existing.bookingId,
+        quantity ?? (existing.quantity + 1),
+      );
       return;
     }
 
@@ -203,7 +210,7 @@ class CartNotifier extends StateNotifier<List<CartItem>> {
       serviceName: service.name,
       imageUrl: service.imageUrl,
       unitPrice: unitPrice,
-      quantity: 1,
+      quantity: quantity ?? 1,
       minimumOrderAmount: isAmc ? null : service.minimumOrderAmount,
       originalUnitPrice: isAmc ? null : originalUnitPrice,
       parentNodeId: parentNodeId,
@@ -249,9 +256,27 @@ class CartNotifier extends StateNotifier<List<CartItem>> {
   /// Adds a vendor custom service to the cart.
   /// Custom service items use [customServiceId] at checkout and are NOT synced
   /// to the remote cart_items table (which has a catalog_nodes FK on service_id).
-  void addCustomServiceToCart(VendorCustomServiceModel service) {
-    // Deduplicate: one item per vendor custom service in the cart.
-    if (state.any((i) => i.customServiceId == service.id)) {
+  ///
+  /// Pass [unitPrice] and [quantity] to override the service's base price and
+  /// default quantity of 1. If the service is already in the cart the existing
+  /// item is updated in-place (supports variant/qty changes without duplicate items).
+  void addCustomServiceToCart(
+    VendorCustomServiceModel service, {
+    double? unitPrice,
+    int quantity = 1,
+  }) {
+    final price = unitPrice ?? service.activePrice;
+    final existing =
+        state.where((i) => i.customServiceId == service.id).firstOrNull;
+    if (existing != null) {
+      state = [
+        for (final item in state)
+          if (item.customServiceId == service.id)
+            item.copyWith(unitPrice: price, quantity: quantity)
+          else
+            item,
+      ];
+      _save();
       return;
     }
     final bookingId = '${service.id}_${DateTime.now().millisecondsSinceEpoch}';
@@ -260,8 +285,8 @@ class CartNotifier extends StateNotifier<List<CartItem>> {
       serviceId: service.id,
       serviceName: service.serviceName,
       imageUrl: service.imageUrl,
-      unitPrice: service.activePrice,
-      quantity: 1,
+      unitPrice: price,
+      quantity: quantity,
       customServiceId: service.id,
       vendorId: service.vendorId,
     );

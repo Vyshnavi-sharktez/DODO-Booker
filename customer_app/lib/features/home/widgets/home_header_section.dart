@@ -5,6 +5,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../../profile/services/profile_providers.dart';
+import '../../profile/utils/profile_launcher.dart';
 
 /// Top navigation bar matching the DODO Booker web landing design.
 ///
@@ -314,7 +315,7 @@ class _AvatarButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTap: () => context.push('/profile'),
+      onTap: () => openProfile(context),
       child: MouseRegion(
         cursor: SystemMouseCursors.click,
         child: Container(

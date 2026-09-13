@@ -15,7 +15,7 @@ class WarrantiesRepository {
           .select('''
             *,
             bookings!booking_id(booking_number, notes, customers(full_name, email, phone)),
-            rework_booking:bookings!rework_booking_id(id, booking_number, notes, status, dispatch_status, vendor_id, created_at, updated_at, completed_at, vendors(business_name)),
+            rework_booking:bookings!rework_booking_id(id, booking_number, notes, status, dispatch_status, vendor_id, created_at, updated_at, vendors(business_name)),
             vendors(business_name)
           ''')
           .or('claimed_at.not.is.null,rework_booking_id.not.is.null,status.eq.Claimed,status.eq.Approved,status.eq.Resolved,status.eq.Rejected')
@@ -48,7 +48,7 @@ class WarrantiesRepository {
             .select('''
               *,
               bookings!booking_id(booking_number, notes, customers(full_name, email, phone)),
-              rework_booking:bookings!rework_booking_id(id, booking_number, notes, status, dispatch_status, vendor_id, created_at, updated_at, completed_at),
+              rework_booking:bookings!rework_booking_id(id, booking_number, notes, status, dispatch_status, vendor_id, created_at, updated_at),
               vendors(business_name)
             ''')
             .or('claimed_at.not.is.null,rework_booking_id.not.is.null,status.eq.Claimed,status.eq.Approved,status.eq.Resolved,status.eq.Rejected')
@@ -95,7 +95,7 @@ class WarrantiesRepository {
           .select('''
             *,
             bookings!booking_id(booking_number, notes, customers(full_name, email, phone)),
-            rework_booking:bookings!rework_booking_id(id, booking_number, notes, status, dispatch_status, vendor_id, created_at, updated_at, completed_at, vendors(business_name)),
+            rework_booking:bookings!rework_booking_id(id, booking_number, notes, status, dispatch_status, vendor_id, created_at, updated_at, vendors(business_name)),
             vendors(business_name)
           ''')
           .order('issued_at', ascending: false);
@@ -208,7 +208,7 @@ class WarrantiesRepository {
           .select('''
             *,
             bookings!booking_id(booking_number, notes, customers(full_name, email, phone)),
-            rework_booking:bookings!rework_booking_id(id, booking_number, notes, status, dispatch_status, vendor_id, created_at, updated_at, completed_at, vendors(business_name)),
+            rework_booking:bookings!rework_booking_id(id, booking_number, notes, status, dispatch_status, vendor_id, created_at, updated_at, vendors(business_name)),
             vendors(business_name),
             customers!customer_id(full_name, email, phone)
           ''')
@@ -227,7 +227,7 @@ class WarrantiesRepository {
             .select('''
               *,
               bookings!booking_id(booking_number, notes, customers(full_name, email, phone)),
-              rework_booking:bookings!rework_booking_id(id, booking_number, notes, status, dispatch_status, vendor_id, created_at, updated_at, completed_at),
+              rework_booking:bookings!rework_booking_id(id, booking_number, notes, status, dispatch_status, vendor_id, created_at, updated_at),
               vendors(business_name)
             ''')
             .order('issued_at', ascending: false);
@@ -325,7 +325,7 @@ class WarrantiesRepository {
       'updated_at': nowIso,
     }).eq('id', warrantyId);
 
-    // 2. Move rework booking to pending assignment if present
+    // 2. Move rework booking to pending (now actionable in vendor workflow)
     if (reworkBookingId != null && reworkBookingId.isNotEmpty) {
       try {
         await _client.from('bookings').update({
@@ -335,6 +335,31 @@ class WarrantiesRepository {
         }).eq('id', reworkBookingId);
       } catch (e) {
         debugPrint('[DODO][WarrantiesRepository] Warning: Rework booking update failed: $e');
+      }
+
+      // Notify assigned vendor now that the booking is actionable
+      try {
+        final rework = await _client
+            .from('bookings')
+            .select('vendor_id, booking_number')
+            .eq('id', reworkBookingId)
+            .maybeSingle();
+        final reworkVendorId = rework?['vendor_id'] as String?;
+        final reworkNum = rework?['booking_number'] as String? ?? reworkBookingId;
+        if (reworkVendorId != null && reworkVendorId.isNotEmpty) {
+          await _client.from('notifications').insert({
+            'user_type': 'vendor',
+            'user_id': reworkVendorId,
+            'title': 'Warranty Rework Booking Assigned',
+            'message': 'A warranty rework booking (#$reworkNum) for original booking #$bookingNumber has been approved and assigned to you.',
+            'notification_type': 'warranty_claim',
+            'is_read': false,
+            'entity_type': 'booking',
+            'entity_id': reworkBookingId,
+          });
+        }
+      } catch (e) {
+        debugPrint('[DODO][WarrantiesRepository] Warning: Vendor notification failed: $e');
       }
     }
 

@@ -6,12 +6,10 @@ import '../../../routes/app_router.dart';
 import '../../bookings/screens/booking_details_screen.dart';
 import '../../bookings/services/bookings_providers.dart';
 
-/// Opened when a customer taps a booking notification deep-link.
-/// Fetches the booking by ID from Supabase and shows BookingDetailsScreen.
-///
-/// Navigation contract:
-///   ← back  → pops this route (returns to wherever we came from)
-///   ✕ close → context.go(home), replacing the stack to Customer Home
+/// Opened when a customer taps a booking notification deep-link on mobile,
+/// or navigates directly to /notification-booking/:id.
+/// On desktop (≥ 768 px), notification taps go through the notification
+/// handlers which show a PageSheet directly over the current page instead.
 class NotificationBookingScreen extends ConsumerWidget {
   const NotificationBookingScreen({super.key, required this.bookingId});
 

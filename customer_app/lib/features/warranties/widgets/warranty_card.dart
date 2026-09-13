@@ -76,13 +76,10 @@ class _WarrantyCardContent extends StatelessWidget {
         child: InkWell(
           borderRadius: BorderRadius.circular(12),
           onTap: () {
-            Navigator.of(context).push(
-              MaterialPageRoute(
-                builder: (_) => WarrantyDetailsScreen(
-                  booking: booking,
-                  warranty: warranty,
-                ),
-              ),
+            WarrantyDetailsScreen.showAsModal(
+              context,
+              booking: booking,
+              warranty: warranty,
             );
           },
           child: Container(

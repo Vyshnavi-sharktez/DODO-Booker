@@ -45,6 +45,10 @@ class CatalogNodeFormDialog extends StatefulWidget {
     double? minimumOrderAmount,
     String discountType,
     double discountValue,
+    bool warrantyEnabled,
+    int? warrantyDays,
+    String? warrantyCovers,
+    String? warrantyExclusions,
   }) onSave;
 
   @override
@@ -67,6 +71,10 @@ class _CatalogNodeFormDialogState extends State<CatalogNodeFormDialog> {
   late bool _isBookable;
   late String _discountType;
   late final TextEditingController _discountValue;
+  late bool _warrantyEnabled;
+  late final TextEditingController _warrantyDays;
+  late final TextEditingController _warrantyCovers;
+  late final TextEditingController _warrantyExclusions;
   bool _saving = false;
 
   @override
@@ -95,6 +103,12 @@ class _CatalogNodeFormDialogState extends State<CatalogNodeFormDialog> {
           ? e.discountValue.toStringAsFixed(0)
           : '',
     );
+    _warrantyEnabled = e?.warrantyEnabled ?? false;
+    _warrantyDays = TextEditingController(
+      text: e?.warrantyDays != null ? e!.warrantyDays!.toString() : '',
+    );
+    _warrantyCovers = TextEditingController(text: e?.warrantyCovers ?? '');
+    _warrantyExclusions = TextEditingController(text: e?.warrantyExclusions ?? '');
   }
 
   @override
@@ -108,6 +122,9 @@ class _CatalogNodeFormDialogState extends State<CatalogNodeFormDialog> {
     _basePrice.dispose();
     _minOrderAmount.dispose();
     _discountValue.dispose();
+    _warrantyDays.dispose();
+    _warrantyCovers.dispose();
+    _warrantyExclusions.dispose();
     super.dispose();
   }
 
@@ -150,6 +167,16 @@ class _CatalogNodeFormDialogState extends State<CatalogNodeFormDialog> {
         discountType: _discountType,
         discountValue:
             double.tryParse(_discountValue.text.trim()) ?? 0,
+        warrantyEnabled: _isBookable ? _warrantyEnabled : false,
+        warrantyDays: (_isBookable && _warrantyEnabled && _warrantyDays.text.trim().isNotEmpty)
+            ? int.tryParse(_warrantyDays.text.trim())
+            : null,
+        warrantyCovers: (_isBookable && _warrantyEnabled && _warrantyCovers.text.trim().isNotEmpty)
+            ? _warrantyCovers.text.trim()
+            : null,
+        warrantyExclusions: (_isBookable && _warrantyEnabled && _warrantyExclusions.text.trim().isNotEmpty)
+            ? _warrantyExclusions.text.trim()
+            : null,
       );
       if (mounted) Navigator.of(context).pop();
     } catch (e) {
@@ -493,7 +520,76 @@ class _CatalogNodeFormDialogState extends State<CatalogNodeFormDialog> {
                   ],
                 ),
 
-                // AMC plans are managed from the catalog tile (AMC Plans button).
+                // ── Warranty Configuration ───────────────────────────────
+                const SizedBox(height: 16),
+                const Divider(),
+                const SizedBox(height: 12),
+                _buildToggleRow(
+                  icon: Icons.verified_rounded,
+                  label: 'Warranty Coverage',
+                  subtitle: 'Issue a service warranty when booking is completed',
+                  value: _warrantyEnabled,
+                  onChanged: (v) => setState(() {
+                    _warrantyEnabled = v;
+                    if (!v) {
+                      _warrantyDays.clear();
+                      _warrantyCovers.clear();
+                      _warrantyExclusions.clear();
+                    }
+                  }),
+                  activeColor: AppColors.accent,
+                ),
+                if (_warrantyEnabled) ...[
+                  const SizedBox(height: 12),
+                  TextFormField(
+                    controller: _warrantyDays,
+                    decoration: const InputDecoration(
+                      labelText: 'Warranty Duration (Days) *',
+                      hintText: 'e.g. 30',
+                      suffixText: 'days',
+                      prefixIcon: Icon(Icons.timer_outlined),
+                      helperText:
+                          'Number of days warranty remains active after completion.',
+                    ),
+                    keyboardType: TextInputType.number,
+                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                    validator: (v) {
+                      if (!_isBookable || !_warrantyEnabled) return null;
+                      if (v == null || v.trim().isEmpty) {
+                        return 'Warranty duration is required when enabled';
+                      }
+                      final days = int.tryParse(v.trim());
+                      if (days == null || days <= 0) {
+                        return 'Duration must be greater than 0 days';
+                      }
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: 12),
+                  TextFormField(
+                    controller: _warrantyCovers,
+                    decoration: const InputDecoration(
+                      labelText: 'Warranty Covers',
+                      hintText: 'One item per line…',
+                      prefixIcon: Icon(Icons.check_circle_outline_rounded),
+                      helperText: 'What is included under this warranty.',
+                      alignLabelWithHint: true,
+                    ),
+                    maxLines: 4,
+                  ),
+                  const SizedBox(height: 12),
+                  TextFormField(
+                    controller: _warrantyExclusions,
+                    decoration: const InputDecoration(
+                      labelText: 'Warranty Does Not Cover',
+                      hintText: 'One item per line…',
+                      prefixIcon: Icon(Icons.cancel_outlined),
+                      helperText: 'What is excluded from this warranty.',
+                      alignLabelWithHint: true,
+                    ),
+                    maxLines: 4,
+                  ),
+                ],
               ],
             ],
           ],

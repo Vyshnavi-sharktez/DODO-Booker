@@ -5,10 +5,13 @@ import 'package:google_fonts/google_fonts.dart';
 
 import '../../../core/constants/app_colors.dart';
 import '../../../models/faq_model.dart';
+import '../../../models/service_attribute_model.dart';
 import '../../cart/providers/cart_provider.dart';
 import '../../cart/utils/cart_launcher.dart';
 import '../../catalog/providers/catalog_providers.dart';
+import '../../category/services/category_providers.dart';
 import '../../reviews/services/review_providers.dart';
+import '../../catalog/widgets/warranty_badge.dart';
 import '../../service/widgets/faq_section.dart';
 import '../models/vendor_custom_service_model.dart';
 
@@ -79,7 +82,7 @@ class VendorCustomServiceSheet {
 // Wired to VendorCustomServiceModel instead of CatalogNodeModel.
 // ═══════════════════════════════════════════════════════════════════════════════
 
-class VendorCustomServiceScreen extends ConsumerWidget {
+class VendorCustomServiceScreen extends ConsumerStatefulWidget {
   const VendorCustomServiceScreen({
     super.key,
     required this.service,
@@ -96,17 +99,76 @@ class VendorCustomServiceScreen extends ConsumerWidget {
   final bool inSheet;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<VendorCustomServiceScreen> createState() =>
+      _VendorCustomServiceScreenState();
+}
+
+class _VendorCustomServiceScreenState
+    extends ConsumerState<VendorCustomServiceScreen> {
+  String? _selectedAttrId;
+  final Map<String, int> _quantities = {};
+
+  VendorCustomServiceModel get service => widget.service;
+
+  int _qtyFor(String attrId) => _quantities[attrId] ?? 1;
+
+  void _setQty(String attrId, int qty) {
+    if (qty < 1) return;
+    setState(() => _quantities[attrId] = qty);
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final isWeb = MediaQuery.sizeOf(context).width >= 768;
     final faqs =
         ref.watch(customServiceFaqsProvider(service.id)).valueOrNull ?? [];
+    final attrs =
+        ref.watch(serviceAttributesProvider(service.id)).valueOrNull ?? [];
+    final attrEntries = attrs.where((a) => a.options.isNotEmpty).toList();
+    // Auto-select the cheapest attr so "From ₹X" and the initial booking-bar
+    // price always show the minimum variant price.
+    final cheapestAttrId = attrEntries.isNotEmpty
+        ? attrEntries
+            .reduce((a, b) =>
+                a.options.first.finalPrice <= b.options.first.finalPrice ? a : b)
+            .id
+        : null;
+    final effectiveAttrId = _selectedAttrId ?? cheapestAttrId;
+    final selectedAttr = effectiveAttrId != null
+        ? attrEntries.where((a) => a.id == effectiveAttrId).firstOrNull
+        : null;
+    final effectiveUnitPrice = selectedAttr != null
+        ? selectedAttr.options.first.finalPrice
+        : service.activePrice;
+    final effectiveQty =
+        effectiveAttrId != null ? _qtyFor(effectiveAttrId) : 1;
+
+    // Minimum price across all attrs — displayed as "From ₹X" in the header.
+    final fromPrice = attrEntries.isNotEmpty
+        ? attrEntries
+            .map((a) => a.options.first.finalPrice)
+            .fold(double.infinity, (a, b) => a < b ? a : b)
+        : service.activePrice;
+
+    void onAttrSelected(String id) => setState(() => _selectedAttrId = id);
 
     if (isWeb) {
-      return _WebScaffold(service: service, faqs: faqs, inModal: inModal);
+      return _WebScaffold(
+        service: service,
+        faqs: faqs,
+        inModal: widget.inModal,
+        attrEntries: attrEntries,
+        selectedAttrId: effectiveAttrId,
+        onAttrSelected: onAttrSelected,
+        quantities: _quantities,
+        onQtyChanged: _setQty,
+        effectiveUnitPrice: effectiveUnitPrice,
+        fromPrice: fromPrice,
+      );
     }
 
     // ── Mobile bottom-sheet mode ─────────────────────────────────────────────
-    if (inSheet) {
+    if (widget.inSheet) {
       return ConstrainedBox(
         constraints: BoxConstraints(
           maxHeight: MediaQuery.of(context).size.height * 0.92,
@@ -162,7 +224,15 @@ class VendorCustomServiceScreen extends ConsumerWidget {
                       children: [
                         if (service.imageUrl?.isNotEmpty == true)
                           _SheetHero(imageUrl: service.imageUrl!),
-                        _ServiceContentBlock(service: service),
+                        _ServiceContentBlock(service: service, fromPrice: fromPrice),
+                        if (attrEntries.isNotEmpty)
+                          _AttributeVariantSection(
+                            attrs: attrEntries,
+                            selectedAttrId: effectiveAttrId,
+                            onAttrSelected: onAttrSelected,
+                            quantities: _quantities,
+                            onQtyChanged: _setQty,
+                          ),
                         if (service.includedItems.isNotEmpty)
                           _IncludedSection(items: service.includedItems),
                         if (service.excludedItems.isNotEmpty)
@@ -232,7 +302,11 @@ class VendorCustomServiceScreen extends ConsumerWidget {
                   ),
                 ),
                 // Sticky booking bar
-                _MobileBookingBar(service: service),
+                _MobileBookingBar(
+                  service: service,
+                  effectiveUnitPrice: effectiveUnitPrice,
+                  effectiveQty: effectiveQty,
+                ),
               ],
             ),
           ),
@@ -251,7 +325,15 @@ class VendorCustomServiceScreen extends ConsumerWidget {
               children: [
                 if (service.imageUrl?.isNotEmpty == true)
                   _MobileHero(imageUrl: service.imageUrl!),
-                _ServiceContentBlock(service: service),
+                _ServiceContentBlock(service: service, fromPrice: fromPrice),
+                if (attrEntries.isNotEmpty)
+                  _AttributeVariantSection(
+                    attrs: attrEntries,
+                    selectedAttrId: effectiveAttrId,
+                    onAttrSelected: onAttrSelected,
+                    quantities: _quantities,
+                    onQtyChanged: _setQty,
+                  ),
                 if (service.includedItems.isNotEmpty)
                   _IncludedSection(items: service.includedItems),
                 if (service.excludedItems.isNotEmpty)
@@ -315,7 +397,11 @@ class VendorCustomServiceScreen extends ConsumerWidget {
           ),
         ],
       ),
-      bottomNavigationBar: _MobileBookingBar(service: service),
+      bottomNavigationBar: _MobileBookingBar(
+        service: service,
+        effectiveUnitPrice: effectiveUnitPrice,
+        effectiveQty: effectiveQty,
+      ),
     );
   }
 }
@@ -329,11 +415,25 @@ class _WebScaffold extends ConsumerWidget {
     required this.service,
     required this.faqs,
     required this.inModal,
+    required this.attrEntries,
+    required this.selectedAttrId,
+    required this.onAttrSelected,
+    required this.quantities,
+    required this.onQtyChanged,
+    required this.effectiveUnitPrice,
+    required this.fromPrice,
   });
 
   final VendorCustomServiceModel service;
   final List<FaqModel> faqs;
   final bool inModal;
+  final List<ServiceAttributeModel> attrEntries;
+  final String? selectedAttrId;
+  final ValueChanged<String> onAttrSelected;
+  final Map<String, int> quantities;
+  final void Function(String, int) onQtyChanged;
+  final double effectiveUnitPrice;
+  final double fromPrice;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -341,7 +441,15 @@ class _WebScaffold extends ConsumerWidget {
     final cartItem =
         cart.where((i) => i.customServiceId == service.id).firstOrNull;
     final inCart = cartItem != null;
+    final hasVariants = attrEntries.isNotEmpty;
+    final effectiveQty =
+        selectedAttrId != null ? (quantities[selectedAttrId] ?? 1) : 1;
+    // When variants present, use variant-driven qty/price; otherwise fall back
+    // to the cart qty so the web stepper stays in sync.
     final cartQty = cartItem?.quantity ?? 1;
+    final displayQty = hasVariants ? effectiveQty : cartQty;
+    final displayUnitPrice =
+        hasVariants ? effectiveUnitPrice : service.activePrice;
 
     final screenH = MediaQuery.sizeOf(context).height;
 
@@ -360,8 +468,20 @@ class _WebScaffold extends ConsumerWidget {
 
     final header = _WebHeader(
       service: service,
+      fromPrice: fromPrice,
       onClose: () => Navigator.of(context).maybePop(),
     );
+
+    final attrsSection = attrEntries.isNotEmpty
+        ? _AttributeVariantSection(
+            attrs: attrEntries,
+            selectedAttrId: selectedAttrId,
+            onAttrSelected: onAttrSelected,
+            horizontalPadding: 28,
+            quantities: quantities,
+            onQtyChanged: onQtyChanged,
+          )
+        : null;
 
     final middle = Padding(
       padding: const EdgeInsets.fromLTRB(28, 24, 28, 0),
@@ -430,7 +550,7 @@ class _WebScaffold extends ConsumerWidget {
               Text(inCart ? 'Total' : 'From',
                   style: const TextStyle(fontSize: 11, color: _kMuted2)),
               Text(
-                '₹${(service.activePrice * cartQty).toInt()}',
+                '₹${(displayUnitPrice * displayQty).toInt()}',
                 style: GoogleFonts.poppins(
                     fontSize: 20,
                     fontWeight: FontWeight.w800,
@@ -440,7 +560,9 @@ class _WebScaffold extends ConsumerWidget {
             ],
           ),
           const Spacer(),
-          if (inCart) ...[
+          // When no variants: show cart qty stepper when in-cart (classic behavior).
+          // When variants: chip stepper handles qty — no duplicate stepper here.
+          if (inCart && !hasVariants) ...[
             _WebQtyStepper(
               quantity: cartQty,
               onDecrement: () => ref
@@ -451,6 +573,8 @@ class _WebScaffold extends ConsumerWidget {
                   .updateQuantity(cartItem.bookingId, cartQty + 1),
             ),
             const SizedBox(width: 12),
+          ],
+          if (inCart && !hasVariants)
             MouseRegion(
               cursor: SystemMouseCursors.click,
               child: GestureDetector(
@@ -470,14 +594,18 @@ class _WebScaffold extends ConsumerWidget {
                   ),
                 ),
               ),
-            ),
-          ] else
+            )
+          else
             MouseRegion(
               cursor: SystemMouseCursors.click,
               child: GestureDetector(
                 onTap: () => ref
                     .read(cartProvider.notifier)
-                    .addCustomServiceToCart(service),
+                    .addCustomServiceToCart(
+                      service,
+                      unitPrice: hasVariants ? effectiveUnitPrice : null,
+                      quantity: hasVariants ? effectiveQty : 1,
+                    ),
                 child: Container(
                   padding: const EdgeInsets.symmetric(
                       horizontal: 24, vertical: 13),
@@ -485,7 +613,7 @@ class _WebScaffold extends ConsumerWidget {
                       color: _kInk,
                       borderRadius: BorderRadius.circular(100)),
                   child: Text(
-                    '🛒  Add to Cart',
+                    inCart ? '🛒  Update Cart' : '🛒  Add to Cart',
                     style: GoogleFonts.poppins(
                         fontSize: 14,
                         fontWeight: FontWeight.w600,
@@ -522,7 +650,11 @@ class _WebScaffold extends ConsumerWidget {
                               child: Column(
                                 crossAxisAlignment:
                                     CrossAxisAlignment.stretch,
-                                children: [header, middle],
+                                children: [
+                                  header,
+                                  ?attrsSection,
+                                  middle,
+                                ],
                               ),
                             ),
                           ),
@@ -574,7 +706,12 @@ class _WebScaffold extends ConsumerWidget {
                   clipBehavior: Clip.antiAlias,
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [header, middle, footer],
+                    children: [
+                      header,
+                      ?attrsSection,
+                      middle,
+                      footer,
+                    ],
                   ),
                 ),
               ),
@@ -592,8 +729,13 @@ class _WebScaffold extends ConsumerWidget {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 class _WebHeader extends StatelessWidget {
-  const _WebHeader({required this.service, required this.onClose});
+  const _WebHeader({
+    required this.service,
+    required this.fromPrice,
+    required this.onClose,
+  });
   final VendorCustomServiceModel service;
+  final double fromPrice;
   final VoidCallback onClose;
 
   @override
@@ -720,7 +862,7 @@ class _WebHeader extends StatelessWidget {
                           ),
                         ),
 
-                      // Price
+                      // Price — always shows the lowest variant price
                       Row(
                         crossAxisAlignment: CrossAxisAlignment.baseline,
                         textBaseline: TextBaseline.alphabetic,
@@ -730,7 +872,7 @@ class _WebHeader extends StatelessWidget {
                                   fontSize: 13, color: _kMuted2)),
                           const SizedBox(width: 8),
                           Text(
-                            '₹${service.activePrice.toInt()}',
+                            '₹${fromPrice.toInt()}',
                             style: GoogleFonts.poppins(
                                 fontSize: 24,
                                 fontWeight: FontWeight.w800,
@@ -739,6 +881,14 @@ class _WebHeader extends StatelessWidget {
                           ),
                         ],
                       ),
+                      if (service.warrantyEnabled && service.warrantyDays != null) ...[
+                        const SizedBox(height: 10),
+                        WarrantyBadge(
+                          warrantyDays: service.warrantyDays!,
+                          warrantyCovers: service.warrantyCovers,
+                          warrantyExclusions: service.warrantyExclusions,
+                        ),
+                      ],
                     ],
                   ),
                 ),
@@ -759,8 +909,9 @@ class _WebHeader extends StatelessWidget {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 class _ServiceContentBlock extends StatelessWidget {
-  const _ServiceContentBlock({required this.service});
+  const _ServiceContentBlock({required this.service, required this.fromPrice});
   final VendorCustomServiceModel service;
+  final double fromPrice;
 
   @override
   Widget build(BuildContext context) {
@@ -831,7 +982,7 @@ class _ServiceContentBlock extends StatelessWidget {
                   style: TextStyle(fontSize: 13, color: _kMuted2)),
               const SizedBox(width: 8),
               Text(
-                '₹${service.activePrice.toInt()}',
+                '₹${fromPrice.toInt()}',
                 style: GoogleFonts.poppins(
                     fontSize: 22,
                     fontWeight: FontWeight.w800,
@@ -840,6 +991,14 @@ class _ServiceContentBlock extends StatelessWidget {
               ),
             ],
           ),
+          if (service.warrantyEnabled && service.warrantyDays != null) ...[
+            const SizedBox(height: 10),
+            WarrantyBadge(
+              warrantyDays: service.warrantyDays!,
+              warrantyCovers: service.warrantyCovers,
+              warrantyExclusions: service.warrantyExclusions,
+            ),
+          ],
           const SizedBox(height: 4),
         ],
       ),
@@ -1130,13 +1289,23 @@ class _InlineReviews extends ConsumerWidget {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 class _MobileBookingBar extends ConsumerWidget {
-  const _MobileBookingBar({required this.service});
+  const _MobileBookingBar({
+    required this.service,
+    required this.effectiveUnitPrice,
+    required this.effectiveQty,
+  });
   final VendorCustomServiceModel service;
+  final double effectiveUnitPrice;
+  final int effectiveQty;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final inCart =
-        ref.watch(cartProvider).any((i) => i.customServiceId == service.id);
+    final cart = ref.watch(cartProvider);
+    final cartItem =
+        cart.where((i) => i.customServiceId == service.id).firstOrNull;
+    final inCart = cartItem != null;
+
+    final displayTotal = effectiveUnitPrice * effectiveQty;
 
     return Container(
       padding: EdgeInsets.fromLTRB(
@@ -1154,7 +1323,7 @@ class _MobileBookingBar extends ConsumerWidget {
               Text(inCart ? 'Total' : 'From',
                   style: const TextStyle(fontSize: 10, color: _kMuted2)),
               Text(
-                '₹${service.activePrice.toInt()}',
+                '₹${displayTotal.toInt()}',
                 style: GoogleFonts.poppins(
                     fontSize: 17,
                     fontWeight: FontWeight.w800,
@@ -1172,7 +1341,11 @@ class _MobileBookingBar extends ConsumerWidget {
                     ? () => openCheckout(context, ref)
                     : () => ref
                         .read(cartProvider.notifier)
-                        .addCustomServiceToCart(service),
+                        .addCustomServiceToCart(
+                          service,
+                          unitPrice: effectiveUnitPrice,
+                          quantity: effectiveQty,
+                        ),
                 child: Container(
                   padding: const EdgeInsets.symmetric(vertical: 13),
                   decoration: BoxDecoration(
@@ -1485,6 +1658,206 @@ class _BAPhoto extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Attribute / variant selector — same design as catalog_node_screen.dart
+// ═══════════════════════════════════════════════════════════════════════════════
+
+class _AttributeVariantSection extends StatelessWidget {
+  const _AttributeVariantSection({
+    required this.attrs,
+    required this.selectedAttrId,
+    required this.onAttrSelected,
+    this.horizontalPadding = 20.0,
+    this.quantities = const {},
+    required this.onQtyChanged,
+  });
+
+  final List<ServiceAttributeModel> attrs;
+  final String? selectedAttrId;
+  final void Function(String attrId) onAttrSelected;
+  final double horizontalPadding;
+  final Map<String, int> quantities;
+  final void Function(String attrId, int qty) onQtyChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    if (attrs.isEmpty) return const SizedBox.shrink();
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      padding: EdgeInsets.fromLTRB(horizontalPadding, 20, horizontalPadding, 4),
+      child: Row(
+        children: attrs.asMap().entries.map((e) {
+          final idx = e.key;
+          final attr = e.value;
+          final opt = attr.options.first;
+          final isSelected = selectedAttrId == attr.id;
+          final qty = quantities[attr.id] ?? 1;
+          return Padding(
+            padding: EdgeInsets.only(right: idx < attrs.length - 1 ? 8 : 0),
+            child: _VariantChip(
+              optionName: attr.name,
+              price: opt.finalPrice,
+              originalPrice: opt.hasDiscount ? opt.priceAdjustment : null,
+              isSelected: isSelected,
+              quantity: qty,
+              onTap: () => onAttrSelected(attr.id),
+              onDecrement: () => onQtyChanged(attr.id, qty - 1),
+              onIncrement: () => onQtyChanged(attr.id, qty + 1),
+            ),
+          );
+        }).toList(),
+      ),
+    );
+  }
+}
+
+class _VariantChip extends StatelessWidget {
+  const _VariantChip({
+    required this.optionName,
+    required this.price,
+    this.originalPrice,
+    required this.isSelected,
+    required this.quantity,
+    required this.onTap,
+    required this.onDecrement,
+    required this.onIncrement,
+  });
+
+  final String optionName;
+  final double price;
+  final double? originalPrice;
+  final bool isSelected;
+  final int quantity;
+  final VoidCallback onTap;
+  final VoidCallback onDecrement;
+  final VoidCallback onIncrement;
+
+  @override
+  Widget build(BuildContext context) {
+    final bg = isSelected ? _kInk : Colors.white;
+    final fg = isSelected ? Colors.white : _kInk;
+    final border = isSelected ? _kInk : const Color(0xFFE8E8E8);
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      child: GestureDetector(
+        onTap: onTap,
+        child: Container(
+          width: 155,
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: bg,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: border),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                optionName,
+                style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: fg,
+                    height: 1.3),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+              const SizedBox(height: 8),
+              if (price > 0 || originalPrice != null)
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.baseline,
+                  textBaseline: TextBaseline.alphabetic,
+                  children: [
+                    if (price > 0)
+                      Text(
+                        '₹${price.toInt()}',
+                        style: GoogleFonts.poppins(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                            color: fg,
+                            height: 1.2),
+                      ),
+                    if (originalPrice != null) ...[
+                      const SizedBox(width: 5),
+                      Text(
+                        '₹${originalPrice!.toInt()}',
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: fg.withAlpha(140),
+                          decoration: TextDecoration.lineThrough,
+                          decorationColor: fg.withAlpha(140),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              // Quantity stepper — only shown when this chip is selected
+              if (isSelected) ...[
+                const SizedBox(height: 10),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    _ChipStepBtn(
+                      icon: Icons.remove_rounded,
+                      onTap: onDecrement,
+                      fg: fg,
+                    ),
+                    Text(
+                      '$quantity',
+                      style: GoogleFonts.poppins(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                          color: fg,
+                          height: 1.2),
+                    ),
+                    _ChipStepBtn(
+                      icon: Icons.add_rounded,
+                      onTap: onIncrement,
+                      fg: fg,
+                    ),
+                  ],
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ChipStepBtn extends StatelessWidget {
+  const _ChipStepBtn({
+    required this.icon,
+    required this.onTap,
+    required this.fg,
+  });
+  final IconData icon;
+  final VoidCallback onTap;
+  final Color fg;
+
+  @override
+  Widget build(BuildContext context) {
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      child: GestureDetector(
+        onTap: onTap,
+        behavior: HitTestBehavior.opaque,
+        child: Container(
+          width: 28,
+          height: 28,
+          decoration: BoxDecoration(
+            color: fg.withAlpha(30),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Icon(icon, size: 14, color: fg),
+        ),
       ),
     );
   }

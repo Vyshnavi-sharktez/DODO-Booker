@@ -310,13 +310,10 @@ class _CustomerWarrantyCardItem extends StatelessWidget {
         child: InkWell(
           borderRadius: BorderRadius.circular(14),
           onTap: () {
-            Navigator.of(context).push(
-              MaterialPageRoute(
-                builder: (_) => WarrantyDetailsScreen(
-                  booking: booking,
-                  warranty: warranty,
-                ),
-              ),
+            WarrantyDetailsScreen.showAsModal(
+              context,
+              booking: booking,
+              warranty: warranty,
             );
           },
           child: Padding(

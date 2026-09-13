@@ -156,21 +156,66 @@ class ServicesRemoteDatasource {
     return _client.storage.from('vendor-requests').getPublicUrl(path);
   }
 
-  Future<void> submitServiceRequest({
+  Future<String> submitServiceRequest({
     required String vendorId,
     required String serviceName,
     String? description,
     double? price,
     String? imageUrl,
+    bool warrantyEnabled = false,
+    int? warrantyDays,
+    String? warrantyCovers,
+    String? warrantyExclusions,
+    List<String> includedItems = const [],
+    List<String> excludedItems = const [],
+    List<Map<String, String>> beforeAfterPairs = const [],
   }) async {
-    await _client.from('vendor_service_requests').insert({
+    final row = await _client.from('vendor_service_requests').insert({
       'vendor_id': vendorId,
       'service_name': serviceName,
       if (description != null && description.isNotEmpty)
         'description': description,
       'price': price,
       'image_url': imageUrl,
-    });
+      'warranty_enabled': warrantyEnabled,
+      if (warrantyEnabled && warrantyDays != null) 'warranty_days': warrantyDays,
+      if (warrantyEnabled && warrantyCovers != null && warrantyCovers.isNotEmpty)
+        'warranty_covers': warrantyCovers,
+      if (warrantyEnabled &&
+          warrantyExclusions != null &&
+          warrantyExclusions.isNotEmpty)
+        'warranty_exclusions': warrantyExclusions,
+      if (includedItems.isNotEmpty) 'included_items': includedItems,
+      if (excludedItems.isNotEmpty) 'excluded_items': excludedItems,
+      if (beforeAfterPairs.isNotEmpty) 'before_after_pairs': beforeAfterPairs,
+    }).select('id').single();
+    return row['id'] as String;
+  }
+
+  Future<void> insertServiceAttributes(
+    String requestId,
+    List<Map<String, dynamic>> attrs,
+  ) async {
+    for (final attr in attrs) {
+      final attrRow = await _client
+          .from('service_attributes')
+          .insert({
+            'custom_service_id': requestId,
+            'name': attr['name'] as String,
+            'field_type': 'dropdown',
+            'is_required': false,
+          })
+          .select('id')
+          .single();
+      await _client.from('service_attribute_options').insert({
+        'attribute_id': attrRow['id'],
+        'option_name': attr['name'] as String,
+        'price_adjustment': attr['price'] as double,
+        'sort_order': 0,
+        'discount_type': attr['discount_type'] as String,
+        'discount_value': attr['discount_value'] as double,
+      });
+    }
   }
 
   Future<void> toggleCustomServiceActive(String requestId, {required bool isActive}) async {

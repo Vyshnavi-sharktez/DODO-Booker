@@ -48,13 +48,17 @@ class _CodCashConfirmationDialogState
 
   @override
   Widget build(BuildContext context) {
-    return Dialog(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      child: Padding(
+    return Center(
+      child: Material(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        clipBehavior: Clip.antiAlias,
+        child: SizedBox(
+        width: 380,
+        child: Padding(
         padding: const EdgeInsets.all(20.0),
         child: Column(
           mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
               children: [
@@ -154,6 +158,7 @@ class _CodCashConfirmationDialogState
                         borderRadius: BorderRadius.circular(10),
                       ),
                       child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
                         children: [
                           Icon(
                             Icons.check_circle_rounded,
@@ -202,6 +207,7 @@ class _CodCashConfirmationDialogState
                         borderRadius: BorderRadius.circular(10),
                       ),
                       child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
                         children: [
                           Icon(
                             Icons.cancel_rounded,
@@ -266,6 +272,8 @@ class _CodCashConfirmationDialogState
                   child: OutlinedButton(
                     onPressed: () => Navigator.of(context).pop(null),
                     style: OutlinedButton.styleFrom(
+                      minimumSize: const Size(double.infinity, 48),
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                       padding: const EdgeInsets.symmetric(vertical: 12),
                       shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(8)),
@@ -279,6 +287,8 @@ class _CodCashConfirmationDialogState
                     onPressed: _handleSubmit,
                     style: FilledButton.styleFrom(
                       backgroundColor: AppColors.primary,
+                      minimumSize: const Size(double.infinity, 48),
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                       padding: const EdgeInsets.symmetric(vertical: 12),
                       shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(8)),
@@ -289,6 +299,8 @@ class _CodCashConfirmationDialogState
               ],
             ),
           ],
+        ),
+        ),
         ),
       ),
     );

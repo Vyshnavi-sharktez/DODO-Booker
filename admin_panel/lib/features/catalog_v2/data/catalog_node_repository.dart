@@ -36,6 +36,10 @@ class CatalogNodeRepository {
     double? minimumOrderAmount,
     String discountType = 'percentage',
     double discountValue = 0,
+    bool warrantyEnabled = false,
+    int? warrantyDays,
+    String? warrantyCovers,
+    String? warrantyExclusions,
   }) async {
     final data = await _supabase
         .from('catalog_nodes')
@@ -58,6 +62,10 @@ class CatalogNodeRepository {
             'minimum_order_amount': minimumOrderAmount,
           'discount_type': discountType,
           'discount_value': discountValue,
+          'warranty_enabled': isBookable ? warrantyEnabled : false,
+          'warranty_days': (isBookable && warrantyEnabled) ? warrantyDays : null,
+          'warranty_covers': (isBookable && warrantyEnabled) ? warrantyCovers : null,
+          'warranty_exclusions': (isBookable && warrantyEnabled) ? warrantyExclusions : null,
         })
         .select()
         .single();
@@ -94,6 +102,10 @@ class CatalogNodeRepository {
     double? minimumOrderAmount,
     String discountType = 'percentage',
     double discountValue = 0,
+    bool warrantyEnabled = false,
+    int? warrantyDays,
+    String? warrantyCovers,
+    String? warrantyExclusions,
   }) async {
     await _supabase
         .from('catalog_nodes')
@@ -114,6 +126,10 @@ class CatalogNodeRepository {
           'minimum_order_amount': minimumOrderAmount,
           'discount_type': discountType,
           'discount_value': discountValue,
+          'warranty_enabled': isBookable ? warrantyEnabled : false,
+          'warranty_days': (isBookable && warrantyEnabled) ? warrantyDays : null,
+          'warranty_covers': (isBookable && warrantyEnabled) ? warrantyCovers : null,
+          'warranty_exclusions': (isBookable && warrantyEnabled) ? warrantyExclusions : null,
         })
         .eq('id', id);
     return _fetchById(id);

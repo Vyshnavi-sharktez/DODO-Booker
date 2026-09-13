@@ -127,6 +127,9 @@ class BookingCard extends StatelessWidget {
                       if (booking.hasReview) ...[
                         const SizedBox(height: 4),
                         const _ReviewedChip(),
+                      ] else if (booking.canReview) ...[
+                        const SizedBox(height: 4),
+                        const _RateNowChip(),
                       ],
                     ],
                   ),
@@ -303,6 +306,40 @@ class _ReviewedChip extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _RateNowChip extends StatelessWidget {
+  const _RateNowChip();
+
+  @override
+  Widget build(BuildContext context) {
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+        decoration: BoxDecoration(
+          color: AppColors.primary.withAlpha(20),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: AppColors.primary.withAlpha(80)),
+        ),
+        child: const Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.star_border_rounded, size: 11, color: AppColors.primary),
+            SizedBox(width: 3),
+            Text(
+              'Rate Now',
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+                color: AppColors.primary,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

@@ -44,17 +44,6 @@ class AmcPlanRecord {
   bool get isActive => status == 'active';
   bool get isScheduled => scheduledVisitDate != null;
 
-  static DateTime? _computeExpiry(DateTime createdAt, String? packageDuration) {
-    final days = switch (packageDuration) {
-      'monthly'     => 30,
-      'quarterly'   => 91,
-      'half_yearly' => 182,
-      'yearly'      => 365,
-      _             => null,
-    };
-    return days != null ? createdAt.add(Duration(days: days)) : null;
-  }
-
   factory AmcPlanRecord.fromRow(
     Map<String, dynamic> row, {
     Map<String, Map<String, dynamic>>? nextVisitByContract,
@@ -63,10 +52,9 @@ class AmcPlanRecord {
   }) {
     final id = row['id'] as String;
     final createdAt = DateTime.parse(row['created_at'] as String);
-    // Compute expiry from local midnight so the resulting date matches the
-    // calendar day the customer purchased, regardless of UTC offset.
-    final expiryDate =
-        _computeExpiry(createdAt.toLocal(), row['package_duration'] as String?);
+    final expiryDate = row['expires_at'] != null
+        ? DateTime.tryParse(row['expires_at'] as String)
+        : null;
 
     final nextVisit = nextVisitByContract?[id];
     final serviceDate = nextVisit?['service_date'] != null
@@ -121,13 +109,20 @@ final allAmcContractsProvider =
     final customerId = custRows.first['id'] as String;
     debugPrint('[AMC][Plans] Step 2: customerId=$customerId');
 
+    debugPrint('[AMC][Plans] Step 3a: sweeping overdue AMC contracts');
+    try {
+      await client.rpc('expire_overdue_amc_contracts');
+    } catch (e) {
+      debugPrint('[AMC][Plans] Step 3a: sweep error (non-fatal): $e');
+    }
+
     debugPrint('[AMC][Plans] Step 3: querying amc_contracts');
     final contracts = await client
         .from('amc_contracts')
         .select(
           'id, service_id, service_name, plan_name, status, '
           'visits_completed, num_visits, total_visits, created_at, '
-          'package_duration, quantity',
+          'expires_at, package_duration, quantity',
         )
         .eq('customer_id', customerId)
         .order('created_at', ascending: false);

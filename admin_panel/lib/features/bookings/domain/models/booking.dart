@@ -189,16 +189,17 @@ class Booking {
       return ('DODO Assigned', const Color(0xFF6B46C1), const Color(0xFFF3E8FF));
     }
     return switch (status) {
-      'pending'     => ('Pending', const Color(0xFFDD6B20), const Color(0xFFFEEBC8)),
-      'assigned'    => ('Assigned', const Color(0xFF3182CE), const Color(0xFFEBF8FF)),
-      'accepted'    => ('Assigned', const Color(0xFF3182CE), const Color(0xFFEBF8FF)),
-      'on_the_way'  => ('On The Way', const Color(0xFF4A6FA5), const Color(0xFFEBF4FF)),
-      'arrived'     => ('Arrived', const Color(0xFF6B46C1), const Color(0xFFF3E8FF)),
-      'in_progress' => ('In Progress', const Color(0xFF805AD5), const Color(0xFFFAF5FF)),
-      'completed'   => ('Completed', const Color(0xFF38A169), const Color(0xFFF0FFF4)),
-      'rejected'    => ('Rejected', const Color(0xFFC05621), const Color(0xFFFEEBC8)),
-      'cancelled'   => ('Cancelled', const Color(0xFFE53E3E), const Color(0xFFFFF5F5)),
-      _             => (status, const Color(0xFF718096), const Color(0xFFEDF2F7)),
+      'pending'                    => ('Pending', const Color(0xFFDD6B20), const Color(0xFFFEEBC8)),
+      'warranty_pending_approval'  => ('Pending Approval', const Color(0xFF744210), const Color(0xFFFEFCBF)),
+      'assigned'                   => ('Assigned', const Color(0xFF3182CE), const Color(0xFFEBF8FF)),
+      'accepted'                   => ('Assigned', const Color(0xFF3182CE), const Color(0xFFEBF8FF)),
+      'on_the_way'                 => ('On The Way', const Color(0xFF4A6FA5), const Color(0xFFEBF4FF)),
+      'arrived'                    => ('Arrived', const Color(0xFF6B46C1), const Color(0xFFF3E8FF)),
+      'in_progress'                => ('In Progress', const Color(0xFF805AD5), const Color(0xFFFAF5FF)),
+      'completed'                  => ('Completed', const Color(0xFF38A169), const Color(0xFFF0FFF4)),
+      'rejected'                   => ('Rejected', const Color(0xFFC05621), const Color(0xFFFEEBC8)),
+      'cancelled'                  => ('Cancelled', const Color(0xFFE53E3E), const Color(0xFFFFF5F5)),
+      _                            => (status, const Color(0xFF718096), const Color(0xFFEDF2F7)),
     };
   }
 

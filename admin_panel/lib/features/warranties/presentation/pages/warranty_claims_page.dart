@@ -77,24 +77,26 @@ class _WarrantyClaimsPageState extends ConsumerState<WarrantyClaimsPage> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Service Warranty Claims & Operations',
-                      style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                            fontWeight: FontWeight.bold,
-                            color: AppColors.textPrimary,
-                          ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      'Monitor warranty lifecycles, review evidence photos, track vendor rework progress, and manage resolutions.',
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                            color: AppColors.textSecondary,
-                          ),
-                    ),
-                  ],
+                Flexible(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Service Warranty Claims & Operations',
+                        style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                              fontWeight: FontWeight.bold,
+                              color: AppColors.textPrimary,
+                            ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Monitor warranty lifecycles, review evidence photos, track vendor rework progress, and manage resolutions.',
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                              color: AppColors.textSecondary,
+                            ),
+                      ),
+                    ],
+                  ),
                 ),
                 Row(
                   children: [
@@ -103,6 +105,8 @@ class _WarrantyClaimsPageState extends ConsumerState<WarrantyClaimsPage> {
                       style: ElevatedButton.styleFrom(
                         backgroundColor: AppColors.primary,
                         foregroundColor: Colors.white,
+                        minimumSize: const Size(0, 36),
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                       ),
                       icon: const Icon(Icons.analytics_rounded, size: 16),
                       label: const Text('Warranty Analytics'),
@@ -259,7 +263,6 @@ class _WarrantyClaimsPageState extends ConsumerState<WarrantyClaimsPage> {
                             children: [
                               // Search Input
                               Expanded(
-                                flex: 3,
                                 child: TextField(
                                   decoration: InputDecoration(
                                     hintText: 'Search customer, booking #, rework #, vendor, certificate...',
@@ -274,13 +277,13 @@ class _WarrantyClaimsPageState extends ConsumerState<WarrantyClaimsPage> {
                                   onChanged: (val) => setState(() => _searchQuery = val.trim()),
                                 ),
                               ),
-                              const SizedBox(width: 12),
+                              const SizedBox(width: 8),
 
                               // Vendor Dropdown Filter
                               SizedBox(
-                                width: 180,
+                                width: 160,
                                 child: DropdownButtonFormField<String?>(
-                                  value: _selectedVendorFilter,
+                                  initialValue: _selectedVendorFilter,
                                   decoration: InputDecoration(
                                     isDense: true,
                                     contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
@@ -294,7 +297,7 @@ class _WarrantyClaimsPageState extends ConsumerState<WarrantyClaimsPage> {
                                   onChanged: (val) => setState(() => _selectedVendorFilter = val),
                                 ),
                               ),
-                              const SizedBox(width: 12),
+                              const SizedBox(width: 8),
 
                               // Date Range Filter Button
                               OutlinedButton.icon(
@@ -306,7 +309,9 @@ class _WarrantyClaimsPageState extends ConsumerState<WarrantyClaimsPage> {
                                       : 'Filter Date',
                                 ),
                                 style: OutlinedButton.styleFrom(
-                                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                                  minimumSize: Size.zero,
+                                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                                 ),
                               ),
@@ -322,6 +327,11 @@ class _WarrantyClaimsPageState extends ConsumerState<WarrantyClaimsPage> {
                                   }),
                                   icon: const Icon(Icons.filter_alt_off_rounded, size: 16),
                                   label: const Text('Clear'),
+                                  style: TextButton.styleFrom(
+                                    minimumSize: Size.zero,
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                  ),
                                 ),
                               ],
                             ],

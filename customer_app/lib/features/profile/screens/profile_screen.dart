@@ -15,7 +15,9 @@ import '../../amc/screens/amc_plans_page.dart';
 import '../../bookings/utils/my_bookings_launcher.dart';
 import '../../warranties/screens/my_warranties_screen.dart';
 class ProfileScreen extends ConsumerWidget {
-  const ProfileScreen({super.key});
+  const ProfileScreen({super.key, this.inModal = false});
+
+  final bool inModal;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -26,32 +28,38 @@ class ProfileScreen extends ConsumerWidget {
     });
 
     if (!isAuthenticated) {
+      final unauthBody = _UnauthenticatedProfile(
+        onSignIn: () async => requireAuth(context, ref),
+      );
+      if (inModal) return unauthBody;
       return Scaffold(
         backgroundColor: AppColors.surfaceVariant,
         appBar: AppBar(title: const Text('My Account')),
-        body: _UnauthenticatedProfile(
-          onSignIn: () async => requireAuth(context, ref),
-        ),
+        body: unauthBody,
       );
     }
 
     final profileAsync = ref.watch(profileProvider);
 
+    final body = Align(
+      alignment: Alignment.topCenter,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 680),
+        child: profileAsync.when(
+          loading: () => const _ProfileSkeleton(),
+          error: (e, _) =>
+              _ProfileError(onRetry: () => ref.invalidate(profileProvider)),
+          data: (profile) => _ProfileBody(profile: profile),
+        ),
+      ),
+    );
+
+    if (inModal) return body;
+
     return Scaffold(
       backgroundColor: AppColors.surfaceVariant,
       appBar: AppBar(title: const Text('My Account')),
-      body: Align(
-        alignment: Alignment.topCenter,
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 680),
-          child: profileAsync.when(
-            loading: () => const _ProfileSkeleton(),
-            error: (e, _) =>
-                _ProfileError(onRetry: () => ref.invalidate(profileProvider)),
-            data: (profile) => _ProfileBody(profile: profile),
-          ),
-        ),
-      ),
+      body: body,
     );
   }
 }

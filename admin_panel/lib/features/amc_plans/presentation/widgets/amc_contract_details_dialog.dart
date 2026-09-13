@@ -44,13 +44,6 @@ DateTime? _adminPlannedDate(
   };
 }
 
-// Planned date of the final visit = end of contract service schedule.
-DateTime? _contractEndDate(_AmcContract c) {
-  final total = c.effectiveTotal;
-  if (total <= 0) return null;
-  return _adminPlannedDate(c.createdAt, c.serviceInterval, total);
-}
-
 String _intervalLabel(String? s) => switch (s) {
       'weekly'      => 'Weekly',
       'bi_weekly'   => 'Bi-Weekly',
@@ -124,6 +117,7 @@ class _AmcContract {
   final double? discountAmount;
   final double? finalPrice;
   final DateTime createdAt;
+  final DateTime? expiresAt;
   final String? serviceInterval;
   final String? packageDuration;
   final String? cancellationReason;
@@ -150,6 +144,7 @@ class _AmcContract {
     this.discountAmount,
     this.finalPrice,
     required this.createdAt,
+    this.expiresAt,
     this.serviceInterval,
     this.packageDuration,
     this.cancellationReason,
@@ -188,6 +183,9 @@ class _AmcContract {
         discountAmount: (m['discount_amount'] as num?)?.toDouble(),
         finalPrice: (m['final_price'] as num?)?.toDouble(),
         createdAt: DateTime.parse(m['created_at'] as String),
+        expiresAt: m['expires_at'] != null
+            ? DateTime.tryParse(m['expires_at'] as String)
+            : null,
         serviceInterval: m['service_interval'] as String?,
         packageDuration: m['package_duration'] as String?,
         cancellationReason: m['cancellation_reason'] as String?,
@@ -212,7 +210,7 @@ final _amcContractDetailProvider = FutureProvider.autoDispose
       .from('amc_contracts')
       .select(
         'id, customer_id, service_name, plan_name, recurrence_interval, price_per_visit, '
-        'status, total_visits, num_visits, created_at, '
+        'status, total_visits, num_visits, created_at, expires_at, '
         'service_interval, package_duration, '
         'original_total, discount_type, discount_value, discount_amount, final_price, '
         'cancellation_reason, cancellation_remarks, cancellation_requested_at, '
@@ -387,6 +385,50 @@ class _AmcContractDetailsDialogState
     }
   }
 
+  Future<void> _setExpiryDate(
+      BuildContext context, _AmcContract contract) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final now = DateTime.now();
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: now.add(const Duration(days: 365)),
+      firstDate: now,
+      lastDate: now.add(const Duration(days: 365 * 10)),
+      helpText: 'Set Contract Expiry Date',
+    );
+    if (picked == null || !mounted) return;
+    final expiresAt =
+        DateTime.utc(picked.year, picked.month, picked.day, 23, 59, 59);
+    try {
+      await Supabase.instance.client.rpc(
+        'set_amc_contract_expires_at',
+        params: {
+          'p_contract_id': contract.id,
+          'p_expires_at': expiresAt.toIso8601String(),
+        },
+      );
+      ref.invalidate(_amcContractDetailProvider(widget.contractId));
+      if (mounted) {
+        messenger.showSnackBar(
+          SnackBar(
+            content:
+                Text('Expiry date set to ${_fmt(expiresAt.toLocal())}.'),
+            backgroundColor: AppColors.success,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text('Failed to set expiry date: $e'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+    }
+  }
+
   Future<void> _reject(BuildContext context, _AmcContract contract) async {
     final messenger = ScaffoldMessenger.of(context);
     final confirmed = await showDialog<bool>(
@@ -499,6 +541,10 @@ class _AmcContractDetailsDialogState
                     rejecting: _rejecting,
                     onApprove: () => _approve(context, contract),
                     onReject: () => _reject(context, contract),
+                    onSetExpiry: contract.expiresAt == null &&
+                            contract.status == 'active'
+                        ? () => _setExpiryDate(context, contract)
+                        : null,
                   );
                 },
               ),
@@ -588,6 +634,7 @@ class _DialogBody extends StatelessWidget {
   final bool rejecting;
   final VoidCallback onApprove;
   final VoidCallback onReject;
+  final VoidCallback? onSetExpiry;
 
   const _DialogBody({
     required this.contract,
@@ -596,6 +643,7 @@ class _DialogBody extends StatelessWidget {
     required this.rejecting,
     required this.onApprove,
     required this.onReject,
+    this.onSetExpiry,
   });
 
   @override
@@ -609,7 +657,7 @@ class _DialogBody extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _SummaryCard(contract: contract),
+          _SummaryCard(contract: contract, onSetExpiry: onSetExpiry),
           if (contract.isCancellationRequested) ...[
             const SizedBox(height: 16),
             _CancellationSection(
@@ -682,7 +730,8 @@ class _DialogBody extends StatelessWidget {
 
 class _SummaryCard extends StatelessWidget {
   final _AmcContract contract;
-  const _SummaryCard({required this.contract});
+  final VoidCallback? onSetExpiry;
+  const _SummaryCard({required this.contract, this.onSetExpiry});
 
   @override
   Widget build(BuildContext context) {
@@ -693,8 +742,10 @@ class _SummaryCard extends StatelessWidget {
     final progress = total > 0 ? completed / total : 0.0;
 
     final startDate = _fmt(contract.createdAt.toLocal());
-    final endDate = _contractEndDate(contract);
-    final endStr = endDate != null ? _fmt(endDate) : '—';
+    final expiresAt = contract.expiresAt;
+    final endStr = expiresAt != null ? _fmt(expiresAt.toLocal()) : '—';
+    final unknownExpiry =
+        expiresAt == null && contract.status == 'active';
 
     return Container(
       padding: const EdgeInsets.all(14),
@@ -757,7 +808,48 @@ class _SummaryCard extends StatelessWidget {
             children: [
               Expanded(
                   child: _MetaItem(label: 'Start Date', value: startDate)),
-              Expanded(child: _MetaItem(label: 'End Date', value: endStr)),
+              Expanded(
+                child: unknownExpiry
+                    ? Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Expires',
+                            style: TextStyle(
+                                fontSize: 10,
+                                color: AppColors.textSecondary,
+                                fontWeight: FontWeight.w500),
+                          ),
+                          const SizedBox(height: 1),
+                          Row(
+                            children: [
+                              const Text(
+                                'Unknown',
+                                style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
+                                    color: AppColors.warning),
+                              ),
+                              if (onSetExpiry != null) ...[
+                                const SizedBox(width: 6),
+                                GestureDetector(
+                                  onTap: onSetExpiry,
+                                  child: const Text(
+                                    'Set date',
+                                    style: TextStyle(
+                                        fontSize: 11,
+                                        color: Color(0xFF3182CE),
+                                        decoration:
+                                            TextDecoration.underline),
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ],
+                      )
+                    : _MetaItem(label: 'Expires', value: endStr),
+              ),
             ],
           ),
           const SizedBox(height: 6),

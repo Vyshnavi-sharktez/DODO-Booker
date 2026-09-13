@@ -30,6 +30,8 @@ class ServicesNotifier extends StateNotifier<AsyncValue<List<Service>>> {
     required int estimatedDuration,
     String? imageUrl,
     required bool isActive,
+    required bool warrantyEnabled,
+    int? warrantyDays,
   }) async {
     await _repo.createService(
       categoryId: categoryId,
@@ -40,6 +42,8 @@ class ServicesNotifier extends StateNotifier<AsyncValue<List<Service>>> {
       estimatedDuration: estimatedDuration,
       imageUrl: imageUrl,
       isActive: isActive,
+      warrantyEnabled: warrantyEnabled,
+      warrantyDays: warrantyDays,
     );
     await _load();
   }
@@ -54,6 +58,8 @@ class ServicesNotifier extends StateNotifier<AsyncValue<List<Service>>> {
     required int estimatedDuration,
     String? imageUrl,
     required bool isActive,
+    required bool warrantyEnabled,
+    int? warrantyDays,
   }) async {
     await _repo.updateService(
       id,
@@ -65,6 +71,8 @@ class ServicesNotifier extends StateNotifier<AsyncValue<List<Service>>> {
       estimatedDuration: estimatedDuration,
       imageUrl: imageUrl,
       isActive: isActive,
+      warrantyEnabled: warrantyEnabled,
+      warrantyDays: warrantyDays,
     );
     await _load();
   }

@@ -66,69 +66,72 @@ class _BookingDetailsScreenState extends ConsumerState<BookingDetailsScreen> {
     return LayoutBuilder(
       builder: (context, constraints) {
         final isWide = constraints.maxWidth > 700;
+        final scrollBody = SingleChildScrollView(
+          padding: EdgeInsets.symmetric(
+            horizontal: isWide ? (constraints.maxWidth - 600) / 2 : 0,
+          ),
+          child: Column(
+            children: [
+              _StatusBanner(booking: booking),
+              if (booking.isCompleted) WarrantyCard(booking: booking),
+              if (booking.completionOtp != null &&
+                  _otpVisibleForStatus(booking.status))
+                _OtpDisplayCard(otp: booking.completionOtp!),
+              if (booking.isAmc) _AmcContractCard(booking: booking),
+              _BookingInfoCard(booking: booking),
+              _VendorCard(booking: booking),
+              _ServiceInfoCard(booking: booking),
+              _AddonsCard(booking: booking),
+              _ServicePhotosCard(bookingId: booking.id),
+              _AddressCard(booking: booking),
+              _TimelineCard(booking: booking),
+              _PaymentCard(booking: booking),
+              const SizedBox(height: 16),
+              _ActionButtons(
+                booking: booking,
+                isLoading: _isCancelling,
+                hasReview: reviewAsync?.valueOrNull != null,
+                isDownloadingInvoice: _isDownloadingInvoice,
+                onCancel: () => _confirmCancel(booking),
+                onRebook: () => _rebook(booking),
+                onRate: () => _openReviewModal(booking),
+                onDownloadInvoice: () => _downloadInvoice(booking),
+              ),
+              const SizedBox(height: 32),
+            ],
+          ),
+        );
+        // In modal mode PageSheet provides the white card, header, and close
+        // button — returning the scroll content directly avoids a grey Scaffold
+        // background layer that would otherwise hide the card's own surface.
+        if (widget.inModal) return scrollBody;
         return Scaffold(
           backgroundColor: AppColors.background,
-          appBar: widget.inModal
-              ? null
-              : AppBar(
-                  title: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text('Booking Details'),
-                      Text(
-                        booking.id,
-                        style: const TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w400,
-                          letterSpacing: 0.5,
-                        ),
-                      ),
-                    ],
-                  ),
-                  actions: [
-                    if (widget.onClose != null)
-                      IconButton(
-                        icon: const Icon(Icons.close_rounded),
-                        tooltip: 'Close',
-                        onPressed: widget.onClose,
-                      ),
-                  ],
-                ),
-          body: SingleChildScrollView(
-            padding: EdgeInsets.symmetric(
-              horizontal: isWide ? (constraints.maxWidth - 600) / 2 : 0,
-            ),
-            child: Column(
+          appBar: AppBar(
+            title: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _StatusBanner(booking: booking),
-                if (booking.isCompleted) WarrantyCard(booking: booking),
-                if (booking.completionOtp != null &&
-                    _otpVisibleForStatus(booking.status))
-                  _OtpDisplayCard(otp: booking.completionOtp!),
-                if (booking.isAmc) _AmcContractCard(booking: booking),
-                _BookingInfoCard(booking: booking),
-                _VendorCard(booking: booking),
-                _ServiceInfoCard(booking: booking),
-                _AddonsCard(booking: booking),
-                _ServicePhotosCard(bookingId: booking.id),
-                _AddressCard(booking: booking),
-                _TimelineCard(booking: booking),
-                _PaymentCard(booking: booking),
-                const SizedBox(height: 16),
-                _ActionButtons(
-                  booking: booking,
-                  isLoading: _isCancelling,
-                  hasReview: reviewAsync?.valueOrNull != null,
-                  isDownloadingInvoice: _isDownloadingInvoice,
-                  onCancel: () => _confirmCancel(booking),
-                  onRebook: () => _rebook(booking),
-                  onRate: () => _openReviewModal(booking),
-                  onDownloadInvoice: () => _downloadInvoice(booking),
+                const Text('Booking Details'),
+                Text(
+                  booking.id,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w400,
+                    letterSpacing: 0.5,
+                  ),
                 ),
-                const SizedBox(height: 32),
               ],
             ),
+            actions: [
+              if (widget.onClose != null)
+                IconButton(
+                  icon: const Icon(Icons.close_rounded),
+                  tooltip: 'Close',
+                  onPressed: widget.onClose,
+                ),
+            ],
           ),
+          body: scrollBody,
         );
       },
     );

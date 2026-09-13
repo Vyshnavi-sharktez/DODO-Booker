@@ -23,6 +23,7 @@ import '../../loyalty/utils/loyalty_utils.dart';
 import '../../address/services/address_providers.dart';
 import '../../amc/providers/amc_provider.dart';
 import '../models/catalog_node_model.dart';
+import '../widgets/warranty_badge.dart';
 import '../providers/catalog_providers.dart';
 import '../utils/catalog_launcher.dart';
 import '../widgets/catalog_node_modal.dart';
@@ -93,7 +94,16 @@ class _CatalogNodeScreenState extends ConsumerState<CatalogNodeScreen> {
   AmcPlanModel? _selectedAmcPlan;
   // Tracks the explicitly chosen attribute variant (null = auto-select first on load).
   String? _selectedAttrId;
+  // Per-variant quantity controlled by the chip stepper.
+  final Map<String, int> _quantities = {};
   CatalogNodeModel get node => widget.node;
+
+  int _qtyFor(String attrId) => _quantities[attrId] ?? 1;
+
+  void _setQty(String attrId, int qty) {
+    if (qty < 1) return;
+    setState(() => _quantities[attrId] = qty);
+  }
 
   void _onOptionSelected(
     String attrId,
@@ -194,6 +204,10 @@ class _CatalogNodeScreenState extends ConsumerState<CatalogNodeScreen> {
             .reduce((a, b) => a < b ? a : b)
         : null;
 
+    // Quantity for the currently-selected variant chip (defaults to 1).
+    final effectiveQty =
+        effectiveAttrId != null ? _qtyFor(effectiveAttrId) : 1;
+
     final displayPrice = _selectedAmcPlan != null
         ? _selectedAmcPlan!.finalPrice
         : selectedAttrPrice != null
@@ -236,6 +250,9 @@ class _CatalogNodeScreenState extends ConsumerState<CatalogNodeScreen> {
         selectedAttrOriginalPrice: selectedAttrOriginalPrice,
         startsAtPrice: startsAtPrice,
         inModal: widget.inModal,
+        quantities: _quantities,
+        onQtyChanged: _setQty,
+        effectiveAttrQty: effectiveQty,
       );
     }
 
@@ -355,6 +372,8 @@ class _CatalogNodeScreenState extends ConsumerState<CatalogNodeScreen> {
                             selectedAttrId: effectiveAttrId,
                             onAttrSelected: (id) =>
                                 setState(() => _selectedAttrId = id),
+                            quantities: _quantities,
+                            onQtyChanged: _setQty,
                           ),
                         if (node.hasChildren)
                           (isUnavailable || isEffectivelyHidden)
@@ -523,6 +542,7 @@ class _CatalogNodeScreenState extends ConsumerState<CatalogNodeScreen> {
                           amcQuantity: 1,
                           attrOptionPrice: selectedAttrPrice,
                           attrOptionOriginalPrice: selectedAttrOriginalPrice,
+                          attrQty: effectiveQty,
                         ),
               ],
             ),
@@ -619,6 +639,8 @@ class _CatalogNodeScreenState extends ConsumerState<CatalogNodeScreen> {
                     attrs: attrEntries,
                     selectedAttrId: effectiveAttrId,
                     onAttrSelected: (id) => setState(() => _selectedAttrId = id),
+                    quantities: _quantities,
+                    onQtyChanged: _setQty,
                   ),
 
                 // ── Children (category navigation) ─────────────────────────
@@ -780,6 +802,7 @@ class _CatalogNodeScreenState extends ConsumerState<CatalogNodeScreen> {
                     amcQuantity: 1,
                     attrOptionPrice: selectedAttrPrice,
                     attrOptionOriginalPrice: selectedAttrOriginalPrice,
+                    attrQty: effectiveQty,
                   )
           : null,
     );
@@ -1151,6 +1174,10 @@ class _ServiceContentBlock extends StatelessWidget {
                 ],
               ],
             ),
+          if (node.warrantyEnabled && node.warrantyDays != null) ...[
+            const SizedBox(height: 10),
+            WarrantyBadge(warrantyDays: node.warrantyDays!, warrantyCovers: node.warrantyCovers, warrantyExclusions: node.warrantyExclusions),
+          ],
           const SizedBox(height: 4),
         ],
       ),
@@ -1956,6 +1983,10 @@ class _NodeInfoHeader extends StatelessWidget {
                 ],
               ],
             ),
+          if (node.warrantyEnabled && node.warrantyDays != null) ...[
+            const SizedBox(height: 10),
+            WarrantyBadge(warrantyDays: node.warrantyDays!, warrantyCovers: node.warrantyCovers, warrantyExclusions: node.warrantyExclusions),
+          ],
         ],
       ),
     );
@@ -2306,6 +2337,7 @@ class _NodeBookingBar extends ConsumerWidget {
     this.amcQuantity = 1,
     this.attrOptionPrice,
     this.attrOptionOriginalPrice,
+    this.attrQty = 1,
   });
 
   final CatalogNodeModel node;
@@ -2322,6 +2354,8 @@ class _NodeBookingBar extends ConsumerWidget {
   // Non-null when the service has attribute variants and one is selected.
   final double? attrOptionPrice;
   final double? attrOptionOriginalPrice;
+  // Quantity from the chip stepper for the selected variant (1 when no variants).
+  final int attrQty;
 
   void _addToCart(WidgetRef ref) {
     if (attrOptionPrice != null) {
@@ -2336,6 +2370,7 @@ class _NodeBookingBar extends ConsumerWidget {
             parentNodeId: parentNodeId,
             amcPlan: amcPlan,
             amcQuantity: amcQuantity,
+            quantity: attrQty,
           );
     } else if (amcPlan != null) {
       ref.read(cartProvider.notifier).addToCart(
@@ -2421,7 +2456,9 @@ class _NodeBookingBar extends ConsumerWidget {
                 textBaseline: TextBaseline.alphabetic,
                 children: [
                   Text(
-                    '₹${displayPrice.toInt()}',
+                    attrOptionPrice != null
+                        ? '₹${(displayPrice * attrQty).toInt()}'
+                        : '₹${displayPrice.toInt()}',
                     style: GoogleFonts.poppins(
                         fontSize: 17,
                         fontWeight: FontWeight.w800,
@@ -2509,6 +2546,9 @@ class _WebScaffold extends ConsumerWidget {
     this.selectedAttrOriginalPrice,
     this.startsAtPrice,
     this.inModal = false,
+    this.quantities = const {},
+    this.onQtyChanged,
+    this.effectiveAttrQty = 1,
   });
 
   final CatalogNodeModel node;
@@ -2539,6 +2579,9 @@ class _WebScaffold extends ConsumerWidget {
   final double? selectedAttrOriginalPrice;
   final double? startsAtPrice;
   final bool inModal;
+  final Map<String, int> quantities;
+  final void Function(String, int)? onQtyChanged;
+  final int effectiveAttrQty;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -2594,6 +2637,7 @@ class _WebScaffold extends ConsumerWidget {
               parentNodeId: parentNodeId,
               amcPlan: selectedAmcPlan,
               amcQuantity: 1,
+              quantity: effectiveAttrQty,
             );
       } else if (selectedAmcPlan != null) {
         ref.read(cartProvider.notifier).addToCart(
@@ -2622,14 +2666,6 @@ class _WebScaffold extends ConsumerWidget {
     final cardDecoration = BoxDecoration(
       color: Colors.white,
       borderRadius: BorderRadius.circular(20),
-      boxShadow: [
-        BoxShadow(
-          color: const Color(0xFF1A1714).withAlpha(90),
-          blurRadius: 70,
-          spreadRadius: -20,
-          offset: const Offset(0, 30),
-        ),
-      ],
     );
 
     final header = _WebHeader(
@@ -2650,6 +2686,8 @@ class _WebScaffold extends ConsumerWidget {
           selectedAttrId: effectiveAttrId,
           onAttrSelected: onAttrSelected ?? (_) {},
           horizontalPadding: 28,
+          quantities: quantities,
+          onQtyChanged: onQtyChanged ?? (_, __) {},
         ),
 
       if (node.isLeafBookable && addOns.isNotEmpty)
@@ -2828,7 +2866,9 @@ class _WebScaffold extends ConsumerWidget {
                       style: const TextStyle(fontSize: 11, color: _kMuted2),
                     ),
                     Text(
-                      '₹${(displayPrice * cartQty).toInt()}',
+                      selectedAttrPrice != null
+                          ? '₹${(displayPrice * effectiveAttrQty).toInt()}'
+                          : '₹${(displayPrice * cartQty).toInt()}',
                       style: GoogleFonts.poppins(
                           fontSize: 20,
                           fontWeight: FontWeight.w800,
@@ -2838,7 +2878,8 @@ class _WebScaffold extends ConsumerWidget {
                   ],
                 ),
                 const Spacer(),
-                if (inCart) ...[
+                // When variants present, chip stepper handles qty — hide web stepper.
+                if (inCart && selectedAttrPrice == null) ...[
                   _WebQtyStepper(
                     quantity: cartQty,
                     onDecrement: () => ref
@@ -2849,6 +2890,8 @@ class _WebScaffold extends ConsumerWidget {
                         .updateQuantity(cartItem!.bookingId, cartQty + 1),
                   ),
                   const SizedBox(width: 12),
+                ],
+                if (inCart && selectedAttrPrice == null)
                   MouseRegion(
                     cursor: SystemMouseCursors.click,
                     child: GestureDetector(
@@ -2868,8 +2911,8 @@ class _WebScaffold extends ConsumerWidget {
                         ),
                       ),
                     ),
-                  ),
-                ] else
+                  )
+                else
                   MouseRegion(
                     cursor: SystemMouseCursors.click,
                     child: GestureDetector(
@@ -2881,7 +2924,9 @@ class _WebScaffold extends ConsumerWidget {
                             color: _kInk,
                             borderRadius: BorderRadius.circular(100)),
                         child: Text(
-                          '🛒  Add to Cart',
+                          inCart && selectedAttrPrice != null
+                              ? '🛒  Update Cart'
+                              : '🛒  Add to Cart',
                           style: GoogleFonts.poppins(
                               fontSize: 14,
                               fontWeight: FontWeight.w600,
@@ -2898,9 +2943,9 @@ class _WebScaffold extends ConsumerWidget {
         : null;
 
     if (inModal) {
-      return Scaffold(
-        backgroundColor: Colors.transparent,
-        body: SafeArea(
+      return Material(
+        type: MaterialType.transparency,
+        child: SafeArea(
           child: Center(
             child: ConstrainedBox(
               constraints: BoxConstraints(
@@ -2924,7 +2969,7 @@ class _WebScaffold extends ConsumerWidget {
                               ),
                             ),
                           ),
-                          if (footer != null) footer,
+                          ?footer,
                         ],
                       ),
                     ),
@@ -2975,7 +3020,7 @@ class _WebScaffold extends ConsumerWidget {
                     children: [
                       header,
                       ...middleSections,
-                      if (footer != null) footer,
+                      ?footer,
                     ],
                   ),
                 ),
@@ -3445,6 +3490,8 @@ class _AttributeVariantSection extends StatelessWidget {
     required this.selectedAttrId,
     required this.onAttrSelected,
     this.horizontalPadding = 20.0,
+    this.quantities = const {},
+    required this.onQtyChanged,
   });
 
   // Pre-filtered: only attrs with options.isNotEmpty
@@ -3452,6 +3499,8 @@ class _AttributeVariantSection extends StatelessWidget {
   final String? selectedAttrId;
   final void Function(String attrId) onAttrSelected;
   final double horizontalPadding;
+  final Map<String, int> quantities;
+  final void Function(String attrId, int qty) onQtyChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -3465,6 +3514,7 @@ class _AttributeVariantSection extends StatelessWidget {
           final attr = e.value;
           final opt = attr.options.first;
           final isSelected = selectedAttrId == attr.id;
+          final qty = quantities[attr.id] ?? 1;
           return Padding(
             padding: EdgeInsets.only(right: idx < attrs.length - 1 ? 8 : 0),
             child: _VariantChip(
@@ -3472,7 +3522,10 @@ class _AttributeVariantSection extends StatelessWidget {
               price: opt.finalPrice,
               originalPrice: opt.hasDiscount ? opt.priceAdjustment : null,
               isSelected: isSelected,
+              quantity: qty,
               onTap: () => onAttrSelected(attr.id),
+              onDecrement: () => onQtyChanged(attr.id, qty - 1),
+              onIncrement: () => onQtyChanged(attr.id, qty + 1),
             ),
           );
         }).toList(),
@@ -3487,14 +3540,20 @@ class _VariantChip extends StatelessWidget {
     required this.price,
     this.originalPrice,
     required this.isSelected,
+    required this.quantity,
     required this.onTap,
+    required this.onDecrement,
+    required this.onIncrement,
   });
 
   final String optionName;
   final double price;
   final double? originalPrice;
   final bool isSelected;
+  final int quantity;
   final VoidCallback onTap;
+  final VoidCallback onDecrement;
+  final VoidCallback onIncrement;
 
   @override
   Widget build(BuildContext context) {
@@ -3556,8 +3615,66 @@ class _VariantChip extends StatelessWidget {
                     ],
                   ],
                 ),
+              // Quantity stepper — only shown when this chip is selected
+              if (isSelected) ...[
+                const SizedBox(height: 10),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    _ChipStepBtn(
+                      icon: Icons.remove_rounded,
+                      onTap: onDecrement,
+                      fg: fg,
+                    ),
+                    Text(
+                      '$quantity',
+                      style: GoogleFonts.poppins(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                          color: fg,
+                          height: 1.2),
+                    ),
+                    _ChipStepBtn(
+                      icon: Icons.add_rounded,
+                      onTap: onIncrement,
+                      fg: fg,
+                    ),
+                  ],
+                ),
+              ],
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ChipStepBtn extends StatelessWidget {
+  const _ChipStepBtn({
+    required this.icon,
+    required this.onTap,
+    required this.fg,
+  });
+  final IconData icon;
+  final VoidCallback onTap;
+  final Color fg;
+
+  @override
+  Widget build(BuildContext context) {
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      child: GestureDetector(
+        onTap: onTap,
+        behavior: HitTestBehavior.opaque,
+        child: Container(
+          width: 28,
+          height: 28,
+          decoration: BoxDecoration(
+            color: fg.withAlpha(30),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Icon(icon, size: 14, color: fg),
         ),
       ),
     );
@@ -3747,6 +3864,10 @@ class _WebHeader extends StatelessWidget {
                             ],
                           ],
                         ),
+                      if (node.warrantyEnabled && node.warrantyDays != null) ...[
+                        const SizedBox(height: 10),
+                        WarrantyBadge(warrantyDays: node.warrantyDays!, warrantyCovers: node.warrantyCovers, warrantyExclusions: node.warrantyExclusions),
+                      ],
                     ],
                   ),
                 ),
@@ -3779,3 +3900,5 @@ class _WebHeader extends StatelessWidget {
     );
   }
 }
+
+// WarrantyBadge and WarrantyInfoDialog live in ../widgets/warranty_badge.dart

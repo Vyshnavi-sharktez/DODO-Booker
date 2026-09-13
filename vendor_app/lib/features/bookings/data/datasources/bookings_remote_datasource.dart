@@ -44,6 +44,7 @@ class BookingsRemoteDatasource {
         .from('bookings')
         .select(_select)
         .eq('vendor_id', vendorId)
+        .neq('status', 'warranty_pending_approval')
         .order('created_at', ascending: false);
 
     final list = List<Map<String, dynamic>>.from(data as List);

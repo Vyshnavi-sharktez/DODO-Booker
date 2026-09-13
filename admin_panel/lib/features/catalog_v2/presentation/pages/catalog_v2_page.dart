@@ -79,6 +79,10 @@ class _CatalogV2PageState extends ConsumerState<CatalogV2Page> {
           minimumOrderAmount,
           discountType = 'percentage',
           discountValue = 0,
+          warrantyEnabled = false,
+          warrantyDays,
+          warrantyCovers,
+          warrantyExclusions,
         }) async {
           await ref.read(catalogNodeNotifierProvider.notifier).createNode(
                 parentId: parent?.id,
@@ -96,6 +100,10 @@ class _CatalogV2PageState extends ConsumerState<CatalogV2Page> {
                 minimumOrderAmount: minimumOrderAmount,
                 discountType: discountType,
                 discountValue: discountValue,
+                warrantyEnabled: warrantyEnabled,
+                warrantyDays: warrantyDays,
+                warrantyCovers: warrantyCovers,
+                warrantyExclusions: warrantyExclusions,
               );
           if (mounted && parent != null) {
             setState(() => _expandedIds.add(parent.id));
@@ -134,6 +142,10 @@ class _CatalogV2PageState extends ConsumerState<CatalogV2Page> {
           minimumOrderAmount,
           discountType = 'percentage',
           discountValue = 0,
+          warrantyEnabled = false,
+          warrantyDays,
+          warrantyCovers,
+          warrantyExclusions,
         }) async {
           await ref.read(catalogNodeNotifierProvider.notifier).updateNode(
                 node.id,
@@ -151,6 +163,10 @@ class _CatalogV2PageState extends ConsumerState<CatalogV2Page> {
                 minimumOrderAmount: minimumOrderAmount,
                 discountType: discountType,
                 discountValue: discountValue,
+                warrantyEnabled: warrantyEnabled,
+                warrantyDays: warrantyDays,
+                warrantyCovers: warrantyCovers,
+                warrantyExclusions: warrantyExclusions,
               );
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(

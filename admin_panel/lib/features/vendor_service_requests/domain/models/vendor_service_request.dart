@@ -23,6 +23,9 @@ class VendorServiceRequest {
     this.warrantyDays,
     this.warrantyCovers,
     this.warrantyExclusions,
+    this.includedItems = const [],
+    this.excludedItems = const [],
+    this.beforeAfterPairs = const [],
   });
 
   final String id;
@@ -46,6 +49,9 @@ class VendorServiceRequest {
   final int? warrantyDays;
   final String? warrantyCovers;
   final String? warrantyExclusions;
+  final List<String> includedItems;
+  final List<String> excludedItems;
+  final List<Map<String, String>> beforeAfterPairs;
 
   bool get isPending => status == 'pending';
   bool get isNeedsCatalog => status == 'needs_catalog';
@@ -113,6 +119,12 @@ class VendorServiceRequest {
       warrantyDays: m['warranty_days'] as int?,
       warrantyCovers: m['warranty_covers'] as String?,
       warrantyExclusions: m['warranty_exclusions'] as String?,
+      includedItems: List<String>.from((m['included_items'] as List?) ?? []),
+      excludedItems: List<String>.from((m['excluded_items'] as List?) ?? []),
+      beforeAfterPairs: ((m['before_after_pairs'] as List?) ?? [])
+          .map((e) => Map<String, String>.from(
+              (e as Map).map((k, v) => MapEntry(k.toString(), v.toString()))))
+          .toList(),
     );
   }
 }

@@ -1,4 +1,3 @@
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -411,15 +410,12 @@ class _CatalogNodeModalState extends ConsumerState<CatalogNodeModal> {
     // ── Desktop: centered modal with blurred backdrop ─────────────────────
     return Stack(
       children: [
-        // ── Blurred dimmed backdrop ──────────────────────────────────────
+        // ── Dimmed backdrop ──────────────────────────────────────────────
         Positioned.fill(
           child: GestureDetector(
             onTap: () => Navigator.of(context).pop(),
             behavior: HitTestBehavior.opaque,
-            child: BackdropFilter(
-              filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
-              child: const ColoredBox(color: Color(0x72000000)),
-            ),
+            child: const ColoredBox(color: Color(0x55000000)),
           ),
         ),
 
@@ -440,13 +436,6 @@ class _CatalogNodeModalState extends ConsumerState<CatalogNodeModal> {
                     decoration: BoxDecoration(
                       color: AppColors.surface,
                       borderRadius: BorderRadius.circular(24),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withAlpha(64),
-                          blurRadius: 56,
-                          offset: const Offset(0, 16),
-                        ),
-                      ],
                     ),
                     child: ClipRRect(
                       borderRadius: BorderRadius.circular(24),

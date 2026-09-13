@@ -1,5 +1,3 @@
-import 'dart:ui';
-
 import 'package:flutter/material.dart';
 import '../models/catalog_node_model.dart';
 import '../screens/catalog_node_screen.dart';
@@ -49,10 +47,7 @@ Future<void> _showNodeAsWebModal(
           child: GestureDetector(
             onTap: () => Navigator.of(ctx).pop(),
             behavior: HitTestBehavior.opaque,
-            child: BackdropFilter(
-              filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
-              child: const ColoredBox(color: Color(0x70000000)),
-            ),
+            child: const ColoredBox(color: Color(0x55000000)),
           ),
         ),
         CatalogNodeScreen(node: node, parentNodeId: parentId, inModal: true),

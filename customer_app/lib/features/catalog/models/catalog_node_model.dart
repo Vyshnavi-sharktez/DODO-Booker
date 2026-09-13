@@ -52,6 +52,12 @@ class CatalogNodeModel {
   /// get_catalog_node_children; null for direct/root fetches.
   final String? relUnavailabilityMessage;
 
+  // ── Warranty config (mirrors catalog_nodes.warranty_* columns) ─────────────
+  final bool warrantyEnabled;
+  final int? warrantyDays;
+  final String? warrantyCovers;
+  final String? warrantyExclusions;
+
   // ── Loyalty earn config (mirrors catalog_nodes.loyalty_earn_* columns) ──────
   final bool loyaltyEarnEnabled;
   /// 'global' | 'fixed' | 'percentage'
@@ -95,6 +101,10 @@ class CatalogNodeModel {
     this.unavailabilityMessage,
     this.relAvailabilityStatus = 'active',
     this.relUnavailabilityMessage,
+    this.warrantyEnabled = false,
+    this.warrantyDays,
+    this.warrantyCovers,
+    this.warrantyExclusions,
     this.loyaltyEarnEnabled = true,
     this.loyaltyEarnRule = 'global',
     this.loyaltyFixedPoints,
@@ -158,6 +168,10 @@ class CatalogNodeModel {
       unavailabilityMessage: unavailabilityMessage,
       relAvailabilityStatus: relAvailabilityStatus,
       relUnavailabilityMessage: relUnavailabilityMessage,
+      warrantyEnabled: warrantyEnabled,
+      warrantyDays: warrantyDays,
+      warrantyCovers: warrantyCovers,
+      warrantyExclusions: warrantyExclusions,
       loyaltyEarnEnabled: loyaltyEarnEnabled,
       loyaltyEarnRule: loyaltyEarnRule,
       loyaltyFixedPoints: loyaltyFixedPoints,
@@ -219,6 +233,10 @@ class CatalogNodeModel {
       relAvailabilityStatus: (map['rel_availability_status'] as String?) ??
           (map['availability_status'] as String? ?? 'active'),
       relUnavailabilityMessage: map['rel_unavailability_message'] as String?,
+      warrantyEnabled: (map['warranty_enabled'] as bool?) ?? false,
+      warrantyDays: map['warranty_days'] as int?,
+      warrantyCovers: map['warranty_covers'] as String?,
+      warrantyExclusions: map['warranty_exclusions'] as String?,
       loyaltyEarnEnabled: (map['loyalty_earn_enabled'] as bool?) ?? true,
       loyaltyEarnRule: (map['loyalty_earn_rule'] as String?) ?? 'global',
       loyaltyFixedPoints: map['loyalty_fixed_points'] as int?,

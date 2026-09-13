@@ -47,6 +47,10 @@ class CatalogNodeNotifier
     double? minimumOrderAmount,
     String discountType = 'percentage',
     double discountValue = 0,
+    bool warrantyEnabled = false,
+    int? warrantyDays,
+    String? warrantyCovers,
+    String? warrantyExclusions,
   }) async {
     await _repo.createNode(
       parentId: parentId,
@@ -64,6 +68,10 @@ class CatalogNodeNotifier
       minimumOrderAmount: minimumOrderAmount,
       discountType: discountType,
       discountValue: discountValue,
+      warrantyEnabled: warrantyEnabled,
+      warrantyDays: warrantyDays,
+      warrantyCovers: warrantyCovers,
+      warrantyExclusions: warrantyExclusions,
     );
     await _load();
   }
@@ -84,6 +92,10 @@ class CatalogNodeNotifier
     double? minimumOrderAmount,
     String discountType = 'percentage',
     double discountValue = 0,
+    bool warrantyEnabled = false,
+    int? warrantyDays,
+    String? warrantyCovers,
+    String? warrantyExclusions,
   }) async {
     await _repo.updateNode(
       id,
@@ -101,6 +113,10 @@ class CatalogNodeNotifier
       minimumOrderAmount: minimumOrderAmount,
       discountType: discountType,
       discountValue: discountValue,
+      warrantyEnabled: warrantyEnabled,
+      warrantyDays: warrantyDays,
+      warrantyCovers: warrantyCovers,
+      warrantyExclusions: warrantyExclusions,
     );
     await _load();
   }

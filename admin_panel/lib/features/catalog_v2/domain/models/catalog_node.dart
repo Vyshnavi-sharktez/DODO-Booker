@@ -33,6 +33,12 @@ class CatalogNode {
   final double? rating;
   final int reviewCount;
 
+  // Warranty Configuration
+  final bool warrantyEnabled;
+  final int? warrantyDays;
+  final String? warrantyCovers;
+  final String? warrantyExclusions;
+
   // AMC (Annual Maintenance Contract) — service-level config
   final bool amcEnabled;
   final String? amcPlanName;
@@ -70,6 +76,10 @@ class CatalogNode {
     this.discountValue = 0,
     this.rating,
     required this.reviewCount,
+    this.warrantyEnabled = false,
+    this.warrantyDays,
+    this.warrantyCovers,
+    this.warrantyExclusions,
     this.amcEnabled = false,
     this.amcPlanName,
     this.amcRecurrenceInterval,
@@ -121,6 +131,10 @@ class CatalogNode {
       discountValue: (map['discount_value'] as num?)?.toDouble() ?? 0,
       rating: (map['rating'] as num?)?.toDouble(),
       reviewCount: map['review_count'] as int? ?? 0,
+      warrantyEnabled: map['warranty_enabled'] as bool? ?? false,
+      warrantyDays: map['warranty_days'] as int?,
+      warrantyCovers: map['warranty_covers'] as String?,
+      warrantyExclusions: map['warranty_exclusions'] as String?,
       amcEnabled: map['amc_enabled'] as bool? ?? false,
       amcPlanName: map['amc_plan_name'] as String?,
       amcRecurrenceInterval: map['amc_recurrence_interval'] as String?,
@@ -154,6 +168,10 @@ class CatalogNode {
     double? basePrice,
     int? estimatedDuration,
     double? minimumOrderAmount,
+    bool? warrantyEnabled,
+    int? warrantyDays,
+    String? warrantyCovers,
+    String? warrantyExclusions,
     int? childrenCount,
   }) {
     return CatalogNode(
@@ -175,6 +193,10 @@ class CatalogNode {
       basePrice: basePrice ?? this.basePrice,
       estimatedDuration: estimatedDuration ?? this.estimatedDuration,
       minimumOrderAmount: minimumOrderAmount ?? this.minimumOrderAmount,
+      warrantyEnabled: warrantyEnabled ?? this.warrantyEnabled,
+      warrantyDays: warrantyDays ?? this.warrantyDays,
+      warrantyCovers: warrantyCovers ?? this.warrantyCovers,
+      warrantyExclusions: warrantyExclusions ?? this.warrantyExclusions,
       rating: rating,
       reviewCount: reviewCount,
       childrenCount: childrenCount ?? this.childrenCount,

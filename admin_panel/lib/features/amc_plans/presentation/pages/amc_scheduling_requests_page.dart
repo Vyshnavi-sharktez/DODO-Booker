@@ -2405,12 +2405,31 @@ class _ResumeRequestCardState extends ConsumerState<_ResumeRequestCard> {
           })
           .eq('id', r.id);
 
+      // D2: extend expires_at by pauseDays so pause time does not consume contract duration.
+      DateTime? newExpiresAt;
+      if (pauseDays > 0) {
+        final contractRow = await client
+            .from('amc_contracts')
+            .select('expires_at')
+            .eq('id', r.contractId)
+            .maybeSingle();
+        if (contractRow != null && contractRow['expires_at'] != null) {
+          final currentExpiry =
+              DateTime.tryParse(contractRow['expires_at'] as String);
+          if (currentExpiry != null) {
+            newExpiresAt = currentExpiry.add(Duration(days: pauseDays));
+          }
+        }
+      }
+
       await client
           .from('amc_contracts')
           .update({
             'status': 'active',
             'pause_started_at': null,
             'resumed_at': nowUtc,
+            if (newExpiresAt != null)
+              'expires_at': newExpiresAt.toUtc().toIso8601String(),
           })
           .eq('id', r.contractId);
 
@@ -2745,19 +2764,39 @@ class _RequestCardState extends ConsumerState<_RequestCard> {
   Future<void> _approve() async {
     setState(() => _approving = true);
     try {
-      // Guard: block scheduling while contract is paused
+      // Guard: block scheduling if contract is paused or expired.
       final contractRow = await Supabase.instance.client
           .from('amc_contracts')
-          .select('status')
+          .select('status, expires_at')
           .eq('id', widget.request.contractId)
           .single();
-      if ((contractRow['status'] as String?) == 'paused') {
+      final contractStatus = contractRow['status'] as String?;
+      final expiresAtRaw = contractRow['expires_at'] as String?;
+      final expiresAt =
+          expiresAtRaw != null ? DateTime.tryParse(expiresAtRaw) : null;
+      final isExpired = contractStatus == 'expired' ||
+          (expiresAt != null && expiresAt.isBefore(DateTime.now().toUtc()));
+      if (contractStatus == 'paused') {
         if (mounted) {
           setState(() => _approving = false);
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text(
                 'Cannot schedule: this AMC membership is currently paused.',
+              ),
+              backgroundColor: AppColors.error,
+            ),
+          );
+        }
+        return;
+      }
+      if (isExpired) {
+        if (mounted) {
+          setState(() => _approving = false);
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'Cannot schedule: this AMC contract has expired.',
               ),
               backgroundColor: AppColors.error,
             ),
@@ -3297,19 +3336,39 @@ class _AmcRequestDetailDialogState
   Future<void> _approve() async {
     setState(() => _approving = true);
     try {
-      // Guard: block scheduling while contract is paused
+      // Guard: block scheduling if contract is paused or expired.
       final contractRow = await Supabase.instance.client
           .from('amc_contracts')
-          .select('status')
+          .select('status, expires_at')
           .eq('id', widget.request.contractId)
           .single();
-      if ((contractRow['status'] as String?) == 'paused') {
+      final contractStatus = contractRow['status'] as String?;
+      final expiresAtRaw = contractRow['expires_at'] as String?;
+      final expiresAt =
+          expiresAtRaw != null ? DateTime.tryParse(expiresAtRaw) : null;
+      final isExpired = contractStatus == 'expired' ||
+          (expiresAt != null && expiresAt.isBefore(DateTime.now().toUtc()));
+      if (contractStatus == 'paused') {
         if (mounted) {
           setState(() => _approving = false);
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text(
                 'Cannot schedule: this AMC membership is currently paused.',
+              ),
+              backgroundColor: AppColors.error,
+            ),
+          );
+        }
+        return;
+      }
+      if (isExpired) {
+        if (mounted) {
+          setState(() => _approving = false);
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'Cannot schedule: this AMC contract has expired.',
               ),
               backgroundColor: AppColors.error,
             ),
