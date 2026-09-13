@@ -406,9 +406,10 @@ class _RequestTypeChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final color = switch (label) {
-      'Price Change' => AppColors.primary,
+      'Price Change'                   => AppColors.primary,
       'Deletion' || 'Deletion Request' => AppColors.error,
-      _ => AppColors.success, // 'New Service'
+      'Edit Proposal'                  => const Color(0xFFF59E0B),
+      _                                => AppColors.success,
     };
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),

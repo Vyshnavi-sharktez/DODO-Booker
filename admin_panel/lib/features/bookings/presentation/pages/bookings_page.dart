@@ -66,6 +66,49 @@ const _allStatuses = [
   'cancelled',
 ];
 
+// AMC contract-level statuses (values from _AmcContractAggregate.contractStatus)
+const _amcStatuses = [
+  'upcoming',
+  'overdue',
+  'assigned',
+  'paused',
+  'cancellation_requested',
+  'cancelled',
+  'completed',
+  'expired',
+];
+
+const _amcStatusLabels = <String, String>{
+  'upcoming':               'Upcoming',
+  'overdue':                'Overdue',
+  'assigned':               'Assigned',
+  'paused':                 'Paused',
+  'cancellation_requested': 'Cancel Pending',
+  'cancelled':              'Cancelled',
+  'completed':              'Completed',
+  'expired':                'Expired',
+};
+
+const _warrantyReworkStatuses = [
+  'warranty_pending_approval',
+  'pending',
+  'assigned',
+  'accepted',
+  'in_progress',
+  'completed',
+  'cancelled',
+];
+
+const _warrantyReworkStatusLabels = <String, String>{
+  'warranty_pending_approval': 'Pending Approval',
+  'pending':                   'Pending',
+  'assigned':                  'Assigned',
+  'accepted':                  'Accepted',
+  'in_progress':               'In Progress',
+  'completed':                 'Completed',
+  'cancelled':                 'Cancelled',
+};
+
 // Statuses that admin can still cancel from (active lifecycle)
 const _cancellableStatuses = {
   'pending', 'assigned', 'assigned_to_dodo_team', 'accepted', 'on_the_way', 'arrived', 'in_progress',
@@ -133,6 +176,7 @@ class _AmcContractAggregate {
     if (cSt == 'cancellation_requested') return 'cancellation_requested';
     if (cSt == 'cancelled') return 'cancelled';
     if (cSt == 'paused') return 'paused';
+    if (cSt == 'expired') return 'expired';
     final total = totalVisits;
     if (total > 0 && completedCount >= total) return 'completed';
     final next = nextPendingVisit;
@@ -231,9 +275,20 @@ class _BookingsPageState extends ConsumerState<BookingsPage> {
       _assignedToFilter != null ||
       _dateFilter != null;
 
+  List<_AmcContractAggregate> _applyAmcStatusFilter(
+      List<_AmcContractAggregate> contracts) {
+    if (_statusFilter == null) return contracts;
+    return contracts
+        .where((agg) => agg.contractStatus == _statusFilter)
+        .toList();
+  }
+
   // Groups all AMC bookings by contract and returns contracts whose next visit
   // is within the scheduling window (or has completed visits for history).
-  List<_AmcContractAggregate> _groupAmcContracts(List<Booking> all, int windowDays) {
+  // Pass includeAll: true to bypass the window constraint (used when a status
+  // filter is active so all matching contracts are visible regardless of window).
+  List<_AmcContractAggregate> _groupAmcContracts(List<Booking> all, int windowDays,
+      {bool includeAll = false}) {
     final today = DateTime.now();
     final windowEnd = DateTime(today.year, today.month, today.day)
         .add(Duration(days: windowDays));
@@ -266,7 +321,7 @@ class _BookingsPageState extends ConsumerState<BookingsPage> {
       final isCancellationPending =
           agg.contractStatus == 'cancellation_requested';
 
-      if (hasCompleted || inWindow || isCancellationPending ||
+      if (includeAll || hasCompleted || inWindow || isCancellationPending ||
           agg.contractStatus == 'cancelled') {
         aggregates.add(agg);
       }
@@ -330,11 +385,13 @@ class _BookingsPageState extends ConsumerState<BookingsPage> {
       context: context,
       builder: (_) => BookingDetailsDialog(
         booking: booking,
-        onAssign: () {
-          Navigator.of(context).pop();
-          _openAssignDialog(booking);
-        },
-        onCancel: _cancellableStatuses.contains(booking.status)
+        onAssign: booking.status != 'warranty_pending_approval'
+            ? () {
+                Navigator.of(context).pop();
+                _openAssignDialog(booking);
+              }
+            : null,
+        onCancel: _cancellableStatuses.contains(booking.status) && !booking.isWarrantyRework
             ? () {
                 Navigator.of(context).pop();
                 _confirmCancel(booking);
@@ -923,7 +980,7 @@ class _BookingsPageState extends ConsumerState<BookingsPage> {
                 label: normalCount > 0 ? 'Normal Bookings ($normalCount)' : 'Normal Bookings',
                 icon: Icons.list_alt_rounded,
                 selected: _tab == 0,
-                onTap: () => setState(() => _tab = 0),
+                onTap: () => setState(() { _tab = 0; _statusFilter = null; }),
               ),
               const SizedBox(width: 8),
               _TabButton(
@@ -932,7 +989,7 @@ class _BookingsPageState extends ConsumerState<BookingsPage> {
                     : 'AMC Bookings',
                 icon: Icons.autorenew_rounded,
                 selected: _tab == 1,
-                onTap: () => setState(() => _tab = 1),
+                onTap: () => setState(() { _tab = 1; _statusFilter = null; }),
               ),
               const SizedBox(width: 8),
               _TabButton(
@@ -941,7 +998,7 @@ class _BookingsPageState extends ConsumerState<BookingsPage> {
                     : 'Warranty Reworks',
                 icon: Icons.shield_rounded,
                 selected: _tab == 2,
-                onTap: () => setState(() => _tab = 2),
+                onTap: () => setState(() { _tab = 2; _statusFilter = null; }),
               ),
             ],
           ),
@@ -976,12 +1033,21 @@ class _BookingsPageState extends ConsumerState<BookingsPage> {
                   items: [
                     const DropdownMenuItem(
                         value: null, child: Text('Status')),
-                    ..._allStatuses.map(
+                    ...(_tab == 1
+                            ? _amcStatuses
+                            : _tab == 2
+                                ? _warrantyReworkStatuses
+                                : _allStatuses)
+                        .map(
                       (s) => DropdownMenuItem(
                         value: s,
                         child: Text(
-                          _statusConfig[s]?.$1 ??
-                              s[0].toUpperCase() + s.substring(1),
+                          _tab == 1
+                              ? (_amcStatusLabels[s] ?? s)
+                              : _tab == 2
+                                  ? (_warrantyReworkStatusLabels[s] ?? s)
+                                  : (_statusConfig[s]?.$1 ??
+                                      s[0].toUpperCase() + s.substring(1)),
                         ),
                       ),
                     ),
@@ -1161,11 +1227,25 @@ class _BookingsPageState extends ConsumerState<BookingsPage> {
                   );
                 } else if (_tab == 1) {
                   // ── AMC Bookings (contract-level) ─────────────────────────
-                  final contracts = _groupAmcContracts(all, windowDays);
-                  if (contracts.isEmpty) {
+                  final allContracts = _groupAmcContracts(all, windowDays);
+                  // When a status filter is active, search across ALL AMC
+                  // contracts so statuses like 'paused' or 'expired' whose
+                  // visits fall outside the scheduling window are still found.
+                  final contracts = _applyAmcStatusFilter(
+                    _statusFilter != null
+                        ? _groupAmcContracts(all, windowDays, includeAll: true)
+                        : allContracts,
+                  );
+                  if (allContracts.isEmpty) {
                     return _EmptyState(
                       message: 'No AMC contracts in the scheduling queue',
                       sub: 'AMC contracts appear here $windowDays days before the next visit due date.',
+                    );
+                  }
+                  if (contracts.isEmpty) {
+                    return _EmptyState(
+                      message: 'No AMC contracts match your filters',
+                      sub: 'Try adjusting the status filter.',
                     );
                   }
                   return Column(
@@ -1173,7 +1253,7 @@ class _BookingsPageState extends ConsumerState<BookingsPage> {
                     children: [
                       _AmcQueueBanner(
                         windowDays: windowDays,
-                        totalInWindow: contracts.length,
+                        totalInWindow: allContracts.length,
                         unit: 'contract',
                       ),
                       const SizedBox(height: 12),
@@ -1198,13 +1278,13 @@ class _BookingsPageState extends ConsumerState<BookingsPage> {
                   final reworks = all.where((b) => b.isWarrantyRework).toList();
                   final filtered = _applyFilters(reworks);
                   if (reworks.isEmpty) {
-                    return _EmptyState(
+                    return const _EmptyState(
                       message: 'No warranty rework bookings',
-                      sub: 'Approved customer warranty claims will generate rework bookings here.',
+                      sub: 'Warranty claims appear here when submitted. Approve or reject them via Warranty Claims.',
                     );
                   }
                   if (filtered.isEmpty) {
-                    return _EmptyState(
+                    return const _EmptyState(
                       message: 'No rework bookings match your filters',
                       sub: 'Try adjusting your search or filters.',
                     );
@@ -1217,7 +1297,7 @@ class _BookingsPageState extends ConsumerState<BookingsPage> {
                     onAssign: _openAssignDialog,
                     onHistory: _openHistoryDialog,
                     onStartDodoService: _startDodoService,
-                    onCancel: _confirmCancel,
+                    onCancel: null,
                     onDelete: _confirmDelete,
                     searchQuery: _searchQuery,
                   );
@@ -1241,7 +1321,7 @@ class _BookingsTable extends StatelessWidget {
   final void Function(Booking) onAssign;
   final void Function(Booking) onHistory;
   final void Function(Booking) onStartDodoService;
-  final void Function(Booking) onCancel;
+  final void Function(Booking)? onCancel;
   final void Function(Booking) onDelete;
   final String searchQuery;
 
@@ -1253,7 +1333,7 @@ class _BookingsTable extends StatelessWidget {
     required this.onAssign,
     required this.onHistory,
     required this.onStartDodoService,
-    required this.onCancel,
+    this.onCancel,
     required this.onDelete,
     this.searchQuery = '',
   });
@@ -1301,7 +1381,7 @@ class _BookingsTable extends StatelessWidget {
                                   onAssign: () => onAssign(b),
                                   onHistory: () => onHistory(b),
                                   onStartDodoService: () => onStartDodoService(b),
-                                  onCancel: () => onCancel(b),
+                                  onCancel: onCancel != null ? () => onCancel!(b) : null,
                                   onDelete: () => onDelete(b),
                                   searchQuery: searchQuery,
                                 );
@@ -1366,7 +1446,7 @@ class _BookingRow extends StatelessWidget {
   final VoidCallback onAssign;
   final VoidCallback onHistory;
   final VoidCallback onStartDodoService;
-  final VoidCallback onCancel;
+  final VoidCallback? onCancel;
   final VoidCallback onDelete;
   final String searchQuery;
 
@@ -1377,7 +1457,7 @@ class _BookingRow extends StatelessWidget {
     required this.onAssign,
     required this.onHistory,
     required this.onStartDodoService,
-    required this.onCancel,
+    this.onCancel,
     required this.onDelete,
     this.searchQuery = '',
   });
@@ -1570,18 +1650,19 @@ class _BookingRow extends StatelessWidget {
                   tooltip: 'View details',
                   visualDensity: VisualDensity.compact,
                 ),
-                IconButton(
-                  onPressed: onAssign,
-                  icon: Icon(
-                    booking.isUnassigned
-                        ? Icons.assignment_ind_rounded
-                        : Icons.swap_horiz_rounded,
-                    size: 16,
-                    color: AppColors.accent,
+                if (booking.status != 'warranty_pending_approval')
+                  IconButton(
+                    onPressed: onAssign,
+                    icon: Icon(
+                      booking.isUnassigned
+                          ? Icons.assignment_ind_rounded
+                          : Icons.swap_horiz_rounded,
+                      size: 16,
+                      color: AppColors.accent,
+                    ),
+                    tooltip: booking.isUnassigned ? 'Assign' : 'Reassign',
+                    visualDensity: VisualDensity.compact,
                   ),
-                  tooltip: booking.isUnassigned ? 'Assign' : 'Reassign',
-                  visualDensity: VisualDensity.compact,
-                ),
                 IconButton(
                   onPressed: onHistory,
                   icon: Icon(Icons.history_rounded,
@@ -1597,7 +1678,9 @@ class _BookingRow extends StatelessWidget {
                     tooltip: 'Start Service (DODO Team)',
                     visualDensity: VisualDensity.compact,
                   ),
-                if (_cancellableStatuses.contains(booking.status))
+                if (onCancel != null &&
+                    _cancellableStatuses.contains(booking.status) &&
+                    !booking.isWarrantyRework)
                   IconButton(
                     onPressed: onCancel,
                     icon: Icon(Icons.cancel_outlined,
@@ -2258,8 +2341,9 @@ class _AmcContractRow extends StatelessWidget {
     final isCompleted =
         contractStatus == 'completed' || contractStatus == 'cancelled';
     final isPaused = contractStatus == 'paused';
+    final isExpired = contractStatus == 'expired';
     final canAssign =
-        !isCompleted && !isCancellationPending && !isPaused && agg.nextPendingVisit != null;
+        !isCompleted && !isCancellationPending && !isPaused && !isExpired && agg.nextPendingVisit != null;
     final isOverdue = nextDue != null && nextDue.isBefore(today);
 
     return Container(
@@ -2526,6 +2610,11 @@ class _AmcContractStatusBadge extends StatelessWidget {
         'Paused',
         const Color(0xFF6B46C1),
         const Color(0xFFF3E8FF)
+      ),
+      'expired' => (
+        'Expired',
+        const Color(0xFF718096),
+        const Color(0xFFEDF2F7)
       ),
       'overdue' => (
         'Overdue',

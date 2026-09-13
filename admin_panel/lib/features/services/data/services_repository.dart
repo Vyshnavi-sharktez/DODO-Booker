@@ -31,6 +31,8 @@ class ServicesRepository {
     required int estimatedDuration,
     String? imageUrl,
     required bool isActive,
+    required bool warrantyEnabled,
+    int? warrantyDays,
   }) async {
     // 1 — create the catalog_node as a bookable service
     final node = await _supabase
@@ -43,6 +45,8 @@ class ServicesRepository {
           if (imageUrl != null && imageUrl.isNotEmpty) 'image_url': imageUrl,
           'is_active': isActive,
           'is_bookable': true,
+          'warranty_enabled': warrantyEnabled,
+          'warranty_days': warrantyEnabled ? warrantyDays : null,
         })
         .select()
         .single();
@@ -78,6 +82,8 @@ class ServicesRepository {
     required int estimatedDuration,
     String? imageUrl,
     required bool isActive,
+    required bool warrantyEnabled,
+    int? warrantyDays,
   }) async {
     // 1 — update catalog_node fields
     final node = await _supabase
@@ -89,6 +95,8 @@ class ServicesRepository {
           'estimated_duration': estimatedDuration,
           'image_url': imageUrl?.isNotEmpty == true ? imageUrl : null,
           'is_active': isActive,
+          'warranty_enabled': warrantyEnabled,
+          'warranty_days': warrantyEnabled ? warrantyDays : null,
         })
         .eq('id', id)
         .select()

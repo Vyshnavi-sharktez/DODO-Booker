@@ -39,6 +39,7 @@ class VendorServiceRequestModel {
   bool get isNewService => requestType == 'new_service';
   bool get isPriceChange => requestType == 'price_change';
   bool get isDeleteService => requestType == 'delete_service';
+  bool get isEditService => requestType == 'edit_service';
 
   /// Shown in Custom Services: approved service, including while deletion is pending.
   bool get isActiveCustomService => isNewService && (isCompleted || isPendingDeletion);
@@ -68,6 +69,7 @@ class VendorServiceRequestModel {
   String get requestTypeLabel => switch (requestType) {
         'price_change' => 'Price Change',
         'delete_service' => 'Deletion',
+        'edit_service' => 'Edit Proposal',
         _ => 'New Service',
       };
 

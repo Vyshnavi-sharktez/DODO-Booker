@@ -6,16 +6,48 @@ import '../../../models/my_booking_model.dart';
 import '../models/service_warranty_model.dart';
 import '../services/warranty_providers.dart';
 import '../widgets/claim_warranty_modal.dart';
+import '../../../core/widgets/page_sheet.dart';
 
 class WarrantyDetailsScreen extends ConsumerWidget {
   final MyBookingModel booking;
   final ServiceWarrantyModel warranty;
+  final bool inModal;
 
   const WarrantyDetailsScreen({
     super.key,
     required this.booking,
     required this.warranty,
+    this.inModal = false,
   });
+
+  static void showAsModal(
+    BuildContext context, {
+    required MyBookingModel booking,
+    required ServiceWarrantyModel warranty,
+  }) {
+    final isDesktop = MediaQuery.of(context).size.width >= 768;
+    if (isDesktop) {
+      PageSheet.show(
+        context,
+        title: 'Warranty & Claim Details',
+        child: WarrantyDetailsScreen(
+          booking: booking,
+          warranty: warranty,
+          inModal: true,
+        ),
+      );
+    } else {
+      showModalBottomSheet<void>(
+        context: context,
+        isScrollControlled: true,
+        backgroundColor: Colors.transparent,
+        builder: (_) => _WarrantyDetailsSheet(
+          booking: booking,
+          warranty: warranty,
+        ),
+      );
+    }
+  }
 
   Color _getStatusColor(String effStatus) {
     switch (effStatus.toLowerCase()) {
@@ -87,19 +119,11 @@ class WarrantyDetailsScreen extends ConsumerWidget {
         ? ref.watch(reworkImagesGroupedProvider(warranty.reworkBookingId!))
         : const AsyncValue.data(<String, List<String>>{});
 
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        title: const Text('Warranty & Claim Details'),
-        elevation: 0,
-        backgroundColor: Colors.white,
-        surfaceTintColor: Colors.transparent,
-      ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
+    final scrollBody = SingleChildScrollView(
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
             // ── Status Banner Card ───────────────────────────────────────────
             Container(
               width: double.infinity,
@@ -550,80 +574,7 @@ class WarrantyDetailsScreen extends ConsumerWidget {
               ),
             ),
             const SizedBox(height: 12),
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: AppColors.border),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      const Icon(Icons.verified_rounded, size: 18, color: Color(0xFF38A169)),
-                      const SizedBox(width: 8),
-                      Text(
-                        'Warranty Covers:',
-                        style: theme.textTheme.titleSmall?.copyWith(
-                          fontWeight: FontWeight.bold,
-                          color: const Color(0xFF276749),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 10),
-                  const _BulletPoint(
-                    icon: Icons.check_circle_outline_rounded,
-                    iconColor: Color(0xFF38A169),
-                    text: 'Workmanship and labor quality for the service performed.',
-                  ),
-                  const _BulletPoint(
-                    icon: Icons.check_circle_outline_rounded,
-                    iconColor: Color(0xFF38A169),
-                    text: 'Spare parts and replacement components supplied during the service.',
-                  ),
-                  const _BulletPoint(
-                    icon: Icons.check_circle_outline_rounded,
-                    iconColor: Color(0xFF38A169),
-                    text: 'Operational defects directly arising from the completed job within the warranty period.',
-                  ),
-
-                  const Divider(height: 28),
-
-                  Row(
-                    children: [
-                      const Icon(Icons.do_not_disturb_on_rounded, size: 18, color: Color(0xFFE53E3E)),
-                      const SizedBox(width: 8),
-                      Text(
-                        'Warranty Does Not Cover:',
-                        style: theme.textTheme.titleSmall?.copyWith(
-                          fontWeight: FontWeight.bold,
-                          color: const Color(0xFF9B2C2C),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 10),
-                  const _BulletPoint(
-                    icon: Icons.highlight_off_rounded,
-                    iconColor: Color(0xFFE53E3E),
-                    text: 'Physical, liquid, or accidental damage occurring post-service completion.',
-                  ),
-                  const _BulletPoint(
-                    icon: Icons.highlight_off_rounded,
-                    iconColor: Color(0xFFE53E3E),
-                    text: 'Misuse, unauthorized third-party tampering, or electrical voltage surges.',
-                  ),
-                  const _BulletPoint(
-                    icon: Icons.highlight_off_rounded,
-                    iconColor: Color(0xFFE53E3E),
-                    text: 'Normal wear and tear or pre-existing defects not included in the original job scope.',
-                  ),
-                ],
-              ),
-            ),
+            _WarrantyCoverageCard(warranty: warranty),
 
             const SizedBox(height: 32),
 
@@ -749,6 +700,102 @@ class WarrantyDetailsScreen extends ConsumerWidget {
             const SizedBox(height: 24),
           ],
         ),
+    );
+
+    if (inModal) return scrollBody;
+
+    return Scaffold(
+      backgroundColor: AppColors.background,
+      appBar: AppBar(
+        title: const Text('Warranty & Claim Details'),
+        elevation: 0,
+        backgroundColor: Colors.white,
+        surfaceTintColor: Colors.transparent,
+      ),
+      body: scrollBody,
+    );
+  }
+}
+
+class _WarrantyDetailsSheet extends StatelessWidget {
+  const _WarrantyDetailsSheet({
+    required this.booking,
+    required this.warranty,
+  });
+
+  final MyBookingModel booking;
+  final ServiceWarrantyModel warranty;
+
+  @override
+  Widget build(BuildContext context) {
+    final maxHeight = MediaQuery.of(context).size.height * 0.92;
+    final bottomPad = MediaQuery.of(context).padding.bottom;
+
+    return Container(
+      height: maxHeight,
+      decoration: const BoxDecoration(
+        color: AppColors.background,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            decoration: const BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const SizedBox(height: 10),
+                Center(
+                  child: Container(
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade300,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 8, 8, 8),
+                  child: Row(
+                    children: [
+                      const Expanded(
+                        child: Text(
+                          'Warranty & Claim Details',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w700,
+                            fontSize: 18,
+                            color: AppColors.textPrimary,
+                          ),
+                        ),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.close_rounded, size: 20),
+                        onPressed: () => Navigator.of(context).pop(),
+                        style: IconButton.styleFrom(
+                          foregroundColor: AppColors.textSecondary,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const Divider(height: 1, color: AppColors.divider),
+              ],
+            ),
+          ),
+          Expanded(
+            child: WarrantyDetailsScreen(
+              booking: booking,
+              warranty: warranty,
+              inModal: true,
+            ),
+          ),
+          SizedBox(height: bottomPad),
+        ],
       ),
     );
   }
@@ -1267,6 +1314,90 @@ class _DetailRow extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+// Dynamic coverage card — uses snapshotted warranty terms when available,
+// falls back to the legacy default bullets for pre-existing warranty records.
+class _WarrantyCoverageCard extends StatelessWidget {
+  const _WarrantyCoverageCard({required this.warranty});
+  final ServiceWarrantyModel warranty;
+
+  static const _defaultCovers = [
+    'Workmanship and labor quality for the service performed.',
+    'Spare parts and replacement components supplied during the service.',
+    'Operational defects directly arising from the completed job within the warranty period.',
+  ];
+  static const _defaultExclusions = [
+    'Physical, liquid, or accidental damage occurring post-service completion.',
+    'Misuse, unauthorized third-party tampering, or electrical voltage surges.',
+    'Normal wear and tear or pre-existing defects not included in the original job scope.',
+  ];
+
+  static List<String> _lines(String? text, List<String> fallback) {
+    if (text == null || text.trim().isEmpty) return fallback;
+    final parsed = text.split('\n').where((l) => l.trim().isNotEmpty).toList();
+    return parsed.isEmpty ? fallback : parsed;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final covers = _lines(warranty.warrantyCovers, _defaultCovers);
+    final exclusions = _lines(warranty.warrantyExclusions, _defaultExclusions);
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.verified_rounded, size: 18, color: Color(0xFF38A169)),
+              const SizedBox(width: 8),
+              Text(
+                'Warranty Covers:',
+                style: theme.textTheme.titleSmall?.copyWith(
+                  fontWeight: FontWeight.bold,
+                  color: const Color(0xFF276749),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          ...covers.map((t) => _BulletPoint(
+                icon: Icons.check_circle_outline_rounded,
+                iconColor: const Color(0xFF38A169),
+                text: t,
+              )),
+          const Divider(height: 28),
+          Row(
+            children: [
+              const Icon(Icons.do_not_disturb_on_rounded, size: 18, color: Color(0xFFE53E3E)),
+              const SizedBox(width: 8),
+              Text(
+                'Warranty Does Not Cover:',
+                style: theme.textTheme.titleSmall?.copyWith(
+                  fontWeight: FontWeight.bold,
+                  color: const Color(0xFF9B2C2C),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          ...exclusions.map((t) => _BulletPoint(
+                icon: Icons.highlight_off_rounded,
+                iconColor: const Color(0xFFE53E3E),
+                text: t,
+              )),
+        ],
+      ),
     );
   }
 }

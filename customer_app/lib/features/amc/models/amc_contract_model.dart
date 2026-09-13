@@ -54,9 +54,10 @@ class AmcContractModel {
   final String planName;
   final String recurrenceInterval;
   final double pricePerVisit;
-  final String status; // 'active' | 'paused' | 'completed' | 'cancelled' | 'cancellation_requested'
+  final String status; // 'active' | 'paused' | 'completed' | 'cancelled' | 'cancellation_requested' | 'expired'
   final int totalVisits; // legacy column
   final DateTime createdAt;
+  final DateTime? expiresAt;
 
   // Snapshot fields added in 20260729_amc_plans.sql
   final String? amcPlanId;
@@ -88,7 +89,9 @@ class AmcContractModel {
   final List<AmcVisitModel> visits;
 
   bool get isCancellationRequested => status == 'cancellation_requested';
-  bool get isRenewable => status == 'completed' || (status == 'active' && remainingVisits == 0);
+  bool get isExpired => status == 'expired' || (expiresAt != null && expiresAt!.isBefore(DateTime.now().toUtc()));
+  bool get hasUnknownExpiry => expiresAt == null && status == 'active';
+  bool get isRenewable => status == 'completed' || status == 'expired' || (status == 'active' && remainingVisits == 0);
 
   const AmcContractModel({
     required this.id,
@@ -100,6 +103,7 @@ class AmcContractModel {
     required this.status,
     required this.totalVisits,
     required this.createdAt,
+    this.expiresAt,
     this.amcPlanId,
     this.packageDuration,
     this.serviceInterval,
@@ -144,6 +148,9 @@ class AmcContractModel {
         status: m['status'] as String? ?? 'active',
         totalVisits: (m['total_visits'] as num?)?.toInt() ?? 0,
         createdAt: DateTime.parse(m['created_at'] as String),
+        expiresAt: m['expires_at'] != null
+            ? DateTime.tryParse(m['expires_at'] as String)
+            : null,
         amcPlanId: m['amc_plan_id'] as String?,
         packageDuration: m['package_duration'] as String?,
         serviceInterval: m['service_interval'] as String?,

@@ -17,6 +17,7 @@ import '../../loyalty/providers/loyalty_providers.dart';
 import '../../loyalty/utils/loyalty_utils.dart';
 import '../../category/services/category_providers.dart';
 import 'package:go_router/go_router.dart';
+import '../../profile/utils/profile_launcher.dart';
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
@@ -214,7 +215,7 @@ class _CategoryExplorerScreenState
       appBar: isDesktop
           ? AppHeader(
               onLogoTap: () => context.go(AppRoutes.home),
-              onProfileTap: () => context.push(AppRoutes.profile),
+              onProfileTap: () => openProfile(context),
               isScrolled: _scrolled,
             )
           : AppBar(

@@ -155,6 +155,7 @@ class _ServicePhotoSheetState extends ConsumerState<ServicePhotoSheet> {
             EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
         child: ConstrainedBox(
           constraints: BoxConstraints(
+            maxWidth: 480,
             maxHeight: MediaQuery.of(context).size.height * 0.75,
           ),
           child: Column(
@@ -196,7 +197,8 @@ class _ServicePhotoSheetState extends ConsumerState<ServicePhotoSheet> {
               const Divider(height: 1),
 
               // Photo grid / empty state
-              Flexible(
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxHeight: 240),
                 child: _urls.isEmpty && !_isUploading
                     ? InkWell(
                         onTap: _addPhoto,
@@ -250,8 +252,9 @@ class _ServicePhotoSheetState extends ConsumerState<ServicePhotoSheet> {
                       child: OutlinedButton(
                         onPressed: () => Navigator.of(context).pop(null),
                         style: OutlinedButton.styleFrom(
-                          padding:
-                              const EdgeInsets.symmetric(vertical: 14),
+                          minimumSize: const Size(double.infinity, 48),
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          padding: const EdgeInsets.symmetric(vertical: 14),
                           shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(8)),
                         ),
@@ -266,8 +269,9 @@ class _ServicePhotoSheetState extends ConsumerState<ServicePhotoSheet> {
                             : null,
                         style: FilledButton.styleFrom(
                           backgroundColor: AppColors.primary,
-                          padding:
-                              const EdgeInsets.symmetric(vertical: 14),
+                          minimumSize: const Size(double.infinity, 48),
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          padding: const EdgeInsets.symmetric(vertical: 14),
                           shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(8)),
                         ),

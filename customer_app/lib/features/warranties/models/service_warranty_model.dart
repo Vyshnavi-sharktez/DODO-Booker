@@ -22,6 +22,8 @@ class ServiceWarrantyModel {
   final DateTime? reworkCreatedAt;
   final String? vendorName;
   final String? issueDescription;
+  final String? warrantyCovers;
+  final String? warrantyExclusions;
 
   const ServiceWarrantyModel({
     required this.id,
@@ -45,6 +47,8 @@ class ServiceWarrantyModel {
     this.reworkCreatedAt,
     this.vendorName,
     this.issueDescription,
+    this.warrantyCovers,
+    this.warrantyExclusions,
   });
 
   bool get isActive => status.toLowerCase() == 'active' && expiresAt.isAfter(DateTime.now());
@@ -163,6 +167,8 @@ class ServiceWarrantyModel {
       reworkCreatedAt: rCreatedAt,
       vendorName: vName,
       issueDescription: cleanedIssue,
+      warrantyCovers: json['warranty_covers'] as String?,
+      warrantyExclusions: json['warranty_exclusions'] as String?,
     );
   }
 

@@ -23,3 +23,9 @@ final reworkImagesGroupedProvider =
   final service = ref.watch(warrantyServiceProvider);
   return service.fetchGroupedReworkImages(reworkBookingId);
 });
+
+final warrantyByIdProvider =
+    FutureProvider.autoDispose.family<ServiceWarrantyModel?, String>((ref, warrantyId) async {
+  final service = ref.watch(warrantyServiceProvider);
+  return service.fetchWarrantyById(warrantyId);
+});

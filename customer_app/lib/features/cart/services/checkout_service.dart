@@ -194,7 +194,7 @@ class CheckoutService {
       if (!amcItem.amcIsRenewal && planId != null && planId.isNotEmpty) {
         final existing = await _client
             .from('amc_contracts')
-            .select('id, visits_completed, num_visits')
+            .select('id, visits_completed, num_visits, status, expires_at')
             .eq('customer_id', customerId)
             .eq('service_id', amcItem.serviceId)
             .eq('amc_plan_id', planId)
@@ -205,7 +205,10 @@ class CheckoutService {
           final row = list.first as Map<String, dynamic>;
           final completed = (row['visits_completed'] as num?)?.toInt() ?? 0;
           final total = (row['num_visits'] as num?)?.toInt() ?? 0;
-          if (total == 0 || completed < total) {
+          final expiresAtStr = row['expires_at'] as String?;
+          final expiresAt = expiresAtStr != null ? DateTime.tryParse(expiresAtStr) : null;
+          final isExpired = expiresAt != null && expiresAt.isBefore(DateTime.now().toUtc());
+          if (!isExpired && (total == 0 || completed < total)) {
             amcContractId = row['id'] as String;
             amcVisitNumber = await resolveNextAmcVisitNumber(_client, amcContractId);
             debugPrint('[AMC] Reusing contract id=$amcContractId  visits=$completed/$total → booking visit #$amcVisitNumber');
@@ -233,8 +236,12 @@ class CheckoutService {
           if (planId != null && planId.isNotEmpty) 'amc_plan_id': planId,
           if (amcItem.amcPackageDuration != null)
             'package_duration': amcItem.amcPackageDuration,
+          if (amcItem.amcPackageDurationValue != null)
+            'package_duration_value': amcItem.amcPackageDurationValue,
           if (amcItem.amcServiceInterval != null)
             'service_interval': amcItem.amcServiceInterval,
+          if (amcItem.amcServiceIntervalValue != null)
+            'service_interval_value': amcItem.amcServiceIntervalValue,
           if (amcItem.amcNumVisits != null) 'num_visits': amcItem.amcNumVisits,
           if (amcItem.amcOriginalTotal != null)
             'original_total': (amcItem.amcOriginalTotal ?? 0) * qty,
@@ -299,6 +306,13 @@ class CheckoutService {
 
     String? pendingVisitId;
     if (amcContractId != null) {
+      final bookable = await _client.rpc(
+        'amc_contract_is_bookable',
+        params: {'p_contract_id': amcContractId},
+      );
+      if (bookable != true) {
+        throw Exception('AMC contract has expired or is no longer active. Please renew your membership.');
+      }
       pendingVisitId = await findUnscheduledAmcVisit(_client, amcContractId);
       if (pendingVisitId != null) {
         debugPrint('[DODO][Checkout][AMC] Found unscheduled visit id=$pendingVisitId — scheduling instead of INSERT');

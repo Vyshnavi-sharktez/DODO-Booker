@@ -8,7 +8,9 @@ class VendorServiceRequestsRepository {
   static const _columns =
       'id, vendor_id, service_name, description, price, active_price, new_price, '
       'image_url, status, rejection_reason, request_type, parent_request_id, '
-      'is_active, created_at, updated_at, vendors(id, business_name, vendor_tiers(id, name))';
+      'is_active, warranty_enabled, warranty_days, warranty_covers, warranty_exclusions, '
+      'included_items, excluded_items, before_after_pairs, '
+      'created_at, updated_at, vendors(id, business_name, vendor_tiers(id, name))';
 
   Future<List<VendorServiceRequest>> fetchAll() async {
     final data = await _supabase

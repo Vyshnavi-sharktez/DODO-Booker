@@ -190,12 +190,12 @@ class CategoryService {
     const optionsSelect =
         'service_attribute_options(id, attribute_id, option_name, price_adjustment, discount_type, discount_value)';
 
-    // Attributes saved by catalog-v2 admin use node_id; legacy services use service_id.
-    // Match on either so both sources are visible to the customer.
+    // Attributes saved by catalog-v2 admin use node_id; legacy services use service_id;
+    // vendor custom services use custom_service_id (keyed to vendor_service_request.id).
     final data = await _db
         .from('service_attributes')
         .select('*, $optionsSelect')
-        .or('service_id.eq.$serviceId,node_id.eq.$serviceId')
+        .or('service_id.eq.$serviceId,node_id.eq.$serviceId,custom_service_id.eq.$serviceId')
         .order('name', ascending: true);
 
     return (data as List)

@@ -57,7 +57,7 @@ class AmcPlansPage extends StatelessWidget {
 
 // ── Tab 1: My Plans ───────────────────────────────────────────────────────────
 
-enum _PlansFilter { all, active, paused, completed, cancelled }
+enum _PlansFilter { all, active, paused, completed, cancelled, expired }
 
 class _PlansTab extends ConsumerStatefulWidget {
   const _PlansTab();
@@ -86,6 +86,8 @@ class _PlansTabState extends ConsumerState<_PlansTab>
           contracts.where((c) => c.status == 'completed').toList(),
         _PlansFilter.cancelled =>
           contracts.where((c) => c.status == 'cancelled').toList(),
+        _PlansFilter.expired =>
+          contracts.where((c) => c.status == 'expired').toList(),
       };
 
   @override
@@ -137,6 +139,14 @@ class _PlansTabState extends ConsumerState<_PlansTab>
                   color: AppColors.error,
                   onTap: () =>
                       setState(() => _filter = _PlansFilter.cancelled),
+                ),
+                const SizedBox(width: 8),
+                _FilterChip(
+                  label: 'Expired',
+                  selected: _filter == _PlansFilter.expired,
+                  color: Colors.grey,
+                  onTap: () =>
+                      setState(() => _filter = _PlansFilter.expired),
                 ),
               ],
             ),
@@ -880,6 +890,7 @@ class _EmptyFilterState extends StatelessWidget {
       _PlansFilter.paused => 'No paused plans.',
       _PlansFilter.completed => 'No completed plans.',
       _PlansFilter.cancelled => 'No cancelled plans.',
+      _PlansFilter.expired => 'No expired plans.',
     };
     return Center(
       child: Padding(

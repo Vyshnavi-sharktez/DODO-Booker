@@ -18,6 +18,8 @@ class ServiceFormDialog extends StatefulWidget {
     required int estimatedDuration,
     String? imageUrl,
     required bool isActive,
+    required bool warrantyEnabled,
+    int? warrantyDays,
   }) onSave;
 
   const ServiceFormDialog({
@@ -41,7 +43,9 @@ class _ServiceFormDialogState extends State<ServiceFormDialog> {
   late final TextEditingController _basePrice;
   late final TextEditingController _estimatedDuration;
   late final TextEditingController _imageUrl;
+  late final TextEditingController _warrantyDays;
   late bool _isActive;
+  late bool _warrantyEnabled;
   bool _saving = false;
   bool _slugEdited = false;
 
@@ -59,6 +63,10 @@ class _ServiceFormDialogState extends State<ServiceFormDialog> {
     );
     _imageUrl = TextEditingController(text: e?.imageUrl ?? '');
     _isActive = e?.isActive ?? true;
+    _warrantyEnabled = e?.warrantyEnabled ?? false;
+    _warrantyDays = TextEditingController(
+      text: e?.warrantyDays != null ? e!.warrantyDays.toString() : '',
+    );
     _slugEdited = e != null;
   }
 
@@ -69,6 +77,7 @@ class _ServiceFormDialogState extends State<ServiceFormDialog> {
     _basePrice.dispose();
     _estimatedDuration.dispose();
     _imageUrl.dispose();
+    _warrantyDays.dispose();
     super.dispose();
   }
 
@@ -92,6 +101,9 @@ class _ServiceFormDialogState extends State<ServiceFormDialog> {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _saving = true);
     try {
+      final days = _warrantyEnabled
+          ? int.tryParse(_warrantyDays.text.trim())
+          : null;
       await widget.onSave(
         categoryId: widget.categoryId,
         subCategoryId: widget.subCategoryId,
@@ -101,6 +113,8 @@ class _ServiceFormDialogState extends State<ServiceFormDialog> {
         estimatedDuration: int.tryParse(_estimatedDuration.text.trim()) ?? 0,
         imageUrl: _imageUrl.text.trim().isEmpty ? null : _imageUrl.text.trim(),
         isActive: _isActive,
+        warrantyEnabled: _warrantyEnabled,
+        warrantyDays: days,
       );
       if (mounted) Navigator.of(context).pop();
     } catch (e) {
@@ -294,43 +308,61 @@ class _ServiceFormDialogState extends State<ServiceFormDialog> {
                       const SizedBox(height: 20),
 
                       // Active toggle
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 16, vertical: 12),
-                        decoration: BoxDecoration(
-                          color: AppColors.background,
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: AppColors.border),
-                        ),
-                        child: Row(
-                          children: [
-                            Icon(
-                              _isActive
-                                  ? Icons.check_circle_outline_rounded
-                                  : Icons.cancel_outlined,
-                              color: _isActive
-                                  ? AppColors.success
-                                  : AppColors.textSecondary,
-                              size: 18,
-                            ),
-                            const SizedBox(width: 10),
-                            Text(
-                              'Active',
-                              style: TextStyle(
-                                fontSize: 14,
-                                color: AppColors.textPrimary,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                            const Spacer(),
-                            Switch(
-                              value: _isActive,
-                              onChanged: (v) => setState(() => _isActive = v),
-                              activeThumbColor: AppColors.success,
-                            ),
-                          ],
-                        ),
+                      _ToggleRow(
+                        icon: _isActive
+                            ? Icons.check_circle_outline_rounded
+                            : Icons.cancel_outlined,
+                        iconColor: _isActive
+                            ? AppColors.success
+                            : AppColors.textSecondary,
+                        label: 'Active',
+                        value: _isActive,
+                        onChanged: (v) => setState(() => _isActive = v),
                       ),
+                      const SizedBox(height: 12),
+
+                      // Warranty toggle
+                      _ToggleRow(
+                        icon: Icons.verified_rounded,
+                        iconColor: _warrantyEnabled
+                            ? AppColors.accent
+                            : AppColors.textSecondary,
+                        label: 'Warranty Coverage',
+                        subtitle: 'Issue a warranty when a booking is completed',
+                        value: _warrantyEnabled,
+                        onChanged: (v) => setState(() {
+                          _warrantyEnabled = v;
+                          if (!v) _warrantyDays.clear();
+                        }),
+                      ),
+
+                      // Warranty duration — shown only when warranty is enabled
+                      if (_warrantyEnabled) ...[
+                        const SizedBox(height: 12),
+                        TextFormField(
+                          controller: _warrantyDays,
+                          decoration: const InputDecoration(
+                            labelText: 'Warranty Duration *',
+                            hintText: 'e.g. 30',
+                            suffixText: 'days',
+                          ),
+                          keyboardType: TextInputType.number,
+                          inputFormatters: [
+                            FilteringTextInputFormatter.digitsOnly,
+                          ],
+                          validator: (v) {
+                            if (!_warrantyEnabled) return null;
+                            if (v == null || v.trim().isEmpty) {
+                              return 'Required when warranty is enabled';
+                            }
+                            final parsed = int.tryParse(v.trim());
+                            if (parsed == null || parsed <= 0) {
+                              return 'Enter a valid number of days';
+                            }
+                            return null;
+                          },
+                        ),
+                      ],
                     ],
                   ),
                 ),
@@ -379,6 +411,70 @@ class _ServiceFormDialogState extends State<ServiceFormDialog> {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _ToggleRow extends StatelessWidget {
+  final IconData icon;
+  final Color iconColor;
+  final String label;
+  final String? subtitle;
+  final bool value;
+  final ValueChanged<bool> onChanged;
+
+  const _ToggleRow({
+    required this.icon,
+    required this.iconColor,
+    required this.label,
+    this.subtitle,
+    required this.value,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: AppColors.background,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, color: iconColor, size: 18),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    color: AppColors.textPrimary,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                if (subtitle != null)
+                  Text(
+                    subtitle!,
+                    style: const TextStyle(
+                      fontSize: 12,
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          Switch(
+            value: value,
+            onChanged: onChanged,
+            activeThumbColor: AppColors.success,
+          ),
+        ],
       ),
     );
   }

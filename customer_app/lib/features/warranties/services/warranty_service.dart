@@ -31,6 +31,43 @@ class WarrantyService {
     }
   }
 
+  /// Fetch a single warranty by its own UUID (used for notification deep-links).
+  Future<ServiceWarrantyModel?> fetchWarrantyById(String warrantyId) async {
+    try {
+      final data = await _client
+          .from('service_warranties')
+          .select('''
+            *,
+            bookings!booking_id(booking_number, notes, vendors(business_name)),
+            rework_booking:bookings!rework_booking_id(id, booking_number, notes, status, dispatch_status, vendor_id, created_at, updated_at, completed_at, vendors(business_name)),
+            vendors(business_name)
+          ''')
+          .eq('id', warrantyId)
+          .maybeSingle();
+      if (data == null) return null;
+      final model = ServiceWarrantyModel.fromJson(Map<String, dynamic>.from(data));
+      if (model.reworkStatus?.toLowerCase() == 'completed' &&
+          model.status.toLowerCase() != 'resolved') {
+        return ServiceWarrantyModel.fromJson({...data, 'status': 'Resolved'});
+      }
+      return model;
+    } catch (e) {
+      debugPrint('[DODO][WarrantyService] fetchWarrantyById primary failed for $warrantyId: $e');
+      try {
+        final fallback = await _client
+            .from('service_warranties')
+            .select('*')
+            .eq('id', warrantyId)
+            .maybeSingle();
+        if (fallback == null) return null;
+        return ServiceWarrantyModel.fromJson(Map<String, dynamic>.from(fallback));
+      } catch (e2) {
+        debugPrint('[DODO][WarrantyService] fetchWarrantyById fallback failed: $e2');
+        return null;
+      }
+    }
+  }
+
   /// Fetch service warranty for a specific booking by bookingId
   Future<ServiceWarrantyModel?> fetchWarrantyByBookingId(String bookingId) async {
     try {
@@ -240,7 +277,7 @@ class WarrantyService {
 
     final basePayload = <String, dynamic>{
       'customer_id': customerId,
-      'status': 'pending',
+      'status': 'warranty_pending_approval',
       'subtotal': 0.0,
       'discount_amount': 0.0,
       'total_amount': 0.0,
@@ -260,7 +297,7 @@ class WarrantyService {
         final payloadWithVendor = Map<String, dynamic>.from(basePayload)..addAll({
           'vendor_id': assignedVendorId,
           'assignment_type': 'External Vendor',
-          'dispatch_status': 'assigned',
+          'dispatch_status': 'warranty_pending',
         });
         reworkBookingData = Map<String, dynamic>.from(
           await _client.from('bookings').insert(payloadWithVendor).select().single(),
@@ -283,7 +320,6 @@ class WarrantyService {
     }
 
     final reworkBookingId = reworkBookingData['id'] as String;
-    final reworkBookingNum = reworkBookingData['booking_number'] as String? ?? reworkBookingId;
 
     // 4. Duplicate original booking_items to rework booking
     final origItemsData = await _client
@@ -350,13 +386,13 @@ class WarrantyService {
     }
 
     // 7. Notifications
-    // Admin notification
+    // Admin notification — claim awaiting review
     try {
       await _client.from('notifications').insert({
         'user_type': 'admin',
         'user_id': null,
-        'title': 'Warranty Claim Filed',
-        'message': 'Warranty claim filed for Booking #$origBookingNum. Rework booking #$reworkBookingNum created.',
+        'title': 'New Warranty Claim — Pending Review',
+        'message': 'Warranty claim filed for Booking #$origBookingNum. Rework booking created and awaiting your approval before it is dispatched.',
         'notification_type': 'warranty_claim',
         'is_read': false,
         'entity_type': 'service_warranty',
@@ -366,35 +402,21 @@ class WarrantyService {
       debugPrint('[WarrantyService] Warning: admin notification failed: $e');
     }
 
-    // Vendor notification (if vendor exists)
-    if (vendorId != null && vendorId.isNotEmpty) {
-      try {
-        await _client.from('notifications').insert({
-          'user_type': 'vendor',
-          'user_id': vendorId,
-          'title': 'Warranty Rework Booking Assigned',
-          'message': 'A warranty rework booking (#$reworkBookingNum) has been assigned to you for original booking #$origBookingNum.',
-          'notification_type': 'warranty_claim',
-          'is_read': false,
-          'entity_type': 'booking',
-          'entity_id': reworkBookingId,
-        });
-      } catch (e) {
-        debugPrint('[WarrantyService] Warning: vendor notification failed: $e');
-      }
-    }
+    // Vendor notification is intentionally NOT sent here.
+    // The rework booking is in 'warranty_pending_approval' state and is not
+    // visible in the vendor's booking queue until admin approves the claim.
 
-    // Customer notification
+    // Customer notification — under review
     try {
       await _client.from('notifications').insert({
         'user_type': 'customer',
         'user_id': customerId,
         'title': 'Warranty Claim Submitted',
-        'message': 'Your warranty claim for Booking #$origBookingNum has been approved. Rework booking #$reworkBookingNum has been created.',
+        'message': 'Your warranty claim for Booking #$origBookingNum has been submitted and is under review. You will be notified once our team has reviewed it.',
         'notification_type': 'warranty_claim',
         'is_read': false,
-        'entity_type': 'booking',
-        'entity_id': reworkBookingId,
+        'entity_type': 'service_warranty',
+        'entity_id': warrantyId,
       });
     } catch (e) {
       debugPrint('[WarrantyService] Warning: customer notification failed: $e');

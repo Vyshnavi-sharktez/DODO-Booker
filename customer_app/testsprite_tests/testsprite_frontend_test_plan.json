@@ -1,0 +1,78 @@
+{
+  "project": "DODO-Booker Customer App",
+  "version": "1.0",
+  "test_cases": [
+    {
+      "id": "TC-CUST-AUTH-01",
+      "title": "Customer Phone Number & OTP Login Flow",
+      "component": "Authentication & Profile",
+      "description": "Verify customer can enter phone number, request OTP, input verification code, and reach home screen.",
+      "severity": "CRITICAL",
+      "req_id": "REQ-001"
+    },
+    {
+      "id": "TC-CUST-CAT-01",
+      "title": "Category Navigation & Service Catalog Search",
+      "component": "Catalog, Search & Categories",
+      "description": "Verify browsing service categories (AC Repair, Plumbing, Cleaning) and searching catalog items returns valid results.",
+      "severity": "HIGH",
+      "req_id": "REQ-002"
+    },
+    {
+      "id": "TC-CUST-CART-01",
+      "title": "Service Option Selection & Cart Quantity Updates",
+      "component": "Cart & Checkout",
+      "description": "Verify selecting a service, configuring add-ons, adjusting item quantity, and viewing price total in cart.",
+      "severity": "HIGH",
+      "req_id": "REQ-003"
+    },
+    {
+      "id": "TC-CUST-ADDR-01",
+      "title": "Service Location Address Selection & Geofence Verification",
+      "component": "Cart & Checkout",
+      "description": "Verify adding/selecting saved address and validating service availability in customer pin code.",
+      "severity": "HIGH",
+      "req_id": "REQ-004"
+    },
+    {
+      "id": "TC-CUST-CPN-01",
+      "title": "Promo Code Redemption & Discount Calculation",
+      "component": "Payment & Coupons",
+      "description": "Verify entering valid coupon code applies discount to bill summary and updates payable amount.",
+      "severity": "MEDIUM",
+      "req_id": "REQ-005"
+    },
+    {
+      "id": "TC-CUST-PAY-01",
+      "title": "Razorpay Online Payment & COD Checkout Selection",
+      "component": "Payment & Coupons",
+      "description": "Verify choosing Razorpay opens payment gateway modal and selecting COD places booking with pending status.",
+      "severity": "CRITICAL",
+      "req_id": "REQ-006"
+    },
+    {
+      "id": "TC-CUST-TRK-01",
+      "title": "Active Booking Lifecycle Tracking & OTP Display",
+      "component": "Booking Management & Tracking",
+      "description": "Verify active booking screen shows real-time status, assigned vendor details, and start/completion OTP.",
+      "severity": "HIGH",
+      "req_id": "REQ-007"
+    },
+    {
+      "id": "TC-CUST-CNCL-01",
+      "title": "Booking Cancellation Flow & Reason Selection",
+      "component": "Booking Management & Tracking",
+      "description": "Verify opening cancel booking dialog, selecting cancellation reason, confirming cancellation, and viewing refund notice.",
+      "severity": "HIGH",
+      "req_id": "REQ-008"
+    },
+    {
+      "id": "TC-CUST-REV-01",
+      "title": "Post-Service Rating & Feedback Submission",
+      "component": "Reviews, Warranties & Subscriptions",
+      "description": "Verify customer can submit star rating (1-5) and write feedback upon booking completion.",
+      "severity": "MEDIUM",
+      "req_id": "REQ-009"
+    }
+  ]
+}

@@ -94,6 +94,12 @@ class _AmcContractDetailsScreenState
               reason: contract.cancellationReason,
             );
           }
+          if (contract.isExpired) {
+            return _MembershipExpiredBar(
+              renewing: _renewing,
+              onRenew: () => _startRenewalFlow(contract),
+            );
+          }
           if (contract.isRenewable) {
             return _MembershipCompletedBar(
               renewing: _renewing,
@@ -999,7 +1005,9 @@ class _AmcContractDetailsScreenState
         amcDiscountAmount: selection.plan.discountAmount,
         amcFinalPrice: selection.plan.finalPrice,
         amcPackageDuration: selection.plan.packageDuration,
+        amcPackageDurationValue: selection.plan.packageDurationValue,
         amcServiceInterval: selection.plan.serviceInterval,
+        amcServiceIntervalValue: selection.plan.serviceIntervalValue,
         amcQuantity: prefillQty,
         amcIsRenewal: true,
         amcPreviousContractId: contract.id,
@@ -1640,6 +1648,70 @@ class _CancellationPendingBar extends StatelessWidget {
               ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+class _MembershipExpiredBar extends StatelessWidget {
+  final bool renewing;
+  final VoidCallback onRenew;
+
+  const _MembershipExpiredBar({
+    required this.renewing,
+    required this.onRenew,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              decoration: BoxDecoration(
+                color: Colors.grey.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: Colors.grey.withValues(alpha: 0.3)),
+              ),
+              child: const Row(
+                children: [
+                  Icon(Icons.schedule_rounded, size: 16, color: Colors.grey),
+                  SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'This AMC contract has expired â€" renew to continue coverage.',
+                      style: TextStyle(fontSize: 12, color: Colors.grey),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 8),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton.icon(
+                onPressed: renewing ? null : onRenew,
+                icon: renewing
+                    ? const SizedBox(
+                        width: 14,
+                        height: 14,
+                        child: CircularProgressIndicator(
+                            strokeWidth: 1.5, color: Colors.white),
+                      )
+                    : const Icon(Icons.autorenew_rounded, size: 18),
+                label: const Text('Renew Membership'),
+                style: FilledButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );

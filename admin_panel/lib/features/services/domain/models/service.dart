@@ -10,6 +10,8 @@ class Service {
   final int estimatedDuration;
   final String? imageUrl;
   final bool isActive;
+  final bool warrantyEnabled;
+  final int? warrantyDays;
   final DateTime? createdAt;
   final DateTime? updatedAt;
 
@@ -25,6 +27,8 @@ class Service {
     required this.estimatedDuration,
     this.imageUrl,
     required this.isActive,
+    this.warrantyEnabled = false,
+    this.warrantyDays,
     this.createdAt,
     this.updatedAt,
   });
@@ -44,6 +48,8 @@ class Service {
       estimatedDuration: map['estimated_duration'] as int? ?? 0,
       imageUrl: map['image_url'] as String?,
       isActive: map['is_active'] as bool? ?? true,
+      warrantyEnabled: map['warranty_enabled'] as bool? ?? false,
+      warrantyDays: map['warranty_days'] as int?,
       createdAt: map['created_at'] != null
           ? DateTime.tryParse(map['created_at'] as String)
           : null,
@@ -64,6 +70,8 @@ class Service {
     int? estimatedDuration,
     String? imageUrl,
     bool? isActive,
+    bool? warrantyEnabled,
+    int? warrantyDays,
   }) {
     return Service(
       id: id,
@@ -77,6 +85,8 @@ class Service {
       estimatedDuration: estimatedDuration ?? this.estimatedDuration,
       imageUrl: imageUrl ?? this.imageUrl,
       isActive: isActive ?? this.isActive,
+      warrantyEnabled: warrantyEnabled ?? this.warrantyEnabled,
+      warrantyDays: warrantyDays ?? this.warrantyDays,
       createdAt: createdAt,
       updatedAt: updatedAt,
     );

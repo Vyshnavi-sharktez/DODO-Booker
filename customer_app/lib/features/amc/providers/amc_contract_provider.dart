@@ -55,7 +55,7 @@ final amcContractProvider = FutureProvider.autoDispose
       .from('amc_contracts')
       .select(
         'id, customer_id, service_id, service_name, plan_name, recurrence_interval, '
-        'price_per_visit, status, total_visits, created_at, '
+        'price_per_visit, status, total_visits, created_at, expires_at, '
         'amc_plan_id, package_duration, service_interval, num_visits, '
         'original_total, discount_type, discount_value, discount_amount, final_price, '
         'cancellation_reason, cancellation_remarks, cancellation_requested_at, '

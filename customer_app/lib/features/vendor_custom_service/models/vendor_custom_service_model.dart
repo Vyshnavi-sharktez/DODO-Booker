@@ -14,6 +14,10 @@ class VendorCustomServiceModel {
     this.includedItems = const [],
     this.excludedItems = const [],
     this.beforeAfterPairs = const [],
+    this.warrantyEnabled = false,
+    this.warrantyDays,
+    this.warrantyCovers,
+    this.warrantyExclusions,
   });
 
   final String id;
@@ -28,6 +32,10 @@ class VendorCustomServiceModel {
   final List<String> includedItems;
   final List<String> excludedItems;
   final List<Map<String, String>> beforeAfterPairs;
+  final bool warrantyEnabled;
+  final int? warrantyDays;
+  final String? warrantyCovers;
+  final String? warrantyExclusions;
 
   String get formattedPrice => '₹${activePrice.toInt()}';
 
@@ -57,6 +65,10 @@ class VendorCustomServiceModel {
                   (e as Map).map((k, v) => MapEntry(k.toString(), v.toString()))))
               .toList() ??
           [],
+      warrantyEnabled: (m['warranty_enabled'] as bool?) ?? false,
+      warrantyDays: m['warranty_days'] as int?,
+      warrantyCovers: m['warranty_covers'] as String?,
+      warrantyExclusions: m['warranty_exclusions'] as String?,
     );
   }
 

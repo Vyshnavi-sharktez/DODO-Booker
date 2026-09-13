@@ -3,8 +3,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/widgets/app_modal_dialog.dart';
+import '../../../core/widgets/page_sheet.dart';
 import '../../../routes/app_router.dart';
+import '../../bookings/screens/booking_details_screen.dart';
+import '../../bookings/services/bookings_providers.dart';
 import '../../catalog/providers/catalog_providers.dart';
+import '../../reviews/widgets/review_modal.dart';
 import '../../catalog/utils/catalog_launcher.dart';
 import '../../vendor_custom_service/widgets/vendor_custom_service_sheet.dart';
 import '../models/notification_model.dart';
@@ -48,11 +52,26 @@ class _NotificationsModalState extends ConsumerState<NotificationsModal> {
     _markRead(n);
     if (n.entityId == null) return;
     if (n.entityType == 'booking') {
-      final route =
-          AppRoutes.notificationBooking.replaceFirst(':id', n.entityId!);
-      debugPrint('[NOTIF][Customer] navigating → $route');
-      Navigator.of(context).pop();
-      GoRouter.of(context).push(route);
+      final isDesktop = MediaQuery.of(context).size.width >= 768;
+      if (isDesktop) {
+        final targetContext = Navigator.of(context).context;
+        Navigator.of(context).pop();
+        final booking =
+            await ref.read(bookingByIdProvider(n.entityId!).future);
+        if (booking != null && targetContext.mounted) {
+          PageSheet.show(
+            targetContext,
+            title: 'Booking Details',
+            child: BookingDetailsScreen(booking: booking, inModal: true),
+          );
+        }
+      } else {
+        final route =
+            AppRoutes.notificationBooking.replaceFirst(':id', n.entityId!);
+        debugPrint('[NOTIF][Customer] navigating → $route');
+        Navigator.of(context).pop();
+        GoRouter.of(context).push(route);
+      }
     } else if (n.entityType == 'custom_service_question') {
       // Vendor answered a custom service question → open the service sheet.
       // The answered question is visible in the FAQ block (customServiceFaqsProvider
@@ -77,6 +96,21 @@ class _NotificationsModalState extends ConsumerState<NotificationsModal> {
         openCatalogNode(targetContext, node, parentId: n.parentNodeId);
       }
     }
+  }
+
+  Future<void> _openRatingModal(NotificationModel n) async {
+    if (n.entityId == null) return;
+    _markRead(n);
+    final parentContext = Navigator.of(context).context;
+    Navigator.of(context).pop();
+    final booking =
+        await ref.read(bookingByIdProvider(n.entityId!).future);
+    if (booking == null || !parentContext.mounted) return;
+    AppModalDialog.show(
+      context: parentContext,
+      child: ReviewModal(
+          bookingId: booking.id, serviceName: booking.serviceName),
+    );
   }
 
   @override
@@ -106,6 +140,7 @@ class _NotificationsModalState extends ConsumerState<NotificationsModal> {
                     notifications: notifications,
                     isRead: _isRead,
                     onTap: _handleTap,
+                    onRateService: _openRatingModal,
                   );
           },
       ),
@@ -119,11 +154,13 @@ class _NotificationList extends StatelessWidget {
   final List<NotificationModel> notifications;
   final bool Function(NotificationModel) isRead;
   final void Function(NotificationModel) onTap;
+  final void Function(NotificationModel)? onRateService;
 
   const _NotificationList({
     required this.notifications,
     required this.isRead,
     required this.onTap,
+    this.onRateService,
   });
 
   @override
@@ -136,6 +173,10 @@ class _NotificationList extends StatelessWidget {
             notification: notifications[i],
             read: isRead(notifications[i]),
             onTap: () => onTap(notifications[i]),
+            onRateService: notifications[i].notificationType == 'booking_completed' &&
+                    onRateService != null
+                ? () => onRateService!(notifications[i])
+                : null,
           ),
           if (i < notifications.length - 1)
             const Divider(height: 1, indent: 16, endIndent: 16),
@@ -149,11 +190,13 @@ class _NotificationTile extends StatelessWidget {
   final NotificationModel notification;
   final bool read;
   final VoidCallback onTap;
+  final VoidCallback? onRateService;
 
   const _NotificationTile({
     required this.notification,
     required this.read,
     required this.onTap,
+    this.onRateService,
   });
 
   static const _months = [
@@ -216,6 +259,41 @@ class _NotificationTile extends StatelessWidget {
                     date,
                     style: tt.labelSmall?.copyWith(color: AppColors.textHint),
                   ),
+                  if (onRateService != null) ...[
+                    const SizedBox(height: 8),
+                    MouseRegion(
+                      cursor: SystemMouseCursors.click,
+                      child: GestureDetector(
+                        onTap: onRateService,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 10, vertical: 5),
+                          decoration: BoxDecoration(
+                            color: AppColors.gold.withAlpha(20),
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(
+                                color: AppColors.gold.withAlpha(100)),
+                          ),
+                          child: const Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.star_rounded,
+                                  size: 13, color: AppColors.gold),
+                              SizedBox(width: 4),
+                              Text(
+                                'Rate Service',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w700,
+                                  color: AppColors.gold,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
                 ],
               ),
             ),

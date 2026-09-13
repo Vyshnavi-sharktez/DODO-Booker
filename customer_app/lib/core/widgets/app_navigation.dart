@@ -11,6 +11,7 @@ import '../../features/home/widgets/hero_section.dart';
 import '../../features/notifications/widgets/notifications_modal.dart';
 import '../../features/notifications/services/notification_providers.dart';
 import '../../features/cart/providers/cart_provider.dart';
+import '../../features/profile/utils/profile_launcher.dart';
 import '../../routes/app_router.dart';
 import 'mobile_cart_bar.dart';
 
@@ -65,7 +66,7 @@ class _AppNavigationState extends ConsumerState<AppNavigation> {
     return Scaffold(
       appBar: AppHeader(
         onLogoTap: () {},
-        onProfileTap: () => context.push(AppRoutes.profile),
+        onProfileTap: () => openProfile(context),
         isScrolled: _scrolled,
       ),
       body: NotificationListener<ScrollNotification>(
@@ -131,7 +132,7 @@ class _MobileBottomNav extends ConsumerWidget {
                 label: 'Profile',
                 active: false,
                 badge: 0,
-                onTap: () => context.push(AppRoutes.profile),
+                onTap: () => openProfile(context),
               ),
             ],
           ),

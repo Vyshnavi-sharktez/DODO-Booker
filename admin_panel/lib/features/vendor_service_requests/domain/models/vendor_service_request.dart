@@ -19,6 +19,13 @@ class VendorServiceRequest {
     required this.createdAt,
     required this.updatedAt,
     this.isActive = false,
+    this.warrantyEnabled = false,
+    this.warrantyDays,
+    this.warrantyCovers,
+    this.warrantyExclusions,
+    this.includedItems = const [],
+    this.excludedItems = const [],
+    this.beforeAfterPairs = const [],
   });
 
   final String id;
@@ -38,6 +45,13 @@ class VendorServiceRequest {
   final DateTime createdAt;
   final DateTime updatedAt;
   final bool isActive;
+  final bool warrantyEnabled;
+  final int? warrantyDays;
+  final String? warrantyCovers;
+  final String? warrantyExclusions;
+  final List<String> includedItems;
+  final List<String> excludedItems;
+  final List<Map<String, String>> beforeAfterPairs;
 
   bool get isPending => status == 'pending';
   bool get isNeedsCatalog => status == 'needs_catalog';
@@ -49,6 +63,7 @@ class VendorServiceRequest {
   bool get isNewService => requestType == 'new_service';
   bool get isPriceChange => requestType == 'price_change';
   bool get isDeleteService => requestType == 'delete_service';
+  bool get isEditService => requestType == 'edit_service';
 
   String get statusLabel => switch (status) {
         'needs_catalog' => 'Needs Catalog',
@@ -62,6 +77,7 @@ class VendorServiceRequest {
   String get requestTypeLabel => switch (requestType) {
         'price_change' => 'Price Change',
         'delete_service' => 'Deletion',
+        'edit_service' => 'Edit Proposal',
         // new_service rows that are awaiting deletion approval
         _ => isPendingDeletion ? 'Deletion Request' : 'New Service',
       };
@@ -99,6 +115,16 @@ class VendorServiceRequest {
       createdAt: DateTime.parse(m['created_at'] as String),
       updatedAt: DateTime.parse(m['updated_at'] as String),
       isActive: m['is_active'] as bool? ?? false,
+      warrantyEnabled: m['warranty_enabled'] as bool? ?? false,
+      warrantyDays: m['warranty_days'] as int?,
+      warrantyCovers: m['warranty_covers'] as String?,
+      warrantyExclusions: m['warranty_exclusions'] as String?,
+      includedItems: List<String>.from((m['included_items'] as List?) ?? []),
+      excludedItems: List<String>.from((m['excluded_items'] as List?) ?? []),
+      beforeAfterPairs: ((m['before_after_pairs'] as List?) ?? [])
+          .map((e) => Map<String, String>.from(
+              (e as Map).map((k, v) => MapEntry(k.toString(), v.toString()))))
+          .toList(),
     );
   }
 }

@@ -125,6 +125,8 @@ class _ServicesPageState extends ConsumerState<ServicesPage> {
           required estimatedDuration,
           imageUrl,
           required isActive,
+          required warrantyEnabled,
+          warrantyDays,
         }) async {
           await ref.read(servicesNotifierProvider.notifier).createService(
                 categoryId: categoryId,
@@ -135,6 +137,8 @@ class _ServicesPageState extends ConsumerState<ServicesPage> {
                 estimatedDuration: estimatedDuration,
                 imageUrl: imageUrl,
                 isActive: isActive,
+                warrantyEnabled: warrantyEnabled,
+                warrantyDays: warrantyDays,
               );
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
@@ -165,6 +169,8 @@ class _ServicesPageState extends ConsumerState<ServicesPage> {
           required estimatedDuration,
           imageUrl,
           required isActive,
+          required warrantyEnabled,
+          warrantyDays,
         }) async {
           await ref.read(servicesNotifierProvider.notifier).updateService(
                 service.id,
@@ -176,6 +182,8 @@ class _ServicesPageState extends ConsumerState<ServicesPage> {
                 estimatedDuration: estimatedDuration,
                 imageUrl: imageUrl,
                 isActive: isActive,
+                warrantyEnabled: warrantyEnabled,
+                warrantyDays: warrantyDays,
               );
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
