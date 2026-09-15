@@ -19,7 +19,9 @@ import '../widgets/vendor_nearby_warning_dialog.dart';
 import '../../amc/screens/amc_contract_details_screen.dart';
 import '../../amc/providers/amc_contract_provider.dart';
 import '../../amc/models/amc_contract_model.dart';
-import '../../warranties/widgets/warranty_card.dart';
+import '../../warranties/models/service_warranty_model.dart';
+import '../../warranties/screens/warranty_details_screen.dart';
+import '../../warranties/services/warranty_providers.dart';
 import '../../call_bridge/widgets/call_bridge_dialog.dart';
 
 class BookingDetailsScreen extends ConsumerStatefulWidget {
@@ -73,7 +75,6 @@ class _BookingDetailsScreenState extends ConsumerState<BookingDetailsScreen> {
           child: Column(
             children: [
               _StatusBanner(booking: booking),
-              if (booking.isCompleted) WarrantyCard(booking: booking),
               if (booking.completionOtp != null &&
                   _otpVisibleForStatus(booking.status))
                 _OtpDisplayCard(otp: booking.completionOtp!),
@@ -82,6 +83,7 @@ class _BookingDetailsScreenState extends ConsumerState<BookingDetailsScreen> {
               _VendorCard(booking: booking),
               _ServiceInfoCard(booking: booking),
               _AddonsCard(booking: booking),
+              _WarrantySectionCard(booking: booking),
               _ServicePhotosCard(bookingId: booking.id),
               _AddressCard(booking: booking),
               _TimelineCard(booking: booking),
@@ -1341,6 +1343,184 @@ class _DateFmt {
 
   String format(DateTime d) =>
       '${d.day.toString().padLeft(2, '0')} ${_months[d.month - 1]} ${d.year}';
+}
+
+// ── Warranty Section Card ─────────────────────────────────────────────────────
+
+class _WarrantySectionCard extends ConsumerWidget {
+  final MyBookingModel booking;
+
+  const _WarrantySectionCard({required this.booking});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    if (!booking.isCompleted) return const SizedBox.shrink();
+
+    final warrantyAsync = ref.watch(bookingWarrantyProvider(booking.id));
+
+    return warrantyAsync.when(
+      data: (warranty) {
+        if (warranty == null) return const SizedBox.shrink();
+        return _WarrantySectionContent(booking: booking, warranty: warranty);
+      },
+      loading: () => const SizedBox.shrink(),
+      error: (_, _) => const SizedBox.shrink(),
+    );
+  }
+}
+
+class _WarrantySectionContent extends StatelessWidget {
+  final MyBookingModel booking;
+  final ServiceWarrantyModel warranty;
+
+  const _WarrantySectionContent({
+    required this.booking,
+    required this.warranty,
+  });
+
+  static const _statusColors = <String, Color>{
+    'active': Color(0xFF38A169),
+    'under review': Color(0xFF805AD5),
+    'approved': Color(0xFF3182CE),
+    'vendor accepted': Color(0xFF3182CE),
+    'in progress': Color(0xFFD69E2E),
+    'rework completed': Color(0xFF2B6CB0),
+    'resolved': Color(0xFF2B6CB0),
+    'rejected': Color(0xFFE53E3E),
+  };
+
+  static const _statusIcons = <String, IconData>{
+    'active': Icons.verified_user_rounded,
+    'under review': Icons.rate_review_rounded,
+    'approved': Icons.assignment_turned_in_rounded,
+    'vendor accepted': Icons.assignment_turned_in_rounded,
+    'in progress': Icons.engineering_rounded,
+    'rework completed': Icons.task_alt_rounded,
+    'resolved': Icons.task_alt_rounded,
+    'rejected': Icons.cancel_rounded,
+  };
+
+  static String _fmtDate(DateTime d) {
+    const m = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    return '${d.day.toString().padLeft(2, '0')} ${m[d.month - 1]} ${d.year}';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final tt = Theme.of(context).textTheme;
+    final key = warranty.effectiveStatus.toLowerCase();
+    final statusColor = _statusColors[key] ?? const Color(0xFF718096);
+    final statusIcon = _statusIcons[key] ?? Icons.history_rounded;
+
+    final subtitle = warranty.isActive
+        ? 'This service is covered under warranty.'
+        : warranty.isExpired
+            ? 'Warranty expired on ${_fmtDate(warranty.expiresAt)}.'
+            : (warranty.isClaimed || warranty.isApproved || warranty.isReworkInProgress)
+                ? 'Rework is actively being processed.'
+                : warranty.isResolved
+                    ? 'Warranty claim has been resolved.'
+                    : warranty.isRejected
+                        ? 'Warranty claim was rejected.'
+                        : 'Warranty no longer active.';
+
+    return Card(
+      margin: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'WARRANTY',
+              style: tt.labelMedium?.copyWith(
+                color: AppColors.textSecondary,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 0.5,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: statusColor.withValues(alpha: 0.12),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(statusIcon, color: statusColor, size: 18),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Service Warranty',
+                        style: tt.titleSmall?.copyWith(
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.textPrimary,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        subtitle,
+                        style: tt.bodySmall?.copyWith(
+                          color: AppColors.textSecondary,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: statusColor.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Text(
+                    warranty.effectiveStatus.toUpperCase(),
+                    style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w800,
+                      color: statusColor,
+                      letterSpacing: 0.3,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 14),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: () => WarrantyDetailsScreen.showAsModal(
+                  context,
+                  booking: booking,
+                  warranty: warranty,
+                ),
+                icon: const Icon(Icons.shield_outlined, size: 16),
+                label: const Text(
+                  'Claim Warranty',
+                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.black,
+                  foregroundColor: Colors.white,
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 // ── Action buttons ─────────────────────────────────────────────────────────────
