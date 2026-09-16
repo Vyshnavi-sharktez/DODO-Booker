@@ -81,6 +81,11 @@ class _VendorNotificationsPanelDialogState
         RouteNames.services,
         queryParameters: {'tab': '0', 'subTab': '2'},
       );
+    } else if (n.entityType == 'vendor_document' ||
+        n.notificationType == 'document_approved' ||
+        n.notificationType == 'document_rejected') {
+      Navigator.of(context).pop();
+      router.pushNamed(RouteNames.documents);
     }
   }
 

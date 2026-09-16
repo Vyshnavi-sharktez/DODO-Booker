@@ -255,6 +255,9 @@ final routerProvider = Provider<GoRouter>((ref) {
             pageBuilder: (context, state) => NoTransitionPage(
               child: VendorDetailsPage(
                 vendorId: state.pathParameters['vendorId']!,
+                initialTab: int.tryParse(
+                        state.uri.queryParameters['tab'] ?? '') ??
+                    0,
               ),
             ),
           ),

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/constants/app_colors.dart';
+import '../../../../core/widgets/vendor_scaffold.dart';
 import '../../../auth/presentation/providers/auth_controller.dart';
 import '../../domain/models/vendor_document.dart';
 import '../providers/documents_provider.dart';
@@ -136,19 +137,16 @@ class _DocumentsPageState extends ConsumerState<DocumentsPage> {
     final availableTypes =
         types.where((t) => !uploadedTypeIds.contains(t.id)).toList();
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('My Documents'),
-        bottom: asyncDocs.isLoading
-            ? const PreferredSize(
-                preferredSize: Size.fromHeight(2),
-                child: LinearProgressIndicator(minHeight: 2),
-              )
-            : null,
-      ),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
+    return VendorScaffold(
+      title: 'My Documents',
+      child: Column(
         children: [
+          if (asyncDocs.isLoading)
+            const LinearProgressIndicator(minHeight: 2),
+          Expanded(
+            child: ListView(
+              padding: const EdgeInsets.all(16),
+              children: [
           if (asyncDocs.hasError)
             _ErrorBanner(onRetry: () => ref.refresh(vendorDocumentsProvider)),
           if (availableTypes.isNotEmpty)
@@ -198,6 +196,9 @@ class _DocumentsPageState extends ConsumerState<DocumentsPage> {
               },
             ),
           ],
+        ],
+            ),
+          ),
         ],
       ),
     );

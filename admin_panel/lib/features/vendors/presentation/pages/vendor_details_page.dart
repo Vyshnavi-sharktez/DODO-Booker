@@ -21,8 +21,9 @@ final _currencyFmt =
     NumberFormat.currency(locale: 'en_IN', symbol: '₹', decimalDigits: 2);
 
 class VendorDetailsPage extends ConsumerWidget {
-  const VendorDetailsPage({super.key, required this.vendorId});
+  const VendorDetailsPage({super.key, required this.vendorId, this.initialTab = 0});
   final String vendorId;
+  final int initialTab;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -34,7 +35,7 @@ class VendorDetailsPage extends ConsumerWidget {
         message: e.toString(),
         onRetry: () => ref.invalidate(vendorByIdProvider(vendorId)),
       ),
-      data: (vendor) => _VendorDetailView(vendor: vendor, vendorId: vendorId),
+      data: (vendor) => _VendorDetailView(vendor: vendor, vendorId: vendorId, initialTab: initialTab),
     );
   }
 }
@@ -42,9 +43,10 @@ class VendorDetailsPage extends ConsumerWidget {
 // ── Main view ──────────────────────────────────────────────────────────────────
 
 class _VendorDetailView extends ConsumerWidget {
-  const _VendorDetailView({required this.vendor, required this.vendorId});
+  const _VendorDetailView({required this.vendor, required this.vendorId, required this.initialTab});
   final Vendor vendor;
   final String vendorId;
+  final int initialTab;
 
   Future<void> _openApplyPenalty(BuildContext context, WidgetRef ref) async {
     await showDialog<void>(
@@ -106,6 +108,7 @@ class _VendorDetailView extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     return DefaultTabController(
       length: 4,
+      initialIndex: initialTab.clamp(0, 3),
       child: Padding(
         padding: const EdgeInsets.all(24),
         child: Column(

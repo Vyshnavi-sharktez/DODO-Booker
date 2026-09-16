@@ -13,6 +13,8 @@ import '../../features/bookings/presentation/pages/booking_detail_page.dart';
 import '../../features/wallet/presentation/pages/wallet_page.dart';
 import '../../features/services/presentation/pages/services_page.dart';
 import '../../features/services/presentation/pages/add_service_page.dart';
+import '../../features/profile/domain/models/vendor_profile.dart';
+import '../../features/profile/presentation/pages/edit_profile_page.dart';
 import '../../features/profile/presentation/pages/profile_page.dart';
 import '../../features/documents/presentation/pages/documents_page.dart';
 import '../../features/notifications/presentation/pages/notifications_page.dart';
@@ -131,6 +133,14 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: RoutePaths.profile,
         name: RouteNames.profile,
         builder: (context, state) => const ProfilePage(),
+      ),
+      GoRoute(
+        path: RoutePaths.editProfile,
+        name: RouteNames.editProfile,
+        builder: (context, state) {
+          final profile = state.extra as VendorProfile;
+          return EditProfilePage(profile: profile);
+        },
       ),
       GoRoute(
         path: RoutePaths.documents,

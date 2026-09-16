@@ -5389,9 +5389,11 @@ class _PendingAttrDialogState extends State<_PendingAttrDialog> {
                     ),
                     const SizedBox(height: 10),
                     Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                      crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
-                        ToggleButtons(
+                        SizedBox(
+                          height: 48,
+                          child: ToggleButtons(
                           isSelected: [
                             _discountType == 'percentage',
                             _discountType == 'flat',
@@ -5404,7 +5406,7 @@ class _PendingAttrDialogState extends State<_PendingAttrDialog> {
                           fillColor: AppColors.primary,
                           textStyle: const TextStyle(fontSize: 13),
                           constraints: const BoxConstraints(
-                              minWidth: 48, minHeight: 44),
+                              minWidth: 48, minHeight: 48, maxHeight: 48),
                           children: const [
                             Padding(
                               padding:
@@ -5418,25 +5420,29 @@ class _PendingAttrDialogState extends State<_PendingAttrDialog> {
                             ),
                           ],
                         ),
+                        ),
                         const SizedBox(width: 12),
                         Expanded(
-                          child: TextFormField(
-                            controller: _discountValue,
-                            keyboardType:
-                                const TextInputType.numberWithOptions(
-                                    decimal: true),
-                            inputFormatters: [
-                              FilteringTextInputFormatter.allow(
-                                  RegExp(r'^\d*\.?\d{0,2}')),
-                            ],
-                            decoration: _inputDeco('0').copyWith(
-                              labelText: _discountType == 'percentage'
-                                  ? 'Discount %'
-                                  : 'Discount ₹',
-                              prefixText:
-                                  _discountType == 'percentage' ? null : '₹ ',
-                              suffixText:
-                                  _discountType == 'percentage' ? '%' : null,
+                          child: SizedBox(
+                            height: 48,
+                            child: TextFormField(
+                              controller: _discountValue,
+                              keyboardType:
+                                  const TextInputType.numberWithOptions(
+                                      decimal: true),
+                              inputFormatters: [
+                                FilteringTextInputFormatter.allow(
+                                    RegExp(r'^\d*\.?\d{0,2}')),
+                              ],
+                              decoration: _inputDeco('0').copyWith(
+                                labelText: _discountType == 'percentage'
+                                    ? 'Discount %'
+                                    : 'Discount ₹',
+                                prefixText:
+                                    _discountType == 'percentage' ? null : '₹ ',
+                                suffixText:
+                                    _discountType == 'percentage' ? '%' : null,
+                              ),
                             ),
                           ),
                         ),
@@ -5458,8 +5464,9 @@ class _PendingAttrDialogState extends State<_PendingAttrDialog> {
                     onPressed: () => Navigator.of(context).pop(),
                     style: OutlinedButton.styleFrom(
                       padding: const EdgeInsets.symmetric(
-                          horizontal: 20, vertical: 10),
-                      minimumSize: const Size(0, 40),
+                          horizontal: 24, vertical: 10),
+                      minimumSize: const Size(0, 44),
+                      fixedSize: const Size.fromHeight(44),
                       tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                     ),
                     child: const Text('Cancel'),
@@ -5480,7 +5487,8 @@ class _PendingAttrDialogState extends State<_PendingAttrDialog> {
                     },
                     style: FilledButton.styleFrom(
                       backgroundColor: AppColors.primary,
-                      minimumSize: const Size(0, 40),
+                      minimumSize: const Size(0, 44),
+                      fixedSize: const Size.fromHeight(44),
                       padding: const EdgeInsets.symmetric(
                           horizontal: 24, vertical: 10),
                       tapTargetSize: MaterialTapTargetSize.shrinkWrap,
