@@ -276,6 +276,12 @@ class _NotificationsPanelDialogState
       return;
     }
 
+    if (n.entityType == 'vendor_document' && n.entityId != null) {
+      Navigator.of(context).pop();
+      router.go('/dashboard/vendors/${n.entityId}?tab=1');
+      return;
+    }
+
     if (n.notificationType == 'subscription_purchased') {
       Navigator.of(context).pop();
       router.go('/dashboard/vendor-subscriptions');

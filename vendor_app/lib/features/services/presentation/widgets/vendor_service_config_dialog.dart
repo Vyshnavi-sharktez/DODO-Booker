@@ -1909,7 +1909,9 @@ class _AttrFormDialogState extends State<_AttrFormDialog> {
                     Row(
                       crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
-                        ToggleButtons(
+                        SizedBox(
+                          height: 44,
+                          child: ToggleButtons(
                           isSelected: [
                             _discountType == 'percentage',
                             _discountType == 'flat',
@@ -1922,7 +1924,7 @@ class _AttrFormDialogState extends State<_AttrFormDialog> {
                           fillColor: AppColors.primary,
                           textStyle: const TextStyle(fontSize: 13),
                           constraints: const BoxConstraints(
-                              minWidth: 48, minHeight: 44),
+                              minWidth: 48, minHeight: 44, maxHeight: 44),
                           children: const [
                             Padding(
                               padding: EdgeInsets.symmetric(horizontal: 10),
@@ -1933,6 +1935,7 @@ class _AttrFormDialogState extends State<_AttrFormDialog> {
                               child: Text('₹'),
                             ),
                           ],
+                        ),
                         ),
                         const SizedBox(width: 12),
                         Expanded(
@@ -1989,6 +1992,7 @@ class _AttrFormDialogState extends State<_AttrFormDialog> {
                         padding: EdgeInsets.zero,
                         tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                         minimumSize: Size.zero,
+                        fixedSize: const Size(125, 44),
                       ),
                       child: const Text('Cancel'),
                     ),
