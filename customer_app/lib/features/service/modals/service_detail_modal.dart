@@ -8,7 +8,6 @@ import '../../../features/catalog/models/catalog_node_model.dart';
 import '../../../models/service_attribute_model.dart';
 import '../../../models/addon_model.dart';
 import '../../../features/category/services/category_providers.dart';
-\
 import '../widgets/service_image_carousel.dart';
 import '../widgets/service_info_section.dart';
 import '../widgets/faq_section.dart';
@@ -484,4 +483,4 @@ class _ModalBookingBar extends ConsumerWidget {
       ),
     );
   }
-}\
+}
