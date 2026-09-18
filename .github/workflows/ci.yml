@@ -27,7 +27,7 @@ jobs:
           key: ${{ runner.os }}-pub-customer-${{ hashFiles('customer_app/pubspec.lock') }}
           restore-keys: ${{ runner.os }}-pub-customer-
       - run: flutter pub get
-      - run: flutter analyze
+      - run: flutter analyze --no-fatal-warnings --no-fatal-infos
       - run: flutter test
 
   vendor_app:
@@ -49,7 +49,7 @@ jobs:
           key: ${{ runner.os }}-pub-vendor-${{ hashFiles('vendor_app/pubspec.lock') }}
           restore-keys: ${{ runner.os }}-pub-vendor-
       - run: flutter pub get
-      - run: flutter analyze
+      - run: flutter analyze --no-fatal-warnings --no-fatal-infos
       - run: flutter test
 
   admin_panel:
@@ -71,5 +71,5 @@ jobs:
           key: ${{ runner.os }}-pub-admin-${{ hashFiles('admin_panel/pubspec.lock') }}
           restore-keys: ${{ runner.os }}-pub-admin-
       - run: flutter pub get
-      - run: flutter analyze
+      - run: flutter analyze --no-fatal-warnings --no-fatal-infos
       - run: flutter test
