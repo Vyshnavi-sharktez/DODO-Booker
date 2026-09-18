@@ -1,0 +1,75 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  customer_app:
+    name: Customer App
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: customer_app
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.41.9'
+          channel: 'stable'
+          cache: true
+      - uses: actions/cache@v4
+        with:
+          path: ~/.pub-cache
+          key: ${{ runner.os }}-pub-customer-${{ hashFiles('customer_app/pubspec.lock') }}
+          restore-keys: ${{ runner.os }}-pub-customer-
+      - run: flutter pub get
+      - run: flutter analyze
+      - run: flutter test
+
+  vendor_app:
+    name: Vendor App
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: vendor_app
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.41.9'
+          channel: 'stable'
+          cache: true
+      - uses: actions/cache@v4
+        with:
+          path: ~/.pub-cache
+          key: ${{ runner.os }}-pub-vendor-${{ hashFiles('vendor_app/pubspec.lock') }}
+          restore-keys: ${{ runner.os }}-pub-vendor-
+      - run: flutter pub get
+      - run: flutter analyze
+      - run: flutter test
+
+  admin_panel:
+    name: Admin Panel
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: admin_panel
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.41.9'
+          channel: 'stable'
+          cache: true
+      - uses: actions/cache@v4
+        with:
+          path: ~/.pub-cache
+          key: ${{ runner.os }}-pub-admin-${{ hashFiles('admin_panel/pubspec.lock') }}
+          restore-keys: ${{ runner.os }}-pub-admin-
+      - run: flutter pub get
+      - run: flutter analyze
+      - run: flutter test
