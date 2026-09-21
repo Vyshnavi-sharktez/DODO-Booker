@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../bulk_upload_module.dart';
 import '../../models/bulk_row.dart';
+import '../catalog_row_validator.dart';
 import '../excel_utils.dart' as xu;
 
 class CatalogBulkModule extends BulkUploadModule {
@@ -120,21 +121,6 @@ Notes:
     _childrenOf = childrenOf;
   }
 
-  String? _findChild(String? parentId, String name) {
-    // Null-safe access — no ! operators. Both maps are set by _loadCache before
-    // _findChild is ever called, but we guard anyway to avoid dart2js crashes.
-    final childMap = _childrenOf;
-    final nodeMap = _nodesById;
-    if (childMap == null || nodeMap == null) return null;
-    final children = childMap[parentId] ?? [];
-    final lc = name.toLowerCase();
-    for (final id in children) {
-      final n = nodeMap[id];
-      if (n != null && (n['name'] as String?)?.toLowerCase() == lc) return id;
-    }
-    return null;
-  }
-
   void _addToCache(String? parentId, String nodeId, String name) {
     final nm = _nodesById;
     final cm = _childrenOf;
@@ -155,65 +141,14 @@ Notes:
       final row = rawRows[i];
       final rowNum = i + 2;
       debugPrint('[CatalogBulk] Validating row $rowNum — keys: ${row.keys.toList()}');
-
-      final levels = _extractLevels(row);
-      debugPrint('[CatalogBulk] Row $rowNum — levels: $levels');
-
-      if (levels.isEmpty) {
-        return BulkRow(
-          rowNumber: rowNum,
-          raw: row,
-          status: RowStatus.invalid,
-          errors: ['At least level_1 is required'],
-          displayLabel: null,
-        );
-      }
-
-      // Validate is_bookable vs base_price before the duplicate check.
-      final isBookable = _parseBool(row['is_bookable'], defaultVal: false);
-      if (isBookable) {
-        final priceStr = (row['base_price'] ?? '').trim();
-        debugPrint('[CatalogBulk] Row $rowNum — is_bookable=true, base_price="$priceStr"');
-        if (priceStr.isEmpty || double.tryParse(priceStr) == null) {
-          return BulkRow(
-            rowNumber: rowNum,
-            raw: row,
-            status: RowStatus.invalid,
-            errors: ['base_price is required and must be a number when is_bookable=TRUE'],
-            displayLabel: levels.last,
-          );
-        }
-      }
-
-      // Walk the path to check whether the leaf already exists.
-      String? parentId;
-      for (var idx = 0; idx < levels.length; idx++) {
-        final name = levels[idx];
-        final existingId = _findChild(parentId, name);
-        if (idx == levels.length - 1) {
-          // Leaf node.
-          if (existingId != null) {
-            debugPrint('[CatalogBulk] Row $rowNum — duplicate: ${levels.join(' > ')}');
-            return BulkRow(
-              rowNumber: rowNum,
-              raw: row,
-              status: RowStatus.skipped,
-              skipReason: 'Node "${levels.join(' > ')}" already exists',
-              displayLabel: levels.last,
-            );
-          }
-        } else {
-          parentId = existingId; // may be null if intermediate is also missing
-        }
-      }
-
-      debugPrint('[CatalogBulk] Row $rowNum — valid: ${levels.join(' > ')}');
-      return BulkRow(
+      final result = validateCatalogRow(
+        row: row,
         rowNumber: rowNum,
-        raw: row,
-        status: RowStatus.valid,
-        displayLabel: levels.last,
+        childrenOf: _childrenOf!,
+        nodesById: _nodesById!,
       );
+      debugPrint('[CatalogBulk] Row $rowNum — ${result.status.name}: ${result.displayLabel}');
+      return result;
     });
   }
 
@@ -230,20 +165,20 @@ Notes:
     for (final br in validRows) {
       try {
         final row = br.raw;
-        final levels = _extractLevels(row);
+        final levels = extractCatalogLevels(row);
 
         String? parentId;
         for (var idx = 0; idx < levels.length; idx++) {
           final name = levels[idx];
           final isLeaf = idx == levels.length - 1;
 
-          var nodeId = _findChild(parentId, name);
+          var nodeId = findCatalogChild(parentId, name, _childrenOf!, _nodesById!);
           if (nodeId == null) {
             // Create the node.
             final slug = await _uniqueSlug(client, name);
             final isBookable = isLeaf &&
-                _parseBool(row['is_bookable'], defaultVal: false);
-            final isActive = _parseBool(row['is_active'], defaultVal: true);
+                parseCatalogBool(row['is_bookable'], defaultVal: false);
+            final isActive = parseCatalogBool(row['is_active'], defaultVal: true);
             final basePrice =
                 isLeaf ? double.tryParse(row['base_price'] ?? '') : null;
             final duration =
@@ -306,19 +241,6 @@ Notes:
 
   // ── Helpers ───────────────────────────────────────────────────────────────────
 
-  List<String> _extractLevels(Map<String, String?> row) {
-    final levels = <String>[];
-    var n = 1;
-    while (true) {
-      final key = 'level_$n';
-      final val = (row[key] ?? '').trim();
-      if (val.isEmpty) break;
-      levels.add(val);
-      n++;
-    }
-    return levels;
-  }
-
   Future<String> _uniqueSlug(SupabaseClient client, String name) async {
     final base = name
         .toLowerCase()
@@ -340,11 +262,4 @@ Notes:
     }
   }
 
-  bool _parseBool(String? val, {required bool defaultVal}) {
-    if (val == null || val.isEmpty) return defaultVal;
-    final v = val.trim().toLowerCase();
-    if (v == 'true' || v == '1' || v == 'yes') return true;
-    if (v == 'false' || v == '0' || v == 'no') return false;
-    return defaultVal;
-  }
 }
