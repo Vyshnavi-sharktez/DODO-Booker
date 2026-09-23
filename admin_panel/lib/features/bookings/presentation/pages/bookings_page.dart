@@ -1607,7 +1607,7 @@ class _BookingRow extends StatelessWidget {
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  booking.isCod ? 'Cash' : 'Online',
+                  booking.paymentMethodLabel,
                   style: TextStyle(
                     fontSize: 11,
                     color: booking.isCod

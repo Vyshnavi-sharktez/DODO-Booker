@@ -92,6 +92,12 @@ const _navItems = <_NavItem>[
     requiredPermission: 'booking.view',
   ),
   _NavItem(
+    label: 'Refund Requests',
+    icon: Icons.assignment_return_rounded,
+    route: '/dashboard/refunds',
+    requiredPermission: 'refund.view',
+  ),
+  _NavItem(
     label: 'Warranty Claims',
     icon: Icons.shield_rounded,
     route: '/dashboard/warranty-claims',

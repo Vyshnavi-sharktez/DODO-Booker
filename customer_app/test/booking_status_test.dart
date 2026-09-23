@@ -223,6 +223,147 @@ void main() {
     });
   });
 
+  group('MyBookingModel.paymentMethodLabel', () {
+    test('cash payment → COD label', () {
+      final b = MyBookingModel(
+        id: 'bk-pm-1',
+        serviceId: 's1',
+        serviceName: 'AC',
+        address: _base,
+        scheduledDate: _created,
+        timeSlot: '10:00 AM',
+        baseAmount: 500,
+        taxAmount: 0,
+        totalAmount: 500,
+        status: 'completed',
+        paymentMethod: 'cash',
+        createdAt: _created,
+      );
+      expect(b.isCod, isTrue);
+      expect(b.paymentMethodLabel, 'COD');
+    });
+
+    test('cod payment → COD label', () {
+      final b = MyBookingModel(
+        id: 'bk-pm-2',
+        serviceId: 's1',
+        serviceName: 'AC',
+        address: _base,
+        scheduledDate: _created,
+        timeSlot: '10:00 AM',
+        baseAmount: 500,
+        taxAmount: 0,
+        totalAmount: 500,
+        status: 'completed',
+        paymentMethod: 'cod',
+        createdAt: _created,
+      );
+      expect(b.isCod, isTrue);
+      expect(b.paymentMethodLabel, 'COD');
+    });
+
+    test('online payment → Online label', () {
+      final b = MyBookingModel(
+        id: 'bk-pm-3',
+        serviceId: 's1',
+        serviceName: 'AC',
+        address: _base,
+        scheduledDate: _created,
+        timeSlot: '10:00 AM',
+        baseAmount: 500,
+        taxAmount: 0,
+        totalAmount: 500,
+        status: 'completed',
+        paymentMethod: 'online',
+        createdAt: _created,
+      );
+      expect(b.isCod, isFalse);
+      expect(b.paymentMethodLabel, 'Online');
+    });
+
+    test('razorpay (legacy DB value) → Online label, not COD', () {
+      final b = MyBookingModel(
+        id: 'bk-pm-5',
+        serviceId: 's1',
+        serviceName: 'AC',
+        address: _base,
+        scheduledDate: _created,
+        timeSlot: '10:00 AM',
+        baseAmount: 500,
+        taxAmount: 0,
+        totalAmount: 500,
+        status: 'completed',
+        paymentMethod: 'razorpay',
+        createdAt: _created,
+      );
+      expect(b.isCod, isFalse);
+      expect(b.paymentMethodLabel, 'Online');
+    });
+
+    test('missing payment_method defaults to cash → COD label', () {
+      // fromJson default: payment_method null → 'cash'
+      final b = MyBookingModel(
+        id: 'bk-pm-4',
+        serviceId: 's1',
+        serviceName: 'AC',
+        address: _base,
+        scheduledDate: _created,
+        timeSlot: '10:00 AM',
+        baseAmount: 500,
+        taxAmount: 0,
+        totalAmount: 500,
+        status: 'completed',
+        createdAt: _created,
+        // paymentMethod omitted — uses default 'cash'
+      );
+      expect(b.paymentMethodLabel, 'COD');
+    });
+
+    test('fromJson parses payment_method field', () {
+      final json = {
+        'id': 'bk-fj-1',
+        'customer_id': 'cust-1',
+        'service_date': '2026-09-10',
+        'status': 'completed',
+        'payment_method': 'online',
+        'subtotal': 500.0,
+        'discount_amount': 0.0,
+        'total_amount': 500.0,
+        'address': '123 Main St, Hyderabad, Telangana, 500001',
+        'notes': 'AC Service · 10:00 AM',
+        'created_at': '2026-09-01T10:00:00.000Z',
+        'assignment_type': 'External Vendor',
+        'booking_items': <dynamic>[],
+        'booking_addons': <dynamic>[],
+      };
+      final b = MyBookingModel.fromJson(json);
+      expect(b.paymentMethod, 'online');
+      expect(b.paymentMethodLabel, 'Online');
+    });
+
+    test('fromJson defaults to cash when payment_method absent', () {
+      final json = {
+        'id': 'bk-fj-2',
+        'customer_id': 'cust-1',
+        'service_date': '2026-09-10',
+        'status': 'completed',
+        // no payment_method key
+        'subtotal': 400.0,
+        'discount_amount': 0.0,
+        'total_amount': 400.0,
+        'address': '123 Main St, Hyderabad, Telangana, 500001',
+        'notes': 'AC Service · 10:00 AM',
+        'created_at': '2026-09-01T10:00:00.000Z',
+        'assignment_type': 'External Vendor',
+        'booking_items': <dynamic>[],
+        'booking_addons': <dynamic>[],
+      };
+      final b = MyBookingModel.fromJson(json);
+      expect(b.paymentMethod, 'cash');
+      expect(b.paymentMethodLabel, 'COD');
+    });
+  });
+
   group('MyBookingModel.displayBookingNumber', () {
     test('uses bookingNumber when present', () {
       final b = MyBookingModel(

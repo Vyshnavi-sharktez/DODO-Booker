@@ -14,6 +14,7 @@ import 'settings_screen.dart';
 import '../../amc/screens/amc_plans_page.dart';
 import '../../bookings/utils/my_bookings_launcher.dart';
 import '../../warranties/screens/my_warranties_screen.dart';
+import '../../refund_queries/screens/refund_queries_flow.dart';
 class ProfileScreen extends ConsumerWidget {
   const ProfileScreen({super.key, this.inModal = false});
 
@@ -165,6 +166,22 @@ class _ProfileBody extends ConsumerWidget {
                     mobileRoute: () => Navigator.of(context).push(
                       MaterialPageRoute(builder: (_) => const MyWarrantiesScreen()),
                     ),
+                  ),
+                ),
+              ),
+
+              const SizedBox(height: 12),
+
+              _FloatingCard(
+                child: ProfileMenuTile(
+                  icon: Icons.assignment_return_outlined,
+                  iconColor: const Color(0xFFE67E22),
+                  title: 'Refund Queries',
+                  subtitle: 'Raise and track refund requests',
+                  onTap: () => PageSheet.show(
+                    context,
+                    title: 'Refund Queries',
+                    child: const RefundQueriesFlow(),
                   ),
                 ),
               ),

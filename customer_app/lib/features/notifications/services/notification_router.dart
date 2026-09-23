@@ -7,6 +7,7 @@ import '../../bookings/screens/booking_details_screen.dart';
 import '../../bookings/services/bookings_providers.dart';
 import '../../catalog/providers/catalog_providers.dart';
 import '../../catalog/utils/catalog_launcher.dart';
+import '../../refund_queries/screens/refund_queries_flow.dart';
 import '../../vendor_custom_service/utils/custom_service_launcher.dart';
 import '../../warranties/screens/warranty_details_screen.dart';
 import '../../warranties/services/warranty_providers.dart';
@@ -82,6 +83,16 @@ abstract final class CustomerNotificationRouter {
             warranty: warranty,
           );
         }
+      }
+    } else if (n.entityType == 'refund_request') {
+      final targetContext = Navigator.of(context).context;
+      Navigator.of(context).pop();
+      if (targetContext.mounted) {
+        PageSheet.show(
+          targetContext,
+          title: 'Refund Queries',
+          child: RefundQueriesFlow(initialRequestId: n.entityId!),
+        );
       }
     }
   }

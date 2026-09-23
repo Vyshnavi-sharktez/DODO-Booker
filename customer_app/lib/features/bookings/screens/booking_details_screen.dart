@@ -115,7 +115,7 @@ class _BookingDetailsScreenState extends ConsumerState<BookingDetailsScreen> {
               children: [
                 const Text('Booking Details'),
                 Text(
-                  booking.id,
+                  booking.displayBookingNumber,
                   style: const TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.w400,
@@ -475,9 +475,14 @@ class _BookingInfoCard extends StatelessWidget {
       children: [
         _DetailRow(
           icon: Icons.confirmation_number_rounded,
-          label: 'Booking ID',
-          value: booking.id,
+          label: 'Booking Ref',
+          value: booking.displayBookingNumber,
           valueColor: AppColors.primary,
+        ),
+        _DetailRow(
+          icon: Icons.payment_rounded,
+          label: 'Payment Method',
+          value: booking.paymentMethodLabel,
         ),
         _DetailRow(
           icon: Icons.calendar_today_rounded,

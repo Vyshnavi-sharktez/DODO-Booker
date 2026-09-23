@@ -115,6 +115,9 @@ class _CatalogNodeConfigDialogState extends State<CatalogNodeConfigDialog>
   final Map<String, TextEditingController> _pvFeeControllers = {};
   List<Map<String, dynamic>> _pvVendors = []; // loaded from DB
 
+  // Refund Period override
+  final _refundPeriodCtrl = TextEditingController();
+
   // Vendor Subscription â€” plan config embedded in catalog_node_configs JSONB
   bool _vsEnabled = false;
   final _vsNameCtrl = TextEditingController();
@@ -135,11 +138,11 @@ class _CatalogNodeConfigDialogState extends State<CatalogNodeConfigDialog>
 
   static const _modules = [
     'tax', 'loyalty', 'scheduling', 'commission', 'surge', 'preferred_vendors',
-    'vendor_subscription',
+    'vendor_subscription', 'refund',
   ];
   static const _tabLabels = [
     'Tax', 'Loyalty', 'Scheduling', 'Platform Commission', 'Surge Fee', 'Preferred Vendors',
-    'Vendor Subscription',
+    'Vendor Subscription', 'Refund Period',
   ];
   static const _dayLabels = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
@@ -148,7 +151,7 @@ class _CatalogNodeConfigDialogState extends State<CatalogNodeConfigDialog>
   void initState() {
     super.initState();
     _tabController = TabController(
-        length: 7, vsync: this, initialIndex: widget.initialTabIndex.clamp(0, 6));
+        length: 8, vsync: this, initialIndex: widget.initialTabIndex.clamp(0, 7));
     for (final m in _modules) {
       _applyToChildren[m] = false;
     }
@@ -178,6 +181,7 @@ class _CatalogNodeConfigDialogState extends State<CatalogNodeConfigDialog>
     for (final ctrl in _vsPercentCtrls.values) {
       ctrl.dispose();
     }
+    _refundPeriodCtrl.dispose();
     super.dispose();
   }
 
@@ -274,6 +278,7 @@ class _CatalogNodeConfigDialogState extends State<CatalogNodeConfigDialog>
       _populateSurge();
       _populatePreferredVendors();
       _populateVendorSubscription();
+      _populateRefund();
 
       if (mounted) setState(() => _loading = false);
     } catch (e) {
@@ -316,6 +321,7 @@ class _CatalogNodeConfigDialogState extends State<CatalogNodeConfigDialog>
     _populateSurge();
     _populatePreferredVendors();
     _populateVendorSubscription();
+    _populateRefund();
   }
 
   CatalogNodeConfigModel? _activeConfig(String module) {
@@ -379,6 +385,14 @@ class _CatalogNodeConfigDialogState extends State<CatalogNodeConfigDialog>
       _commType = cfg.config['commission_type'] as String? ?? 'percentage';
       _commValueCtrl.text =
           (cfg.config['commission_value'] as num?)?.toString() ?? '';
+    }
+  }
+
+  void _populateRefund() {
+    final cfg = _activeConfig('refund');
+    if (cfg != null) {
+      _refundPeriodCtrl.text =
+          (cfg.config['refund_period_days'] as num?)?.toString() ?? '';
     }
   }
 
@@ -749,6 +763,11 @@ class _CatalogNodeConfigDialogState extends State<CatalogNodeConfigDialog>
               : double.tryParse(_vsSubFeeCtrl.text.trim()),
           'is_active': _vsIsActive,
           'permissions': perms,
+        };
+      case 'refund':
+        return {
+          'refund_period_days':
+              int.tryParse(_refundPeriodCtrl.text.trim()) ?? 30,
         };
       default:
         return {};
@@ -1133,6 +1152,8 @@ class _CatalogNodeConfigDialogState extends State<CatalogNodeConfigDialog>
         _populatePreferredVendors();
       case 'vendor_subscription':
         _populateVendorSubscription();
+      case 'refund':
+        _populateRefund();
     }
   }
 
@@ -1274,6 +1295,10 @@ class _CatalogNodeConfigDialogState extends State<CatalogNodeConfigDialog>
           if (vsSubFee != null) 'Subscription fee: â‚¹$vsSubFee',
           'Status: ${vsActive ? 'Active' : 'Inactive'}',
         ];
+      case 'refund':
+        final days = cfg['refund_period_days'] as num?;
+        if (days == null) return ['Refund period: not configured'];
+        return ['Refund eligibility period: ${days.toInt()} day(s) after completion'];
       default:
         return [];
     }
@@ -1368,6 +1393,9 @@ class _CatalogNodeConfigDialogState extends State<CatalogNodeConfigDialog>
                 numVal != 0 ? numVal.toStringAsFixed(0) : '';
           }
         }
+      case 'refund':
+        _refundPeriodCtrl.text =
+            (cfg['refund_period_days'] as num?)?.toString() ?? '';
     }
   }
 
@@ -1387,6 +1415,8 @@ class _CatalogNodeConfigDialogState extends State<CatalogNodeConfigDialog>
         return _buildPreferredVendorsFields();
       case 'vendor_subscription':
         return _buildVendorSubscriptionFields();
+      case 'refund':
+        return _buildRefundFields();
       default:
         return const SizedBox.shrink();
     }
@@ -1559,6 +1589,47 @@ class _CatalogNodeConfigDialogState extends State<CatalogNodeConfigDialog>
           inputFormatters: [
             FilteringTextInputFormatter.allow(RegExp(r'[0-9.]')),
           ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildRefundFields() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _label('Refund Eligibility Period (days)'),
+        const SizedBox(height: 4),
+        TextField(
+          controller: _refundPeriodCtrl,
+          decoration: _inputDeco('e.g. 7'),
+          keyboardType: TextInputType.number,
+          inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+        ),
+        const SizedBox(height: 10),
+        Container(
+          padding: const EdgeInsets.all(10),
+          decoration: BoxDecoration(
+            color: AppColors.background,
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: const Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(Icons.info_outline_rounded,
+                  size: 14, color: AppColors.textSecondary),
+              SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  'Overrides the global default for services in this catalog path. '
+                  'Customers must submit a refund request within this many days of '
+                  'service completion. Set to 0 to block all refund requests for '
+                  'completed bookings under this node.',
+                  style: TextStyle(fontSize: 11, color: AppColors.textSecondary),
+                ),
+              ),
+            ],
+          ),
         ),
       ],
     );

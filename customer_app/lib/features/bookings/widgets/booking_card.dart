@@ -150,13 +150,15 @@ class BookingCard extends StatelessWidget {
                       children: [
                         _InfoRow(
                           icon: Icons.confirmation_number_outlined,
-                          text: booking.id,
+                          text: booking.displayBookingNumber,
                           textStyle: tt.labelSmall?.copyWith(
                             color: AppColors.textSecondary,
                             fontFamily: 'monospace',
                             letterSpacing: 0.5,
                           ),
                         ),
+                        const SizedBox(height: 3),
+                        _PaymentMethodBadge(label: booking.paymentMethodLabel),
                         const SizedBox(height: 4),
                         _InfoRow(
                           icon: Icons.calendar_today_rounded,
@@ -341,6 +343,43 @@ class _RateNowChip extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+class _PaymentMethodBadge extends StatelessWidget {
+  final String label;
+  const _PaymentMethodBadge({required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    final isOnline = label == 'Online';
+    return Row(
+      children: [
+        const SizedBox(width: 17), // aligns with _InfoRow text
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+          decoration: BoxDecoration(
+            color: isOnline
+                ? AppColors.primary.withAlpha(20)
+                : AppColors.textSecondary.withAlpha(20),
+            borderRadius: BorderRadius.circular(4),
+            border: Border.all(
+              color: isOnline
+                  ? AppColors.primary.withAlpha(70)
+                  : AppColors.textSecondary.withAlpha(50),
+            ),
+          ),
+          child: Text(
+            label,
+            style: TextStyle(
+              fontSize: 10,
+              fontWeight: FontWeight.w600,
+              color: isOnline ? AppColors.primary : AppColors.textSecondary,
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

@@ -143,7 +143,7 @@ export default {
     }
 
     // ── Validate payment method ─────────────────────────────────────────────
-    if (booking.payment_method !== "razorpay") {
+    if (booking.payment_method !== "online" && booking.payment_method !== "razorpay") {
       return Response.json(
         { error: "This booking is not configured for Razorpay payment." },
         { status: 422 },

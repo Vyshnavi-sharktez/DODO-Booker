@@ -10,6 +10,7 @@ import '../../bookings/services/bookings_providers.dart';
 import '../../catalog/providers/catalog_providers.dart';
 import '../../reviews/widgets/review_modal.dart';
 import '../../catalog/utils/catalog_launcher.dart';
+import '../../refund_queries/screens/refund_queries_flow.dart';
 import '../../vendor_custom_service/widgets/vendor_custom_service_sheet.dart';
 import '../models/notification_model.dart';
 import '../services/notification_providers.dart';
@@ -94,6 +95,16 @@ class _NotificationsModalState extends ConsumerState<NotificationsModal> {
       final node = await ref.read(catalogServiceProvider).fetchNode(serviceId);
       if (node != null && targetContext.mounted) {
         openCatalogNode(targetContext, node, parentId: n.parentNodeId);
+      }
+    } else if (n.entityType == 'refund_request') {
+      final targetContext = Navigator.of(context).context;
+      Navigator.of(context).pop();
+      if (targetContext.mounted) {
+        PageSheet.show(
+          targetContext,
+          title: 'Refund Queries',
+          child: RefundQueriesFlow(initialRequestId: n.entityId!),
+        );
       }
     }
   }

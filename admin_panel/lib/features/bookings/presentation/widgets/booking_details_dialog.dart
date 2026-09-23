@@ -336,6 +336,7 @@ class _BookingDetailsDialogState extends ConsumerState<BookingDetailsDialog> {
                     _SectionLabel('Booking Info'),
                     const SizedBox(height: 12),
                     _InfoRow('Booking Number', booking.bookingNumber),
+                    _InfoRow('Payment Method', booking.paymentMethodLabel),
                     if (booking.isWarrantyRework) ...[
                       _InfoRow('Booking Type', 'Warranty Rework', bold: true),
                       if (booking.originalBookingNumber != null)
@@ -413,7 +414,6 @@ class _BookingDetailsDialogState extends ConsumerState<BookingDetailsDialog> {
                     if (booking.isCod) ...[
                       _SectionLabel('COD Reconciliation'),
                       const SizedBox(height: 12),
-                      _InfoRow('Payment Method', 'Cash on Delivery (COD)', bold: true),
                       Padding(
                         padding: const EdgeInsets.symmetric(vertical: 4),
                         child: Row(

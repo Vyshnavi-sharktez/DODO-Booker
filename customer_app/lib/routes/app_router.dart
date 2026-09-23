@@ -30,6 +30,11 @@ import '../features/info/screens/contact_screen.dart';
 import '../features/info/screens/help_screen.dart';
 import '../features/info/screens/refund_policy_screen.dart';
 import '../features/service_areas/screens/service_areas_screen.dart';
+import '../features/refund_queries/screens/refund_queries_screen.dart';
+import '../features/refund_queries/screens/booking_selection_screen.dart';
+import '../features/refund_queries/screens/refund_query_form_screen.dart';
+import '../features/refund_queries/screens/refund_query_detail_screen.dart';
+import '../features/refund_queries/models/booking_for_refund_model.dart';
 import '../models/booking_model.dart';
 import '../models/category_model.dart';
 import '../models/subcategory_model.dart';
@@ -100,6 +105,10 @@ class AppRoutes {
   static const String contact = '/contact';
   static const String help = '/help';
   static const String refundPolicy = '/refund-policy';
+  static const String refundQueries = '/refund-queries';
+  static const String bookingSelectionForRefund = '/refund-queries/select-booking';
+  static const String refundQueryForm = '/refund-queries/new';
+  static const String refundQueryDetail = '/refund-queries/:id';
 }
 
 final appRouter = GoRouter(
@@ -214,6 +223,32 @@ final appRouter = GoRouter(
     GoRoute(
       path: AppRoutes.refundPolicy,
       builder: (context, state) => const RefundPolicyScreen(),
+    ),
+    GoRoute(
+      path: AppRoutes.refundQueries,
+      builder: (context, state) => const RefundQueriesScreen(),
+    ),
+    GoRoute(
+      path: AppRoutes.bookingSelectionForRefund,
+      builder: (context, state) => const BookingSelectionScreen(),
+    ),
+    GoRoute(
+      path: AppRoutes.refundQueryForm,
+      builder: (context, state) {
+        final booking = state.extra;
+        if (booking is BookingForRefundModel) {
+          return RefundQueryFormScreen(booking: booking);
+        }
+        return const Scaffold(
+          body: Center(child: Text('Booking not found')),
+        );
+      },
+    ),
+    GoRoute(
+      path: AppRoutes.refundQueryDetail,
+      builder: (context, state) => RefundQueryDetailScreen(
+        requestId: state.pathParameters['id']!,
+      ),
     ),
 
     // ── Catalog / search browsing: ShellRoute shows floating cart bar ──────────

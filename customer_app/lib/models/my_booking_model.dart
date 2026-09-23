@@ -119,6 +119,7 @@ class MyBookingModel {
   final double totalAmount;
   final String status;
   final String assignmentType; // 'Unassigned' | 'External Vendor' | 'DODO Team'
+  final String paymentMethod;  // 'cash' | 'cod' | 'online'
   final DateTime createdAt;
   final String? customerId;
   final String? vendorId;
@@ -152,6 +153,7 @@ class MyBookingModel {
     required this.totalAmount,
     required this.status,
     this.assignmentType = 'Unassigned',
+    this.paymentMethod = 'cash',
     required this.createdAt,
     this.customerId,
     this.vendorId,
@@ -175,6 +177,10 @@ class MyBookingModel {
   }
 
   bool get isDodoTeam => assignmentType == 'DODO Team';
+
+  // 'cash' is the canonical COD value; 'cod' is accepted as alias.
+  bool get isCod => paymentMethod == 'cash' || paymentMethod == 'cod';
+  String get paymentMethodLabel => isCod ? 'COD' : 'Online';
 
   bool get isUpcoming =>
       status == BookingStatus.pending ||
@@ -280,6 +286,7 @@ class MyBookingModel {
       totalAmount: (json['total_amount'] as num?)?.toDouble() ?? 0.0,
       status: status,
       assignmentType: assignmentType,
+      paymentMethod: json['payment_method'] as String? ?? 'cash',
       createdAt: DateTime.parse(createdAtStr),
       customerId: json['customer_id'] as String?,
       vendorId: json['vendor_id'] as String?,

@@ -158,6 +158,8 @@ class Booking {
   // 'cod' is accepted as an alias for backward compatibility.
   bool get isCod => paymentMethod == 'cash' || paymentMethod == 'cod';
 
+  String get paymentMethodLabel => isCod ? 'COD' : 'Online';
+
   bool get isWarrantyRework => (notes ?? '').contains('[WARRANTY REWORK]');
 
   String? get originalBookingNumber {
