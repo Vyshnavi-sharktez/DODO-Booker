@@ -279,7 +279,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       debugPrint('[DODO][Checkout] ✓ createCartBooking returned — id=${booking.id}');
 
       // ── Razorpay payment ───────────────────────────────────────────────────
-      if (paymentMethod == 'razorpay') {
+      if (paymentMethod == 'online') {
         debugPrint('[DODO][Razorpay][TRACE] → launchCheckout(${booking.id})');
         try {
           final result = await RazorpayService().launchCheckout(booking.id);

@@ -12,12 +12,25 @@ interface RazorpayPaymentEntity {
   [key: string]: unknown;
 }
 
+interface RazorpayRefundEntity {
+  id: string;          // rfnd_XXXXX
+  entity: string;
+  amount: number;      // paise
+  currency: string;
+  payment_id: string;  // pay_XXXXX that was refunded
+  status: string;      // "processed" | "failed"
+  // notes is a flat string-keyed object.  We embed dodo_transaction_id here
+  // when creating the refund so we can match this event back to our DB row.
+  notes: Record<string, string> | null;
+  receipt: string | null;
+  [key: string]: unknown;
+}
+
 interface RazorpayWebhookPayload {
   event: string;
   payload: {
-    payment: {
-      entity: RazorpayPaymentEntity;
-    };
+    payment?: { entity: RazorpayPaymentEntity };
+    refund?:  { entity: RazorpayRefundEntity };
   };
 }
 
@@ -44,7 +57,7 @@ async function loadWebhookSecret(supabaseAdmin: SupabaseClient): Promise<string 
 // The resulting hex digest appears in the X-Razorpay-Signature header.
 // This is a separate secret from RAZORPAY_KEY_SECRET (used for payment HMAC).
 
-async function verifyWebhookSignature(
+export async function verifyWebhookSignature(
   rawBody: ArrayBuffer,
   signature: string,
   secret: string,
@@ -70,6 +83,182 @@ async function verifyWebhookSignature(
     diff |= computed.charCodeAt(i) ^ signature.charCodeAt(i);
   }
   return diff === 0;
+}
+
+// ── Refund event handler ──────────────────────────────────────────────────────
+//
+// Called after the webhook signature has been verified.
+//
+// Transaction lookup strategy:
+//   1. Primary: extract our internal transaction UUID from
+//      refundEntity.notes.dodo_transaction_id (embedded when the refund was
+//      created by process-razorpay-refund Edge Function).  This is the direct
+//      match key — we set it, so it cannot be spoofed once the HMAC is verified.
+//
+//   2. Fallback: look up refund_transactions.gateway_refund_id = rfnd_XXXXX.
+//      Used for refunds whose notes don't contain our UUID (e.g. manual refunds
+//      created via the Razorpay dashboard) or for already-completed rows.
+//
+//   3. If neither lookup matches → acknowledge 200 without any state change to
+//      stop Razorpay retries for unknown refunds.
+//
+// Security notes:
+//   • HMAC verification is the auth gate — no admin JWT is present in a webhook.
+//   • The transaction UUID in notes was set BY US, so it cannot be forged by an
+//     attacker who can only manipulate Razorpay's notes field (they would need
+//     the webhook secret to pass HMAC verification first).
+//   • The RPCs (webhook_complete/fail_refund_transaction) are SECURITY DEFINER
+//     and GRANTED to service_role only — no authenticated user can call them
+//     directly.
+
+async function handleRefundEvent(
+  event: "refund.processed" | "refund.failed",
+  refundEntity: RazorpayRefundEntity,
+  supabase: SupabaseClient,
+): Promise<Response> {
+  const gatewayRefundId = refundEntity.id;
+  const transactionIdFromNotes = refundEntity.notes?.dodo_transaction_id ?? null;
+
+  let transactionId: string | null = transactionIdFromNotes;
+
+  if (!transactionId) {
+    // ── Fallback: look up by gateway_refund_id already stored in DB ──────────
+    const { data: existing } = await supabase
+      .from("refund_transactions")
+      .select("id, status, gateway_refund_id")
+      .eq("gateway_refund_id", gatewayRefundId)
+      .maybeSingle();
+
+    if (!existing) {
+      // Unknown refund — not created by this system, test event, or manual
+      // Razorpay dashboard refund.  Acknowledge to stop retries.
+      return Response.json(
+        { received: true, handled: false, reason: "unknown_refund" },
+      );
+    }
+
+    // Quick idempotency for already-terminal rows found by gateway_refund_id.
+    if (existing.status === "completed" && event === "refund.processed") {
+      return Response.json({ received: true, idempotent: true });
+    }
+    if (existing.status === "failed" && event === "refund.failed") {
+      return Response.json({ received: true, idempotent: true });
+    }
+
+    transactionId = existing.id as string;
+  }
+
+  // ── Fast idempotency read before acquiring a row lock ─────────────────────
+  // The RPCs handle all state-machine transitions correctly under a row lock,
+  // so this pre-check is an optimisation only — it is NOT a correctness gate.
+  const { data: txn } = await supabase
+    .from("refund_transactions")
+    .select("id, status, gateway_refund_id")
+    .eq("id", transactionId)
+    .maybeSingle();
+
+  if (txn) {
+    if (
+      event === "refund.processed" &&
+      txn.status === "completed" &&
+      txn.gateway_refund_id === gatewayRefundId
+    ) {
+      return Response.json({ received: true, idempotent: true });
+    }
+    if (event === "refund.failed" && txn.status === "failed") {
+      return Response.json({ received: true, idempotent: true });
+    }
+    // A refund.failed event for an already-confirmed transaction is an anomaly.
+    // Acknowledge to stop retries but never revert a completed refund.
+    if (event === "refund.failed" && txn.status === "completed") {
+      console.warn(
+        `[razorpay-webhook] refund.failed event for already-completed ` +
+          `transaction ${transactionId} (${gatewayRefundId}). ` +
+          `Ignoring — a confirmed success is immutable.`,
+      );
+      return Response.json(
+        { received: true, handled: false, reason: "already_complete" },
+      );
+    }
+  }
+
+  // ── Delegate to RPC (handles locking, state transition, audit trail) ───────
+
+  if (event === "refund.processed") {
+    const { data: result, error } = await supabase.rpc(
+      "webhook_complete_refund_transaction",
+      {
+        p_transaction_id:    transactionId,
+        p_gateway_refund_id: gatewayRefundId,
+        p_gateway_response:  refundEntity as unknown as Record<string, unknown>,
+      },
+    );
+
+    if (error) {
+      // P0002 = transaction not found (very unlikely after lookup above).
+      if (error.code === "P0002") {
+        return Response.json(
+          { received: true, handled: false, reason: "transaction_not_found" },
+        );
+      }
+      console.error(
+        `[razorpay-webhook] webhook_complete_refund_transaction failed ` +
+          `for transaction ${transactionId}: ${error.message}`,
+      );
+      return Response.json(
+        { error: "Failed to update refund record." },
+        { status: 500 },
+      );
+    }
+
+    // 'already_complete' and 'already_failed' are idempotent outcomes.
+    return Response.json({
+      received: true,
+      success: result === "completed",
+      idempotent: result !== "completed",
+      result,
+      gateway_refund_id: gatewayRefundId,
+    });
+  }
+
+  // ── refund.failed ─────────────────────────────────────────────────────────
+  const failureReason =
+    String((refundEntity as Record<string, unknown>)["description"] ?? "") ||
+    String((refundEntity as Record<string, unknown>)["error_code"] ?? "") ||
+    "Refund failed (refund.failed webhook)";
+
+  const { data: result, error } = await supabase.rpc(
+    "webhook_fail_refund_transaction",
+    {
+      p_transaction_id:    transactionId,
+      p_gateway_refund_id: gatewayRefundId,
+      p_failure_reason:    failureReason,
+      p_gateway_response:  refundEntity as unknown as Record<string, unknown>,
+    },
+  );
+
+  if (error) {
+    if (error.code === "P0002") {
+      return Response.json(
+        { received: true, handled: false, reason: "transaction_not_found" },
+      );
+    }
+    console.error(
+      `[razorpay-webhook] webhook_fail_refund_transaction failed ` +
+        `for transaction ${transactionId}: ${error.message}`,
+    );
+    return Response.json(
+      { error: "Failed to update refund record." },
+      { status: 500 },
+    );
+  }
+
+  return Response.json({
+    received: true,
+    failed: result === "failed",
+    idempotent: result !== "failed",
+    result,
+  });
 }
 
 // ── Handler ───────────────────────────────────────────────────────────────────
@@ -139,6 +328,19 @@ export default {
 
     const { event } = payload;
 
+    // ── Refund events ─────────────────────────────────────────────────────────
+    // Handled before payment events to avoid a fall-through to the unknown-event
+    // early return.
+    if (event === "refund.processed" || event === "refund.failed") {
+      const refundEntity = payload.payload?.refund?.entity;
+      if (!refundEntity?.id) {
+        // Unexpected payload shape — acknowledge to stop retries.
+        return Response.json({ received: true, handled: false });
+      }
+      return handleRefundEvent(event, refundEntity, supabase);
+    }
+
+    // ── Payment events ────────────────────────────────────────────────────────
     // Acknowledge unhandled events — return 200 to prevent Razorpay retries.
     if (event !== "payment.captured" && event !== "payment.failed") {
       return Response.json({ received: true, handled: false });

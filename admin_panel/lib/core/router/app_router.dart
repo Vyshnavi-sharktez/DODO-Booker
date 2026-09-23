@@ -48,6 +48,7 @@ import '../../features/warranties/presentation/pages/warranty_analytics_page.dar
 import '../../features/call_monitoring/presentation/pages/call_sessions_page.dart';
 import '../../features/vendor_service_requests/presentation/pages/vendor_service_requests_page.dart';
 import '../../features/vendor_catalog/presentation/pages/vendor_catalog_page.dart';
+import '../../features/refunds/presentation/pages/refund_requests_page.dart';
 import '../../shared/pages/unauthorized_page.dart';
 import '../rbac/permission_guard.dart';
 
@@ -464,6 +465,13 @@ final routerProvider = Provider<GoRouter>((ref) {
             name: 'vendorCatalog',
             pageBuilder: (context, state) => const NoTransitionPage(
               child: VendorCatalogPage(),
+            ),
+          ),
+          GoRoute(
+            path: '/dashboard/refunds',
+            name: 'refundRequests',
+            pageBuilder: (context, state) => const NoTransitionPage(
+              child: RefundRequestsPage(),
             ),
           ),
         ],

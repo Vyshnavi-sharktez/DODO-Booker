@@ -287,6 +287,12 @@ class _NotificationsPanelDialogState
       router.go('/dashboard/vendor-subscriptions');
       return;
     }
+
+    if (n.entityType == 'refund_request') {
+      Navigator.of(context).pop();
+      router.go('/dashboard/refunds');
+      return;
+    }
   }
 
   @override

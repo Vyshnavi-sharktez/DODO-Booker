@@ -154,6 +154,15 @@ class SettingsPage extends ConsumerWidget {
           min: 1,
           max: 365,
         ),
+        SettingFieldDef(
+          key: 'default_refund_period_days',
+          label: 'Default Refund Eligibility Period',
+          hint: 'Days after service completion a customer can request a refund',
+          type: SettingFieldType.integer,
+          unit: 'days',
+          min: 0,
+          max: 365,
+        ),
       ],
     ),
     SettingSectionDef(

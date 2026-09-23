@@ -53,11 +53,11 @@ class _PaymentSelectionSheetState extends State<PaymentSelectionSheet> {
           ),
           const SizedBox(height: 12),
           _PaymentOption(
-            selected: _selected == 'razorpay',
+            selected: _selected == 'online',
             icon: Icons.credit_card_outlined,
             title: 'Pay Online',
             subtitle: 'Card, UPI, Net Banking.',
-            onTap: () => setState(() => _selected = 'razorpay'),
+            onTap: () => setState(() => _selected = 'online'),
           ),
           const SizedBox(height: 28),
           SizedBox(
