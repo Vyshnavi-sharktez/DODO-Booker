@@ -58,4 +58,20 @@ class NotificationService {
         .update({'is_read': true})
         .eq('id', notificationId);
   }
+
+  Future<void> markAsUnread(String notificationId) async {
+    debugPrint('[DODO][Notification] Marked Unread: $notificationId');
+    await _client
+        .from('notifications')
+        .update({'is_read': false})
+        .eq('id', notificationId);
+  }
+
+  Future<void> deleteNotification(String notificationId) async {
+    debugPrint('[DODO][Notification] Deleted: $notificationId');
+    await _client
+        .from('notifications')
+        .delete()
+        .eq('id', notificationId);
+  }
 }

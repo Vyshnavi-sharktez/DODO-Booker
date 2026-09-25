@@ -23,6 +23,7 @@ class _MyBookingsModalState extends ConsumerState<MyBookingsModal>
     (BookingsTab.ongoing, 'Ongoing'),
     (BookingsTab.completed, 'Completed'),
     (BookingsTab.cancelled, 'Cancelled'),
+    (BookingsTab.failed, 'Failed'),
   ];
 
   @override

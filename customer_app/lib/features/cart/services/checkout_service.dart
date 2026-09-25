@@ -260,7 +260,7 @@ class CheckoutService {
           try {
             await _client.from('notifications').insert({
               'user_type': 'admin',
-              'user_id': 'admin',
+              'user_id': null,
               'title': 'AMC Membership Renewed',
               'message': 'A customer has renewed their "$planLabel" AMC membership.',
               'notification_type': 'amc_renewed',
@@ -430,7 +430,7 @@ class CheckoutService {
     try {
       await _client.from('notifications').insert({
         'user_type': 'admin',
-        'user_id': 'admin',
+        'user_id': null,
         'title': 'New Booking Received',
         'message': 'A new booking has been created.',
         'notification_type': 'booking_created',

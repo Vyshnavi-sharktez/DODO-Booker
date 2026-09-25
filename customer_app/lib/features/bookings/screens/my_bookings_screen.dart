@@ -21,6 +21,7 @@ class _MyBookingsScreenState extends ConsumerState<MyBookingsScreen>
     (BookingsTab.ongoing, 'Ongoing'),
     (BookingsTab.completed, 'Completed'),
     (BookingsTab.cancelled, 'Cancelled'),
+    (BookingsTab.failed, 'Failed'),
   ];
 
   @override

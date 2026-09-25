@@ -17,7 +17,7 @@ class BookingsService {
   // separately in _injectReviewFlags(), same pattern as _injectAddons().
   static const _bookingSelect = '''
     id, booking_number, customer_id, vendor_id, dodo_team_id,
-    assignment_type, service_date, status, payment_method,
+    assignment_type, service_date, status, payment_method, payment_status,
     subtotal, discount_amount, total_amount,
     address, notes, created_at,
     completion_otp, otp_verified_at,
@@ -292,7 +292,7 @@ class BookingsService {
     try {
       await _client.from('notifications').insert({
         'user_type': 'admin',
-        'user_id': 'admin',
+        'user_id': null,
         'title': 'Booking Cancelled',
         'message': 'Customer cancelled booking $ref.',
         'notification_type': 'booking_cancelled',

@@ -24,8 +24,9 @@ class NotificationsModal extends ConsumerStatefulWidget {
 }
 
 class _NotificationsModalState extends ConsumerState<NotificationsModal> {
-  // Tracks IDs marked read locally so the UI updates instantly.
   final _locallyRead = <String>{};
+  final _locallyUnread = <String>{};
+  final _locallyDeleted = <String>{};
 
   @override
   void initState() {
@@ -33,18 +34,52 @@ class _NotificationsModalState extends ConsumerState<NotificationsModal> {
     debugPrint('[DODO][Notif] modal initState — ${DateTime.now().millisecondsSinceEpoch}ms');
   }
 
-  bool _isRead(NotificationModel n) =>
-      n.isRead || _locallyRead.contains(n.id);
+  bool _isRead(NotificationModel n) {
+    if (_locallyUnread.contains(n.id)) return false;
+    return n.isRead || _locallyRead.contains(n.id);
+  }
 
   Future<void> _markRead(NotificationModel n) async {
     if (_isRead(n)) return;
-    setState(() => _locallyRead.add(n.id));
+    setState(() {
+      _locallyRead.add(n.id);
+      _locallyUnread.remove(n.id);
+    });
     try {
       await ref.read(notificationServiceProvider).markAsRead(n.id);
       ref.invalidate(notificationsProvider);
     } catch (_) {
       // Non-fatal — optimistic state already applied.
     }
+  }
+
+  Future<void> _toggleRead(NotificationModel n) async {
+    final currentlyRead = _isRead(n);
+    setState(() {
+      if (currentlyRead) {
+        _locallyUnread.add(n.id);
+        _locallyRead.remove(n.id);
+      } else {
+        _locallyRead.add(n.id);
+        _locallyUnread.remove(n.id);
+      }
+    });
+    try {
+      if (currentlyRead) {
+        await ref.read(notificationServiceProvider).markAsUnread(n.id);
+      } else {
+        await ref.read(notificationServiceProvider).markAsRead(n.id);
+      }
+      ref.invalidate(notificationsProvider);
+    } catch (_) {}
+  }
+
+  Future<void> _delete(NotificationModel n) async {
+    setState(() => _locallyDeleted.add(n.id));
+    try {
+      await ref.read(notificationServiceProvider).deleteNotification(n.id);
+      ref.invalidate(notificationsProvider);
+    } catch (_) {}
   }
 
   Future<void> _handleTap(NotificationModel n) async {
@@ -137,21 +172,26 @@ class _NotificationsModalState extends ConsumerState<NotificationsModal> {
         ),
         error: (e, _) => const _EmptyState(),
         data: (notifications) {
+            final visible = notifications
+                .where((n) => !_locallyDeleted.contains(n.id))
+                .toList();
             // During a refresh (isAuth false→true), Riverpod calls data: with
             // the stale [] instead of loading:. Treat that as loading.
-            if (notifications.isEmpty && notificationsAsync.isLoading) {
+            if (visible.isEmpty && notificationsAsync.isLoading) {
               return const SizedBox(
                 height: 200,
                 child: Center(child: CircularProgressIndicator()),
               );
             }
-            return notifications.isEmpty
+            return visible.isEmpty
                 ? const _EmptyState()
                 : _NotificationList(
-                    notifications: notifications,
+                    notifications: visible,
                     isRead: _isRead,
                     onTap: _handleTap,
                     onRateService: _openRatingModal,
+                    onToggleRead: _toggleRead,
+                    onDelete: _delete,
                   );
           },
       ),
@@ -166,12 +206,16 @@ class _NotificationList extends StatelessWidget {
   final bool Function(NotificationModel) isRead;
   final void Function(NotificationModel) onTap;
   final void Function(NotificationModel)? onRateService;
+  final void Function(NotificationModel) onToggleRead;
+  final void Function(NotificationModel) onDelete;
 
   const _NotificationList({
     required this.notifications,
     required this.isRead,
     required this.onTap,
     this.onRateService,
+    required this.onToggleRead,
+    required this.onDelete,
   });
 
   @override
@@ -188,6 +232,8 @@ class _NotificationList extends StatelessWidget {
                     onRateService != null
                 ? () => onRateService!(notifications[i])
                 : null,
+            onToggleRead: () => onToggleRead(notifications[i]),
+            onDelete: () => onDelete(notifications[i]),
           ),
           if (i < notifications.length - 1)
             const Divider(height: 1, indent: 16, endIndent: 16),
@@ -202,12 +248,16 @@ class _NotificationTile extends StatelessWidget {
   final bool read;
   final VoidCallback onTap;
   final VoidCallback? onRateService;
+  final VoidCallback onToggleRead;
+  final VoidCallback onDelete;
 
   const _NotificationTile({
     required this.notification,
     required this.read,
     required this.onTap,
     this.onRateService,
+    required this.onToggleRead,
+    required this.onDelete,
   });
 
   static const _months = [
@@ -222,100 +272,157 @@ class _NotificationTile extends StatelessWidget {
     final date = '${d.day} ${_months[d.month - 1]} · '
         '${d.hour.toString().padLeft(2, '0')}:${d.minute.toString().padLeft(2, '0')}';
 
-    return InkWell(
-      onTap: onTap,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Padding(
-              padding: const EdgeInsets.only(top: 6, right: 10),
-              child: Container(
-                width: 8,
-                height: 8,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: read ? Colors.transparent : AppColors.primary,
-                ),
-              ),
-            ),
-            Expanded(
-              child: Column(
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(
+          child: InkWell(
+            onTap: onTap,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 4, 12),
+              child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    notification.title,
-                    style: tt.bodySmall?.copyWith(
-                      fontWeight: read ? FontWeight.w500 : FontWeight.w700,
-                      color: read
-                          ? AppColors.textSecondary
-                          : AppColors.textPrimary,
-                    ),
-                  ),
-                  if (notification.message.isNotEmpty) ...[
-                    const SizedBox(height: 3),
-                    Text(
-                      notification.message,
-                      style: tt.bodySmall?.copyWith(
-                        color: AppColors.textSecondary,
-                        height: 1.4,
+                  Padding(
+                    padding: const EdgeInsets.only(top: 6, right: 10),
+                    child: Container(
+                      width: 8,
+                      height: 8,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: read ? Colors.transparent : AppColors.primary,
                       ),
-                      maxLines: 3,
-                      overflow: TextOverflow.ellipsis,
                     ),
-                  ],
-                  const SizedBox(height: 4),
-                  Text(
-                    date,
-                    style: tt.labelSmall?.copyWith(color: AppColors.textHint),
                   ),
-                  if (onRateService != null) ...[
-                    const SizedBox(height: 8),
-                    MouseRegion(
-                      cursor: SystemMouseCursors.click,
-                      child: GestureDetector(
-                        onTap: onRateService,
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 10, vertical: 5),
-                          decoration: BoxDecoration(
-                            color: AppColors.gold.withAlpha(20),
-                            borderRadius: BorderRadius.circular(20),
-                            border: Border.all(
-                                color: AppColors.gold.withAlpha(100)),
-                          ),
-                          child: const Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(Icons.star_rounded,
-                                  size: 13, color: AppColors.gold),
-                              SizedBox(width: 4),
-                              Text(
-                                'Rate Service',
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w700,
-                                  color: AppColors.gold,
-                                ),
-                              ),
-                            ],
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          notification.title,
+                          style: tt.bodySmall?.copyWith(
+                            fontWeight: read ? FontWeight.w500 : FontWeight.w700,
+                            color: read
+                                ? AppColors.textSecondary
+                                : AppColors.textPrimary,
                           ),
                         ),
-                      ),
+                        if (notification.message.isNotEmpty) ...[
+                          const SizedBox(height: 3),
+                          Text(
+                            notification.message,
+                            style: tt.bodySmall?.copyWith(
+                              color: AppColors.textSecondary,
+                              height: 1.4,
+                            ),
+                            maxLines: 3,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
+                        const SizedBox(height: 4),
+                        Text(
+                          date,
+                          style: tt.labelSmall?.copyWith(color: AppColors.textHint),
+                        ),
+                        if (onRateService != null) ...[
+                          const SizedBox(height: 8),
+                          MouseRegion(
+                            cursor: SystemMouseCursors.click,
+                            child: GestureDetector(
+                              onTap: onRateService,
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 10, vertical: 5),
+                                decoration: BoxDecoration(
+                                  color: AppColors.gold.withAlpha(20),
+                                  borderRadius: BorderRadius.circular(20),
+                                  border: Border.all(
+                                      color: AppColors.gold.withAlpha(100)),
+                                ),
+                                child: const Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(Icons.star_rounded,
+                                        size: 13, color: AppColors.gold),
+                                    SizedBox(width: 4),
+                                    Text(
+                                      'Rate Service',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w700,
+                                        color: AppColors.gold,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ],
                     ),
-                  ],
+                  ),
                 ],
               ),
             ),
-          ],
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(0, 10, 8, 10),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _SmallAction(
+                icon: read
+                    ? Icons.mark_email_unread_outlined
+                    : Icons.mark_email_read_outlined,
+                tooltip: read ? 'Mark unread' : 'Mark read',
+                onTap: onToggleRead,
+              ),
+              const SizedBox(height: 2),
+              _SmallAction(
+                icon: Icons.delete_outline_rounded,
+                tooltip: 'Delete',
+                onTap: onDelete,
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// ── Small action button ───────────────────────────────────────────────────────
+
+class _SmallAction extends StatelessWidget {
+  const _SmallAction({
+    required this.icon,
+    required this.tooltip,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String tooltip;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: tooltip,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(4),
+        child: Padding(
+          padding: const EdgeInsets.all(5),
+          child: Icon(icon, size: 15, color: AppColors.textHint),
         ),
       ),
     );
   }
 }
 
-// ── Empty state (unchanged) ───────────────────────────────────────────────────
+// ── Empty state ───────────────────────────────────────────────────────────────
 
 class _EmptyState extends StatelessWidget {
   const _EmptyState();

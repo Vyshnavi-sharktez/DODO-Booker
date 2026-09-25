@@ -39,6 +39,9 @@ class BookingTabContent extends ConsumerWidget {
 
     switch (tab) {
       case BookingsTab.upcoming:
+        // All upcoming bookings — including uncertain-payment ones — shown
+        // inline. Uncertain bookings (pending + unverified) remain protected
+        // here until their payment outcome is resolved.
         entries.addAll(
           data.regular.where((b) => b.isUpcoming).map(_RegularEntry.new),
         );
@@ -65,6 +68,13 @@ class BookingTabContent extends ConsumerWidget {
         );
         entries.addAll(
           data.amcContracts.where((c) => c.isCancelled).map(_AmcEntry.new),
+        );
+      case BookingsTab.failed:
+        // Definitive Razorpay/online payment failures: status=cancelled +
+        // payment_status=failed (set by DB trigger). AMC contracts cannot
+        // have payment failures in the same way, so only regular bookings.
+        entries.addAll(
+          data.regular.where((b) => b.isPaymentFailed).map(_RegularEntry.new),
         );
     }
 

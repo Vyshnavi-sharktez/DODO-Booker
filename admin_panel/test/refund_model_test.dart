@@ -89,7 +89,7 @@ void main() {
     test('processing', () {
       expect(
           _makeRequest(status: RefundTicketStatus.processing).statusLabel,
-          'Processing');
+          'Payment Processing');
     });
     test('completed', () {
       expect(

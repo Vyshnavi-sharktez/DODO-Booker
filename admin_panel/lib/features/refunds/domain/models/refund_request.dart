@@ -229,7 +229,7 @@ class RefundRequest {
         RefundTicketStatus.approved => 'Approved',
         RefundTicketStatus.partiallyApproved => 'Partially Approved',
         RefundTicketStatus.rejected => 'Rejected',
-        RefundTicketStatus.processing => 'Processing',
+        RefundTicketStatus.processing => 'Payment Processing',
         RefundTicketStatus.completed => 'Completed',
         RefundTicketStatus.failed => 'Failed',
         RefundTicketStatus.closed => 'Closed',
@@ -308,7 +308,9 @@ class RefundRequest {
 
   bool get canClose =>
       status != RefundTicketStatus.processing &&
-      status != RefundTicketStatus.closed;
+      status != RefundTicketStatus.closed &&
+      status != RefundTicketStatus.approved &&
+      status != RefundTicketStatus.partiallyApproved;
 
   double get remainingRefundable {
     // Effective ceiling: approved_amount caps the limit when set.

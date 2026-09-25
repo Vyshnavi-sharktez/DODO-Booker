@@ -570,7 +570,7 @@ class BookingService {
     try {
       await _client.from('notifications').insert({
         'user_type': 'admin',
-        'user_id': 'admin',
+        'user_id': null,
         'title': 'New Booking Received',
         'message': 'A new booking has been created.',
         'notification_type': 'booking_created',

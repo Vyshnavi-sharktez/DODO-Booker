@@ -35,6 +35,7 @@ import '../../preferred_vendor/providers/preferred_vendor_provider.dart';
 import '../../service_availability/services/serviceability_service.dart';
 import '../../service_availability/widgets/service_area_unavailable_dialog.dart';
 import '../../../features/booking/services/razorpay_service.dart';
+import '../../../features/booking/widgets/payment_failed_dialog.dart';
 
 class CheckoutScreen extends ConsumerStatefulWidget {
   final bool inModal;
@@ -279,31 +280,83 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       debugPrint('[DODO][Checkout] ✓ createCartBooking returned — id=${booking.id}');
 
       // ── Razorpay payment ───────────────────────────────────────────────────
+      //
+      // Failure semantics mirror booking_gate.dart:
+      //   launchCheckout throws  → edge fn never responded; no charge possible
+      //                            → cancel booking, preserve cart for retry.
+      //   result.status='failure'→ definitive SDK failure or modal dismissed
+      //                            → cancel booking, preserve cart for retry.
+      //   result.status='external_wallet' → payment may still complete in wallet
+      //                            → preserve booking AND cart (uncertain outcome).
+      //   verifyPayment throws   → SDK said 'success'; customer may be charged
+      //                            → preserve booking AND cart; contact support.
       if (paymentMethod == 'online') {
-        debugPrint('[DODO][Razorpay][TRACE] → launchCheckout(${booking.id})');
+        // ── Checkout ───────────────────────────────────────────────────────────
+        late RazorpayCallbackData result;
         try {
-          final result = await RazorpayService().launchCheckout(booking.id);
-          debugPrint(
-            '[DODO][Razorpay][TRACE] result: status=${result.status}'
-            '  paymentId=${result.paymentId}  orderId=${result.orderId}'
-            '  errorCode=${result.errorCode}  wallet=${result.walletName}',
+          debugPrint('[DODO][Razorpay][TRACE] → launchCheckout(${booking.id})');
+          result = await RazorpayService().launchCheckout(booking.id);
+        } catch (e) {
+          // Edge function never responded — definitely no charge.
+          // Cancel the booking; cart stays intact for retry from cart.
+          debugPrint('[DODO][Razorpay][TRACE] launchCheckout error — cancelling ${booking.id}: $e');
+          try {
+            await ref.read(bookingsServiceProvider).cancelBooking(
+              booking.id,
+              reason: 'payment_failed',
+            );
+          } catch (_) {}
+          if (!mounted) return;
+          await showPaymentFailedDialog(
+            context,
+            onBackToCart: _navigateBackToCart,
           );
-          if (result.status != 'success') {
-            final msg = result.status == 'external_wallet'
-                ? 'Please complete payment via ${result.walletName ?? 'external wallet'}. Your booking is saved.'
-                : (result.errorDescription?.isNotEmpty == true
-                    ? result.errorDescription!
-                    : 'Payment was not completed. Your booking is saved — check My Bookings.');
-            if (mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                content: Text(msg),
-                backgroundColor: const Color(0xFFEA4335),
-                behavior: SnackBarBehavior.floating,
-              ));
-            }
-            return;
+          return;
+        }
+
+        debugPrint(
+          '[DODO][Razorpay][TRACE] result: status=${result.status}'
+          '  paymentId=${result.paymentId}  orderId=${result.orderId}'
+          '  errorCode=${result.errorCode}  wallet=${result.walletName}',
+        );
+
+        if (result.status == 'external_wallet') {
+          // Customer redirected to wallet app — payment may still complete.
+          // Preserve the booking; cart NOT cleared (payment outcome uncertain).
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+              content: Text(
+                'Please complete payment via '
+                '${result.walletName ?? 'external wallet'}. Your booking is saved.',
+              ),
+              backgroundColor: const Color(0xFFEA4335),
+              behavior: SnackBarBehavior.floating,
+            ));
           }
-          debugPrint('[DODO][Razorpay][TRACE] → verifyPayment(${booking.id})');
+          return;
+        }
+
+        if (result.status != 'success') {
+          // Definitive failure or dismissal — cancel the booking.
+          // clearCart() only runs on the success path below, so cart is preserved.
+          debugPrint('[DODO][Razorpay][TRACE] payment failed/dismissed — cancelling ${booking.id}');
+          try {
+            await ref.read(bookingsServiceProvider).cancelBooking(
+              booking.id,
+              reason: 'payment_failed',
+            );
+          } catch (_) {}
+          if (!mounted) return;
+          await showPaymentFailedDialog(
+            context,
+            onBackToCart: _navigateBackToCart,
+          );
+          return;
+        }
+
+        // ── HMAC verification ──────────────────────────────────────────────────
+        debugPrint('[DODO][Razorpay][TRACE] → verifyPayment(${booking.id})');
+        try {
           await RazorpayService().verifyPayment(
             bookingId: booking.id,
             paymentId: result.paymentId!,
@@ -312,10 +365,15 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
           );
           debugPrint('[DODO][Razorpay][TRACE] ✓ verifyPayment succeeded');
         } catch (e) {
-          debugPrint('[DODO][Razorpay][TRACE] exception: $e');
+          // SDK said 'success' — customer may have been charged.
+          // Do NOT cancel. Preserve the booking AND the cart.
+          debugPrint('[DODO][Razorpay][TRACE] verifyPayment error: $e');
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-              content: Text('Payment error. Your booking is saved — check My Bookings.'),
+              content: Text(
+                'Payment verification failed. Your booking is saved — '
+                'contact support if you were charged.',
+              ),
               backgroundColor: Color(0xFFEA4335),
               behavior: SnackBarBehavior.floating,
             ));
@@ -552,6 +610,16 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       await context.push('/address');
     }
     if (mounted) ref.invalidate(addressNotifierProvider);
+  }
+
+  // Called by the payment-failed dialog's "Back to Cart" button.
+  // Dismisses the checkout screen so the customer lands back on their cart.
+  void _navigateBackToCart() {
+    if (widget.inModal) {
+      Navigator.of(context).pop();
+    } else if (context.canPop()) {
+      context.pop();
+    }
   }
 
   void _showError(String message) {

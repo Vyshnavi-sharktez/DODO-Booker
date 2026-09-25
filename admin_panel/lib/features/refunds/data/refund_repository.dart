@@ -311,16 +311,17 @@ class RefundRepository {
   //   1. Verifies the caller is an active admin (via RPC + auth.uid()).
   //   2. Atomically locks the transaction and transitions pending → processing.
   //   3. Calls the Razorpay Refunds API with an idempotency key.
-  //   4. On success: marks the transaction complete (via RPC).
-  //   5. On definitive failure: marks the transaction failed (via RPC).
-  //   6. On uncertain outcome: returns 202 (transaction stays processing).
+  //   4. On status=processed: marks transaction complete (via RPC), returns 200.
+  //   5. On status=pending: stores gateway_refund_id, returns 202 pending=true.
+  //   6. On definitive failure: marks transaction failed (via RPC), throws.
+  //   7. On uncertain outcome: returns 202 (transaction stays processing).
   //
-  // Returns true  if Razorpay definitively confirmed the refund (HTTP 200).
-  // Returns false if the outcome is uncertain (HTTP 202 — check dashboard).
-  // Throws on validation errors (400/409), auth failure (403), or gateway
-  // errors (422/500).
+  // Returns 'confirmed' — Razorpay immediately settled the refund (HTTP 200).
+  // Returns 'pending'   — Razorpay queued it; webhook will finalise (HTTP 202 pending=true).
+  // Returns 'uncertain' — Outcome unclear (HTTP 202, other) — check dashboard.
+  // Throws on validation errors (400/409), auth failure (403), or gateway errors (422/500).
 
-  Future<bool> processRazorpayRefund(String transactionId) async {
+  Future<String> processRazorpayRefund(String transactionId) async {
     final response = await _supabase.functions.invoke(
       'process-razorpay-refund',
       body: {'transaction_id': transactionId},
@@ -331,7 +332,10 @@ class RefundRepository {
       final msg = data is Map ? data['error'] as String? : null;
       throw Exception(msg ?? 'Refund processing failed (HTTP $status)');
     }
-    return status == 200;
+    if (status == 200) return 'confirmed';
+    final data = response.data;
+    if (data is Map && data['pending'] == true) return 'pending';
+    return 'uncertain';
   }
 
   // ── Messages ──────────────────────────────────────────────────────────────

@@ -81,6 +81,7 @@ class Booking {
   final double? longitude;
   final String? completionOtp;
   final String paymentMethod; // 'cash' | 'cod' | 'online' — mirrors DB default 'cash'
+  final String? paymentStatus; // 'pending' | 'success' | 'failed' | null for COD
   final bool? codCashCollected;
   final String? codNotCollectedReason;
   final DateTime? codConfirmedAt;
@@ -134,6 +135,7 @@ class Booking {
     this.longitude,
     this.completionOtp,
     this.paymentMethod = 'cash',
+    this.paymentStatus,
     this.codCashCollected,
     this.codNotCollectedReason,
     this.codConfirmedAt,
@@ -157,6 +159,10 @@ class Booking {
   // 'cash' is the canonical value written by the customer app ("Cash After Service").
   // 'cod' is accepted as an alias for backward compatibility.
   bool get isCod => paymentMethod == 'cash' || paymentMethod == 'cod';
+
+  // True for online bookings whose payment has not been verified.
+  // These must not be assigned to vendors or dispatched.
+  bool get isPaymentUnverified => !isCod && paymentStatus != 'success';
 
   String get paymentMethodLabel => isCod ? 'COD' : 'Online';
 
@@ -200,6 +206,8 @@ class Booking {
       'in_progress'                => ('In Progress', const Color(0xFF805AD5), const Color(0xFFFAF5FF)),
       'completed'                  => ('Completed', const Color(0xFF38A169), const Color(0xFFF0FFF4)),
       'rejected'                   => ('Rejected', const Color(0xFFC05621), const Color(0xFFFEEBC8)),
+      'cancelled' when paymentStatus == 'failed'
+                               => ('Payment Failed', const Color(0xFFE53E3E), const Color(0xFFFFF5F5)),
       'cancelled'                  => ('Cancelled', const Color(0xFFE53E3E), const Color(0xFFFFF5F5)),
       _                            => (status, const Color(0xFF718096), const Color(0xFFEDF2F7)),
     };
@@ -268,6 +276,7 @@ class Booking {
       longitude: (map['longitude'] as num?)?.toDouble(),
       completionOtp: map['completion_otp'] as String?,
       paymentMethod: map['payment_method'] as String? ?? 'cash',
+      paymentStatus: map['payment_status'] as String?,
       codCashCollected: map['cod_cash_collected'] as bool?,
       codNotCollectedReason: map['cod_not_collected_reason'] as String?,
       codConfirmedAt: map['cod_confirmed_at'] != null
@@ -368,6 +377,7 @@ class Booking {
       longitude: longitude,
       completionOtp: completionOtp ?? this.completionOtp,
       paymentMethod: paymentMethod,
+      paymentStatus: paymentStatus,
       codCashCollected: codCashCollected ?? this.codCashCollected,
       codNotCollectedReason: codNotCollectedReason ?? this.codNotCollectedReason,
       codConfirmedAt: codConfirmedAt ?? this.codConfirmedAt,

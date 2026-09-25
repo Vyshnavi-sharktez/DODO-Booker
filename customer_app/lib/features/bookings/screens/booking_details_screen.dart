@@ -75,6 +75,10 @@ class _BookingDetailsScreenState extends ConsumerState<BookingDetailsScreen> {
           child: Column(
             children: [
               _StatusBanner(booking: booking),
+              if (booking.isPaymentFailed)
+                const _PaymentFailedInfoBanner(),
+              if (booking.isCancelled && !booking.isCod)
+                _RefundBanners(booking: booking),
               if (booking.completionOtp != null &&
                   _otpVisibleForStatus(booking.status))
                 _OtpDisplayCard(otp: booking.completionOtp!),
@@ -251,6 +255,7 @@ class _BookingDetailsScreenState extends ConsumerState<BookingDetailsScreen> {
     // Refresh review state after modal closes (submitted or viewed)
     ref.invalidate(bookingReviewProvider(b.id));
   }
+
 }
 
 bool _otpVisibleForStatus(String status) => const {
@@ -1649,6 +1654,196 @@ class _OtpDisplayCardState extends State<_OtpDisplayCard> {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+// ── Payment failed info banner ────────────────────────────────────────────────
+
+/// Shown for bookings where isPaymentFailed is true (status=cancelled +
+/// payment_status=failed, set by DB trigger). Informs the customer that any
+/// debit will be automatically reversed. Never shown for uncertain payments.
+class _PaymentFailedInfoBanner extends StatelessWidget {
+  const _PaymentFailedInfoBanner();
+
+  @override
+  Widget build(BuildContext context) {
+    const color = Color(0xFFE53E3E);
+    final tt = Theme.of(context).textTheme;
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 0, 16, 4),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: color.withAlpha(12),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: color.withAlpha(45)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 34,
+            height: 34,
+            decoration: BoxDecoration(
+              color: color.withAlpha(22),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(
+              Icons.credit_card_off_outlined,
+              color: color,
+              size: 17,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              'Your payment could not be completed. If your account was debited, '
+              'the amount will be automatically reversed/refunded to your original '
+              'payment method. This may take a few business days.',
+              style: tt.bodySmall?.copyWith(
+                color: color,
+                height: 1.45,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Cancellation refund banners ───────────────────────────────────────────────
+
+/// Shown only for cancelled, non-COD bookings.
+/// Watches the live refund status and renders the appropriate banner:
+///   - status == 'completed' or 'closed' → green "Your Money Has Been Refunded!" banner
+///   - payment captured (payment_status == 'success') → blue info banner
+///   - otherwise → nothing (payment wasn't captured, or COD)
+class _RefundBanners extends ConsumerWidget {
+  final MyBookingModel booking;
+
+  const _RefundBanners({required this.booking});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final refundAsync = ref.watch(bookingRefundStatusProvider(booking.id));
+
+    return refundAsync.when(
+      loading: () => const SizedBox.shrink(),
+      error: (_, _) => const SizedBox.shrink(),
+      data: (refundStatus) {
+        if (refundStatus == 'completed' || refundStatus == 'closed') {
+          return _RefundSuccessBanner(booking: booking);
+        }
+        if (booking.paymentStatus == 'success') {
+          return _RefundInfoBanner(booking: booking);
+        }
+        return const SizedBox.shrink();
+      },
+    );
+  }
+}
+
+class _RefundInfoBanner extends StatelessWidget {
+  final MyBookingModel booking;
+
+  const _RefundInfoBanner({required this.booking});
+
+  @override
+  Widget build(BuildContext context) {
+    const color = Color(0xFF2B6CB0);
+    final tt = Theme.of(context).textTheme;
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 0, 16, 4),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: color.withAlpha(15),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: color.withAlpha(50)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 34,
+            height: 34,
+            decoration: BoxDecoration(
+              color: color.withAlpha(25),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(Icons.info_outline_rounded, color: color, size: 17),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              'Your booking has been cancelled successfully. Since your payment was already deducted, your refund will be credited to your original payment method within 4–5 business days.',
+              style: tt.bodySmall?.copyWith(
+                color: color,
+                height: 1.45,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _RefundSuccessBanner extends StatelessWidget {
+  final MyBookingModel booking;
+
+  const _RefundSuccessBanner({required this.booking});
+
+  @override
+  Widget build(BuildContext context) {
+    final color = AppColors.success;
+    final tt = Theme.of(context).textTheme;
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 0, 16, 4),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: color.withAlpha(18),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: color.withAlpha(55)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 34,
+            height: 34,
+            decoration: BoxDecoration(
+              color: color.withAlpha(30),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(Icons.check_circle_rounded, color: color, size: 17),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Your Money Has Been Refunded!',
+                  style: tt.bodySmall?.copyWith(
+                    color: color,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 13,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  'Your refund has been successfully processed. The amount will reflect in your original payment method within 4–5 business days, depending on your bank.',
+                  style: tt.bodySmall?.copyWith(
+                    color: AppColors.textSecondary,
+                    height: 1.45,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }

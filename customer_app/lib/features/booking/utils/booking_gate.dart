@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+
 import '../../../core/widgets/app_modal_dialog.dart';
 import '../../../features/auth/providers/auth_provider.dart';
 import '../../../features/auth/widgets/otp_login_modal.dart';
@@ -18,6 +19,9 @@ import '../modals/payment_modal.dart';
 import '../services/booking_providers.dart';
 import '../services/razorpay_service.dart';
 import '../services/coupon_providers.dart';
+import '../widgets/payment_failed_dialog.dart';
+import '../../bookings/services/bookings_providers.dart';
+import '../../cart/utils/cart_launcher.dart';
 import '../../../features/tax/providers/tax_provider.dart';
 import '../../../features/tax/models/tax_settings_model.dart';
 import '../../../features/amc/models/amc_plan_model.dart';
@@ -182,34 +186,87 @@ Future<void> launchBookingFlow(
     if (!context.mounted) return;
 
     // ── Step 8 (Razorpay): Open payment checkout + server-side verification ──
-    // Runs only when the booking was created with payment_method = 'razorpay'.
-    // The booking row already exists; success screen is only shown after both
-    // the SDK callback AND the HMAC verification edge function confirm success.
+    // The booking row already exists in the DB.  Checkout and verification are
+    // handled in separate try/catch blocks because their failure semantics differ:
+    //
+    //   launchCheckout throws  → edge function never responded; no Razorpay order
+    //                            was created, so payment definitely did not occur.
+    //                            Cancel the booking to prevent a phantom Upcoming entry.
+    //
+    //   result.status='failure' → SDK reported definitive failure or user dismissed.
+    //                            No charge; cancel the booking.
+    //
+    //   result.status='external_wallet' → Customer redirected to wallet app; payment
+    //                            may still complete.  Preserve the booking.
+    //
+    //   verifyPayment throws   → SDK said 'success' so the customer may already have
+    //                            been charged.  Status is UNKNOWN — do NOT cancel.
+    //                            Preserve the booking for support investigation.
     if (paymentMethod == 'razorpay') {
+      // ── Checkout ─────────────────────────────────────────────────────────────
+      late RazorpayCallbackData result;
       try {
-        final result = await RazorpayService().launchCheckout(booking.id);
-        debugPrint(
-          '[DODO][Razorpay] checkout result: status=${result.status}'
-          '  paymentId=${result.paymentId}'
-          '  orderId=${result.orderId}'
-          '  errorCode=${result.errorCode}'
-          '  wallet=${result.walletName}',
-        );
-        if (result.status != 'success') {
-          if (!context.mounted) return;
-          final msg = result.status == 'external_wallet'
-              ? 'Please complete payment via ${result.walletName ?? 'external wallet'}. Your booking is saved.'
-              : (result.errorDescription?.isNotEmpty == true
-                  ? result.errorDescription!
-                  : 'Payment was not completed. Your booking is saved — check My Bookings.');
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text(msg),
-            backgroundColor: const Color(0xFFEA4335),
-            behavior: SnackBarBehavior.floating,
-          ));
-          return;
+        result = await RazorpayService().launchCheckout(booking.id);
+      } catch (e) {
+        debugPrint('[DODO][Razorpay] launchCheckout error: $e');
+        try {
+          await ref.read(bookingsServiceProvider).cancelBooking(
+            booking.id,
+            reason: 'payment_failed',
+          );
+        } catch (cancelErr) {
+          debugPrint('[DODO][Razorpay] warning: cancel after checkout error: $cancelErr');
         }
-        debugPrint('[DODO][Razorpay] → verifyPayment(${booking.id})');
+        if (!context.mounted) return;
+        await showPaymentFailedDialog(
+          context,
+          onBackToCart: () => openCart(context),
+        );
+        return;
+      }
+
+      debugPrint(
+        '[DODO][Razorpay] checkout result: status=${result.status}'
+        '  paymentId=${result.paymentId}'
+        '  orderId=${result.orderId}'
+        '  errorCode=${result.errorCode}'
+        '  wallet=${result.walletName}',
+      );
+
+      if (result.status == 'external_wallet') {
+        if (!context.mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(
+            'Please complete payment via '
+            '${result.walletName ?? 'external wallet'}. Your booking is saved.',
+          ),
+          backgroundColor: const Color(0xFFEA4335),
+          behavior: SnackBarBehavior.floating,
+        ));
+        return;
+      }
+
+      if (result.status != 'success') {
+        debugPrint('[DODO][Razorpay] payment failed/dismissed — cancelling ${booking.id}');
+        try {
+          await ref.read(bookingsServiceProvider).cancelBooking(
+            booking.id,
+            reason: 'payment_failed',
+          );
+        } catch (cancelErr) {
+          debugPrint('[DODO][Razorpay] warning: cancel after payment failure: $cancelErr');
+        }
+        if (!context.mounted) return;
+        await showPaymentFailedDialog(
+          context,
+          onBackToCart: () => openCart(context),
+        );
+        return;
+      }
+
+      // ── HMAC verification ─────────────────────────────────────────────────────
+      debugPrint('[DODO][Razorpay] → verifyPayment(${booking.id})');
+      try {
         await RazorpayService().verifyPayment(
           bookingId: booking.id,
           paymentId: result.paymentId!,
@@ -218,11 +275,14 @@ Future<void> launchBookingFlow(
         );
         debugPrint('[DODO][Razorpay] ✓ verifyPayment succeeded');
       } catch (e) {
-        debugPrint('[DODO][Razorpay] checkout/verification error: $e');
+        debugPrint('[DODO][Razorpay] verifyPayment error: $e');
         if (!context.mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('Payment verification failed. Your booking is saved — check My Bookings.'),
-          backgroundColor: const Color(0xFFEA4335),
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text(
+            'Payment verification failed. Your booking is saved — '
+            'contact support if you were charged.',
+          ),
+          backgroundColor: Color(0xFFEA4335),
           behavior: SnackBarBehavior.floating,
         ));
         return;

@@ -85,21 +85,49 @@ export async function verifyWebhookSignature(
   return diff === 0;
 }
 
+// ── Receipt → transaction UUID conversion ─────────────────────────────────────
+// process-razorpay-refund sets the Razorpay refund receipt to:
+//   transaction_id.replace(/-/g, "").slice(0, 40)
+//
+// A UUID is exactly 32 hex characters, so the receipt is always the full UUID
+// with hyphens removed.  Reinserting hyphens yields the original UUID, enabling
+// a direct primary-key lookup on refund_transactions when both
+// notes.dodo_transaction_id and gateway_refund_id are unavailable (race-condition
+// window during refund creation in test mode or for instant-speed refunds).
+//
+// Returns null for any receipt that does not look like a stripped UUID.
+// Accepts uppercase hex (Razorpay may normalise casing on return).
+
+export function receiptToTransactionId(
+  receipt: string | null | undefined,
+): string | null {
+  if (!receipt) return null;
+  const lower = receipt.toLowerCase();
+  if (lower.length !== 32 || !/^[0-9a-f]{32}$/.test(lower)) return null;
+  return `${lower.slice(0, 8)}-${lower.slice(8, 12)}-${lower.slice(12, 16)}-${lower.slice(16, 20)}-${lower.slice(20)}`;
+}
+
 // ── Refund event handler ──────────────────────────────────────────────────────
 //
 // Called after the webhook signature has been verified.
 //
-// Transaction lookup strategy:
+// Transaction lookup strategy (three tiers):
 //   1. Primary: extract our internal transaction UUID from
 //      refundEntity.notes.dodo_transaction_id (embedded when the refund was
 //      created by process-razorpay-refund Edge Function).  This is the direct
 //      match key — we set it, so it cannot be spoofed once the HMAC is verified.
 //
-//   2. Fallback: look up refund_transactions.gateway_refund_id = rfnd_XXXXX.
+//   2. Fallback A: look up refund_transactions.gateway_refund_id = rfnd_XXXXX.
 //      Used for refunds whose notes don't contain our UUID (e.g. manual refunds
 //      created via the Razorpay dashboard) or for already-completed rows.
 //
-//   3. If neither lookup matches → acknowledge 200 without any state change to
+//   3. Fallback B: reconstruct the transaction UUID from the Razorpay receipt.
+//      process-razorpay-refund sets receipt = transaction_id_without_hyphens
+//      (first 40 chars; a UUID is 32 chars so this is always the full UUID).
+//      Handles the race-condition window where the webhook arrives before
+//      gateway_refund_id is stored AND notes.dodo_transaction_id is absent.
+//
+//   4. If no lookup matches → acknowledge 200 without any state change to
 //      stop Razorpay retries for unknown refunds.
 //
 // Security notes:
@@ -107,6 +135,8 @@ export async function verifyWebhookSignature(
 //   • The transaction UUID in notes was set BY US, so it cannot be forged by an
 //     attacker who can only manipulate Razorpay's notes field (they would need
 //     the webhook secret to pass HMAC verification first).
+//   • The receipt is derived deterministically from the transaction UUID, so
+//     receipt-based lookups are equally unforgeable once HMAC passes.
 //   • The RPCs (webhook_complete/fail_refund_transaction) are SECURITY DEFINER
 //     and GRANTED to service_role only — no authenticated user can call them
 //     directly.
@@ -122,30 +152,55 @@ async function handleRefundEvent(
   let transactionId: string | null = transactionIdFromNotes;
 
   if (!transactionId) {
-    // ── Fallback: look up by gateway_refund_id already stored in DB ──────────
+    // ── Fallback A: gateway_refund_id stored by process-razorpay-refund ───────
     const { data: existing } = await supabase
       .from("refund_transactions")
       .select("id, status, gateway_refund_id")
       .eq("gateway_refund_id", gatewayRefundId)
       .maybeSingle();
 
-    if (!existing) {
+    if (existing) {
+      // Quick idempotency for already-terminal rows found by gateway_refund_id.
+      if (existing.status === "completed" && event === "refund.processed") {
+        return Response.json({ received: true, idempotent: true });
+      }
+      if (existing.status === "failed" && event === "refund.failed") {
+        return Response.json({ received: true, idempotent: true });
+      }
+      transactionId = existing.id as string;
+    }
+
+    // ── Fallback B: receipt-based lookup (race-condition safety net) ──────────
+    // Covers the window where the webhook arrives before gateway_refund_id is
+    // stored AND notes.dodo_transaction_id is absent or malformed.
+    if (!transactionId) {
+      const receiptTxnId = receiptToTransactionId(refundEntity.receipt);
+      if (receiptTxnId) {
+        const { data: byReceipt } = await supabase
+          .from("refund_transactions")
+          .select("id, status, gateway_refund_id")
+          .eq("id", receiptTxnId)
+          .maybeSingle();
+
+        if (byReceipt) {
+          if (byReceipt.status === "completed" && event === "refund.processed") {
+            return Response.json({ received: true, idempotent: true });
+          }
+          if (byReceipt.status === "failed" && event === "refund.failed") {
+            return Response.json({ received: true, idempotent: true });
+          }
+          transactionId = byReceipt.id as string;
+        }
+      }
+    }
+
+    if (!transactionId) {
       // Unknown refund — not created by this system, test event, or manual
       // Razorpay dashboard refund.  Acknowledge to stop retries.
       return Response.json(
         { received: true, handled: false, reason: "unknown_refund" },
       );
     }
-
-    // Quick idempotency for already-terminal rows found by gateway_refund_id.
-    if (existing.status === "completed" && event === "refund.processed") {
-      return Response.json({ received: true, idempotent: true });
-    }
-    if (existing.status === "failed" && event === "refund.failed") {
-      return Response.json({ received: true, idempotent: true });
-    }
-
-    transactionId = existing.id as string;
   }
 
   // ── Fast idempotency read before acquiring a row lock ─────────────────────
