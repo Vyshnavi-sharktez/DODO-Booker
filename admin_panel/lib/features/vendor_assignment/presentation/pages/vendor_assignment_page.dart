@@ -67,12 +67,16 @@ class _VendorAssignmentPageState
   List<Booking> _applyFilters(List<Booking> all, {String? focusId}) {
     // Show actionable bookings: pending, assigned, in_progress, and rejected
     // (admin can reassign rejected bookings).
+    // Exclude unverified online-payment bookings — they must not be assigned
+    // until payment_status='success'. The DB trigger enforces this at the
+    // storage layer; this filter prevents misleading UI state.
     var result = all
         .where((b) =>
-            b.status == 'pending' ||
-            b.status == 'assigned' ||
-            b.status == 'in_progress' ||
-            b.status == 'rejected')
+            (b.status == 'pending' ||
+             b.status == 'assigned' ||
+             b.status == 'in_progress' ||
+             b.status == 'rejected') &&
+            !b.isPaymentUnverified)
         .toList();
 
     if (_searchQuery.isNotEmpty) {

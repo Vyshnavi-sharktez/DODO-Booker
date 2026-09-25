@@ -120,6 +120,7 @@ class MyBookingModel {
   final String status;
   final String assignmentType; // 'Unassigned' | 'External Vendor' | 'DODO Team'
   final String paymentMethod;  // 'cash' | 'cod' | 'online'
+  final String? paymentStatus; // 'pending' | 'success' | 'failed' | null for COD
   final DateTime createdAt;
   final String? customerId;
   final String? vendorId;
@@ -154,6 +155,7 @@ class MyBookingModel {
     required this.status,
     this.assignmentType = 'Unassigned',
     this.paymentMethod = 'cash',
+    this.paymentStatus,
     required this.createdAt,
     this.customerId,
     this.vendorId,
@@ -196,11 +198,41 @@ class MyBookingModel {
 
   bool get isCompleted => status == BookingStatus.completed;
 
-  bool get isCancelled => status == BookingStatus.cancelled;
+  // True only when the Razorpay/online payment definitively failed and the DB
+  // trigger auto-cancelled the booking (payment_status = 'failed').
+  // These appear under the Failed tab, not the Cancelled tab.
+  bool get isPaymentFailed =>
+      !isCod &&
+      status == BookingStatus.cancelled &&
+      paymentStatus == 'failed';
+
+  // Regular cancellations (customer/admin initiated, or app-cancelled without a
+  // confirmed failure signal).  Excludes payment-failed auto-cancellations.
+  bool get isCancelled => status == BookingStatus.cancelled && !isPaymentFailed;
 
   bool get canCancel => isUpcoming;
-  bool get canRebook => isCompleted || isCancelled;
+  bool get canRebook => isCompleted || isCancelled || isPaymentFailed;
   bool get canReview => isCompleted;
+
+  // True for online bookings whose payment outcome has not been confirmed:
+  // checkout was interrupted (refresh, timeout, bank delay) and neither
+  // verified nor definitively failed.  These must not appear as normal
+  // Upcoming bookings and cannot be dispatched to vendors.
+  bool get isPaymentUncertain =>
+      !isCod &&
+      status == BookingStatus.pending &&
+      paymentStatus != 'success';
+
+  // Label for the payment-status badge on My Bookings cards.
+  // Returns null for COD bookings (no online-payment status to surface).
+  String? get paymentStatusBadgeLabel {
+    if (isCod) return null;
+    switch (paymentStatus) {
+      case 'success': return 'Paid';
+      case 'failed':  return 'Payment Failed';
+      default:        return 'Payment Pending'; // 'pending' or null
+    }
+  }
 
   factory MyBookingModel.fromJson(Map<String, dynamic> json) {
     final createdAtStr = json['created_at'] as String;
@@ -287,6 +319,7 @@ class MyBookingModel {
       status: status,
       assignmentType: assignmentType,
       paymentMethod: json['payment_method'] as String? ?? 'cash',
+      paymentStatus: json['payment_status'] as String?,
       createdAt: DateTime.parse(createdAtStr),
       customerId: json['customer_id'] as String?,
       vendorId: json['vendor_id'] as String?,

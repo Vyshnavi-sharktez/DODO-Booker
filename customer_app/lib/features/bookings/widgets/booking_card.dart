@@ -32,7 +32,9 @@ class BookingCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final tt = Theme.of(context).textTheme;
-    final (statusColor, statusLabel) = _statusMeta(booking.status);
+    final (statusColor, statusLabel) = booking.isPaymentFailed
+        ? (AppColors.error, 'Payment Failed')
+        : _statusMeta(booking.status);
 
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
@@ -158,7 +160,7 @@ class BookingCard extends StatelessWidget {
                           ),
                         ),
                         const SizedBox(height: 3),
-                        _PaymentMethodBadge(label: booking.paymentMethodLabel),
+                        _PaymentMethodBadge(booking: booking),
                         const SizedBox(height: 4),
                         _InfoRow(
                           icon: Icons.calendar_today_rounded,
@@ -348,35 +350,64 @@ class _RateNowChip extends StatelessWidget {
 }
 
 class _PaymentMethodBadge extends StatelessWidget {
-  final String label;
-  const _PaymentMethodBadge({required this.label});
+  final MyBookingModel booking;
+  const _PaymentMethodBadge({required this.booking});
 
   @override
   Widget build(BuildContext context) {
-    final isOnline = label == 'Online';
+    final badgeLabel = booking.paymentStatusBadgeLabel;
+
+    final Color color;
+    final IconData? icon;
+    final String label;
+
+    if (badgeLabel == null) {
+      color = AppColors.textSecondary;
+      icon = null;
+      label = 'COD';
+    } else {
+      switch (badgeLabel) {
+        case 'Paid':
+          color = AppColors.success;
+          icon = Icons.check_circle_outline_rounded;
+          label = 'Paid';
+        case 'Payment Failed':
+          color = AppColors.error;
+          icon = Icons.error_outline_rounded;
+          label = 'Payment Failed';
+        default: // 'Payment Pending'
+          color = AppColors.error;
+          icon = Icons.schedule_rounded;
+          label = 'Payment Pending';
+      }
+    }
+
     return Row(
       children: [
         const SizedBox(width: 17), // aligns with _InfoRow text
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
           decoration: BoxDecoration(
-            color: isOnline
-                ? AppColors.primary.withAlpha(20)
-                : AppColors.textSecondary.withAlpha(20),
+            color: color.withAlpha(20),
             borderRadius: BorderRadius.circular(4),
-            border: Border.all(
-              color: isOnline
-                  ? AppColors.primary.withAlpha(70)
-                  : AppColors.textSecondary.withAlpha(50),
-            ),
+            border: Border.all(color: color.withAlpha(70)),
           ),
-          child: Text(
-            label,
-            style: TextStyle(
-              fontSize: 10,
-              fontWeight: FontWeight.w600,
-              color: isOnline ? AppColors.primary : AppColors.textSecondary,
-            ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (icon != null) ...[
+                Icon(icon, size: 10, color: color),
+                const SizedBox(width: 3),
+              ],
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 10,
+                  fontWeight: FontWeight.w600,
+                  color: color,
+                ),
+              ),
+            ],
           ),
         ),
       ],

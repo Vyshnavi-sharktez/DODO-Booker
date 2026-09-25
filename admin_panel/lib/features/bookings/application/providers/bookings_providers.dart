@@ -14,6 +14,39 @@ final bookingImagesProvider = FutureProvider.autoDispose
   return List<Map<String, dynamic>>.from(rows as List);
 });
 
+class BookingPaymentAuditData {
+  final List<Map<String, dynamic>> attempts;
+  final String? refundStatus;
+  const BookingPaymentAuditData({required this.attempts, this.refundStatus});
+}
+
+final bookingPaymentAuditProvider = FutureProvider.autoDispose
+    .family<BookingPaymentAuditData, String>((ref, bookingId) async {
+  final client = ref.watch(supabaseClientProvider);
+
+  final rows = await client
+      .from('booking_payments')
+      .select(
+        'id, gateway, gateway_order_id, gateway_payment_id, '
+        'amount, currency, status, failure_reason, attempt_number, created_at',
+      )
+      .eq('booking_id', bookingId)
+      .order('attempt_number', ascending: false);
+
+  final refundRow = await client
+      .from('refund_requests')
+      .select('status')
+      .eq('booking_id', bookingId)
+      .order('created_at', ascending: false)
+      .limit(1)
+      .maybeSingle();
+
+  return BookingPaymentAuditData(
+    attempts: List<Map<String, dynamic>>.from(rows as List),
+    refundStatus: refundRow?['status'] as String?,
+  );
+});
+
 final bookingsRepositoryProvider = Provider<BookingsRepository>((ref) {
   return BookingsRepository(ref.watch(supabaseClientProvider));
 });

@@ -49,6 +49,7 @@ const _statusConfig = <String, (String, Color, Color)>{
   'completed':              ('Completed',                      Color(0xFF38A169), Color(0xFFF0FFF4)),
   'rejected':               ('Rejected',                       Color(0xFFC05621), Color(0xFFFEEBC8)),
   'cancelled':              ('Cancelled',                      Color(0xFFE53E3E), Color(0xFFFFF5F5)),
+  'payment_failed':         ('Payment Failed',                 Color(0xFFE53E3E), Color(0xFFFFF5F5)),
 };
 
 const _allStatuses = [
@@ -64,6 +65,7 @@ const _allStatuses = [
   'completed',
   'rejected',
   'cancelled',
+  'payment_failed',
 ];
 
 // AMC contract-level statuses (values from _AmcContractAggregate.contractStatus)
@@ -112,6 +114,13 @@ const _warrantyReworkStatusLabels = <String, String>{
 // Statuses that admin can still cancel from (active lifecycle)
 const _cancellableStatuses = {
   'pending', 'assigned', 'assigned_to_dodo_team', 'accepted', 'on_the_way', 'arrived', 'in_progress',
+};
+
+// Statuses where admin can assign / reassign a vendor.
+// Excludes accepted + post-acceptance states (vendor is already working)
+// and cancelled/completed. Includes rejected so admin can find a new vendor.
+const _assignableStatuses = {
+  'pending', 'assigned', 'assigned_to_dodo_team', 'rejected',
 };
 
 // Sentinel for the "Unassigned" option in the Assigned To filter.
@@ -247,6 +256,10 @@ class _BookingsPageState extends ConsumerState<BookingsPage> {
             .where((b) =>
                 (b.status == 'assigned' && b.dispatchStatus == 'accepted') ||
                 b.status == 'accepted')
+            .toList();
+      } else if (_statusFilter == 'payment_failed') {
+        result = result
+            .where((b) => b.status == 'cancelled' && b.paymentStatus == 'failed')
             .toList();
       } else {
         result = result.where((b) => b.status == _statusFilter).toList();
@@ -385,7 +398,7 @@ class _BookingsPageState extends ConsumerState<BookingsPage> {
       context: context,
       builder: (_) => BookingDetailsDialog(
         booking: booking,
-        onAssign: booking.status != 'warranty_pending_approval'
+        onAssign: _assignableStatuses.contains(booking.status)
             ? () {
                 Navigator.of(context).pop();
                 _openAssignDialog(booking);
@@ -1650,7 +1663,7 @@ class _BookingRow extends StatelessWidget {
                   tooltip: 'View details',
                   visualDensity: VisualDensity.compact,
                 ),
-                if (booking.status != 'warranty_pending_approval')
+                if (_assignableStatuses.contains(booking.status))
                   IconButton(
                     onPressed: onAssign,
                     icon: Icon(

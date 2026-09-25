@@ -193,6 +193,12 @@ class _RefundDetailDialogState extends ConsumerState<RefundDetailDialog>
     await _run(
       () => ref.read(refundRepositoryProvider).initiateCodRefund(r.id),
     );
+    if (mounted && _error == null) {
+      await _showInitiateSuccessPopup(
+        'The refund has been marked as initiated. Please complete the '
+        'manual bank or UPI transfer to the customer.',
+      );
+    }
   }
 
   Future<void> _handleInitiateOnlineRefund(RefundRequest r) async {
@@ -201,7 +207,7 @@ class _RefundDetailDialogState extends ConsumerState<RefundDetailDialog>
       _busy = true;
       _error = null;
     });
-    bool uncertain = false;
+    String? refundResult;
     try {
       final balance = await ref
           .read(refundRepositoryProvider)
@@ -217,17 +223,33 @@ class _RefundDetailDialogState extends ConsumerState<RefundDetailDialog>
             gateway: 'razorpay',
             refundMethod: 'original_payment_method',
           );
-      final confirmed = await ref
+      refundResult = await ref
           .read(refundRepositoryProvider)
           .processRazorpayRefund(txnId);
-      uncertain = !confirmed;
       await _reload();
     } catch (e) {
       if (mounted) setState(() => _error = e.toString());
     } finally {
       if (mounted) setState(() => _busy = false);
     }
-    if (uncertain && mounted) {
+    if (!mounted) return;
+    if (refundResult == 'confirmed') {
+      await _showInitiateSuccessPopup(
+        'The refund has been submitted to Razorpay and will be returned '
+        'to the customer\'s original payment method.',
+      );
+    } else if (refundResult == 'pending') {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Refund queued by Razorpay — will be confirmed automatically '
+            'within 5–7 business days via webhook.',
+          ),
+          backgroundColor: Color(0xFF805AD5),
+          duration: Duration(seconds: 8),
+        ),
+      );
+    } else if (refundResult == 'uncertain') {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text(
@@ -242,6 +264,70 @@ class _RefundDetailDialogState extends ConsumerState<RefundDetailDialog>
     }
   }
 
+  Future<void> _showInitiateSuccessPopup(String message) async {
+    if (!mounted) return;
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: true,
+      builder: (ctx) => Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 380),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 32),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 64,
+                  height: 64,
+                  decoration: const BoxDecoration(
+                    color: Color(0xFFEBFBF0),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.check_circle_rounded,
+                    color: AppColors.success,
+                    size: 36,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                const Text(
+                  'Refund Initiated Successfully!',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 17,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFF2D3748),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  message,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    fontSize: 13,
+                    color: Color(0xFF718096),
+                    height: 1.5,
+                  ),
+                ),
+                const SizedBox(height: 24),
+                FilledButton(
+                  onPressed: () => Navigator.of(ctx).pop(),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: const Color(0xFF805AD5),
+                    minimumSize: const Size(120, 40),
+                  ),
+                  child: const Text('Close'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   Future<void> _handleProcessViaRazorpay(RefundTransaction txn) async {
     if (_busy) return;
     setState(() {
@@ -249,11 +335,23 @@ class _RefundDetailDialogState extends ConsumerState<RefundDetailDialog>
       _error = null;
     });
     try {
-      final confirmed = await ref
+      final result = await ref
           .read(refundRepositoryProvider)
           .processRazorpayRefund(txn.id);
       await _reload();
-      if (!confirmed && mounted) {
+      if (!mounted) return;
+      if (result == 'pending') {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Refund queued by Razorpay — will be confirmed automatically '
+              'within 5–7 business days via webhook.',
+            ),
+            backgroundColor: Color(0xFF805AD5),
+            duration: Duration(seconds: 8),
+          ),
+        );
+      } else if (result == 'uncertain') {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text(

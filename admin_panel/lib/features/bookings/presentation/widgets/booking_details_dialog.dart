@@ -533,6 +533,11 @@ class _BookingDetailsDialogState extends ConsumerState<BookingDetailsDialog> {
                       const SizedBox(height: 20),
                     ],
 
+                    if (!booking.isCod && booking.paymentStatus == 'failed') ...[
+                      _PaymentReconciliationSection(booking: booking),
+                      const SizedBox(height: 20),
+                    ],
+
                     _SectionLabel('Timestamps'),
                     const SizedBox(height: 12),
                     _InfoRow(
@@ -1384,4 +1389,149 @@ class _AmcContractExpandedSectionState
         'monthly' => 'Monthly',
         _ => i,
       };
+}
+
+// ── Payment reconciliation section ────────────────────────────────────────────
+
+/// Shown in admin booking details when payment_status='failed' (non-COD).
+/// Fetches the booking_payments row(s) and any linked refund_request so the
+/// admin can identify if the customer was charged and handle reconciliation.
+class _PaymentReconciliationSection extends ConsumerWidget {
+  final Booking booking;
+  const _PaymentReconciliationSection({required this.booking});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final auditAsync = ref.watch(bookingPaymentAuditProvider(booking.id));
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _SectionLabel('Payment Reconciliation'),
+        const SizedBox(height: 8),
+        Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: const Color(0xFFFFF5F5),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: const Color(0xFFFEB2B2)),
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Icon(
+                Icons.warning_amber_rounded,
+                size: 16,
+                color: Color(0xFFE53E3E),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'This booking\'s payment was marked failed. '
+                  'If the customer reports a debit, verify gateway IDs below '
+                  'before initiating a refund to avoid duplicate processing.',
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: Color(0xFF9B2C2C),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 12),
+        _InfoRow('DODO Booking ID', _truncateId(booking.id), tooltip: booking.id),
+        _InfoRow('DODO Payment Status', booking.paymentStatus ?? '—', bold: true),
+        auditAsync.when(
+          loading: () => const Padding(
+            padding: EdgeInsets.symmetric(vertical: 8),
+            child: Center(
+              child: SizedBox(
+                width: 18,
+                height: 18,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+            ),
+          ),
+          error: (_, _) => Padding(
+            padding: const EdgeInsets.symmetric(vertical: 4),
+            child: Text(
+              'Could not load gateway payment details.',
+              style: TextStyle(
+                fontSize: 12,
+                color: Colors.grey[600],
+                fontStyle: FontStyle.italic,
+              ),
+            ),
+          ),
+          data: (audit) {
+            if (audit.attempts.isEmpty) {
+              return Padding(
+                padding: const EdgeInsets.symmetric(vertical: 4),
+                child: Text(
+                  'No payment attempt records found.',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.grey[600],
+                    fontStyle: FontStyle.italic,
+                  ),
+                ),
+              );
+            }
+            final attempt = audit.attempts.first;
+            final orderId = attempt['gateway_order_id'] as String?;
+            final paymentId = attempt['gateway_payment_id'] as String?;
+            final amount = (attempt['amount'] as num?)?.toDouble();
+            final gwStatus = attempt['status'] as String?;
+            final failureReason = attempt['failure_reason'] as String?;
+            final attemptNum = attempt['attempt_number'] as int?;
+            final refundStatus = audit.refundStatus;
+
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Divider(height: 16),
+                _InfoRow(
+                  'Gateway',
+                  ((attempt['gateway'] as String?) ?? 'razorpay').toUpperCase(),
+                ),
+                _InfoRow(
+                  'Order ID',
+                  orderId ?? '—',
+                  tooltip: orderId,
+                ),
+                _InfoRow(
+                  'Payment ID',
+                  paymentId ?? '—',
+                  tooltip: paymentId,
+                ),
+                if (amount != null)
+                  _InfoRow('Amount', '₹${amount.toStringAsFixed(2)}'),
+                _InfoRow(
+                  'Gateway Status',
+                  _capitalize(gwStatus ?? '—'),
+                  bold: true,
+                ),
+                if (failureReason != null && failureReason.isNotEmpty)
+                  _InfoRow('Failure Reason', failureReason),
+                if (attemptNum != null)
+                  _InfoRow('Attempt #', '$attemptNum'),
+                const Divider(height: 16),
+                _InfoRow(
+                  'Refund Status',
+                  refundStatus != null
+                      ? _capitalize(refundStatus.replaceAll('_', ' '))
+                      : 'No refund ticket',
+                  bold: refundStatus != null,
+                ),
+              ],
+            );
+          },
+        ),
+      ],
+    );
+  }
+
+  static String _capitalize(String s) =>
+      s.isEmpty ? s : '${s[0].toUpperCase()}${s.substring(1)}';
 }

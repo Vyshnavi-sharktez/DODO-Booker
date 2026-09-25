@@ -271,45 +271,105 @@ export default {
       transaction_id,
     );
 
-    // ── Razorpay confirmed the refund ────────────────────────────────────────
+    // ── Razorpay accepted the refund request ─────────────────────────────────
+    //
+    // HTTP 200 from Razorpay does NOT mean the refund has completed.  It means:
+    //
+    //   status = "processed" — Razorpay immediately settled the refund (rare;
+    //     only for instant-refund-eligible payments).  Safe to mark complete now.
+    //
+    //   status = "pending"   — Razorpay has queued the refund.  Money has NOT
+    //     moved yet.  Razorpay will send a refund.processed (or refund.failed)
+    //     webhook once the refund clears (typically 5–7 business days for normal
+    //     speed).  Do NOT mark the transaction complete yet.
+    //
+    // Only call admin_mark_refund_transaction_complete when Razorpay explicitly
+    // confirms status = "processed".  For any other value (including "pending"),
+    // store the gateway_refund_id so the webhook handler can locate this
+    // transaction via both the notes-based and gateway_refund_id fallback lookups,
+    // then return HTTP 202 so the admin panel knows to wait for the webhook.
     if (razorpayResult.ok) {
-      const { error: completeError } = await ctx.supabase.rpc(
-        "admin_mark_refund_transaction_complete",
-        {
-          p_transaction_id: transaction_id,
-          p_gateway_refund_id: razorpayResult.refund.id,
-          p_gateway_response: razorpayResult.refund,
-        },
-      );
+      const razorpayRefundStatus = razorpayResult.refund.status;
 
-      if (completeError) {
-        // CRITICAL: Razorpay created the refund but our database record failed.
-        // The gateway_refund_id UNIQUE constraint prevents double-recording if
-        // the admin retries manually.  Log the refund ID prominently so the
-        // admin can reconcile manually.
-        console.error(
-          `[process-razorpay-refund] CRITICAL: Razorpay refund ` +
-            `${razorpayResult.refund.id} created for transaction ` +
-            `${transaction_id} but admin_mark_refund_transaction_complete ` +
-            `failed: ${completeError.message}`,
-        );
-        return Response.json(
+      if (razorpayRefundStatus === "processed") {
+        // ── Immediately settled — mark complete now ───────────────────────────
+        const { error: completeError } = await ctx.supabase.rpc(
+          "admin_mark_refund_transaction_complete",
           {
-            error:
-              "Razorpay confirmed the refund but our record update failed. " +
-              `Razorpay refund ID: ${razorpayResult.refund.id}. ` +
-              "Use 'Mark Complete' in the UI with this ID to reconcile.",
-            gateway_refund_id: razorpayResult.refund.id,
+            p_transaction_id: transaction_id,
+            p_gateway_refund_id: razorpayResult.refund.id,
+            p_gateway_response: razorpayResult.refund,
           },
-          { status: 500 },
+        );
+
+        if (completeError) {
+          // CRITICAL: Razorpay settled the refund but our record update failed.
+          // The gateway_refund_id UNIQUE constraint prevents double-recording on
+          // manual retry.  Log prominently so the admin can reconcile.
+          console.error(
+            `[process-razorpay-refund] CRITICAL: Razorpay refund ` +
+              `${razorpayResult.refund.id} processed for transaction ` +
+              `${transaction_id} but admin_mark_refund_transaction_complete ` +
+              `failed: ${completeError.message}`,
+          );
+          return Response.json(
+            {
+              error:
+                "Razorpay confirmed the refund but our record update failed. " +
+                `Razorpay refund ID: ${razorpayResult.refund.id}. ` +
+                "Use 'Mark Complete' in the UI with this ID to reconcile.",
+              gateway_refund_id: razorpayResult.refund.id,
+            },
+            { status: 500 },
+          );
+        }
+
+        return Response.json({
+          success: true,
+          gateway_refund_id: razorpayResult.refund.id,
+          razorpay_status: razorpayRefundStatus,
+        });
+      }
+
+      // ── Refund queued (status = "pending" or any unrecognised value) ────────
+      // Store the gateway_refund_id on the transaction while it stays in
+      // 'processing' state.  This enables the webhook handler's fallback
+      // gateway_refund_id lookup in addition to the notes-based primary lookup.
+      // webhook_complete_refund_transaction / webhook_fail_refund_transaction
+      // will perform the final state transition when Razorpay delivers the
+      // refund.processed or refund.failed event.
+      const { error: storeError } = await ctx.supabaseAdmin
+        .from("refund_transactions")
+        .update({
+          gateway_refund_id: razorpayResult.refund.id,
+          gateway_response: razorpayResult.refund,
+        })
+        .eq("id", transaction_id)
+        .eq("status", "processing");
+
+      if (storeError) {
+        // Non-fatal: the notes-based webhook lookup still works without this.
+        console.warn(
+          `[process-razorpay-refund] Could not store gateway_refund_id ` +
+            `for pending refund on transaction ${transaction_id}: ` +
+            storeError.message,
         );
       }
 
-      return Response.json({
-        success: true,
-        gateway_refund_id: razorpayResult.refund.id,
-        razorpay_status: razorpayResult.refund.status,
-      });
+      // Return 202 so the admin panel shows an informational message rather
+      // than a success confirmation.  The webhook finalises the transaction.
+      return Response.json(
+        {
+          pending: true,
+          message:
+            "Razorpay has queued the refund. The transaction will be marked " +
+            "complete automatically once Razorpay processes it " +
+            "(typically 5–7 business days for normal-speed refunds).",
+          gateway_refund_id: razorpayResult.refund.id,
+          razorpay_status: razorpayRefundStatus,
+        },
+        { status: 202 },
+      );
     }
 
     // ── Razorpay returned an error ───────────────────────────────────────────

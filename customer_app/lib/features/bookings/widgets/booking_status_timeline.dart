@@ -12,16 +12,16 @@ class BookingStatusTimeline extends StatelessWidget {
   Widget build(BuildContext context) {
     final events = List<BookingStatusEvent>.from(booking.timeline);
 
-    if (booking.isCancelled) {
+    if (booking.isCancelled || booking.isPaymentFailed) {
       events.add(BookingStatusEvent(
         status: BookingStatus.cancelled,
-        label: 'Cancelled',
+        label: booking.isPaymentFailed ? 'Payment Failed' : 'Cancelled',
         isReached: true,
       ));
     }
 
     // The last reached non-cancelled step is the "active" (current) step.
-    final lastReachedIdx = booking.isCancelled
+    final lastReachedIdx = (booking.isCancelled || booking.isPaymentFailed)
         ? -1
         : events.lastIndexWhere(
             (e) => e.isReached && e.status != BookingStatus.cancelled,

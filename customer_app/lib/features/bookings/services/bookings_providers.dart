@@ -27,6 +27,19 @@ final bookingImagesProvider = FutureProvider.autoDispose
   return List<Map<String, dynamic>>.from(rows as List);
 });
 
+/// Fetches the refund_request status for a single booking.
+/// Returns null when no refund request exists for this booking.
+/// Used by BookingDetailsScreen to show the cancellation refund info / success banners.
+final bookingRefundStatusProvider = FutureProvider.autoDispose
+    .family<String?, String>((ref, bookingId) async {
+  final row = await Supabase.instance.client
+      .from('refund_requests')
+      .select('status')
+      .eq('booking_id', bookingId)
+      .maybeSingle();
+  return row?['status'] as String?;
+});
+
 // ── Processed bookings: separates regular bookings from AMC contracts ──────────
 
 class ProcessedBookings {

@@ -30,4 +30,18 @@ class NotificationsRepository extends BaseRepository {
         .eq('user_id', vendorId)
         .eq('is_read', false);
   }
+
+  Future<void> markAsUnread(String notificationId) async {
+    await supabase
+        .from('notifications')
+        .update({'is_read': false})
+        .eq('id', notificationId);
+  }
+
+  Future<void> deleteNotification(String notificationId) async {
+    await supabase
+        .from('notifications')
+        .delete()
+        .eq('id', notificationId);
+  }
 }

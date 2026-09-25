@@ -18,15 +18,51 @@ class VendorNotificationsPanelDialog extends ConsumerStatefulWidget {
 class _VendorNotificationsPanelDialogState
     extends ConsumerState<VendorNotificationsPanelDialog> {
   final _locallyRead = <String>{};
+  final _locallyUnread = <String>{};
+  final _locallyDeleted = <String>{};
 
-  bool _isRead(VendorNotification n) =>
-      n.isRead || _locallyRead.contains(n.id);
+  bool _isRead(VendorNotification n) {
+    if (_locallyUnread.contains(n.id)) return false;
+    return n.isRead || _locallyRead.contains(n.id);
+  }
 
   Future<void> _markRead(VendorNotification n) async {
     if (_isRead(n)) return;
-    setState(() => _locallyRead.add(n.id));
+    setState(() {
+      _locallyRead.add(n.id);
+      _locallyUnread.remove(n.id);
+    });
     try {
       await ref.read(notificationsRepositoryProvider).markAsRead(n.id);
+      ref.invalidate(vendorNotificationsProvider);
+    } catch (_) {}
+  }
+
+  Future<void> _toggleRead(VendorNotification n) async {
+    final currentlyRead = _isRead(n);
+    setState(() {
+      if (currentlyRead) {
+        _locallyUnread.add(n.id);
+        _locallyRead.remove(n.id);
+      } else {
+        _locallyRead.add(n.id);
+        _locallyUnread.remove(n.id);
+      }
+    });
+    try {
+      if (currentlyRead) {
+        await ref.read(notificationsRepositoryProvider).markAsUnread(n.id);
+      } else {
+        await ref.read(notificationsRepositoryProvider).markAsRead(n.id);
+      }
+      ref.invalidate(vendorNotificationsProvider);
+    } catch (_) {}
+  }
+
+  Future<void> _delete(VendorNotification n) async {
+    setState(() => _locallyDeleted.add(n.id));
+    try {
+      await ref.read(notificationsRepositoryProvider).deleteNotification(n.id);
       ref.invalidate(vendorNotificationsProvider);
     } catch (_) {}
   }
@@ -34,8 +70,10 @@ class _VendorNotificationsPanelDialogState
   Future<void> _markAllRead(List<VendorNotification> notifications) async {
     final user = ref.read(currentVendorUserProvider);
     if (user == null) return;
-    final unreadIds =
-        notifications.where((n) => !_isRead(n)).map((n) => n.id).toSet();
+    final unreadIds = notifications
+        .where((n) => !_locallyDeleted.contains(n.id) && !_isRead(n))
+        .map((n) => n.id)
+        .toSet();
     if (unreadIds.isEmpty) return;
     setState(() => _locallyRead.addAll(unreadIds));
     try {
@@ -138,7 +176,9 @@ class _VendorNotificationsPanelDialogState
                         const Spacer(),
                         notificationsAsync.whenOrNull(
                           data: (items) {
-                            final hasUnread = items.any((n) => !_isRead(n));
+                            final hasUnread = items
+                                .where((n) => !_locallyDeleted.contains(n.id))
+                                .any((n) => !_isRead(n));
                             if (!hasUnread) return null;
                             return TextButton(
                               onPressed: () => _markAllRead(items),
@@ -181,7 +221,10 @@ class _VendorNotificationsPanelDialogState
                         ),
                       ),
                       data: (notifications) {
-                        if (notifications.isEmpty) {
+                        final visible = notifications
+                            .where((n) => !_locallyDeleted.contains(n.id))
+                            .toList();
+                        if (visible.isEmpty) {
                           return const Padding(
                             padding: EdgeInsets.symmetric(vertical: 48),
                             child: Center(
@@ -204,15 +247,17 @@ class _VendorNotificationsPanelDialogState
                         }
                         return ListView.separated(
                           shrinkWrap: true,
-                          itemCount: notifications.length,
+                          itemCount: visible.length,
                           separatorBuilder: (_, __) =>
                               const Divider(height: 1),
                           itemBuilder: (ctx, i) {
-                            final n = notifications[i];
+                            final n = visible[i];
                             return NotificationTile(
                               notification: n,
                               isRead: _isRead(n),
                               onTap: () => _handleTap(n),
+                              onToggleRead: () => _toggleRead(n),
+                              onDelete: () => _delete(n),
                             );
                           },
                         );

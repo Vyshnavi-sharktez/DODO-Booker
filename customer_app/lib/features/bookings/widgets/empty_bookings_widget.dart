@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../core/constants/app_colors.dart';
 
-enum BookingsTab { upcoming, ongoing, completed, cancelled }
+enum BookingsTab { upcoming, ongoing, completed, cancelled, failed }
 
 class EmptyBookingsWidget extends StatelessWidget {
   final BookingsTab tab;
@@ -90,6 +90,12 @@ class EmptyBookingsWidget extends StatelessWidget {
           Icons.cancel_outlined,
           'No Cancelled Bookings',
           'You haven\'t cancelled any\nbookings — great job!',
+        );
+      case BookingsTab.failed:
+        return (
+          Icons.credit_card_off_outlined,
+          'No Failed Payments',
+          'Bookings where payment could not\nbe completed will appear here.',
         );
     }
   }

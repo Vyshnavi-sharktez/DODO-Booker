@@ -19,6 +19,9 @@
 import { assertEquals } from "jsr:@std/assert@^1";
 
 // ── Production implementation (kept in sync with index.ts) ────────────────────
+// Both functions below are duplicated from index.ts.  They cannot be imported
+// because index.ts depends on Supabase packages only available in the Edge
+// Functions runtime.  Keep them in sync with the production implementation.
 
 async function verifyWebhookSignature(
   rawBody: ArrayBuffer,
@@ -45,6 +48,15 @@ async function verifyWebhookSignature(
     diff |= computed.charCodeAt(i) ^ signature.charCodeAt(i);
   }
   return diff === 0;
+}
+
+function receiptToTransactionId(
+  receipt: string | null | undefined,
+): string | null {
+  if (!receipt) return null;
+  const lower = receipt.toLowerCase();
+  if (lower.length !== 32 || !/^[0-9a-f]{32}$/.test(lower)) return null;
+  return `${lower.slice(0, 8)}-${lower.slice(8, 12)}-${lower.slice(12, 16)}-${lower.slice(16, 20)}-${lower.slice(20)}`;
 }
 
 // ── Test helpers ──────────────────────────────────────────────────────────────
@@ -82,6 +94,82 @@ const TEST_BODY_PROCESSED = JSON.stringify({
         status: "processed",
         notes: { dodo_transaction_id: "550e8400-e29b-41d4-a716-446655440000" },
         receipt: "550e8400e29b41d4a716",
+      },
+    },
+  },
+});
+
+// Receipt-fallback fixtures: notes absent or malformed, but receipt is correct.
+// UUID 770e8400-e29b-41d4-a716-446655440000 → receipt 770e8400e29b41d4a716446655440000
+const TEST_BODY_PROCESSED_NULL_NOTES = JSON.stringify({
+  event: "refund.processed",
+  payload: {
+    refund: {
+      entity: {
+        id: "rfnd_test003",
+        entity: "refund",
+        amount: 59290,
+        currency: "INR",
+        payment_id: "pay_test003",
+        status: "processed",
+        notes: null,
+        receipt: "770e8400e29b41d4a716446655440000",
+      },
+    },
+  },
+});
+
+// Razorpay sometimes returns notes as an empty array [] instead of an object.
+const TEST_BODY_PROCESSED_ARRAY_NOTES = JSON.stringify({
+  event: "refund.processed",
+  payload: {
+    refund: {
+      entity: {
+        id: "rfnd_test004",
+        entity: "refund",
+        amount: 59290,
+        currency: "INR",
+        payment_id: "pay_test004",
+        status: "processed",
+        notes: [],
+        receipt: "770e8400e29b41d4a716446655440000",
+      },
+    },
+  },
+});
+
+// No notes, no valid receipt → truly unknown refund.
+const TEST_BODY_PROCESSED_NO_RECEIPT = JSON.stringify({
+  event: "refund.processed",
+  payload: {
+    refund: {
+      entity: {
+        id: "rfnd_test005",
+        entity: "refund",
+        amount: 59290,
+        currency: "INR",
+        payment_id: "pay_test005",
+        status: "processed",
+        notes: null,
+        receipt: null,
+      },
+    },
+  },
+});
+
+const TEST_BODY_FAILED_NULL_NOTES = JSON.stringify({
+  event: "refund.failed",
+  payload: {
+    refund: {
+      entity: {
+        id: "rfnd_test006",
+        entity: "refund",
+        amount: 59290,
+        currency: "INR",
+        payment_id: "pay_test006",
+        status: "failed",
+        notes: null,
+        receipt: "770e8400e29b41d4a716446655440000",
       },
     },
   },
@@ -327,6 +415,149 @@ Deno.test("refund.processed with a different gateway_refund_id proceeds to RPC (
   );
 });
 
+// ── receiptToTransactionId tests ─────────────────────────────────────────────
+
+Deno.test("receiptToTransactionId: valid 32-char hex returns correct UUID", () => {
+  assertEquals(
+    receiptToTransactionId("770e8400e29b41d4a716446655440000"),
+    "770e8400-e29b-41d4-a716-446655440000",
+  );
+});
+
+Deno.test("receiptToTransactionId: uppercase hex is normalised to lowercase UUID", () => {
+  assertEquals(
+    receiptToTransactionId("770E8400E29B41D4A716446655440000"),
+    "770e8400-e29b-41d4-a716-446655440000",
+  );
+});
+
+Deno.test("receiptToTransactionId: known DODO transaction ID round-trips correctly", () => {
+  // b77adceb-5cc0-4548-a9d8-4adda2113e9d is the real stuck transaction.
+  assertEquals(
+    receiptToTransactionId("b77adceb5cc04548a9d84adda2113e9d"),
+    "b77adceb-5cc0-4548-a9d8-4adda2113e9d",
+  );
+});
+
+Deno.test("receiptToTransactionId: null returns null", () => {
+  assertEquals(receiptToTransactionId(null), null);
+});
+
+Deno.test("receiptToTransactionId: undefined returns null", () => {
+  assertEquals(receiptToTransactionId(undefined), null);
+});
+
+Deno.test("receiptToTransactionId: empty string returns null", () => {
+  assertEquals(receiptToTransactionId(""), null);
+});
+
+Deno.test("receiptToTransactionId: 31-char hex returns null (too short)", () => {
+  assertEquals(receiptToTransactionId("770e8400e29b41d4a71644665544000"), null);
+});
+
+Deno.test("receiptToTransactionId: 33-char hex returns null (too long)", () => {
+  assertEquals(receiptToTransactionId("770e8400e29b41d4a7164466554400000"), null);
+});
+
+Deno.test("receiptToTransactionId: non-hex chars return null", () => {
+  assertEquals(receiptToTransactionId("770e8400e29b41d4a716446655440zzz"), null);
+});
+
+Deno.test("receiptToTransactionId: receipt with hyphens (UUID format) returns null", () => {
+  // The receipt stored in Razorpay has NO hyphens; if someone passes the raw
+  // UUID by mistake, it will fail the length / hex check.
+  assertEquals(receiptToTransactionId("770e8400-e29b-41d4-a716-446655440000"), null);
+});
+
+// ── Notes-absent fallback logic tests ────────────────────────────────────────
+
+Deno.test("null notes field triggers fallback (notes→null means no dodo_transaction_id)", () => {
+  const entity = JSON.parse(TEST_BODY_PROCESSED_NULL_NOTES).payload.refund.entity;
+  const transactionIdFromNotes = entity.notes?.["dodo_transaction_id"] ?? null;
+  assertEquals(transactionIdFromNotes, null);
+});
+
+Deno.test("array notes field triggers fallback (Razorpay empty-array quirk)", () => {
+  // When Razorpay returns notes as [] rather than {}, dodo_transaction_id is absent.
+  const entity = JSON.parse(TEST_BODY_PROCESSED_ARRAY_NOTES).payload.refund.entity;
+  const transactionIdFromNotes = entity.notes?.["dodo_transaction_id"] ?? null;
+  assertEquals(transactionIdFromNotes, null);
+});
+
+Deno.test("receipt is present in null-notes fixture", () => {
+  const entity = JSON.parse(TEST_BODY_PROCESSED_NULL_NOTES).payload.refund.entity;
+  assertEquals(entity.receipt, "770e8400e29b41d4a716446655440000");
+});
+
+Deno.test("receipt is present in array-notes fixture", () => {
+  const entity = JSON.parse(TEST_BODY_PROCESSED_ARRAY_NOTES).payload.refund.entity;
+  assertEquals(entity.receipt, "770e8400e29b41d4a716446655440000");
+});
+
+Deno.test("receipt from null-notes fixture resolves to correct UUID", () => {
+  const entity = JSON.parse(TEST_BODY_PROCESSED_NULL_NOTES).payload.refund.entity;
+  assertEquals(
+    receiptToTransactionId(entity.receipt),
+    "770e8400-e29b-41d4-a716-446655440000",
+  );
+});
+
+Deno.test("receipt from array-notes fixture resolves to correct UUID", () => {
+  const entity = JSON.parse(TEST_BODY_PROCESSED_ARRAY_NOTES).payload.refund.entity;
+  assertEquals(
+    receiptToTransactionId(entity.receipt),
+    "770e8400-e29b-41d4-a716-446655440000",
+  );
+});
+
+Deno.test("null receipt with null notes yields null UUID (unknown_refund path)", () => {
+  const entity = JSON.parse(TEST_BODY_PROCESSED_NO_RECEIPT).payload.refund.entity;
+  const transactionIdFromNotes = entity.notes?.["dodo_transaction_id"] ?? null;
+  assertEquals(transactionIdFromNotes, null);
+  assertEquals(receiptToTransactionId(entity.receipt), null);
+  // Both lookups return null → unknown_refund path is correctly taken.
+});
+
+Deno.test("refund.failed null-notes fixture resolves receipt to UUID", () => {
+  const entity = JSON.parse(TEST_BODY_FAILED_NULL_NOTES).payload.refund.entity;
+  const transactionIdFromNotes = entity.notes?.["dodo_transaction_id"] ?? null;
+  assertEquals(transactionIdFromNotes, null);
+  assertEquals(
+    receiptToTransactionId(entity.receipt),
+    "770e8400-e29b-41d4-a716-446655440000",
+  );
+});
+
+// ── Idempotency checks for receipt-found rows ─────────────────────────────────
+
+Deno.test("idempotency: receipt-matched completed transaction skips RPC for refund.processed", () => {
+  // Mirrors the checkIdempotency logic applied after a receipt-based lookup.
+  const txnStatus = "completed";
+  const txnGatewayRefundId = "rfnd_test003";
+  const incomingGatewayRefundId = "rfnd_test003";
+  assertEquals(
+    checkIdempotency("refund.processed", txnStatus, txnGatewayRefundId, incomingGatewayRefundId),
+    "idempotent",
+  );
+});
+
+Deno.test("idempotency: receipt-matched failed transaction skips RPC for refund.failed", () => {
+  const txnStatus = "failed";
+  assertEquals(
+    checkIdempotency("refund.failed", txnStatus, null, "rfnd_test006"),
+    "idempotent",
+  );
+});
+
+Deno.test("idempotency: receipt-matched processing transaction proceeds to RPC", () => {
+  // The race-condition fix: receipt lookup finds the transaction still processing.
+  const txnStatus = "processing";
+  assertEquals(
+    checkIdempotency("refund.processed", txnStatus, null, "rfnd_test003"),
+    "process",
+  );
+});
+
 // ── Integration test scenarios (manual, require Supabase local stack) ─────────
 //
 // The following scenarios cannot be unit-tested without a live database.
@@ -383,3 +614,35 @@ Deno.test("refund.processed with a different gateway_refund_id proceeds to RPC (
 //   Expected: booking_payments.status → success; bookings.payment_status → success.
 //   Send the same event again → 200 { idempotent: true }, no double-write.
 //   Send payment.failed after payment.captured → success is NOT reverted.
+//
+// Scenario I — Race-condition: webhook arrives before gateway_refund_id is stored:
+//   1. Admin initiates a Razorpay refund for an online booking.
+//   2. Intercept the outgoing process-razorpay-refund request BEFORE it stores
+//      gateway_refund_id (simulate by pausing after the Razorpay API call).
+//   3. Send a mock refund.processed webhook with notes: null (or notes: []) and
+//      receipt = transaction_id_without_hyphens (e.g. "b77adceb5cc04548a9d84adda2113e9d").
+//   Expected: receipt fallback reconstructs the UUID, finds the processing
+//             transaction, calls webhook_complete_refund_transaction, and returns
+//             200 { received: true, success: true }.
+//             Transaction transitions to completed; ticket to completed.
+//   After test: resume process-razorpay-refund.  Its gateway_refund_id UPDATE
+//   uses .eq("status", "processing") so it is a no-op if status is now completed.
+//
+// Scenario J — Race-condition: webhook arrives after gateway_refund_id is stored
+//              but notes are still absent:
+//   Same as I but let process-razorpay-refund complete first (gateway_refund_id stored).
+//   Then send refund.processed with notes: null.
+//   Expected: Fallback A (gateway_refund_id) finds the transaction.
+//             Completion proceeds normally.
+//
+// Scenario K — Truly unknown receipt (manual Razorpay dashboard refund):
+//   Send refund.processed where receipt is not a 32-char hex string (e.g.
+//   a custom string set by Razorpay dashboard, like "manual-001").
+//   Expected: 200 { received: true, handled: false, reason: "unknown_refund" }.
+//   No DB changes.
+//
+// Scenario L — Receipt of an already-completed transaction (Fallback B idempotency):
+//   Send refund.processed twice for the same refund, both times with notes: null.
+//   First delivery completes the transaction via receipt fallback.
+//   Second delivery: receipt lookup finds transaction with status = completed.
+//   Expected: 200 { received: true, idempotent: true }.  No double-write.
