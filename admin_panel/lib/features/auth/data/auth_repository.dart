@@ -73,13 +73,14 @@ class AuthRepository {
           isSuperAdmin: true, permissions: const {}, roleNames: ['Super Admin']);
     }
 
-    // 4. Fetch assigned roles
+    // 4. Fetch assigned roles — only active roles contribute permissions.
     List<dynamic> rolesList = [];
     try {
       rolesList = await _supabase
           .from('admin_user_roles')
-          .select('role_id, roles(id, name)')
-          .eq('admin_user_id', adminId);
+          .select('role_id, roles!inner(id, name)')
+          .eq('admin_user_id', adminId)
+          .eq('roles.is_active', true);
     } catch (e) {
       rethrow;
     }
@@ -151,7 +152,7 @@ class AuthRepository {
       fullName: row['full_name'] as String? ?? '',
       email: row['email'] as String? ?? '',
       isSuperAdmin: isSuperAdmin,
-      isActive: true,
+      isActive: row['is_active'] as bool? ?? false,
       permissions: permissions,
       roleNames: roleNames,
     );

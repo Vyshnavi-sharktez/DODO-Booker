@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../../core/config/app_url_config.dart';
@@ -23,17 +24,49 @@ final authStateProvider = StreamProvider<AuthState>((ref) {
 });
 
 // ── Admin user data (fetched after login) ─────────────────────────────────────
-// Rebuilds whenever auth state changes. Returns null when logged out.
+// Re-fetches on every Supabase auth event AND on a 5-minute periodic timer.
+// The timer detects mid-session deactivation: fetchAdminUser filters
+// is_active = true, so a deactivated admin receives null on the next tick,
+// which the router redirect interprets as "not authenticated" → /login.
 
 final adminUserProvider = StreamProvider<AdminUser?>((ref) {
-  final authStream = ref.watch(supabaseClientProvider).auth.onAuthStateChange;
+  final client = ref.watch(supabaseClientProvider);
   final repo = ref.read(authRepositoryProvider);
 
-  return authStream.asyncMap((authState) async {
-    final session = authState.session;
-    if (session == null) return null;
-    return await repo.fetchAdminUser(session.user.id);
+  final controller = StreamController<AdminUser?>();
+
+  Future<void> fetchAndEmit() async {
+    final session = client.auth.currentSession;
+    if (session == null) {
+      if (!controller.isClosed) controller.add(null);
+      return;
+    }
+    try {
+      final user = await repo.fetchAdminUser(session.user.id);
+      if (!controller.isClosed) controller.add(user);
+    } catch (_) {
+      // fetchAdminUser throws when no active admin row is found (deactivated
+      // or unknown).  Emit null so the router redirects to /login.
+      if (!controller.isClosed) controller.add(null);
+    }
+  }
+
+  // Re-emit on every Supabase auth event (login, logout, token refresh).
+  final authSub = client.auth.onAuthStateChange.listen((_) => fetchAndEmit());
+
+  // Periodic re-validation: detect if the admin was deactivated mid-session.
+  final timer = Timer.periodic(
+    const Duration(minutes: 5),
+    (_) => fetchAndEmit(),
+  );
+
+  ref.onDispose(() {
+    authSub.cancel();
+    timer.cancel();
+    controller.close();
   });
+
+  return controller.stream;
 });
 
 // ── Convenience: resolved admin user (or null) ────────────────────────────────

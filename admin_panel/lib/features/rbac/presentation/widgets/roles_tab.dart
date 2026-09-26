@@ -188,33 +188,48 @@ class _RoleCard extends ConsumerWidget {
             Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                IconButton(
-                  tooltip: 'Edit',
-                  icon: const Icon(Icons.edit_rounded, size: 18),
-                  onPressed: () => _showEditDialog(context, ref),
-                ),
-                if (!role.isSystem)
+                if (!role.isSystem) ...[
+                  IconButton(
+                    tooltip: 'Edit',
+                    icon: const Icon(Icons.edit_rounded, size: 18),
+                    onPressed: () => _showEditDialog(context, ref),
+                  ),
                   IconButton(
                     tooltip: 'Delete',
                     icon: Icon(Icons.delete_outline_rounded,
                         size: 18, color: AppColors.error),
                     onPressed: () => _confirmDelete(context, ref),
                   ),
-                IconButton(
-                  tooltip: role.isActive ? 'Deactivate' : 'Activate',
-                  icon: Icon(
-                    role.isActive
-                        ? Icons.toggle_on_rounded
-                        : Icons.toggle_off_rounded,
-                    size: 22,
-                    color: role.isActive ? AppColors.success : AppColors.textSecondary,
+                  IconButton(
+                    tooltip: role.isActive ? 'Deactivate' : 'Activate',
+                    icon: Icon(
+                      role.isActive
+                          ? Icons.toggle_on_rounded
+                          : Icons.toggle_off_rounded,
+                      size: 32,
+                      color: role.isActive
+                          ? AppColors.success
+                          : AppColors.textSecondary,
+                    ),
+                    onPressed: () async {
+                      try {
+                        await ref
+                            .read(rolesNotifierProvider.notifier)
+                            .updateRole(role.id, isActive: !role.isActive);
+                      } catch (e) {
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text('Failed to update role: $e'),
+                              backgroundColor: AppColors.error,
+                              behavior: SnackBarBehavior.floating,
+                            ),
+                          );
+                        }
+                      }
+                    },
                   ),
-                  onPressed: role.isSystem
-                      ? null
-                      : () => ref
-                          .read(rolesNotifierProvider.notifier)
-                          .updateRole(role.id, isActive: !role.isActive),
-                ),
+                ],
               ],
             ),
           ],
@@ -241,12 +256,22 @@ class _RoleCard extends ConsumerWidget {
     );
   }
 
-  void _confirmDelete(BuildContext context, WidgetRef ref) {
+  Future<void> _confirmDelete(BuildContext context, WidgetRef ref) async {
+    final count = await ref
+        .read(rbacRepositoryProvider)
+        .fetchRoleAdminCount(role.id);
+    if (!context.mounted) return;
+
+    final detail = count > 0
+        ? 'Delete "${role.name}"? $count admin${count == 1 ? '' : 's'} '
+          'will lose this role. This cannot be undone.'
+        : 'Delete "${role.name}"? This cannot be undone.';
+
     showDialog<void>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Delete Role'),
-        content: Text('Delete "${role.name}"? This cannot be undone.'),
+        content: Text(detail),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(),

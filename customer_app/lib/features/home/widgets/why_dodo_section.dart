@@ -93,7 +93,6 @@ class WhyDodoSection extends StatelessWidget {
 
     final w = MediaQuery.sizeOf(context).width;
     final isDesktop = w >= 768;
-    final hPad = (w * 0.05).clamp(24.0, 64.0);
     final vPad = isDesktop ? 96.0 : 64.0;
 
     return ClipRect(
@@ -126,12 +125,12 @@ class WhyDodoSection extends StatelessWidget {
             color: const Color(0xFF111111).withOpacity(0.50),
           ),
         ),
-        // ── Content ──────────────────────────────────────────────────────
-        Padding(
-          padding: EdgeInsets.symmetric(horizontal: hPad, vertical: vPad),
-          child: Center(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 1280),
+        // ── Content — same ConstrainedBox(1280)+20px as all body sections ─
+        Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 1280),
+            child: Padding(
+              padding: EdgeInsets.symmetric(horizontal: 20, vertical: vPad),
               child: isDesktop
                   ? _DesktopLayout(
                       items: gridItems,

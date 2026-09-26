@@ -19,6 +19,8 @@ final hasAnyPermissionProvider =
 });
 
 // ── Route permission map ───────────────────────────────────────────────────────
+// Maps stripped route paths (without /dashboard prefix) to required permissions.
+// Dynamic routes like /vendors/:id are handled separately in resolveRoutePermission.
 
 const Map<String, String> routePermissions = {
   '/rbac': 'rbac.manage',
@@ -51,10 +53,34 @@ const Map<String, String> routePermissions = {
   '/amc-plans': 'category.view',
   '/amc-scheduling-requests': 'booking.view',
   '/warranty-claims': 'booking.view',
+  '/warranty-analytics': 'booking.view',
+  '/call-sessions': 'booking.view',
+  '/dispatch-analytics': 'booking.view',
+  '/gps-audit': 'booking.view',
+  '/gps-analytics': 'booking.view',
   '/vendor-service-requests': 'vendor.view',
+  '/vendor-catalog': 'vendor.view',
   '/refunds': 'refund.view',
   '/support': 'booking.view',
 };
+
+// Dynamic route patterns: a prefix match maps to its module permission.
+// Checked only when no exact entry is found in routePermissions.
+const Map<String, String> _dynamicRoutePermissions = {
+  '/vendors/': 'vendor.view',
+  '/customers/': 'customer.view',
+};
+
+/// Returns the required permission for [strippedPath], or null if the route
+/// is open to all authenticated admins.
+String? resolveRoutePermission(String strippedPath) {
+  final exact = routePermissions[strippedPath];
+  if (exact != null) return exact;
+  for (final entry in _dynamicRoutePermissions.entries) {
+    if (strippedPath.startsWith(entry.key)) return entry.value;
+  }
+  return null;
+}
 
 // ── Permission guard widget ────────────────────────────────────────────────────
 

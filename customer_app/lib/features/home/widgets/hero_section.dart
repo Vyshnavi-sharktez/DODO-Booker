@@ -359,9 +359,6 @@ class _WebHero extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final w = MediaQuery.of(context).size.width;
-    final hPad = w >= 1024 ? 32.0 : 20.0;
-
     return ClipRect(
       child: SizedBox(
         height: 640,
@@ -407,44 +404,52 @@ class _WebHero extends StatelessWidget {
               ),
             ),
           ),
-          // ── Content ─────────────────────────────────────────────────────
+          // ── Content — same ConstrainedBox(1280)+20px as all body sections ─
           Padding(
-            padding: EdgeInsets.symmetric(horizontal: hPad, vertical: 72),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                Expanded(
-                  flex: 55,
-                  child: Align(
-                    alignment: const Alignment(0, 0.3),
-                    child: _WebContent(
-                      checkState: checkState,
-                      pickedLabel: pickedLabel,
-                      fetchingGps: fetchingGps,
-                      onContinue: onContinue,
-                      onReset: onReset,
-                      onLocationTap: onLocationTap,
-                      onClearLocation: onClearLocation,
-                      onFetchLiveLocation: onFetchLiveLocation,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 48),
-                Expanded(
-                  flex: 45,
-                  child: Align(
-                    alignment: Alignment.center,
-                    child: ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: 400),
-                      child: Image.asset(
-                        'assets/images/dodo-mascot.png',
-                        fit: BoxFit.contain,
-                        errorBuilder: (_, _, _) => const SizedBox.shrink(),
+            padding: const EdgeInsets.symmetric(vertical: 72),
+            child: Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 1280),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      Expanded(
+                        flex: 55,
+                        child: Align(
+                          alignment: const Alignment(0, 0.3),
+                          child: _WebContent(
+                            checkState: checkState,
+                            pickedLabel: pickedLabel,
+                            fetchingGps: fetchingGps,
+                            onContinue: onContinue,
+                            onReset: onReset,
+                            onLocationTap: onLocationTap,
+                            onClearLocation: onClearLocation,
+                            onFetchLiveLocation: onFetchLiveLocation,
+                          ),
+                        ),
                       ),
-                    ),
+                      const SizedBox(width: 48),
+                      Expanded(
+                        flex: 45,
+                        child: Align(
+                          alignment: Alignment.center,
+                          child: ConstrainedBox(
+                            constraints: const BoxConstraints(maxWidth: 400),
+                            child: Image.asset(
+                              'assets/images/dodo-mascot.png',
+                              fit: BoxFit.contain,
+                              errorBuilder: (_, _, _) => const SizedBox.shrink(),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-              ],
+              ),
             ),
           ),
         ],

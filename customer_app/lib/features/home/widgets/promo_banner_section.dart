@@ -15,7 +15,7 @@ class PromoBannerSection extends StatelessWidget {
     final isDesktop = width >= 768;
 
     return Container(
-      margin: EdgeInsets.symmetric(horizontal: isDesktop ? 24 : 16),
+      margin: const EdgeInsets.symmetric(horizontal: 20),
       height: isDesktop ? 200 : 160,
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(20),
