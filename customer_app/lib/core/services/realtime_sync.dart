@@ -14,6 +14,7 @@ import '../../features/home/services/landing_page_sections_provider.dart';
 import '../../features/loyalty/providers/loyalty_providers.dart';
 import '../../features/surge_fee/providers/surge_fee_provider.dart';
 import '../../features/tax/providers/tax_provider.dart';
+import '../../features/support/services/support_chat_providers.dart';
 
 /// Manages all Supabase Realtime subscriptions for the customer app.
 ///
@@ -240,8 +241,10 @@ class CustomerRealtimeSync {
             value: customerId,
           ),
           callback: (_) {
-            debugPrint('[DODO][CustomerSync] personal notification INSERT → invalidating notificationsProvider + AMC providers');
+            debugPrint('[DODO][CustomerSync] personal notification INSERT → invalidating notificationsProvider + AMC + support providers');
             _ref.invalidate(notificationsProvider);
+            // Refresh support conversation so SupportChatScreen detects new replies.
+            _ref.invalidate(supportConversationProvider);
             // Re-fetch AMC state on every personal notification so that
             // admin actions (approve/reject cancellation, schedule visit)
             // are reflected immediately even if the amc_contracts Realtime
@@ -315,6 +318,7 @@ class CustomerRealtimeSync {
     _ref.invalidate(homeBannersProvider);
     _ref.invalidate(activeCouponsProvider);
     _ref.invalidate(notificationsProvider);
+    _ref.invalidate(supportConversationProvider);
     _ref.invalidate(pendingAmcRequestProvider);
     _ref.invalidate(pendingAmcPauseRequestProvider);
     _ref.invalidate(pendingAmcResumeRequestProvider);

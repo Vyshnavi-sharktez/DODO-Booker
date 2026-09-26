@@ -89,6 +89,20 @@ class AddressNotifier
       current.where((a) => a.id != id).toList(),
     );
   }
+
+  Future<void> setDefault(String id) async {
+    // Optimistic update so the UI responds immediately.
+    final current = state.valueOrNull ?? [];
+    state = AsyncValue.data(
+      current.map((a) => a.copyWith(isDefault: a.id == id)).toList(),
+    );
+    try {
+      await _service.setDefaultAddress(id);
+    } catch (e, st) {
+      state = AsyncValue.error(e, st);
+      await load();
+    }
+  }
 }
 
 final addressNotifierProvider = StateNotifierProvider<AddressNotifier,

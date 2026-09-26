@@ -8,7 +8,11 @@ import '../services/address_providers.dart';
 
 class AddressScreen extends ConsumerWidget {
   final bool inModal;
-  const AddressScreen({super.key, this.inModal = false});
+  // When true (opened from Checkout), each card shows a "Select" button
+  // that pops the sheet with the chosen AddressModel. All management
+  // actions (edit, delete, set-default) remain fully available.
+  final bool pickMode;
+  const AddressScreen({super.key, this.inModal = false, this.pickMode = false});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -20,9 +24,9 @@ class AddressScreen extends ConsumerWidget {
       appBar: inModal
           ? null
           : AppBar(
-              title: const Text(
-                'My Addresses',
-                style: TextStyle(fontWeight: FontWeight.w700),
+              title: Text(
+                pickMode ? 'Select Address' : 'My Addresses',
+                style: const TextStyle(fontWeight: FontWeight.w700),
               ),
               backgroundColor: cs.surface,
               surfaceTintColor: Colors.transparent,
@@ -44,6 +48,9 @@ class AddressScreen extends ConsumerWidget {
                 onAdd: () => _openAddForm(context, ref),
                 onEdit: (addr) => _openEditForm(context, ref, addr),
                 onDelete: (addr) => _confirmDelete(context, ref, addr),
+                onSetDefault: (addr) =>
+                    ref.read(addressNotifierProvider.notifier).setDefault(addr.id),
+                onPick: pickMode ? (addr) => Navigator.of(context).pop(addr) : null,
               ),
       ),
       floatingActionButton: asyncAddresses.maybeWhen(
@@ -126,14 +133,19 @@ class AddressScreen extends ConsumerWidget {
 class _AddressList extends StatelessWidget {
   final List<AddressModel> addresses;
   final VoidCallback onAdd;
-  final ValueChanged<AddressModel> onEdit;
-  final ValueChanged<AddressModel> onDelete;
+  final ValueChanged<AddressModel>? onEdit;
+  final ValueChanged<AddressModel>? onDelete;
+  final ValueChanged<AddressModel>? onSetDefault;
+  // Non-null when opened from Checkout — pops the sheet with the chosen address.
+  final ValueChanged<AddressModel>? onPick;
 
   const _AddressList({
     required this.addresses,
     required this.onAdd,
-    required this.onEdit,
-    required this.onDelete,
+    this.onEdit,
+    this.onDelete,
+    this.onSetDefault,
+    this.onPick,
   });
 
   @override
@@ -144,8 +156,10 @@ class _AddressList extends StatelessWidget {
       separatorBuilder: (context, index) => const SizedBox(height: 10),
       itemBuilder: (_, i) => _AddressManageCard(
         address: addresses[i],
-        onEdit: () => onEdit(addresses[i]),
-        onDelete: () => onDelete(addresses[i]),
+        onEdit: onEdit != null ? () => onEdit!(addresses[i]) : null,
+        onDelete: onDelete != null ? () => onDelete!(addresses[i]) : null,
+        onSetDefault: onSetDefault != null ? () => onSetDefault!(addresses[i]) : null,
+        onPick: onPick != null ? () => onPick!(addresses[i]) : null,
       ),
     );
   }
@@ -155,13 +169,18 @@ class _AddressList extends StatelessWidget {
 
 class _AddressManageCard extends StatelessWidget {
   final AddressModel address;
-  final VoidCallback onEdit;
-  final VoidCallback onDelete;
+  final VoidCallback? onEdit;
+  final VoidCallback? onDelete;
+  final VoidCallback? onSetDefault;
+  // Non-null when opened from Checkout: pops the sheet with this address.
+  final VoidCallback? onPick;
 
   const _AddressManageCard({
     required this.address,
-    required this.onEdit,
-    required this.onDelete,
+    this.onEdit,
+    this.onDelete,
+    this.onSetDefault,
+    this.onPick,
   });
 
   @override
@@ -178,111 +197,186 @@ class _AddressManageCard extends StatelessWidget {
           BoxShadow(color: Color(0x08000000), blurRadius: 6, offset: Offset(0, 2)),
         ],
       ),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Icon
-            Container(
-              width: 40,
-              height: 40,
-              decoration: BoxDecoration(
-                color: AppColors.primaryLight,
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Icon(
-                _iconForLabel(address.label),
-                size: 20,
-                color: AppColors.primary,
-              ),
-            ),
-            const SizedBox(width: 12),
-
-            // Details
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Text(
-                        address.label,
-                        style: tt.titleSmall?.copyWith(fontWeight: FontWeight.w700),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Icon
+                    Container(
+                      width: 40,
+                      height: 40,
+                      decoration: BoxDecoration(
+                        color: AppColors.primaryLight,
+                        borderRadius: BorderRadius.circular(10),
                       ),
-                      if (address.isDefault) ...[
-                        const SizedBox(width: 8),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-                          decoration: BoxDecoration(
-                            color: AppColors.success.withAlpha(25),
-                            borderRadius: BorderRadius.circular(20),
-                            border: Border.all(color: AppColors.success.withAlpha(80)),
+                      child: Icon(
+                        _iconForLabel(address.label),
+                        size: 20,
+                        color: AppColors.primary,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+
+                    // Details (label + address lines only)
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Text(
+                                address.label,
+                                style: tt.titleSmall?.copyWith(fontWeight: FontWeight.w700),
+                              ),
+                              if (address.isDefault) ...[
+                                const SizedBox(width: 8),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: AppColors.success.withAlpha(25),
+                                    borderRadius: BorderRadius.circular(20),
+                                    border: Border.all(color: AppColors.success.withAlpha(80)),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: const [
+                                      Icon(
+                                        Icons.check_circle_rounded,
+                                        size: 10,
+                                        color: AppColors.success,
+                                      ),
+                                      SizedBox(width: 3),
+                                      Text(
+                                        'Default',
+                                        style: TextStyle(
+                                          fontSize: 10,
+                                          color: AppColors.success,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ],
                           ),
-                          child: const Text(
-                            'Default',
-                            style: TextStyle(
-                              fontSize: 10,
-                              color: AppColors.success,
-                              fontWeight: FontWeight.w600,
+                          const SizedBox(height: 4),
+                          Text(
+                            address.line1,
+                            style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
+                          ),
+                          if (address.line2 != null)
+                            Text(
+                              address.line2!,
+                              style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
+                            ),
+                          const SizedBox(height: 2),
+                          Text(
+                            '${address.city}, ${address.state} – ${address.pincode}',
+                            style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    // Edit / Delete actions
+                    Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        InkWell(
+                          onTap: onEdit,
+                          borderRadius: BorderRadius.circular(8),
+                          child: Padding(
+                            padding: const EdgeInsets.all(6),
+                            child: Icon(
+                              Icons.edit_outlined,
+                              size: 18,
+                              color: AppColors.primary,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        InkWell(
+                          onTap: onDelete,
+                          borderRadius: BorderRadius.circular(8),
+                          child: Padding(
+                            padding: const EdgeInsets.all(6),
+                            child: Icon(
+                              Icons.delete_outline_rounded,
+                              size: 18,
+                              color: AppColors.error,
                             ),
                           ),
                         ),
                       ],
-                    ],
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    address.line1,
-                    style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
-                  ),
-                  if (address.line2 != null)
-                    Text(
-                      address.line2!,
-                      style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
                     ),
-                  const SizedBox(height: 2),
-                  Text(
-                    '${address.city}, ${address.state} – ${address.pincode}',
-                    style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
+                  ],
+                ),
+
+                // "Set as Default" pill button — only for non-default addresses
+                if (onSetDefault != null && !address.isDefault) ...[
+                  const SizedBox(height: 10),
+                  GestureDetector(
+                    onTap: onSetDefault,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(
+                          color: AppColors.primary.withAlpha(120),
+                        ),
+                      ),
+                      child: Text(
+                        'Set as Default',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.primary,
+                        ),
+                      ),
+                    ),
                   ),
                 ],
-              ),
-            ),
-
-            // Actions
-            Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                InkWell(
-                  onTap: onEdit,
-                  borderRadius: BorderRadius.circular(8),
-                  child: Padding(
-                    padding: const EdgeInsets.all(6),
-                    child: Icon(
-                      Icons.edit_outlined,
-                      size: 18,
-                      color: AppColors.primary,
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 4),
-                InkWell(
-                  onTap: onDelete,
-                  borderRadius: BorderRadius.circular(8),
-                  child: Padding(
-                    padding: const EdgeInsets.all(6),
-                    child: Icon(
-                      Icons.delete_outline_rounded,
-                      size: 18,
-                      color: AppColors.error,
-                    ),
-                  ),
-                ),
               ],
             ),
+          ),
+
+          // "Select for this booking" footer — only shown in pick mode
+          if (onPick != null) ...[
+            Divider(height: 1, thickness: 1, color: cs.outline.withAlpha(60)),
+            InkWell(
+              onTap: onPick,
+              borderRadius: const BorderRadius.vertical(bottom: Radius.circular(14)),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.check_circle_outline_rounded,
+                        size: 15, color: AppColors.primary),
+                    const SizedBox(width: 6),
+                    Text(
+                      'Select for this booking',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.primary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
           ],
-        ),
+        ],
       ),
     );
   }

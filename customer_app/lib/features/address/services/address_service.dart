@@ -106,4 +106,19 @@ class AddressService {
     await _client.from('customer_addresses').delete().eq('id', id);
     debugPrint('[DODO][Address] Delete success: id=$id');
   }
+
+  Future<void> setDefaultAddress(String id) async {
+    debugPrint('[DODO][Address] Setting default: id=$id');
+    final customerId = await _getCustomerId();
+    // Clear all defaults for this customer, then set the target.
+    await _client
+        .from('customer_addresses')
+        .update({'is_default': false})
+        .eq('customer_id', customerId);
+    await _client
+        .from('customer_addresses')
+        .update({'is_default': true})
+        .eq('id', id);
+    debugPrint('[DODO][Address] Set default success: id=$id');
+  }
 }

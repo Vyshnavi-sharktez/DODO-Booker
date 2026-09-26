@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/widgets/page_sheet.dart';
 import '../../../routes/app_router.dart';
+import '../../support/screens/support_chat_screen.dart';
 import '../../bookings/screens/booking_details_screen.dart';
 import '../../bookings/services/bookings_providers.dart';
 import '../../catalog/providers/catalog_providers.dart';
@@ -92,6 +93,14 @@ abstract final class CustomerNotificationRouter {
           targetContext,
           title: 'Refund Queries',
           child: RefundQueriesFlow(initialRequestId: n.entityId!),
+        );
+      }
+    } else if (n.entityType == 'support_conversation') {
+      final targetContext = Navigator.of(context).context;
+      Navigator.of(context).pop();
+      if (targetContext.mounted) {
+        Navigator.of(targetContext).push(
+          MaterialPageRoute(builder: (_) => const SupportChatScreen()),
         );
       }
     }
