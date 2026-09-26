@@ -52,6 +52,13 @@ const Map<String, String> kSettingDefaults = {
   'penalty_vendor_noshow_enabled': 'false',
   'penalty_vendor_noshow_amount': '0',
 
+  // Support Chat
+  'support_reminder_enabled': 'true',
+  'support_reminder_interval_minutes': '60',
+  'support_reminder_max_count': '3',
+  'support_auto_close_enabled': 'false',
+  'support_auto_close_idle_hours': '24',
+
   // Subscription
   'subscription_enabled': 'false',
   'subscription_require_active': 'false',

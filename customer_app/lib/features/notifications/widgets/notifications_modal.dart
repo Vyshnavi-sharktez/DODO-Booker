@@ -14,6 +14,7 @@ import '../../refund_queries/screens/refund_queries_flow.dart';
 import '../../vendor_custom_service/widgets/vendor_custom_service_sheet.dart';
 import '../models/notification_model.dart';
 import '../services/notification_providers.dart';
+import '../../support/screens/support_chat_screen.dart';
 
 class NotificationsModal extends ConsumerStatefulWidget {
   const NotificationsModal({super.key});
@@ -140,6 +141,12 @@ class _NotificationsModalState extends ConsumerState<NotificationsModal> {
           title: 'Refund Queries',
           child: RefundQueriesFlow(initialRequestId: n.entityId!),
         );
+      }
+    } else if (n.entityType == 'support_conversation') {
+      final targetContext = Navigator.of(context).context;
+      Navigator.of(context).pop();
+      if (targetContext.mounted) {
+        SupportChatScreen.show(targetContext);
       }
     }
   }

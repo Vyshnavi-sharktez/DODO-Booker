@@ -35,6 +35,7 @@ import '../features/refund_queries/screens/booking_selection_screen.dart';
 import '../features/refund_queries/screens/refund_query_form_screen.dart';
 import '../features/refund_queries/screens/refund_query_detail_screen.dart';
 import '../features/refund_queries/models/booking_for_refund_model.dart';
+import '../features/support/screens/support_chat_screen.dart';
 import '../models/booking_model.dart';
 import '../models/category_model.dart';
 import '../models/subcategory_model.dart';
@@ -109,6 +110,7 @@ class AppRoutes {
   static const String bookingSelectionForRefund = '/refund-queries/select-booking';
   static const String refundQueryForm = '/refund-queries/new';
   static const String refundQueryDetail = '/refund-queries/:id';
+  static const String supportChat = '/support-chat';
 }
 
 final appRouter = GoRouter(
@@ -249,6 +251,10 @@ final appRouter = GoRouter(
       builder: (context, state) => RefundQueryDetailScreen(
         requestId: state.pathParameters['id']!,
       ),
+    ),
+    GoRoute(
+      path: AppRoutes.supportChat,
+      builder: (context, state) => const SupportChatScreen(),
     ),
 
     // ── Catalog / search browsing: ShellRoute shows floating cart bar ──────────

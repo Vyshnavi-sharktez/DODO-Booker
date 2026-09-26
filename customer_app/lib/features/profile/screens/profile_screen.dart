@@ -15,6 +15,7 @@ import '../../amc/screens/amc_plans_page.dart';
 import '../../bookings/utils/my_bookings_launcher.dart';
 import '../../warranties/screens/my_warranties_screen.dart';
 import '../../refund_queries/screens/refund_queries_flow.dart';
+import '../../support/screens/support_chat_screen.dart';
 class ProfileScreen extends ConsumerWidget {
   const ProfileScreen({super.key, this.inModal = false});
 
@@ -183,6 +184,18 @@ class _ProfileBody extends ConsumerWidget {
                     title: 'Refund Queries',
                     child: const RefundQueriesFlow(),
                   ),
+                ),
+              ),
+
+              const SizedBox(height: 12),
+
+              _FloatingCard(
+                child: ProfileMenuTile(
+                  icon: Icons.support_agent_rounded,
+                  iconColor: AppColors.primary,
+                  title: 'Support Chat',
+                  subtitle: 'Chat with our support team',
+                  onTap: () => SupportChatScreen.show(context),
                 ),
               ),
 

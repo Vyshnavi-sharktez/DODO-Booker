@@ -92,6 +92,12 @@ const _navItems = <_NavItem>[
     requiredPermission: 'booking.view',
   ),
   _NavItem(
+    label: 'Support Chat',
+    icon: Icons.support_agent_rounded,
+    route: '/dashboard/support',
+    requiredPermission: 'booking.view',
+  ),
+  _NavItem(
     label: 'Refund Requests',
     icon: Icons.assignment_return_rounded,
     route: '/dashboard/refunds',

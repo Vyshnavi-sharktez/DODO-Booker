@@ -293,6 +293,12 @@ class _NotificationsPanelDialogState
       router.go('/dashboard/refunds');
       return;
     }
+
+    if (n.entityType == 'support_conversation') {
+      Navigator.of(context).pop();
+      router.go('/dashboard/support');
+      return;
+    }
   }
 
   @override

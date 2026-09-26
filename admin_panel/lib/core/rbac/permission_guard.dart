@@ -53,6 +53,7 @@ const Map<String, String> routePermissions = {
   '/warranty-claims': 'booking.view',
   '/vendor-service-requests': 'vendor.view',
   '/refunds': 'refund.view',
+  '/support': 'booking.view',
 };
 
 // ── Permission guard widget ────────────────────────────────────────────────────

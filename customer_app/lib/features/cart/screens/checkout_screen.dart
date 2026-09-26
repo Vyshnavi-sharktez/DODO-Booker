@@ -599,17 +599,25 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     return null;
   }
 
-  Future<void> _openAddressScreen() async {
-    if (widget.inModal) {
-      await PageSheet.show(
-        context,
-        title: 'My Addresses',
-        child: const AddressScreen(inModal: true),
-      );
+  Future<void> _changeAddress() async {
+    final result = await PageSheet.show<AddressModel>(
+      context,
+      title: 'Select Address',
+      child: const AddressScreen(inModal: true, pickMode: true),
+    );
+    if (!mounted) return;
+    if (result != null) {
+      setState(() {
+        _selectedAddress = result;
+        _selectedPreferredVendorId = null;
+        _preferredVendorFeeAmount = 0.0;
+      });
     } else {
-      await context.push('/address');
+      // User may have changed the default without explicitly selecting.
+      // Reset so whenData re-picks the current default.
+      setState(() => _selectedAddress = null);
     }
-    if (mounted) ref.invalidate(addressNotifierProvider);
+    ref.invalidate(addressNotifierProvider);
   }
 
   // Called by the payment-failed dialog's "Back to Cart" button.
@@ -707,18 +715,15 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         ? ref.watch(timeSlotsProvider((date: dateStr, serviceId: serviceId, parentNodeId: parentNodeId, vendorId: null)))
         : null;
 
-    // Pre-select the default address once loaded
+    // Pre-select default address; revert to default if selected address was deleted
     addressAsync.whenData((list) {
-      if (_selectedAddress == null && list.isNotEmpty) {
-        final def = list.firstWhere(
-          (a) => a.isDefault,
-          orElse: () => list.first,
-        );
-        // Use post-frame to avoid setState during build
+      if (list.isEmpty) return;
+      final stillValid = _selectedAddress != null &&
+          list.any((a) => a.id == _selectedAddress!.id);
+      if (!stillValid) {
+        final def = list.firstWhere((a) => a.isDefault, orElse: () => list.first);
         WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (mounted && _selectedAddress == null) {
-            setState(() => _selectedAddress = def);
-          }
+          if (mounted) setState(() => _selectedAddress = def);
         });
       }
     });
@@ -732,10 +737,6 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       // Address
       _SectionCard(
         title: 'Service Address',
-        trailing: TextButton(
-          onPressed: _openAddressScreen,
-          child: const Text('Manage'),
-        ),
         child: addressAsync.when(
           loading: () => const Center(
               child: Padding(
@@ -762,7 +763,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                     ),
                     const SizedBox(height: 8),
                     OutlinedButton.icon(
-                      onPressed: _openAddressScreen,
+                      onPressed: _changeAddress,
                       icon: const Icon(Icons.add_rounded, size: 16),
                       label: const Text('Add Address'),
                     ),
@@ -770,18 +771,31 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                 ),
               );
             }
+            final addr = _selectedAddress != null &&
+                    list.any((a) => a.id == _selectedAddress!.id)
+                ? _selectedAddress!
+                : list.firstWhere((a) => a.isDefault, orElse: () => list.first);
             return Column(
-              children: list
-                  .map((addr) => _AddressRadioTile(
-                        address: addr,
-                        selected: _selectedAddress?.id == addr.id,
-                        onTap: () => setState(() {
-                          _selectedAddress = addr;
-                          _selectedPreferredVendorId = null;
-                          _preferredVendorFeeAmount = 0.0;
-                        }),
-                      ))
-                  .toList(),
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _AddressRadioTile(
+                  address: addr,
+                  selected: true,
+                  onTap: () {},
+                ),
+                TextButton.icon(
+                  onPressed: _changeAddress,
+                  icon: const Icon(Icons.swap_horiz_rounded, size: 16),
+                  label: const Text('Change Address'),
+                  style: TextButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 4),
+                    foregroundColor: AppColors.primary,
+                    textStyle: const TextStyle(
+                        fontSize: 13, fontWeight: FontWeight.w600),
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  ),
+                ),
+              ],
             );
           },
         ),
@@ -999,12 +1013,10 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
 class _SectionCard extends StatelessWidget {
   final String title;
   final Widget child;
-  final Widget? trailing;
 
   const _SectionCard({
     required this.title,
     required this.child,
-    this.trailing,
   });
 
   @override
@@ -1027,17 +1039,8 @@ class _SectionCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Text(title,
-                  style:
-                      tt.titleSmall?.copyWith(fontWeight: FontWeight.w700)),
-              if (trailing != null) ...[
-                const Spacer(),
-                trailing!,
-              ],
-            ],
-          ),
+          Text(title,
+              style: tt.titleSmall?.copyWith(fontWeight: FontWeight.w700)),
           const SizedBox(height: 12),
           child,
         ],

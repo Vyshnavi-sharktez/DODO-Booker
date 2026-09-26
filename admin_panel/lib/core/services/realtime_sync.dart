@@ -6,6 +6,7 @@ import '../../features/bookings/application/providers/bookings_providers.dart';
 import '../../features/bookings/application/providers/dispatch_providers.dart';
 import '../../features/customer_questions/application/providers/customer_questions_providers.dart';
 import '../../features/notifications/application/providers/notifications_providers.dart';
+import '../../features/support/application/support_providers.dart';
 import '../../features/vendors/application/providers/vendors_providers.dart';
 
 /// Manages Supabase Realtime subscriptions for the admin panel.
@@ -71,6 +72,20 @@ class AdminRealtimeSync {
           table: 'customer_questions',
           callback: (_) => _refreshCustomerQuestions(),
         )
+        // Support conversation status / unread count changed → refresh inbox list.
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'support_conversations',
+          callback: (_) => _refreshSupportConversations(),
+        )
+        // New support message → refresh the currently-open chat thread.
+        .onPostgresChanges(
+          event: PostgresChangeEvent.insert,
+          schema: 'public',
+          table: 'support_messages',
+          callback: (_) => _refreshSupportMessages(),
+        )
         .subscribe();
   }
 
@@ -88,6 +103,30 @@ class AdminRealtimeSync {
 
   void _refreshCustomerQuestions() {
     _ref.invalidate(customerQuestionsNotifierProvider);
+  }
+
+  void _refreshSupportConversations() {
+    _ref.invalidate(supportConversationsProvider);
+    // Also refresh the open chat detail panel so the status badge and header
+    // reflect the latest conversation state (e.g. pending_admin ↔ pending_customer
+    // transition triggered by the AFTER INSERT trigger on support_messages).
+    final selectedId = _ref.read(selectedSupportConversationIdProvider);
+    if (selectedId != null) {
+      _ref.invalidate(supportConversationDetailProvider(selectedId));
+    }
+  }
+
+  void _refreshSupportMessages() {
+    final selectedId = _ref.read(selectedSupportConversationIdProvider);
+    if (selectedId != null) {
+      _ref.invalidate(supportMessagesProvider(selectedId));
+      // Do NOT invalidate supportConversationDetailProvider here — that causes
+      // the entire _ChatPane to flip to a loading spinner on every new message.
+      // Status updates are handled by _refreshSupportConversations, which fires
+      // on the support_conversations UPDATE event emitted by the AFTER INSERT
+      // trigger whenever a message is inserted.
+    }
+    _ref.invalidate(supportConversationsProvider);
   }
 
   /// Called by the lifecycle observer on admin panel resume after a long pause.
