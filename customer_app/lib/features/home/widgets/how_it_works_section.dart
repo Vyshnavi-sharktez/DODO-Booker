@@ -93,10 +93,7 @@ class HowItWorksSection extends StatelessWidget {
     final isDesktop = MediaQuery.of(context).size.width >= 768;
 
     return Padding(
-      padding: EdgeInsets.symmetric(
-        horizontal: isDesktop ? 24 : 20,
-        vertical: 8,
-      ),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [

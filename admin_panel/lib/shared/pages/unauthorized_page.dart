@@ -10,6 +10,7 @@ class UnauthorizedPage extends StatelessWidget {
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
+        mainAxisSize: MainAxisSize.min,
         children: [
           Container(
             width: 80,
@@ -44,11 +45,13 @@ class UnauthorizedPage extends StatelessWidget {
           ElevatedButton.icon(
             onPressed: () => context.go('/dashboard'),
             icon: const Icon(Icons.arrow_back_rounded, size: 18),
-            label: const Text('Back to Dashboard'),
+            label: const Text('Back to Dashboard', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
             style: ElevatedButton.styleFrom(
               backgroundColor: AppColors.primary,
               foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+              padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 14),
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              minimumSize: Size.zero,
             ),
           ),
         ],

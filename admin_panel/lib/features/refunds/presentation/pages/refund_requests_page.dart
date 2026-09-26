@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import '../../../../core/rbac/permission_guard.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/admin_search_bar.dart';
 import '../../application/refund_providers.dart';
@@ -55,7 +56,9 @@ class _RefundRequestsPageState extends ConsumerState<RefundRequestsPage> {
     final currentStatus = ref.watch(refundStatusFilterProvider);
     final asyncRequests = ref.watch(refundRequestsProvider);
 
-    return Scaffold(
+    return PermissionGuard(
+      permission: 'refund.view',
+      child: Scaffold(
       backgroundColor: AppColors.background,
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -177,6 +180,7 @@ class _RefundRequestsPageState extends ConsumerState<RefundRequestsPage> {
             ),
           ),
         ],
+      ),
       ),
     );
   }

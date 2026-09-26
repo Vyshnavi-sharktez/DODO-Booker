@@ -107,7 +107,8 @@ class RouterNotifier extends ChangeNotifier {
     // Permission check for protected routes (skip for dashboard and unauthorized).
     if (isLoggedIn && !isOnLoginPage && location != '/dashboard' &&
         location != '/unauthorized') {
-      final requiredPermission = routePermissions[_stripDashboardPrefix(location)];
+      final strippedPath = _stripDashboardPrefix(location);
+      final requiredPermission = resolveRoutePermission(strippedPath);
       if (requiredPermission != null) {
         final adminUser = _ref.read(currentAdminUserProvider);
         // While user data is loading, allow through — guard will react when ready.
@@ -135,14 +136,12 @@ final routerNotifierProvider = ChangeNotifierProvider<RouterNotifier>((ref) {
 // ── GoRouter provider ─────────────────────────────────────────────────────────
 
 final routerProvider = Provider<GoRouter>((ref) {
-  final notifier = ref.watch(routerNotifierProvider);
+  final notifier = ref.read(routerNotifierProvider);
 
   return GoRouter(
     initialLocation: '/login',
     debugLogDiagnostics: false,
-    refreshListenable: _GoRouterRefreshStream(
-      Supabase.instance.client.auth.onAuthStateChange,
-    ),
+    refreshListenable: notifier,
     redirect: notifier.redirect,
     routes: [
       // ── Public ──────────────────────────────────────────────────────────────

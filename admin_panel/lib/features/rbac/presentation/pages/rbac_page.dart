@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../../core/rbac/permission_guard.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../widgets/admin_users_tab.dart';
 import '../widgets/permissions_tab.dart';
@@ -30,7 +31,9 @@ class _RbacPageState extends ConsumerState<RbacPage>
 
   @override
   Widget build(BuildContext context) {
-    return Column(
+    return PermissionGuard(
+      permission: 'rbac.manage',
+      child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         // ── Page header ──────────────────────────────────────────────────────
@@ -127,6 +130,7 @@ class _RbacPageState extends ConsumerState<RbacPage>
           ),
         ),
       ],
+      ),
     );
   }
 }

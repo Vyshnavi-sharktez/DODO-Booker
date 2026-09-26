@@ -61,6 +61,14 @@ class RbacRepository {
     await _supabase.from('roles').delete().eq('id', id);
   }
 
+  Future<int> fetchRoleAdminCount(String roleId) async {
+    final data = await _supabase
+        .from('admin_user_roles')
+        .select('admin_user_id')
+        .eq('role_id', roleId);
+    return (data as List).length;
+  }
+
   // ── Role-Permission assignments ────────────────────────────────────────────
 
   Future<void> setRolePermissions(

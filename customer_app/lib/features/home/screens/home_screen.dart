@@ -105,6 +105,8 @@ class HomeScreen extends ConsumerWidget {
         for (final section in bodySections)
           ..._sectionSlivers(section),
 
+        const SliverToBoxAdapter(child: SizedBox(height: _kSectionGap)),
+
         SliverFillRemaining(
           hasScrollBody: false,
           child: Column(
@@ -119,7 +121,12 @@ class HomeScreen extends ConsumerWidget {
     );
   }
 
+  // Shared spacing applied above every section (including future CMS types).
+  // Hero is exempt — it sits flush at the top of the page.
+  static const double _kSectionGap = 48.0;
+
   List<Widget> _sectionSlivers(LandingPageSection section) {
+    // Hero: no top gap — flush at top, full-width dark background.
     if (section.sectionType == 'hero') {
       return [
         SliverToBoxAdapter(
@@ -131,15 +138,17 @@ class HomeScreen extends ConsumerWidget {
       ];
     }
 
+    // Full-width sections (e.g. why_dodo): gap + full-width render.
     if (SectionRenderer.isFullWidth(section.sectionType)) {
       return [
-        const SliverToBoxAdapter(child: SizedBox(height: 48)),
+        const SliverToBoxAdapter(child: SizedBox(height: _kSectionGap)),
         SliverToBoxAdapter(child: SectionRenderer(section: section)),
       ];
     }
 
+    // All other sections (current + any future CMS type): gap + constrained box.
     return [
-      const SliverToBoxAdapter(child: SizedBox(height: 28)),
+      const SliverToBoxAdapter(child: SizedBox(height: _kSectionGap)),
       SliverToBoxAdapter(
         child: Align(
           alignment: Alignment.topCenter,

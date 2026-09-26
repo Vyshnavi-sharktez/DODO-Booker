@@ -244,14 +244,28 @@ class _UserCard extends ConsumerWidget {
                       user.isActive
                           ? Icons.toggle_on_rounded
                           : Icons.toggle_off_rounded,
-                      size: 22,
+                      size: 32,
                       color: user.isActive
                           ? AppColors.success
                           : AppColors.textSecondary,
                     ),
-                    onPressed: () => ref
-                        .read(rbacAdminUsersNotifierProvider.notifier)
-                        .updateAdminUser(user.id, isActive: !user.isActive),
+                    onPressed: () async {
+                      try {
+                        await ref
+                            .read(rbacAdminUsersNotifierProvider.notifier)
+                            .updateAdminUser(user.id, isActive: !user.isActive);
+                      } catch (e) {
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text('Failed to update user: $e'),
+                              backgroundColor: AppColors.error,
+                              behavior: SnackBarBehavior.floating,
+                            ),
+                          );
+                        }
+                      }
+                    },
                   ),
                 ],
               ],
