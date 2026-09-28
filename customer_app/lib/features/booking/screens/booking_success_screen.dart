@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../models/booking_model.dart';
 
@@ -186,7 +186,7 @@ class _BookingSuccessScreenState extends State<BookingSuccessScreen>
                                     const SizedBox(width: 12),
                                     Flexible(
                                       child: Text(
-                                        '$_formattedDate · ${widget.booking.timeSlot}',
+                                        '$_formattedDate - ${widget.booking.timeSlot}',
                                         style: tt.labelMedium?.copyWith(fontWeight: FontWeight.w600),
                                         textAlign: TextAlign.right,
                                         overflow: TextOverflow.ellipsis,

@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/constants/app_colors.dart';
@@ -17,6 +17,7 @@ import '../services/invoice_service.dart';
 import '../widgets/cancel_booking_reason_dialog.dart';
 import '../widgets/vendor_nearby_warning_dialog.dart';
 import '../../amc/screens/amc_contract_details_screen.dart';
+import '../../../core/widgets/page_sheet.dart';
 import '../../amc/providers/amc_contract_provider.dart';
 import '../../amc/models/amc_contract_model.dart';
 import '../../warranties/models/service_warranty_model.dart';
@@ -296,13 +297,31 @@ class _StatusBanner extends StatelessWidget {
           ),
           const SizedBox(width: 12),
           Expanded(
-            child: Text(
-              label,
-              style: TextStyle(
-                color: color,
-                fontWeight: FontWeight.w700,
-                fontSize: 14,
-              ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  label,
+                  style: TextStyle(
+                    color: color,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 14,
+                  ),
+                ),
+                if (booking.cancellationReason != null &&
+                    booking.cancellationReason!.isNotEmpty) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    'Reason: ${booking.cancellationReason}',
+                    style: TextStyle(
+                      color: color,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
+              ],
             ),
           ),
           const SizedBox(width: 8),
@@ -492,7 +511,7 @@ class _BookingInfoCard extends StatelessWidget {
         _DetailRow(
           icon: Icons.calendar_today_rounded,
           label: 'Scheduled Date',
-          value: '$_scheduledDate · ${booking.timeSlot}',
+          value: '$_scheduledDate - ${booking.timeSlot}',
         ),
         _DetailRow(
           icon: Icons.access_time_rounded,
@@ -929,7 +948,7 @@ class _VendorCard extends StatelessWidget {
               ),
               const SizedBox(width: 8),
               Text(
-                'Vendor assignment in progress…',
+                'Vendor assignment in progress...',
                 style: tt.bodySmall?.copyWith(
                   color: AppColors.textHint,
                   fontStyle: FontStyle.italic,
@@ -1172,13 +1191,13 @@ class _AmcContractCard extends ConsumerWidget {
               SizedBox(
                 width: double.infinity,
                 child: OutlinedButton.icon(
-                  onPressed: () => Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => AmcContractDetailsScreen(
-                        contractId: contractId,
-                        initialPlanName:
-                            booking.amcPlanName ?? 'AMC Contract',
-                      ),
+                  onPressed: () => PageSheet.show(
+                    context,
+                    title: booking.amcPlanName ?? 'AMC Contract',
+                    child: AmcContractDetailsScreen(
+                      contractId: contractId,
+                      initialPlanName: booking.amcPlanName ?? 'AMC Contract',
+                      inModal: true,
                     ),
                   ),
                   icon: const Icon(Icons.open_in_new_rounded, size: 16),
@@ -1278,7 +1297,7 @@ class _AmcContractCard extends ConsumerWidget {
           _DetailRow(
             icon: Icons.local_offer_outlined,
             label: 'Discount',
-            value: '−₹${c.discountAmount!.toStringAsFixed(2)}',
+            value: '-₹${c.discountAmount!.toStringAsFixed(2)}',
           ),
         if (c.finalPrice != null && c.finalPrice! > 0)
           _DetailRow(
@@ -1912,7 +1931,7 @@ class _ActionButtons extends StatelessWidget {
                     )
                   : const Icon(Icons.download_rounded, size: 18),
               label: Text(
-                  isDownloadingInvoice ? 'Generating…' : 'Download Invoice'),
+                  isDownloadingInvoice ? 'Generating...' : 'Download Invoice'),
               style: OutlinedButton.styleFrom(
                 minimumSize: const Size.fromHeight(50),
               ),
@@ -1940,7 +1959,7 @@ class _ActionButtons extends StatelessWidget {
                       child: CircularProgressIndicator(strokeWidth: 2),
                     )
                   : const Icon(Icons.cancel_outlined, size: 18),
-              label: Text(isLoading ? 'Cancelling…' : 'Cancel Booking'),
+              label: Text(isLoading ? 'Cancelling...' : 'Cancel Booking'),
               style: OutlinedButton.styleFrom(
                 minimumSize: const Size.fromHeight(50),
                 foregroundColor: AppColors.error,

@@ -304,6 +304,8 @@ class _NotificationsPanelDialogState
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(notificationsNotifierProvider);
+    final panelHeight =
+        (MediaQuery.sizeOf(context).height - 68 - 24).clamp(300.0, 520.0);
 
     return Align(
       alignment: Alignment.topRight,
@@ -313,7 +315,7 @@ class _NotificationsPanelDialogState
           color: Colors.transparent,
           child: Container(
             width: 390,
-            constraints: const BoxConstraints(maxHeight: 520),
+            height: panelHeight,
             decoration: BoxDecoration(
               color: AppColors.surface,
               borderRadius: BorderRadius.circular(12),
@@ -329,7 +331,6 @@ class _NotificationsPanelDialogState
             child: ClipRRect(
               borderRadius: BorderRadius.circular(12),
               child: Column(
-                mainAxisSize: MainAxisSize.min,
                 children: [
                   // ── Header ───────────────────────────────────────────
                   Container(
@@ -381,7 +382,7 @@ class _NotificationsPanelDialogState
                   const Divider(height: 1),
 
                   // ── Body ─────────────────────────────────────────────
-                  Flexible(
+                  Expanded(
                     child: state.when(
                       loading: () => const Padding(
                         padding: EdgeInsets.all(40),
@@ -423,7 +424,6 @@ class _NotificationsPanelDialogState
                               (b.createdAt ?? DateTime(0))
                                   .compareTo(a.createdAt ?? DateTime(0)));
                         return ListView.separated(
-                          shrinkWrap: true,
                           itemCount: sorted.length,
                           separatorBuilder: (context, index) =>
                               const Divider(height: 1),

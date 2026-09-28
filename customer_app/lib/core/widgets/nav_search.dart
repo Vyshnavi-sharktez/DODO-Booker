@@ -1,4 +1,4 @@
-import 'dart:async';
+﻿import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -641,7 +641,7 @@ class _ResultsSection extends StatelessWidget {
     final header = _PanelHeader(
       icon: Icons.search_rounded,
       label: isLoading
-          ? 'Searching…'
+          ? 'Searching...'
           : results.isEmpty
               ? 'No results for "$query"'
               : 'Results for "$query"',

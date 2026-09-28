@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/constants/app_colors.dart';
@@ -246,7 +246,7 @@ class _RefundQueryFormScreenState
           maxLength: 1000,
           decoration: InputDecoration(
             hintText:
-                'Explain what happened and why you are requesting a refund…',
+                'Explain what happened and why you are requesting a refund...',
             hintStyle: TextStyle(color: AppColors.textHint, fontSize: 14),
             filled: true,
             fillColor: AppColors.surface,
@@ -420,7 +420,7 @@ class _Dot extends StatelessWidget {
     return const Padding(
       padding: EdgeInsets.symmetric(horizontal: 4),
       child: Text(
-        '·',
+        '-',
         style: TextStyle(color: AppColors.textHint, fontSize: 11),
       ),
     );

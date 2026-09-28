@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/widgets/nav_search.dart';
@@ -194,8 +195,32 @@ class _MobileHomeGreeting extends ConsumerWidget {
                 fontWeight: FontWeight.w700,
                 color: const Color(0xFF1A1714),
               ),
+              overflow: TextOverflow.ellipsis,
             ),
           ),
+          if (isAuth) ...[
+            GestureDetector(
+              onTap: () => context.push('/wishlist'),
+              child: Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF1A1A2E),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(
+                    color: const Color(0xFFFFD700).withAlpha(100),
+                    width: 0.8,
+                  ),
+                ),
+                child: const Icon(
+                  Icons.favorite_border_rounded,
+                  size: 14,
+                  color: Color(0xFFFFD700),
+                ),
+              ),
+            ),
+            if (points != null) const SizedBox(width: 6),
+          ],
           if (isAuth && points != null)
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),

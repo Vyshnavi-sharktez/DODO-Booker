@@ -1,4 +1,4 @@
-import 'package:flutter/foundation.dart' show kIsWeb;
+﻿import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -2018,7 +2018,7 @@ class _ChildrenSection extends StatelessWidget {
         if (children.isEmpty)
           const Padding(
             padding: EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-            child: Text('Loading…',
+            child: Text('Loading...',
                 style: TextStyle(color: _kMuted2, fontSize: 13)),
           )
         else
@@ -2413,7 +2413,7 @@ class _NodeBookingBar extends ConsumerWidget {
           .firstOrNull;
     } else if (attrOptionPrice != null) {
       // Attr service: effectiveBase = attrOptionPrice (addons embedded in unitPrice,
-      // so item.effectiveBase = unitPrice − addonsTotal = attrOptionPrice).
+      // so item.effectiveBase = unitPrice - addonsTotal = attrOptionPrice).
       cartItem = findMatchingCartItem(
         cartItems,
         serviceId: node.id,
@@ -2603,7 +2603,7 @@ class _WebScaffold extends ConsumerWidget {
           .firstOrNull;
     } else if (selectedAttrPrice != null) {
       // Attr service: effectiveBase = selectedAttrPrice (addons embedded in unitPrice,
-      // so item.effectiveBase = unitPrice − addonsTotal = selectedAttrPrice).
+      // so item.effectiveBase = unitPrice - addonsTotal = selectedAttrPrice).
       cartItem = findMatchingCartItem(
         cart,
         serviceId: node.id,
@@ -3033,7 +3033,7 @@ class _WebScaffold extends ConsumerWidget {
   }
 }
 
-// ── Web quantity stepper (− qty +) used in the web footer when in-cart ────────
+// ── Web quantity stepper (- qty +) used in the web footer when in-cart ────────
 
 class _WebQtyStepper extends StatelessWidget {
   const _WebQtyStepper({

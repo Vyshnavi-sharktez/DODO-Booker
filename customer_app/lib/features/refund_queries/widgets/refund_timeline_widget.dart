@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../../core/constants/app_colors.dart';
 import '../models/refund_status_event_model.dart';
@@ -129,7 +129,7 @@ class RefundTimelineWidget extends StatelessWidget {
                             ),
                           ),
                           const Text(
-                            ' · ',
+                            ' - ',
                             style: TextStyle(
                               color: AppColors.textHint,
                               fontSize: 11,

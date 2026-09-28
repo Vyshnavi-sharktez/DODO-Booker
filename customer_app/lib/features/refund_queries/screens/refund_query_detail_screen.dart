@@ -1,4 +1,4 @@
-import 'dart:typed_data';
+﻿import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -743,7 +743,7 @@ class _MessagesTabState extends State<_MessagesTab> {
                       maxLines: 5,
                       textCapitalization: TextCapitalization.sentences,
                       decoration: InputDecoration(
-                        hintText: 'Type a message…',
+                        hintText: 'Type a message...',
                         hintStyle: TextStyle(
                           color: AppColors.textHint,
                           fontSize: 14,
@@ -1038,7 +1038,7 @@ class _BankDetailsPromptCardState
                           strokeWidth: 2, color: Colors.white))
                   : const Icon(Icons.add_card_rounded, size: 16),
               label: Text(
-                  _submitting ? 'Submitting…' : 'Submit Bank/UPI Details'),
+                  _submitting ? 'Submitting...' : 'Submit Bank/UPI Details'),
               style: FilledButton.styleFrom(
                 backgroundColor: const Color(0xFF2B6CB0),
                 padding: const EdgeInsets.symmetric(vertical: 10),

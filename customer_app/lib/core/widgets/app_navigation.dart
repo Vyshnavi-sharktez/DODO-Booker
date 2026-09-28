@@ -4,12 +4,10 @@ import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../constants/app_colors.dart';
 import 'app_header.dart';
-import 'app_modal_dialog.dart';
+import '../../features/auth/services/auth_service.dart';
 import '../../features/home/screens/home_screen.dart';
 import '../../features/home/services/home_providers.dart';
 import '../../features/home/widgets/hero_section.dart';
-import '../../features/notifications/widgets/notifications_modal.dart';
-import '../../features/notifications/services/notification_providers.dart';
 import '../../features/cart/providers/cart_provider.dart';
 import '../../features/profile/utils/profile_launcher.dart';
 import '../../routes/app_router.dart';
@@ -24,6 +22,19 @@ class AppNavigation extends ConsumerStatefulWidget {
 
 class _AppNavigationState extends ConsumerState<AppNavigation> {
   bool _scrolled = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _autoUnlockIfLoggedIn();
+  }
+
+  Future<void> _autoUnlockIfLoggedIn() async {
+    final authed = await AuthService().isAuthenticated();
+    if (authed && mounted) {
+      ref.read(mobileServicesUnlockedProvider.notifier).state = true;
+    }
+  }
 
   bool _onScroll(ScrollNotification notification) {
     final scrolled = notification.metrics.pixels > 8;
@@ -88,7 +99,7 @@ class _MobileBottomNav extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final unreadCount = ref.watch(unreadCountProvider);
+    final cartCount = ref.watch(cartItemCountProvider);
 
     return Container(
       decoration: const BoxDecoration(
@@ -118,14 +129,11 @@ class _MobileBottomNav extends ConsumerWidget {
                 onTap: () => context.push(AppRoutes.myBookings),
               ),
               _BottomNavItem(
-                icon: Icons.notifications_outlined,
-                label: 'Alerts',
+                icon: Icons.shopping_cart_outlined,
+                label: 'Cart',
                 active: false,
-                badge: unreadCount,
-                onTap: () => AppModalDialog.show(
-                  context: context,
-                  child: const NotificationsModal(),
-                ),
+                badge: cartCount,
+                onTap: () => context.push(AppRoutes.cart),
               ),
               _BottomNavItem(
                 icon: Icons.person_outline_rounded,

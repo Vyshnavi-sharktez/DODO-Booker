@@ -1,4 +1,4 @@
-import 'dart:ui';
+﻿import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -441,7 +441,7 @@ class _ModalBookingBar extends ConsumerWidget {
               ),
               Text(
                 amcPlan != null
-                    ? 'per visit · AMC'
+                    ? 'per visit - AMC'
                     : (priceAdjustment > 0 || addonsTotal > 0)
                         ? 'incl. adjustments'
                         : 'onwards',

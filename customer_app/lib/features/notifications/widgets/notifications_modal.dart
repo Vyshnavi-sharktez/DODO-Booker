@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/constants/app_colors.dart';
@@ -169,39 +169,39 @@ class _NotificationsModalState extends ConsumerState<NotificationsModal> {
   @override
   Widget build(BuildContext context) {
     final notificationsAsync = ref.watch(notificationsProvider);
+    final screenH = MediaQuery.sizeOf(context).height;
+    final listH = (screenH - 200).clamp(220.0, 440.0);
+
+    final body = notificationsAsync.when(
+      loading: () =>
+          const Center(child: CircularProgressIndicator()),
+      error: (e, _) => const _EmptyState(),
+      data: (notifications) {
+        final visible = notifications
+            .where((n) => !_locallyDeleted.contains(n.id))
+            .toList();
+        // During a refresh (isAuth false→true), Riverpod calls data: with
+        // the stale [] instead of loading:. Treat that as loading.
+        if (visible.isEmpty && notificationsAsync.isLoading) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        if (visible.isEmpty) return const _EmptyState();
+        return _NotificationList(
+          notifications: visible,
+          isRead: _isRead,
+          onTap: _handleTap,
+          onRateService: _openRatingModal,
+          onToggleRead: _toggleRead,
+          onDelete: _delete,
+        );
+      },
+    );
 
     return AppModalDialog(
       title: 'Notifications',
-      child: notificationsAsync.when(
-        loading: () => const SizedBox(
-          height: 200,
-          child: Center(child: CircularProgressIndicator()),
-        ),
-        error: (e, _) => const _EmptyState(),
-        data: (notifications) {
-            final visible = notifications
-                .where((n) => !_locallyDeleted.contains(n.id))
-                .toList();
-            // During a refresh (isAuth false→true), Riverpod calls data: with
-            // the stale [] instead of loading:. Treat that as loading.
-            if (visible.isEmpty && notificationsAsync.isLoading) {
-              return const SizedBox(
-                height: 200,
-                child: Center(child: CircularProgressIndicator()),
-              );
-            }
-            return visible.isEmpty
-                ? const _EmptyState()
-                : _NotificationList(
-                    notifications: visible,
-                    isRead: _isRead,
-                    onTap: _handleTap,
-                    onRateService: _openRatingModal,
-                    onToggleRead: _toggleRead,
-                    onDelete: _delete,
-                  );
-          },
-      ),
+      scrollable: false,
+      contentPadding: EdgeInsets.zero,
+      child: SizedBox(height: listH, child: body),
     );
   }
 }
@@ -227,25 +227,24 @@ class _NotificationList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        for (int i = 0; i < notifications.length; i++) ...[
-          _NotificationTile(
-            notification: notifications[i],
-            read: isRead(notifications[i]),
-            onTap: () => onTap(notifications[i]),
-            onRateService: notifications[i].notificationType == 'booking_completed' &&
-                    onRateService != null
-                ? () => onRateService!(notifications[i])
-                : null,
-            onToggleRead: () => onToggleRead(notifications[i]),
-            onDelete: () => onDelete(notifications[i]),
-          ),
-          if (i < notifications.length - 1)
-            const Divider(height: 1, indent: 16, endIndent: 16),
-        ],
-      ],
+    return ListView.separated(
+      itemCount: notifications.length,
+      separatorBuilder: (_, __) =>
+          const Divider(height: 1, indent: 16, endIndent: 16),
+      itemBuilder: (ctx, i) {
+        final n = notifications[i];
+        return _NotificationTile(
+          notification: n,
+          read: isRead(n),
+          onTap: () => onTap(n),
+          onRateService: n.notificationType == 'booking_completed' &&
+                  onRateService != null
+              ? () => onRateService!(n)
+              : null,
+          onToggleRead: () => onToggleRead(n),
+          onDelete: () => onDelete(n),
+        );
+      },
     );
   }
 }
@@ -276,7 +275,7 @@ class _NotificationTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final tt = Theme.of(context).textTheme;
     final d = notification.createdAt.toLocal();
-    final date = '${d.day} ${_months[d.month - 1]} · '
+    final date = '${d.day} ${_months[d.month - 1]} - '
         '${d.hour.toString().padLeft(2, '0')}:${d.minute.toString().padLeft(2, '0')}';
 
     return Row(
@@ -419,10 +418,13 @@ class _SmallAction extends StatelessWidget {
       message: tooltip,
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(4),
-        child: Padding(
-          padding: const EdgeInsets.all(5),
-          child: Icon(icon, size: 15, color: AppColors.textHint),
+        borderRadius: BorderRadius.circular(8),
+        child: SizedBox(
+          width: 44,
+          height: 44,
+          child: Center(
+            child: Icon(icon, size: 18, color: AppColors.textHint),
+          ),
         ),
       ),
     );
@@ -438,10 +440,9 @@ class _EmptyState extends StatelessWidget {
   Widget build(BuildContext context) {
     final tt = Theme.of(context).textTheme;
 
-    return SizedBox(
-      height: 320,
+    return Center(
       child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
+        mainAxisSize: MainAxisSize.min,
         children: [
           Container(
             width: 80,

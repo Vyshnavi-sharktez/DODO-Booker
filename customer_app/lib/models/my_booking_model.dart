@@ -1,4 +1,4 @@
-import 'package:flutter/foundation.dart';
+﻿import 'package:flutter/foundation.dart';
 
 import 'address_model.dart';
 import 'booking_item.dart';
@@ -135,6 +135,8 @@ class MyBookingModel {
   final String? amcRecurrenceInterval;
   final int? amcVisitNumber;
   final DateTime? serviceDate;
+  final String? cancelledBy;
+  final String? cancellationReason;
 
   const MyBookingModel({
     required this.id,
@@ -170,6 +172,8 @@ class MyBookingModel {
     this.amcRecurrenceInterval,
     this.amcVisitNumber,
     this.serviceDate,
+    this.cancelledBy,
+    this.cancellationReason,
   });
 
   String get displayBookingNumber {
@@ -279,7 +283,7 @@ class MyBookingModel {
           : '${bookingItems.length} services';
     }
 
-    // ── Time slot from notes: "Service Name · 10:00 AM" or just the slot ─
+    // ── Time slot from notes: "Service Name - 10:00 AM" or just the slot ─
     final timeSlot =
         (json['time_slot'] as String?) ?? _timeSlotFromNotes(notes) ?? '';
 
@@ -346,20 +350,22 @@ class MyBookingModel {
       serviceDate: json['service_date'] != null
           ? DateTime.tryParse(json['service_date'] as String)
           : null,
+      cancelledBy: json['cancelled_by'] as String?,
+      cancellationReason: json['cancellation_reason'] as String?,
     );
   }
 
-  // "Service Name · 10:00 AM" → "10:00 AM"
+  // "Service Name - 10:00 AM" → "10:00 AM"
   static String? _timeSlotFromNotes(String? notes) {
-    if (notes == null || !notes.contains(' · ')) return null;
-    final parts = notes.split(' · ');
+    if (notes == null || !notes.contains(' - ')) return null;
+    final parts = notes.split(' - ');
     return parts.length >= 2 ? parts.last : null;
   }
 
-  // "Service Name · 10:00 AM" → "Service Name"
+  // "Service Name - 10:00 AM" → "Service Name"
   static String? _serviceNameFromNotes(String? notes) {
-    if (notes == null || !notes.contains(' · ')) return null;
-    return notes.split(' · ').first;
+    if (notes == null || !notes.contains(' - ')) return null;
+    return notes.split(' - ').first;
   }
 
   // Parse fullAddress text format: "line1[, line2], city, state, pincode"

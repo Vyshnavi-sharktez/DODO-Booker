@@ -736,16 +736,45 @@ class _BookingsPageState extends ConsumerState<BookingsPage> {
   }
 
   Future<void> _confirmCancel(Booking booking) async {
+    final reasonController = TextEditingController();
+    String? capturedReason;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         shape:
             RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         title: const Text('Cancel Booking'),
-        content: Text(
-          'Cancel booking "${booking.bookingNumber}"?\n\n'
-          'The booking will be marked as Cancelled. '
-          'This cannot be reversed by the admin.',
+        content: SizedBox(
+          width: 400,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Cancel booking "${booking.bookingNumber}"?\n\n'
+                'The booking will be marked as Cancelled. '
+                'This cannot be reversed by the admin.',
+              ),
+              const SizedBox(height: 16),
+              SizedBox(
+                height: 96,
+                child: TextField(
+                  controller: reasonController,
+                  maxLines: null,
+                  expands: true,
+                  textAlignVertical: TextAlignVertical.top,
+                  textInputAction: TextInputAction.newline,
+                  decoration: const InputDecoration(
+                    labelText: 'Cancellation reason (Optional)',
+                    alignLabelWithHint: true,
+                    border: OutlineInputBorder(),
+                    contentPadding:
+                        EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
         actions: [
           TextButton(
@@ -753,7 +782,10 @@ class _BookingsPageState extends ConsumerState<BookingsPage> {
             child: const Text('Keep'),
           ),
           FilledButton(
-            onPressed: () => Navigator.of(ctx).pop(true),
+            onPressed: () {
+              capturedReason = reasonController.text;
+              Navigator.of(ctx).pop(true);
+            },
             style: FilledButton.styleFrom(
                 backgroundColor: AppColors.error),
             child: const Text('Cancel Booking'),
@@ -761,11 +793,18 @@ class _BookingsPageState extends ConsumerState<BookingsPage> {
         ],
       ),
     );
+    reasonController.dispose();
     if (confirmed != true) return;
+    final trimmedReason = capturedReason?.trim();
     try {
       await ref
           .read(bookingsNotifierProvider.notifier)
-          .cancelBooking(booking.id);
+          .cancelBooking(
+            booking.id,
+            reason: trimmedReason != null && trimmedReason.isNotEmpty
+                ? trimmedReason
+                : null,
+          );
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(

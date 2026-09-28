@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/constants/app_colors.dart';
@@ -890,7 +890,7 @@ class _ModalChildrenList extends StatelessWidget {
           const Padding(
             padding: EdgeInsets.symmetric(horizontal: 20, vertical: 8),
             child: Text(
-              'Loading…',
+              'Loading...',
               style: TextStyle(color: AppColors.textHint, fontSize: 13),
             ),
           )
@@ -1342,7 +1342,7 @@ class _ModalBookingBar extends ConsumerWidget {
                 ),
                 Text(
                   amcPlan != null
-                      ? 'AMC total · ${amcPlan!.numVisits} visits'
+                      ? 'AMC total - ${amcPlan!.numVisits} visits'
                       : (priceAdjustment > 0 || addonsTotal > 0)
                           ? 'incl. adjustments'
                           : 'onwards',

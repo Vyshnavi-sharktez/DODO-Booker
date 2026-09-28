@@ -1,4 +1,4 @@
-import 'dart:async';
+﻿import 'dart:async';
 import 'dart:math' as math;
 import 'dart:ui';
 import 'package:flutter/material.dart';
@@ -1471,7 +1471,7 @@ class _PendingBubble extends StatelessWidget {
                             color: Color(0xFFA0AEC0)),
                       ),
                       SizedBox(width: 4),
-                      Text('Sending…',
+                      Text('Sending...',
                           style: TextStyle(
                               fontSize: 10,
                               color: Color(0xFFA0AEC0))),
@@ -1760,8 +1760,8 @@ class _ReplyInput extends StatelessWidget {
                     textCapitalization: TextCapitalization.sentences,
                     decoration: InputDecoration(
                       hintText: disabled
-                          ? 'Start a new chat to continue…'
-                          : 'Type a message…',
+                          ? 'Start a new chat to continue...'
+                          : 'Type a message...',
                       hintStyle: const TextStyle(
                           color: AppColors.textHint, fontSize: 14),
                       border: const OutlineInputBorder(

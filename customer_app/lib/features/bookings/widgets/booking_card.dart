@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/utils/icon_registry.dart';
 import '../../../models/my_booking_model.dart';
@@ -164,7 +164,7 @@ class BookingCard extends StatelessWidget {
                         const SizedBox(height: 4),
                         _InfoRow(
                           icon: Icons.calendar_today_rounded,
-                          text: '$_formattedDate  ·  ${booking.timeSlot}',
+                          text: '$_formattedDate  -  ${booking.timeSlot}',
                         ),
                         const SizedBox(height: 4),
                         _InfoRow(

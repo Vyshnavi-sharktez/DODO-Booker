@@ -8,6 +8,7 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
+import '../../../../core/rbac/permission_guard.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/admin_search_bar.dart';
 import '../../../settings/application/providers/settings_providers.dart';
@@ -120,7 +121,9 @@ class _SupportInboxPageState extends ConsumerState<SupportInboxPage> {
     final selectedId = ref.watch(selectedSupportConversationIdProvider);
     final viewHistory = ref.watch(selectedSupportHistoryModeProvider);
 
-    return Scaffold(
+    return PermissionGuard(
+      permission: 'booking.view',
+      child: Scaffold(
       backgroundColor: AppColors.background,
       body: Row(
         children: [
@@ -279,6 +282,7 @@ class _SupportInboxPageState extends ConsumerState<SupportInboxPage> {
                   ),
           ),
         ],
+      ),
       ),
     );
   }

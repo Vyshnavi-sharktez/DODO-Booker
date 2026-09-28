@@ -12,9 +12,11 @@ import '../../features/catalog/providers/catalog_providers.dart';
 import '../../features/home/services/home_providers.dart';
 import '../../features/home/services/landing_page_sections_provider.dart';
 import '../../features/loyalty/providers/loyalty_providers.dart';
+import '../../features/refund_queries/services/refund_queries_providers.dart';
 import '../../features/surge_fee/providers/surge_fee_provider.dart';
 import '../../features/tax/providers/tax_provider.dart';
 import '../../features/support/services/support_chat_providers.dart';
+import '../../features/warranties/services/warranty_providers.dart';
 
 /// Manages all Supabase Realtime subscriptions for the customer app.
 ///
@@ -22,10 +24,12 @@ import '../../features/support/services/support_chat_providers.dart';
 ///
 /// Two channels are maintained:
 ///   dodo-customer-sync  — shared channel for catalog, config, banners, coupons,
-///                         bookings, and broadcast notifications (user_type='customer').
-///   dodo-customer-notif-{id} — per-customer channel for personal notifications
-///                              filtered by user_id = customerId. Created after auth
-///                              via ref.listen(currentCustomerIdProvider, ...).
+///                         bookings, AMC, refunds, warranties, and broadcast
+///                         notifications (user_type='customer').
+///   dodo-customer-notif-{id} — per-customer channel for personal notifications,
+///                              refund updates, loyalty changes, and warranty
+///                              status changes filtered by customer_id. Created
+///                              after auth via ref.listen(currentCustomerIdProvider).
 ///
 /// Why two channels for notifications?
 ///   Supabase Realtime evaluates RLS using the connection's JWT. With the anon
@@ -35,23 +39,31 @@ import '../../features/support/services/support_chat_providers.dart';
 ///   which succeeds under the permissive anon-read RLS on this table.
 ///
 /// Catalog and config callbacks are debounced (300 ms) so that a burst of
-/// related events (e.g., a multi-row admin update) collapses into a single
-/// invalidation cycle rather than triggering 9+ simultaneous provider
-/// rebuilds that saturate Flutter's event loop and delay gesture processing.
+/// related events collapses into a single invalidation cycle.
 ///
-/// Event → invalidation map:
+/// Event → invalidation map (shared channel):
 ///   catalog_nodes / catalog_node_relationships /
 ///   catalog_node_location_restrictions       → _invalidateCatalog() [debounced]
-///   tax_settings                             → _invalidateConfig()  [debounced]
-///   surge_fee_settings                       → _invalidateConfig()  [debounced]
-///   loyalty_settings                         → _invalidateConfig()  [debounced]
-///   catalog_node_configs                     → _invalidateConfig()  [debounced]
+///   tax_settings / surge_fee_settings /
+///   loyalty_settings / catalog_node_configs  → _invalidateConfig()  [debounced]
 ///   banners                                  → homeBannersProvider
 ///   coupons                                  → activeCouponsProvider
+///   landing_page_sections                    → landingPageSectionsProvider
 ///   notifications (broadcast, user_type=customer) → notificationsProvider
-///   notifications (personal,  user_id=cust)  → notificationsProvider
-///   bookings                                 → myBookingsProvider
+///   bookings                                 → myBookingsProvider + amcContractProvider
 ///   amc_contracts                            → processedBookingsProvider + amcContractProvider + allAmcContractsProvider
+///   amc_scheduling_requests                  → pendingAmcRequestProvider + amcContractProvider
+///   amc_pause_requests                       → pause request + contract providers
+///   amc_resume_requests                      → resume request + contract providers
+///
+/// Event → invalidation map (personal channel, filtered by customer_id):
+///   notifications INSERT                     → notificationsProvider + AMC + support + refund + loyalty
+///   refund_requests INSERT/UPDATE            → myRefundQueriesProvider + refundQueryDetailProvider
+///   refund_status_history INSERT             → myRefundQueriesProvider + refundQueryDetailProvider
+///   refund_messages INSERT                   → refundQueryDetailProvider
+///   loyalty_transactions INSERT              → customerLoyaltyProvider + loyaltyTransactionsProvider
+///   customer_loyalty UPDATE                  → customerLoyaltyProvider
+///   service_warranties INSERT/UPDATE         → customerWarrantiesProvider + bookingWarrantyProvider
 class CustomerRealtimeSync {
   final Ref _ref;
   final SupabaseClient _client;
@@ -59,6 +71,9 @@ class CustomerRealtimeSync {
   RealtimeChannel? _notifChannel;
   Timer? _catalogDebounce;
   Timer? _configDebounce;
+
+  // Guard: only recreate personal channel when customer ID actually changes.
+  String? _activeNotifCustomerId;
 
   CustomerRealtimeSync(this._ref, this._client) {
     _subscribe();
@@ -105,7 +120,7 @@ class CustomerRealtimeSync {
           table: 'loyalty_settings',
           callback: (_) => _debouncedInvalidateConfig(),
         )
-        // ── Scoped per-node module configs (tax / surge / loyalty / scheduling)
+        // ── Scoped per-node module configs ───────────────────────────────────
         .onPostgresChanges(
           event: PostgresChangeEvent.all,
           schema: 'public',
@@ -113,10 +128,6 @@ class CustomerRealtimeSync {
           callback: (_) => _debouncedInvalidateConfig(),
         )
         // ── Landing page CMS publish events ──────────────────────────────────
-        // Invalidated when admin publishes sections (is_published / is_enabled /
-        // display_order changes). The anon RLS policy means we only receive events
-        // for rows that are (or become) published+enabled, which is exactly what
-        // the customer app renders.
         .onPostgresChanges(
           event: PostgresChangeEvent.all,
           schema: 'public',
@@ -130,16 +141,14 @@ class CustomerRealtimeSync {
           table: 'banners',
           callback: (_) => _ref.invalidate(homeBannersProvider),
         )
-        // ── Coupon changes (admin creates/updates/deactivates coupons) ────────
+        // ── Coupon changes ────────────────────────────────────────────────────
         .onPostgresChanges(
           event: PostgresChangeEvent.all,
           schema: 'public',
           table: 'coupons',
           callback: (_) => _ref.invalidate(activeCouponsProvider),
         )
-        // ── Broadcast notifications (user_type='customer', user_id IS NULL) ───
-        // Filtered by user_type so Supabase evaluates a concrete row predicate
-        // rather than sending all rows (which fails RLS with the anon key).
+        // ── Broadcast notifications (user_type='customer') ───────────────────
         .onPostgresChanges(
           event: PostgresChangeEvent.all,
           schema: 'public',
@@ -150,23 +159,21 @@ class CustomerRealtimeSync {
             value: 'customer',
           ),
           callback: (_) {
-            debugPrint('[DODO][CustomerSync] broadcast notification event → invalidating notificationsProvider');
+            debugPrint('[DODO][CustomerSync] broadcast notification → invalidating notificationsProvider');
             _ref.invalidate(notificationsProvider);
           },
         )
-        // ── Booking status changes (admin updates customer booking) ───────────
+        // ── Booking status changes ────────────────────────────────────────────
         .onPostgresChanges(
           event: PostgresChangeEvent.all,
           schema: 'public',
           table: 'bookings',
           callback: (_) {
             _ref.invalidate(myBookingsProvider);
-            // Refresh contract detail screens — admin approval sets service_date
-            // on the booking row, so the visits timeline must re-render.
             _ref.invalidate(amcContractProvider);
           },
         )
-        // ── AMC scheduling request resolved (admin approves or rejects) ───────
+        // ── AMC scheduling request resolved ───────────────────────────────────
         .onPostgresChanges(
           event: PostgresChangeEvent.all,
           schema: 'public',
@@ -176,7 +183,7 @@ class CustomerRealtimeSync {
             _ref.invalidate(amcContractProvider);
           },
         )
-        // ── AMC pause request resolved (admin approves/rejects pause) ─────────
+        // ── AMC pause request resolved ────────────────────────────────────────
         .onPostgresChanges(
           event: PostgresChangeEvent.all,
           schema: 'public',
@@ -188,7 +195,7 @@ class CustomerRealtimeSync {
             _ref.invalidate(amcContractProvider);
           },
         )
-        // ── AMC resume request resolved (admin approves/rejects resume) ───────
+        // ── AMC resume request resolved ───────────────────────────────────────
         .onPostgresChanges(
           event: PostgresChangeEvent.all,
           schema: 'public',
@@ -200,10 +207,7 @@ class CustomerRealtimeSync {
             _ref.invalidate(amcContractProvider);
           },
         )
-        // ── AMC contract status changes (admin approves/rejects cancellation) ─
-        // Invalidate both the bookings list (which shows AMC contract cards) and
-        // any open contract detail screen so the customer sees the new status
-        // immediately when the admin acts on a cancellation request.
+        // ── AMC contract status changes ───────────────────────────────────────
         .onPostgresChanges(
           event: PostgresChangeEvent.all,
           schema: 'public',
@@ -220,9 +224,20 @@ class CustomerRealtimeSync {
         });
   }
 
-  // ── Personal notification channel ────────────────────────────────────────────
+  // ── Personal notification + data channel ─────────────────────────────────────
+  //
+  // Created after sign-in and destroyed on sign-out. Filtered by customer_id
+  // so RLS evaluation succeeds under the anon key.
+  //
+  // Same-value guard: if the incoming customerId equals the currently active
+  // one, we skip teardown and recreation to prevent channel churn on repeated
+  // auth-state emissions (e.g., session restore firing multiple events).
 
   void resubscribeNotifications(String? customerId) {
+    // Skip if same ID — prevents churn on repeated auth-state emissions.
+    if (customerId == _activeNotifCustomerId) return;
+    _activeNotifCustomerId = customerId;
+
     if (_notifChannel != null) {
       _client.removeChannel(_notifChannel!);
       _notifChannel = null;
@@ -231,6 +246,7 @@ class CustomerRealtimeSync {
 
     _notifChannel = _client
         .channel('dodo-customer-notif-$customerId')
+        // ── Personal notifications ─────────────────────────────────────────
         .onPostgresChanges(
           event: PostgresChangeEvent.insert,
           schema: 'public',
@@ -241,14 +257,10 @@ class CustomerRealtimeSync {
             value: customerId,
           ),
           callback: (_) {
-            debugPrint('[DODO][CustomerSync] personal notification INSERT → invalidating notificationsProvider + AMC + support providers');
+            debugPrint('[DODO][CustomerSync] personal notification INSERT → invalidating all relevant providers');
             _ref.invalidate(notificationsProvider);
-            // Refresh support conversation so SupportChatScreen detects new replies.
             _ref.invalidate(supportConversationProvider);
-            // Re-fetch AMC state on every personal notification so that
-            // admin actions (approve/reject cancellation, schedule visit)
-            // are reflected immediately even if the amc_contracts Realtime
-            // event was silently dropped by RLS evaluation.
+            // Safety-net re-fetch for AMC state (covers RLS-dropped events).
             _ref.invalidate(amcContractProvider);
             _ref.invalidate(allAmcContractsProvider);
             _ref.invalidate(processedBookingsProvider);
@@ -260,18 +272,107 @@ class CustomerRealtimeSync {
             _ref.invalidate(amcResumeRequestsForContractProvider);
             _ref.invalidate(allAmcPauseRequestsProvider);
             _ref.invalidate(allAmcResumeRequestsProvider);
+            // Also refresh refund queries on notification (safety net).
+            _ref.invalidate(myRefundQueriesProvider);
+          },
+        )
+        // ── Refund request status changes ──────────────────────────────────
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'refund_requests',
+          filter: PostgresChangeFilter(
+            type: PostgresChangeFilterType.eq,
+            column: 'customer_id',
+            value: customerId,
+          ),
+          callback: (payload) {
+            debugPrint('[DODO][CustomerSync] refund_requests change → invalidating refund providers');
+            _ref.invalidate(myRefundQueriesProvider);
+            // Invalidate all autoDispose family instances by invalidating the family.
+            _ref.invalidate(refundQueryDetailProvider);
+          },
+        )
+        // ── Refund status history (timeline) ──────────────────────────────
+        // Supabase Realtime filter on refund_status_history requires joining
+        // through refund_requests, which is not supported. Subscribe without
+        // a filter and trust RLS to scope visibility to the customer's own rows.
+        .onPostgresChanges(
+          event: PostgresChangeEvent.insert,
+          schema: 'public',
+          table: 'refund_status_history',
+          callback: (_) {
+            debugPrint('[DODO][CustomerSync] refund_status_history INSERT → invalidating refund providers');
+            _ref.invalidate(myRefundQueriesProvider);
+            _ref.invalidate(refundQueryDetailProvider);
+          },
+        )
+        // ── Refund messages (new admin reply) ──────────────────────────────
+        .onPostgresChanges(
+          event: PostgresChangeEvent.insert,
+          schema: 'public',
+          table: 'refund_messages',
+          callback: (_) {
+            debugPrint('[DODO][CustomerSync] refund_messages INSERT → invalidating refundQueryDetailProvider');
+            _ref.invalidate(refundQueryDetailProvider);
+          },
+        )
+        // ── Loyalty transactions (points earned or redeemed) ───────────────
+        .onPostgresChanges(
+          event: PostgresChangeEvent.insert,
+          schema: 'public',
+          table: 'loyalty_transactions',
+          filter: PostgresChangeFilter(
+            type: PostgresChangeFilterType.eq,
+            column: 'customer_id',
+            value: customerId,
+          ),
+          callback: (_) {
+            debugPrint('[DODO][CustomerSync] loyalty_transactions INSERT → invalidating loyalty providers');
+            _ref.invalidate(customerLoyaltyProvider);
+            _ref.invalidate(loyaltyTransactionsProvider);
+          },
+        )
+        // ── Customer loyalty balance (direct update e.g. admin adjustment) ─
+        .onPostgresChanges(
+          event: PostgresChangeEvent.update,
+          schema: 'public',
+          table: 'customer_loyalty',
+          filter: PostgresChangeFilter(
+            type: PostgresChangeFilterType.eq,
+            column: 'customer_id',
+            value: customerId,
+          ),
+          callback: (_) {
+            debugPrint('[DODO][CustomerSync] customer_loyalty UPDATE → invalidating customerLoyaltyProvider');
+            _ref.invalidate(customerLoyaltyProvider);
+          },
+        )
+        // ── Warranty status changes ────────────────────────────────────────
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'service_warranties',
+          filter: PostgresChangeFilter(
+            type: PostgresChangeFilterType.eq,
+            column: 'customer_id',
+            value: customerId,
+          ),
+          callback: (_) {
+            debugPrint('[DODO][CustomerSync] service_warranties change → invalidating warranty providers');
+            _ref.invalidate(customerWarrantiesProvider);
+            _ref.invalidate(bookingWarrantyProvider);
+            _ref.invalidate(warrantyByIdProvider);
           },
         )
         .subscribe((status, error) {
           debugPrint('[DODO][CustomerSync] notif channel status=$status error=$error');
         });
-    debugPrint('[DODO][CustomerSync] notification channel subscribed for customer=$customerId');
+    debugPrint('[DODO][CustomerSync] personal channel subscribed for customer=$customerId');
   }
 
-  // Collapse rapid catalog events into one invalidation cycle.
-  // Without debouncing, a multi-table admin update fires several callbacks
-  // within milliseconds, each invalidating 9 providers and triggering a
-  // large widget rebuild wave that blocks Flutter's event loop on web.
+  // ── Debounced invalidation helpers ───────────────────────────────────────────
+
   void _debouncedInvalidateCatalog() {
     _catalogDebounce?.cancel();
     _catalogDebounce = Timer(const Duration(milliseconds: 300), _invalidateCatalog);
@@ -306,7 +407,6 @@ class CustomerRealtimeSync {
   }
 
   /// Called by the lifecycle observer on app resume after an extended pause.
-  /// Refetches everything that Realtime may have missed during the gap.
   void refetchAll() {
     _invalidateCatalog();
     _invalidateConfig();
@@ -326,6 +426,13 @@ class CustomerRealtimeSync {
     _ref.invalidate(amcResumeRequestsForContractProvider);
     _ref.invalidate(allAmcPauseRequestsProvider);
     _ref.invalidate(allAmcResumeRequestsProvider);
+    _ref.invalidate(myRefundQueriesProvider);
+    _ref.invalidate(refundQueryDetailProvider);
+    _ref.invalidate(customerLoyaltyProvider);
+    _ref.invalidate(loyaltyTransactionsProvider);
+    _ref.invalidate(customerWarrantiesProvider);
+    _ref.invalidate(bookingWarrantyProvider);
+    _ref.invalidate(warrantyByIdProvider);
   }
 
   void dispose() {
@@ -341,9 +448,10 @@ final realtimeSyncProvider = Provider<CustomerRealtimeSync>((ref) {
   ref.onDispose(sync.dispose);
 
   // React to customer ID changes (sign-in, sign-out, session restore) and
-  // (re)create the personal notification channel accordingly.  fireImmediately
-  // ensures the channel is set up even if the customer is already authenticated
-  // when this provider first runs.
+  // (re)create the personal channel accordingly. fireImmediately ensures the
+  // channel is set up even if the customer is already authenticated when this
+  // provider first runs. The same-value guard inside resubscribeNotifications
+  // prevents unnecessary channel churn on repeated emissions of the same ID.
   ref.listen<AsyncValue<String?>>(
     currentCustomerIdProvider,
     (_, next) => next.whenData((id) => sync.resubscribeNotifications(id)),

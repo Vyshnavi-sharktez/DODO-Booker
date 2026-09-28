@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
@@ -708,7 +708,7 @@ class _NotEligibleBookingCard extends StatelessWidget {
                   ),
                   const SizedBox(height: 3),
                   Text(
-                    '${booking.displayBookingNumber}  ·  ${booking.formattedDate}',
+                    '${booking.displayBookingNumber}  -  ${booking.formattedDate}',
                     style: tt.bodySmall?.copyWith(
                       color: AppColors.textHint,
                       fontSize: 11,

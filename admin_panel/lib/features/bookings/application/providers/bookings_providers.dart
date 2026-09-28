@@ -93,8 +93,8 @@ class BookingsNotifier extends StateNotifier<AsyncValue<List<Booking>>> {
     }
   }
 
-  Future<void> cancelBooking(String id) async {
-    final updated = await _repo.cancelBooking(id);
+  Future<void> cancelBooking(String id, {String? reason}) async {
+    final updated = await _repo.cancelBooking(id, reason: reason);
     final current = state.valueOrNull;
     if (current != null) {
       state = AsyncValue.data(

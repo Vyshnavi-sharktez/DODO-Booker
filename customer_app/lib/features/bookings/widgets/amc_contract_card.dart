@@ -1,7 +1,8 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../amc/models/amc_contract_summary.dart';
 import '../../amc/screens/amc_contract_details_screen.dart';
+import '../../../core/widgets/page_sheet.dart';
 
 class AmcContractCard extends StatelessWidget {
   final AmcContractSummary contract;
@@ -138,7 +139,7 @@ class AmcContractCard extends StatelessWidget {
                   ),
                   if (next != null) ...[
                     const SizedBox(width: 12),
-                    const Text('·',
+                    const Text('-',
                         style: TextStyle(color: AppColors.textHint)),
                     const SizedBox(width: 12),
                     const Icon(Icons.calendar_today_rounded,
@@ -189,13 +190,14 @@ class AmcContractCard extends StatelessWidget {
   }
 
   void _openDetails(BuildContext context) {
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => AmcContractDetailsScreen(
-          contractId: _c.contractId,
-          initialPlanName:
-              _c.planName.isNotEmpty ? _c.planName : _c.serviceName,
-        ),
+    final label = _c.planName.isNotEmpty ? _c.planName : _c.serviceName;
+    PageSheet.show(
+      context,
+      title: label.isNotEmpty ? label : 'AMC Contract',
+      child: AmcContractDetailsScreen(
+        contractId: _c.contractId,
+        initialPlanName: label,
+        inModal: true,
       ),
     );
   }

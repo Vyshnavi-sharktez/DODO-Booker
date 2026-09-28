@@ -1,4 +1,4 @@
-import 'dart:ui';
+﻿import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../../core/constants/app_colors.dart';
@@ -225,7 +225,7 @@ class _SummaryCard extends StatelessWidget {
           const SizedBox(height: 10),
           _SummaryRow(
             label: 'Date & Time',
-            value: '$formattedDate · ${booking.timeSlot}',
+            value: '$formattedDate - ${booking.timeSlot}',
           ),
           if (booking.addressLabel.isNotEmpty) ...[
             const SizedBox(height: 10),

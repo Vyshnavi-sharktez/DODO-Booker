@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -229,7 +229,7 @@ class _SearchPillState extends State<_SearchPill> {
               const SizedBox(width: 8),
               Flexible(
                 child: Text(
-                  'Search for services…',
+                  'Search for services...',
                   overflow: TextOverflow.ellipsis,
                   style: GoogleFonts.inter(
                     fontSize: 13,

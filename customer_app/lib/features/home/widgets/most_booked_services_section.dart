@@ -1,4 +1,4 @@
-import 'package:flutter/gestures.dart';
+﻿import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -267,7 +267,7 @@ class _ServiceCardState extends State<_ServiceCard> {
               mainAxisSize: MainAxisSize.max,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                // Image — fills (cardHeight − _kInfoH)
+                // Image — fills (cardHeight - _kInfoH)
                 Expanded(
                   child: _CardImage(
                     service: widget.service,

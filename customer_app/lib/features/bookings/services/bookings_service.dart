@@ -21,6 +21,7 @@ class BookingsService {
     subtotal, discount_amount, total_amount,
     address, notes, created_at,
     completion_otp, otp_verified_at,
+    cancelled_by, cancellation_reason,
     is_amc, amc_contract_id, amc_plan_name, amc_recurrence_interval, amc_visit_number,
     booking_items(
       service_id,
@@ -259,17 +260,6 @@ class BookingsService {
 
   Future<bool> cancelBooking(String bookingId, {String? reason, String? remarks}) async {
     debugPrint('[DODO][Booking] Cancel requested for bookingId=$bookingId');
-
-    // Fetch metadata needed for notifications before updating.
-    Map<String, dynamic>? meta;
-    try {
-      meta = await _client
-          .from('bookings')
-          .select('vendor_id, booking_number')
-          .eq('id', bookingId)
-          .maybeSingle();
-    } catch (_) {}
-
     debugPrint('[DODO][Booking] Updating booking status');
     final updateData = <String, dynamic>{
       'status': 'cancelled',
@@ -281,40 +271,9 @@ class BookingsService {
 
     await _client.from('bookings').update(updateData).eq('id', bookingId);
     debugPrint('[DODO][Booking] Booking cancelled successfully');
-
-    // Notify admin and vendor (if assigned) — non-fatal.
-    final vendorId = meta?['vendor_id'] as String?;
-    final bookingNum = meta?['booking_number'] as String? ?? '';
-    final ref = bookingNum.isNotEmpty
-        ? '#$bookingNum'
-        : '#${bookingId.length > 8 ? bookingId.substring(0, 8) : bookingId}';
-
-    try {
-      await _client.from('notifications').insert({
-        'user_type': 'admin',
-        'user_id': null,
-        'title': 'Booking Cancelled',
-        'message': 'Customer cancelled booking $ref.',
-        'notification_type': 'booking_cancelled',
-        'is_read': false,
-        'entity_type': 'booking',
-        'entity_id': bookingId,
-      });
-      if (vendorId != null && vendorId.isNotEmpty) {
-        await _client.from('notifications').insert({
-          'user_type': 'vendor',
-          'user_id': vendorId,
-          'title': 'Booking Cancelled',
-          'message': 'Booking $ref has been cancelled.',
-          'notification_type': 'booking_cancelled',
-          'is_read': false,
-          'entity_type': 'booking',
-          'entity_id': bookingId,
-        });
-      }
-    } catch (e) {
-      debugPrint('[DODO][Booking] Warning: cancel notifications failed (non-fatal): $e');
-    }
+    // Admin and vendor notifications are handled by the DB trigger
+    // fn_notify_admin_booking_status_change which routes by cancelled_by.
+    // No Dart inserts needed here.
 
     return true;
   }

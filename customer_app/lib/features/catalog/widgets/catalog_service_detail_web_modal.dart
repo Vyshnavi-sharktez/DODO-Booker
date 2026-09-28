@@ -1,4 +1,4 @@
-import 'dart:ui';
+﻿import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -406,7 +406,7 @@ class _CatalogServiceDetailWebModalState
   }
 }
 
-// ── Two-column header (image left · info right · absolute close) ──────────────
+// ── Two-column header (image left - info right - absolute close) ──────────────
 
 class _WebDetailHeader extends StatelessWidget {
   const _WebDetailHeader({
@@ -1543,7 +1543,7 @@ class _WebDetailBookingBar extends ConsumerWidget {
                 ),
                 if (amcPlan != null)
                   Text(
-                    'AMC · ${amcPlan!.numVisits} visits',
+                    'AMC - ${amcPlan!.numVisits} visits',
                     style: const TextStyle(
                         fontSize: 10, color: AppColors.textHint),
                   )

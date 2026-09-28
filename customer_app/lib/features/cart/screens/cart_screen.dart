@@ -1,4 +1,4 @@
-import 'package:flutter/foundation.dart' show kIsWeb;
+﻿import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -389,7 +389,7 @@ class _CartItemCardState extends ConsumerState<_CartItemCard> {
                                 item.amcRecurrenceInterval!,
                               if (item.amcNumVisits != null)
                                 '${item.amcNumVisits} visits',
-                            ].join(' · '),
+                            ].join(' - '),
                             style: tt.labelSmall
                                 ?.copyWith(color: AppColors.textHint),
                           ),
@@ -556,7 +556,7 @@ class _CartItemCardState extends ConsumerState<_CartItemCard> {
                         if (item.amcRecurrenceInterval != null &&
                             item.amcRecurrenceInterval!.isNotEmpty)
                           Text(
-                            '${item.amcRecurrenceInterval!} · ${item.amcNumVisits ?? 12} visits',
+                            '${item.amcRecurrenceInterval!} - ${item.amcNumVisits ?? 12} visits',
                             style: tt.labelSmall
                                 ?.copyWith(color: AppColors.textHint),
                           ),

@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../features/catalog/models/catalog_node_model.dart';
@@ -215,7 +215,7 @@ class BookingSummaryCard extends ConsumerWidget {
                   const Icon(Icons.schedule_rounded, size: 12, color: AppColors.textHint),
                   const SizedBox(width: 4),
                   Text(
-                    'Recurrence: ${amcPlan!.recurrenceInterval}  ·  12 visits total',
+                    'Recurrence: ${amcPlan!.recurrenceInterval}  -  12 visits total',
                     style: tt.labelSmall?.copyWith(color: AppColors.textHint),
                   ),
                 ],
@@ -331,7 +331,7 @@ class _DiscountRow extends StatelessWidget {
         ),
         const SizedBox(width: 8),
         Text(
-          '−₹${amount.toStringAsFixed(2)}',
+          '-₹${amount.toStringAsFixed(2)}',
           style: tt.bodySmall?.copyWith(
             color: AppColors.success,
             fontWeight: FontWeight.w600,

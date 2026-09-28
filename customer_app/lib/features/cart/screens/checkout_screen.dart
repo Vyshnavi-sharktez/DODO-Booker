@@ -1,4 +1,4 @@
-import 'package:flutter/foundation.dart';
+﻿import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -1753,6 +1753,15 @@ class _LoyaltySection extends ConsumerWidget {
                     ],
                   ),
                 ),
+                if (redeemPoints < availablePoints) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    'Max ${settings.maxRedeemPercentage.toStringAsFixed(0)}% of order value - ${availablePoints - redeemPoints} pts carry forward',
+                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                          color: AppColors.textHint,
+                        ),
+                  ),
+                ],
               ],
             ],
           ),

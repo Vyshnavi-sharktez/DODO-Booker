@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -675,7 +675,7 @@ class _PopularCard extends StatelessWidget {
               [
                 if (price != null) '₹${price.toInt()}',
                 if (rating != null) '$rating★',
-              ].join(' · '),
+              ].join(' - '),
               style: GoogleFonts.inter(
                 fontSize: 11,
                 color: AppColors.textSecondary,

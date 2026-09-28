@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import '../../catalog/services/catalog_service.dart';
 import '../../catalog/utils/catalog_launcher.dart';
 import '../../../core/constants/app_colors.dart';
@@ -44,7 +44,7 @@ class _BookingCard extends StatelessWidget {
 
   String get _formattedDate {
     final d = booking.scheduledDate;
-    return '${d.day} ${_months[d.month - 1]} · ${booking.timeSlot}';
+    return '${d.day} ${_months[d.month - 1]} - ${booking.timeSlot}';
   }
 
   (Color, Color, String) get _statusMeta {

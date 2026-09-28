@@ -130,6 +130,8 @@ class _VendorNotificationsPanelDialogState
   @override
   Widget build(BuildContext context) {
     final notificationsAsync = ref.watch(vendorNotificationsProvider);
+    final panelHeight =
+        (MediaQuery.sizeOf(context).height - 68 - 24).clamp(300.0, 520.0);
 
     return Align(
       alignment: Alignment.topRight,
@@ -138,7 +140,8 @@ class _VendorNotificationsPanelDialogState
         child: Material(
           color: Colors.transparent,
           child: Container(
-            constraints: const BoxConstraints(maxWidth: 390, maxHeight: 520),
+            width: 390,
+            height: panelHeight,
             decoration: BoxDecoration(
               color: AppColors.surface,
               borderRadius: BorderRadius.circular(12),
@@ -154,7 +157,6 @@ class _VendorNotificationsPanelDialogState
             child: ClipRRect(
               borderRadius: BorderRadius.circular(12),
               child: Column(
-                mainAxisSize: MainAxisSize.min,
                 children: [
                   // ── Header ───────────────────────────────────────────────
                   Container(
@@ -205,7 +207,7 @@ class _VendorNotificationsPanelDialogState
                   const Divider(height: 1),
 
                   // ── Body ─────────────────────────────────────────────────
-                  Flexible(
+                  Expanded(
                     child: notificationsAsync.when(
                       loading: () => const Padding(
                         padding: EdgeInsets.all(40),
@@ -246,7 +248,6 @@ class _VendorNotificationsPanelDialogState
                           );
                         }
                         return ListView.separated(
-                          shrinkWrap: true,
                           itemCount: visible.length,
                           separatorBuilder: (_, __) =>
                               const Divider(height: 1),

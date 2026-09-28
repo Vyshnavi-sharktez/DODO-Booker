@@ -55,7 +55,7 @@ class ServiceAttributeSection extends StatelessWidget {
               children: attr.options.map((opt) {
                 final selected = selections[attr.id] == opt.id;
                 final priceLabel = opt.finalPrice > 0
-                    ? ' · ₹${opt.finalPrice.toStringAsFixed(0)}'
+                    ? ' - ₹${opt.finalPrice.toStringAsFixed(0)}'
                     : '';
                 return _AttrChip(
                   label: '${opt.optionName}$priceLabel',
