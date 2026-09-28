@@ -100,8 +100,8 @@ class BookingForRefundModel {
     }
     if (serviceName.isEmpty) {
       final notes = map['notes'] as String?;
-      if (notes != null && notes.contains(' - ')) {
-        serviceName = notes.split(' - ').first;
+      if (notes != null && notes.contains(' · ')) {
+        serviceName = notes.split(' · ').first;
       }
     }
 
