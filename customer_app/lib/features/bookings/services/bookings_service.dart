@@ -17,8 +17,8 @@ class BookingsService {
   // separately in _injectReviewFlags(), same pattern as _injectAddons().
   static const _bookingSelect = '''
     id, booking_number, customer_id, vendor_id, dodo_team_id,
-    assignment_type, service_date, status, payment_method, payment_status,
-    subtotal, discount_amount, total_amount,
+    assignment_type, service_date, scheduled_time, status, payment_method, payment_status,
+    subtotal, tax_amount, discount_amount, total_amount,
     address, notes, created_at,
     completion_otp, otp_verified_at,
     cancelled_by, cancellation_reason,

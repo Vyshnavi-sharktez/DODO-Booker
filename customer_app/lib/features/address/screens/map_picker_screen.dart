@@ -47,6 +47,9 @@ class _MapPickerScreenState extends State<MapPickerScreen> {
   double _currentZoom = _streetZoom;
 
   bool _isConfirming = false;
+  // Set to true on any user gesture (pan, pinch, tap). Prevents the async GPS
+  // jump in _tryJumpToCurrentLocation from overriding a manually placed pin.
+  bool _userHasInteracted = false;
 
   @override
   void initState() {
@@ -76,6 +79,8 @@ class _MapPickerScreenState extends State<MapPickerScreen> {
             const LocationSettings(accuracy: LocationAccuracy.high),
       ).timeout(const Duration(seconds: 8));
       if (!mounted) return;
+      // Abort if the user already placed the pin manually.
+      if (_userHasInteracted) return;
       final loc = LatLng(pos.latitude, pos.longitude);
       // Move the map; onPositionChanged will update _selectedLatLng.
       _mapController.move(loc, 15);
@@ -136,11 +141,12 @@ class _MapPickerScreenState extends State<MapPickerScreen> {
               ),
               // Tap anywhere → jump crosshair to that point.
               onTap: (tapPosition, point) {
+                _userHasInteracted = true;
                 _mapController.move(point, _currentZoom);
-                // onPositionChanged will update _selectedLatLng after the move.
               },
               // Tracks camera after every user gesture or programmatic move.
               onPositionChanged: (camera, hasGesture) {
+                if (hasGesture) _userHasInteracted = true;
                 setState(() {
                   _selectedLatLng = camera.center;
                   _currentZoom = camera.zoom;

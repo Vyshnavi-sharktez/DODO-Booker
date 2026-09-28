@@ -23,7 +23,6 @@ import '../../amc/models/amc_contract_model.dart';
 import '../../warranties/models/service_warranty_model.dart';
 import '../../warranties/screens/warranty_details_screen.dart';
 import '../../warranties/services/warranty_providers.dart';
-import '../../call_bridge/widgets/call_bridge_dialog.dart';
 
 class BookingDetailsScreen extends ConsumerStatefulWidget {
   final MyBookingModel booking;
@@ -85,7 +84,6 @@ class _BookingDetailsScreenState extends ConsumerState<BookingDetailsScreen> {
                 _OtpDisplayCard(otp: booking.completionOtp!),
               if (booking.isAmc) _AmcContractCard(booking: booking),
               _BookingInfoCard(booking: booking),
-              _VendorCard(booking: booking),
               _ServiceInfoCard(booking: booking),
               _AddonsCard(booking: booking),
               _WarrantySectionCard(booking: booking),
@@ -363,7 +361,7 @@ class _StatusBanner extends StatelessWidget {
       case BookingStatus.assigned:
         return (AppColors.primary, 'Vendor has been assigned', Icons.person_pin_rounded);
       case BookingStatus.assignedToDodoTeam:
-        return (const Color(0xFF6B46C1), 'DODO Team has been assigned', Icons.groups_rounded);
+        return (AppColors.primary, 'DODO Team has been assigned', Icons.groups_rounded);
       case BookingStatus.accepted:
         return (const Color(0xFF00ACC1), 'Vendor confirmed your booking', Icons.thumb_up_rounded);
       case BookingStatus.enRoute:
@@ -511,8 +509,14 @@ class _BookingInfoCard extends StatelessWidget {
         _DetailRow(
           icon: Icons.calendar_today_rounded,
           label: 'Scheduled Date',
-          value: '$_scheduledDate - ${booking.timeSlot}',
+          value: _scheduledDate,
         ),
+        if (booking.timeSlot.isNotEmpty)
+          _DetailRow(
+            icon: Icons.schedule_rounded,
+            label: 'Slot Time',
+            value: booking.timeSlot,
+          ),
         _DetailRow(
           icon: Icons.access_time_rounded,
           label: 'Booked On',
@@ -813,154 +817,6 @@ class _AddressCard extends StatelessWidget {
   }
 }
 
-class _VendorCard extends StatelessWidget {
-  final MyBookingModel booking;
-
-  const _VendorCard({required this.booking});
-
-  @override
-  Widget build(BuildContext context) {
-    final tt = Theme.of(context).textTheme;
-    final isVendorAssigned = (booking.vendorId != null && booking.vendorId!.isNotEmpty) ||
-        (booking.vendorName != null && booking.vendorName!.isNotEmpty);
-
-    final vendorDisplayName = (booking.vendorName != null && booking.vendorName!.isNotEmpty)
-        ? booking.vendorName!
-        : 'Assigned Vendor';
-
-    final statusLower = booking.status.toLowerCase();
-    final isCallActiveStatus = const {
-      'assigned',
-      'assigned_to_dodo_team',
-      'accepted',
-      'en_route',
-      'in_progress',
-      'started',
-      'awaiting_verification',
-    }.contains(statusLower);
-
-    final showCallButton = isVendorAssigned && isCallActiveStatus;
-
-    return _SectionCard(
-      title: 'ASSIGNED VENDOR',
-      children: [
-        if (isVendorAssigned) ...[
-          Row(
-            children: [
-              Container(
-                width: 46,
-                height: 46,
-                decoration: const BoxDecoration(
-                  color: AppColors.primaryLight,
-                  shape: BoxShape.circle,
-                ),
-                child: Center(
-                  child: Text(
-                    vendorDisplayName[0].toUpperCase(),
-                    style: const TextStyle(
-                      color: AppColors.primary,
-                      fontWeight: FontWeight.w800,
-                      fontSize: 20,
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      vendorDisplayName,
-                      style: tt.titleSmall?.copyWith(
-                        fontWeight: FontWeight.w700,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    const SizedBox(height: 2),
-                    Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(Icons.shield_rounded, size: 12, color: AppColors.primary),
-                        const SizedBox(width: 4),
-                        Flexible(
-                          child: Text(
-                            'Protected via DODO Call Bridge',
-                            style: tt.bodySmall?.copyWith(
-                              color: AppColors.primary,
-                              fontWeight: FontWeight.w600,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          if (showCallButton) ...[
-            const SizedBox(height: 12),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton.icon(
-                onPressed: () {
-                  CallBridgeDialog.show(
-                    context,
-                    bookingId: booking.id,
-                    bookingNumber: booking.displayBookingNumber,
-                    callerId: booking.customerId ?? 'customer_1',
-                    calleeId: booking.vendorId ?? 'vendor_1',
-                    callerRole: 'customer',
-                    recipientName: vendorDisplayName,
-                    bookingStatus: booking.status,
-                  );
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.primary,
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                  elevation: 0,
-                ),
-                icon: const Icon(Icons.phone_rounded, size: 16),
-                label: const Text(
-                  'Call via DODO',
-                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
-                ),
-              ),
-            ),
-          ],
-        ]
-        else
-          Row(
-            children: [
-              const Icon(
-                Icons.pending_rounded,
-                size: 16,
-                color: AppColors.textHint,
-              ),
-              const SizedBox(width: 8),
-              Text(
-                'Vendor assignment in progress...',
-                style: tt.bodySmall?.copyWith(
-                  color: AppColors.textHint,
-                  fontStyle: FontStyle.italic,
-                ),
-              ),
-            ],
-          ),
-      ],
-    );
-  }
-}
-
 class _TimelineCard extends StatelessWidget {
   final MyBookingModel booking;
 
@@ -997,6 +853,14 @@ class _PaymentCard extends StatelessWidget {
 
   const _PaymentCard({required this.booking});
 
+  static String _taxLabel(double taxAmount, double base) {
+    if (taxAmount > 0 && base > 0) {
+      final rate = (taxAmount / base * 100).round();
+      return 'GST ($rate%)';
+    }
+    return 'GST';
+  }
+
   @override
   Widget build(BuildContext context) {
     final tt = Theme.of(context).textTheme;
@@ -1010,7 +874,7 @@ class _PaymentCard extends StatelessWidget {
           tt: tt,
         ),
         _PaymentRow(
-          label: 'GST (18%)',
+          label: _taxLabel(booking.taxAmount, booking.baseAmount),
           value: '₹${booking.taxAmount.toStringAsFixed(2)}',
           tt: tt,
         ),
@@ -1020,20 +884,6 @@ class _PaymentCard extends StatelessWidget {
           value: '₹${booking.totalAmount.toStringAsFixed(2)}',
           tt: tt,
           isTotal: true,
-        ),
-        const SizedBox(height: 6),
-        Row(
-          children: [
-            const Icon(Icons.info_outline_rounded, size: 12, color: AppColors.textHint),
-            const SizedBox(width: 6),
-            Text(
-              'Payment integration coming soon',
-              style: tt.labelSmall?.copyWith(
-                color: AppColors.textHint,
-                fontStyle: FontStyle.italic,
-              ),
-            ),
-          ],
         ),
       ],
     );
