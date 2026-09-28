@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'app_header.dart';
+import '../../features/auth/providers/auth_provider.dart';
+import '../../features/auth/utils/auth_modal_gate.dart';
 import '../../features/home/screens/home_screen.dart';
 import '../../features/home/services/home_providers.dart';
 import '../../features/home/widgets/hero_section.dart';
@@ -111,7 +113,13 @@ class _MobileBottomNav extends ConsumerWidget {
                 label: 'Bookings',
                 active: false,
                 badge: 0,
-                onTap: () => context.push(AppRoutes.myBookings),
+                onTap: () async {
+                  if (!ref.read(isAuthenticatedProvider)) {
+                    final authed = await requireAuth(context, ref);
+                    if (!context.mounted || !authed) return;
+                  }
+                  if (context.mounted) context.push(AppRoutes.myBookings);
+                },
               ),
               _BottomNavItem(
                 icon: Icons.shopping_cart_outlined,
