@@ -208,7 +208,6 @@ class _ProfileBody extends ConsumerWidget {
                   icon: Icons.settings_rounded,
                   iconColor: AppColors.textSecondary,
                   title: 'Settings',
-                  subtitle: 'App preferences',
                   onTap: () => _openResponsive(
                     context,
                     desktopModal: () => PageSheet.show(

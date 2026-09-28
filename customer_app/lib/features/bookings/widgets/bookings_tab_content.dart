@@ -88,7 +88,10 @@ class BookingTabContent extends ConsumerWidget {
     return asyncData.when(
       loading: () => const BookingsLoadingSkeleton(),
       error: (e, _) => BookingsErrorState(
-        onRetry: () => ref.invalidate(processedBookingsProvider),
+        onRetry: () {
+          ref.invalidate(myBookingsProvider);
+          ref.invalidate(processedBookingsProvider);
+        },
       ),
       data: (processed) {
         final entries = _filter(processed);

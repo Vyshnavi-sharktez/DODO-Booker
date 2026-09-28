@@ -6,7 +6,6 @@ import '../../../routes/app_router.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../../../features/home/services/home_providers.dart';
 import '../services/profile_providers.dart';
-import 'appearance_screen.dart';
 import 'about_screen.dart';
 import 'privacy_policy_screen.dart';
 
@@ -29,24 +28,6 @@ class SettingsScreen extends ConsumerWidget {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               const SizedBox(height: 20),
-
-              // ── APPEARANCE ─────────────────────────────────────────────
-              _SectionLabel('Appearance'),
-
-              _FloatingCard(
-                child: _SettingsTile(
-                  icon: Icons.palette_outlined,
-                  iconColor: const Color(0xFF5C6BC0),
-                  title: 'Appearance',
-                  subtitle: 'Light or dark theme',
-                  onTap: () => _open(
-                    context,
-                    title: 'Appearance',
-                    modal: const AppearanceScreen(inModal: true),
-                    screen: const AppearanceScreen(),
-                  ),
-                ),
-              ),
 
               // ── ABOUT ──────────────────────────────────────────────────
               _SectionLabel('About'),
