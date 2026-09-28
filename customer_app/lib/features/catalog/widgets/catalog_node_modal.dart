@@ -1260,18 +1260,39 @@ class _ModalBookingBar extends ConsumerWidget {
             content: const Text(
               'You already have an active AMC subscription for this service.',
             ),
+            actionsPadding: EdgeInsets.zero,
             actions: [
-              TextButton(
-                onPressed: () => Navigator.of(ctx).pop(),
-                child: const Text('Close'),
-              ),
-              FilledButton(
-                onPressed: () {
-                  Navigator.of(ctx).pop();
-                  Navigator.of(context).pop();
-                  context.push(AppRoutes.amcPlans);
-                },
-                child: const Text('View AMC Plans'),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: () => Navigator.of(ctx).pop(),
+                        style: OutlinedButton.styleFrom(
+                            padding:
+                                const EdgeInsets.symmetric(vertical: 10)),
+                        child: const Text('Close',
+                            style: TextStyle(fontSize: 12)),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: FilledButton(
+                        onPressed: () {
+                          Navigator.of(ctx).pop();
+                          Navigator.of(context).pop();
+                          context.push(AppRoutes.amcPlans);
+                        },
+                        style: FilledButton.styleFrom(
+                            padding:
+                                const EdgeInsets.symmetric(vertical: 10)),
+                        child: const Text('View AMC Plans',
+                            style: TextStyle(fontSize: 12)),
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ],
           ),

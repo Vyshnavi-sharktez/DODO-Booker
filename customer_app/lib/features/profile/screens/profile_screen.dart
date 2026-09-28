@@ -180,10 +180,23 @@ class _ProfileBody extends ConsumerWidget {
                   iconColor: const Color(0xFFE67E22),
                   title: 'Refund Queries',
                   subtitle: 'Raise and track refund requests',
-                  onTap: () => PageSheet.show(
+                  onTap: () => _openResponsive(
                     context,
-                    title: 'Refund Queries',
-                    child: const RefundQueriesFlow(),
+                    desktopModal: () => PageSheet.show(
+                      context,
+                      title: 'Refund Queries',
+                      child: const RefundQueriesFlow(),
+                    ),
+                    mobileRoute: () => Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => Scaffold(
+                          appBar: AppBar(
+                            title: const Text('Refund Queries'),
+                          ),
+                          body: const RefundQueriesFlow(),
+                        ),
+                      ),
+                    ),
                   ),
                 ),
               ),
