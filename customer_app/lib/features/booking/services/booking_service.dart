@@ -1,4 +1,4 @@
-import 'dart:math';
+﻿import 'dart:math';
 
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -435,7 +435,7 @@ class BookingService {
         'service_date': serviceDate,
         'scheduled_time': slot.label,
         'address': address.fullAddress,
-        'notes': '${service.name} · ${slot.label}',
+        'notes': '${service.name} - ${slot.label}',
         'latitude': ?address.latitude,
         'longitude': ?address.longitude,
         'subtotal': subtotal,
@@ -461,7 +461,7 @@ class BookingService {
         'discount_amount': discountAmount,
         'total_amount': totalAmount,
         'address': address.fullAddress,
-        'notes': '${service.name} · ${slot.label}',
+        'notes': '${service.name} - ${slot.label}',
         'latitude': ?address.latitude,
         'longitude': ?address.longitude,
         'completion_otp': completionOtp,
@@ -566,23 +566,10 @@ class BookingService {
       }
     }
 
-    // ── Notify admin of new booking ──────────────────────────────────────────
-    try {
-      await _client.from('notifications').insert({
-        'user_type': 'admin',
-        'user_id': null,
-        'title': 'New Booking Received',
-        'message': 'A new booking has been created.',
-        'notification_type': 'booking_created',
-        'is_read': false,
-        'entity_type': 'booking',
-        'entity_id': bookingId,
-      });
-    } catch (e) {
-      debugPrint('[DODO][Booking] Warning: admin booking_created notification failed (non-fatal): $e');
-    }
-
     // ── Notify customer of their new booking ─────────────────────────────────
+    // Admin notification is handled by the DB trigger fn_notify_admin_new_booking
+    // (AFTER INSERT ON bookings WHEN status = 'pending'), which includes customer
+    // name, booking number, and amount. No Dart INSERT needed here.
     try {
       await _client.from('notifications').insert({
         'user_type': 'customer',

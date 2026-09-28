@@ -16,6 +16,7 @@ import '../../bookings/utils/my_bookings_launcher.dart';
 import '../../warranties/screens/my_warranties_screen.dart';
 import '../../refund_queries/screens/refund_queries_flow.dart';
 import '../../support/screens/support_chat_screen.dart';
+
 class ProfileScreen extends ConsumerWidget {
   const ProfileScreen({super.key, this.inModal = false});
 

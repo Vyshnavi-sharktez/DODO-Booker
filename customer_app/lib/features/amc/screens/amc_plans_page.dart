@@ -1,8 +1,9 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/constants/app_colors.dart';
 import '../providers/amc_plans_provider.dart';
 import '../screens/amc_contract_details_screen.dart';
+import '../../../core/widgets/page_sheet.dart';
 
 class AmcPlansPage extends StatelessWidget {
   final bool inModal;
@@ -17,6 +18,8 @@ class AmcPlansPage extends StatelessWidget {
       return DefaultTabController(
         length: 2,
         child: Column(
+          mainAxisSize: MainAxisSize.max,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             TabBar(
               tabs: _tabs,
@@ -27,7 +30,12 @@ class AmcPlansPage extends StatelessWidget {
               labelStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
             ),
             const Divider(height: 1, color: AppColors.divider),
-            const Expanded(child: TabBarView(children: _tabViews)),
+            const Expanded(
+              child: ColoredBox(
+                color: AppColors.background,
+                child: TabBarView(children: _tabViews),
+              ),
+            ),
           ],
         ),
       );
@@ -39,14 +47,17 @@ class AmcPlansPage extends StatelessWidget {
         backgroundColor: AppColors.background,
         appBar: AppBar(
           title: const Text('My AMC Plans'),
-          backgroundColor: AppColors.primary,
-          foregroundColor: Colors.white,
-          bottom: const TabBar(
+          backgroundColor: AppColors.background,
+          foregroundColor: AppColors.textPrimary,
+          elevation: 0,
+          scrolledUnderElevation: 0,
+          bottom: TabBar(
             tabs: _tabs,
-            indicatorColor: Colors.white,
-            labelColor: Colors.white,
-            unselectedLabelColor: Colors.white70,
-            labelStyle: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+            indicatorColor: AppColors.primary,
+            labelColor: AppColors.primary,
+            unselectedLabelColor: AppColors.textSecondary,
+            indicatorWeight: 2,
+            labelStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
           ),
         ),
         body: const TabBarView(children: _tabViews),
@@ -96,63 +107,80 @@ class _PlansTabState extends ConsumerState<_PlansTab>
     final contractsAsync = ref.watch(allAmcContractsProvider);
 
     return Column(
+      mainAxisSize: MainAxisSize.max,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        // Filter chips
+        // Filter chips — full-width, equal-width tabs
         Padding(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-          child: SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Row(
-              children: [
-                _FilterChip(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+          child: Row(
+            children: [
+              Expanded(
+                child: _FilterChip(
                   label: 'All',
                   selected: _filter == _PlansFilter.all,
                   color: AppColors.primary,
                   onTap: () => setState(() => _filter = _PlansFilter.all),
+                  fullWidth: true,
                 ),
-                const SizedBox(width: 8),
-                _FilterChip(
+              ),
+              const SizedBox(width: 4),
+              Expanded(
+                child: _FilterChip(
                   label: 'Active',
                   selected: _filter == _PlansFilter.active,
                   color: AppColors.success,
                   onTap: () => setState(() => _filter = _PlansFilter.active),
+                  fullWidth: true,
                 ),
-                const SizedBox(width: 8),
-                _FilterChip(
+              ),
+              const SizedBox(width: 4),
+              Expanded(
+                child: _FilterChip(
                   label: 'Paused',
                   selected: _filter == _PlansFilter.paused,
                   color: AppColors.warning,
                   onTap: () => setState(() => _filter = _PlansFilter.paused),
+                  fullWidth: true,
                 ),
-                const SizedBox(width: 8),
-                _FilterChip(
+              ),
+              const SizedBox(width: 4),
+              Expanded(
+                child: _FilterChip(
                   label: 'Completed',
                   selected: _filter == _PlansFilter.completed,
                   color: AppColors.primary,
                   onTap: () =>
                       setState(() => _filter = _PlansFilter.completed),
+                  fullWidth: true,
                 ),
-                const SizedBox(width: 8),
-                _FilterChip(
+              ),
+              const SizedBox(width: 4),
+              Expanded(
+                child: _FilterChip(
                   label: 'Cancelled',
                   selected: _filter == _PlansFilter.cancelled,
                   color: AppColors.error,
                   onTap: () =>
                       setState(() => _filter = _PlansFilter.cancelled),
+                  fullWidth: true,
                 ),
-                const SizedBox(width: 8),
-                _FilterChip(
+              ),
+              const SizedBox(width: 4),
+              Expanded(
+                child: _FilterChip(
                   label: 'Expired',
                   selected: _filter == _PlansFilter.expired,
                   color: Colors.grey,
                   onTap: () =>
                       setState(() => _filter = _PlansFilter.expired),
+                  fullWidth: true,
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
-        const SizedBox(height: 8),
+        const Divider(height: 1, color: AppColors.divider),
         Expanded(
           child: contractsAsync.when(
             loading: () =>
@@ -216,7 +244,7 @@ class _PlansTabState extends ConsumerState<_PlansTab>
 
 // ── Tab 2: Pause & Resume Requests ────────────────────────────────────────────
 
-enum _PauseResumeFilter { all, pending, active, history }
+enum _PauseResumeFilter { all, pending, active, rejected }
 
 sealed class _PauseResumeEntry {
   DateTime get createdAt;
@@ -283,14 +311,9 @@ class _PauseResumeTabState extends ConsumerState<_PauseResumeTab>
                 i.status == 'approved' && i.contractStatus == 'paused')
             .toList();
         fr = [];
-      case _PauseResumeFilter.history:
-        fp = pauseItems
-            .where((i) =>
-                i.status == 'rejected' ||
-                i.status == 'cancelled' ||
-                (i.status == 'approved' && i.contractStatus != 'paused'))
-            .toList();
-        fr = resumeItems.where((i) => i.status != 'pending').toList();
+      case _PauseResumeFilter.rejected:
+        fp = pauseItems.where((i) => i.status == 'rejected').toList();
+        fr = resumeItems.where((i) => i.status == 'rejected').toList();
     }
 
     return [
@@ -300,12 +323,15 @@ class _PauseResumeTabState extends ConsumerState<_PauseResumeTab>
   }
 
   void _openContract(BuildContext context, String contractId, String label) {
-    Navigator.of(context).push(MaterialPageRoute(
-      builder: (_) => AmcContractDetailsScreen(
+    PageSheet.show(
+      context,
+      title: label.isNotEmpty ? label : 'AMC Contract',
+      child: AmcContractDetailsScreen(
         contractId: contractId,
         initialPlanName: label,
+        inModal: true,
       ),
-    ));
+    );
   }
 
   @override
@@ -316,50 +342,61 @@ class _PauseResumeTabState extends ConsumerState<_PauseResumeTab>
     final resumeAsync = ref.watch(allAmcResumeRequestsProvider);
 
     return Column(
+      mainAxisSize: MainAxisSize.max,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        // Filter chips
+        // Filter tabs — equal width, fill full horizontal space
         Padding(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-          child: SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Row(
-              children: [
-                _FilterChip(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+          child: Row(
+            children: [
+              Expanded(
+                child: _FilterChip(
                   label: 'All',
                   selected: _filter == _PauseResumeFilter.all,
                   color: AppColors.primary,
+                  fullWidth: true,
                   onTap: () =>
                       setState(() => _filter = _PauseResumeFilter.all),
                 ),
-                const SizedBox(width: 8),
-                _FilterChip(
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _FilterChip(
                   label: 'Pending',
                   selected: _filter == _PauseResumeFilter.pending,
                   color: AppColors.warning,
+                  fullWidth: true,
                   onTap: () =>
                       setState(() => _filter = _PauseResumeFilter.pending),
                 ),
-                const SizedBox(width: 8),
-                _FilterChip(
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _FilterChip(
                   label: 'Active',
                   selected: _filter == _PauseResumeFilter.active,
                   color: const Color(0xFF2C7A7B),
+                  fullWidth: true,
                   onTap: () =>
                       setState(() => _filter = _PauseResumeFilter.active),
                 ),
-                const SizedBox(width: 8),
-                _FilterChip(
-                  label: 'History',
-                  selected: _filter == _PauseResumeFilter.history,
-                  color: AppColors.textSecondary,
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _FilterChip(
+                  label: 'Rejected',
+                  selected: _filter == _PauseResumeFilter.rejected,
+                  color: AppColors.error,
+                  fullWidth: true,
                   onTap: () =>
-                      setState(() => _filter = _PauseResumeFilter.history),
+                      setState(() => _filter = _PauseResumeFilter.rejected),
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
-        const SizedBox(height: 8),
+        const Divider(height: 1, color: AppColors.divider),
         Expanded(
           child: pauseAsync.when(
             loading: () =>
@@ -796,41 +833,62 @@ class _FilterChip extends StatelessWidget {
   final bool selected;
   final Color color;
   final VoidCallback onTap;
+  final bool fullWidth;
 
   const _FilterChip({
     required this.label,
     required this.selected,
     required this.color,
     required this.onTap,
+    this.fullWidth = false,
   });
 
   @override
   Widget build(BuildContext context) {
+    const selectedDark = Color(0xFF1A1A1A);
+    const selectedBg   = Color(0xFFF0F0F0);
+
+    final borderColor = selected
+        ? (fullWidth ? selectedDark : color)
+        : AppColors.border;
+    final bgColor = selected
+        ? (fullWidth ? selectedBg : color.withValues(alpha: 0.12))
+        : Colors.transparent;
+    final textColor = selected
+        ? (fullWidth ? selectedDark : color)
+        : AppColors.textSecondary;
+    final borderWidth = selected ? (fullWidth ? 2.0 : 1.5) : 1.0;
+
     return MouseRegion(
       cursor: SystemMouseCursors.click,
       child: GestureDetector(
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 150),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
-        decoration: BoxDecoration(
-          color: selected ? color.withValues(alpha: 0.12) : Colors.transparent,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(
-            color: selected ? color : AppColors.border,
-            width: selected ? 1.5 : 1.0,
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 150),
+          width: fullWidth ? double.infinity : null,
+          padding: EdgeInsets.symmetric(
+            horizontal: fullWidth ? 4 : 14,
+            vertical: 7,
           ),
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
-            fontSize: 12,
-            fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-            color: selected ? color : AppColors.textSecondary,
+          decoration: BoxDecoration(
+            color: bgColor,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: borderColor, width: borderWidth),
+          ),
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Text(
+              label,
+              textAlign: fullWidth ? TextAlign.center : TextAlign.start,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                color: textColor,
+              ),
+            ),
           ),
         ),
       ),
-    ),
     );
   }
 }
@@ -848,7 +906,7 @@ class _EmptyRequestsState extends StatelessWidget {
       _PauseResumeFilter.all => 'No pause or resume requests yet.',
       _PauseResumeFilter.pending => 'No pending requests.',
       _PauseResumeFilter.active => 'No active pauses.',
-      _PauseResumeFilter.history => 'No history yet.',
+      _PauseResumeFilter.rejected => 'No rejected requests.',
     };
     return Center(
       child: Padding(
@@ -1117,13 +1175,16 @@ class _AmcPlanCardState extends ConsumerState<_AmcPlanCard> {
   }
 
   void _openDetails(BuildContext context) {
-    Navigator.of(context).push(MaterialPageRoute(
-      builder: (_) => AmcContractDetailsScreen(
+    final label = _r.planName.isNotEmpty ? _r.planName : _r.serviceName;
+    PageSheet.show(
+      context,
+      title: label.isNotEmpty ? label : 'AMC Contract',
+      child: AmcContractDetailsScreen(
         contractId: _r.contractId,
-        initialPlanName:
-            _r.planName.isNotEmpty ? _r.planName : _r.serviceName,
+        initialPlanName: label,
+        inModal: true,
       ),
-    ));
+    );
   }
 
   static (Color, String) _statusMeta(String s) => switch (s) {
@@ -1177,7 +1238,7 @@ class _NextVisitRow extends StatelessWidget {
       final d = r.scheduledVisitDate!;
       final dateStr = '${d.day} ${months[d.month - 1]} ${d.year}';
       final timeStr = r.scheduledVisitTime?.isNotEmpty == true
-          ? ' · ${r.scheduledVisitTime}'
+          ? ' - ${r.scheduledVisitTime}'
           : '';
       return (Icons.calendar_month_rounded,
           'Next Visit: $dateStr$timeStr', AppColors.success, false);

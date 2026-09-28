@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../../core/constants/app_colors.dart';
@@ -991,7 +991,7 @@ class _DesktopListCard extends ConsumerWidget {
               mainAxisSize: MainAxisSize.min,
               children: [
                 _CardQtyBtn(
-                  label: '−',
+                  label: '-',
                   onTap: () => ref
                       .read(cartProvider.notifier)
                       .updateQuantity(cartItem.bookingId, qty - 1),
@@ -2166,7 +2166,7 @@ class _CartPanelItemState extends ConsumerState<_CartPanelItem> {
                             item.amcRecurrenceInterval!,
                           if (item.amcNumVisits != null)
                             '${item.amcNumVisits} visits',
-                        ].join(' · '),
+                        ].join(' - '),
                         style: GoogleFonts.inter(
                             fontSize: 10, color: _kTextMuted),
                       ),

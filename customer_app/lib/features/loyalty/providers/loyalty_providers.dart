@@ -3,14 +3,19 @@ import '../services/loyalty_service.dart';
 import '../models/loyalty_settings_model.dart';
 import '../models/customer_loyalty_model.dart';
 import '../models/loyalty_transaction_model.dart';
+import '../../auth/providers/auth_provider.dart';
 
 final _loyaltyService = LoyaltyService();
 
 final loyaltySettingsProvider =
     FutureProvider<LoyaltySettingsModel>((ref) => _loyaltyService.getSettings());
 
-final customerLoyaltyProvider =
-    FutureProvider<CustomerLoyaltyModel>((ref) => _loyaltyService.getCustomerLoyalty());
+// Watches auth state so the provider re-runs after login/logout, ensuring
+// loyalty points are fetched from the correct customer on mobile fresh sessions.
+final customerLoyaltyProvider = FutureProvider<CustomerLoyaltyModel>((ref) {
+  ref.watch(authNotifierProvider);
+  return _loyaltyService.getCustomerLoyalty();
+});
 
 final loyaltyTransactionsProvider =
     FutureProvider<List<LoyaltyTransactionModel>>(

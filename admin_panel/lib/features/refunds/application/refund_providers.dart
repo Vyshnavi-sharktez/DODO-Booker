@@ -21,6 +21,12 @@ final refundIssueCategoriesProvider =
 final refundStatusFilterProvider = StateProvider<String>((ref) => 'all');
 final refundSearchQueryProvider = StateProvider<String>((ref) => '');
 
+/// Tracks which refund ticket is currently open in the admin UI so that
+/// realtime message/status events can scope their invalidation to the
+/// visible detail dialog only. Set to non-null when a dialog opens,
+/// back to null on close.
+final selectedRefundRequestIdProvider = StateProvider<String?>((ref) => null);
+
 final refundRequestsProvider =
     FutureProvider<List<RefundRequest>>((ref) async {
   final statusFilter = ref.watch(refundStatusFilterProvider);

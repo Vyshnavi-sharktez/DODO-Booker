@@ -1,4 +1,4 @@
-import 'package:flutter/foundation.dart';
+﻿import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:uuid/uuid.dart';
 
@@ -176,7 +176,7 @@ class CatalogService {
     });
     // Notify all admins in real-time.
     final preview =
-        question.length > 80 ? '${question.substring(0, 80)}…' : question;
+        question.length > 80 ? '${question.substring(0, 80)}...' : question;
     final who = customerName?.isNotEmpty == true ? customerName! : 'A customer';
     await _db.from('notifications').insert({
       'user_type': 'admin',
@@ -215,7 +215,7 @@ class CatalogService {
       'status': 'pending',
     });
     final preview =
-        question.length > 80 ? '${question.substring(0, 80)}…' : question;
+        question.length > 80 ? '${question.substring(0, 80)}...' : question;
     final who = customerName?.isNotEmpty == true ? customerName! : 'A customer';
     final notifications = [
       {

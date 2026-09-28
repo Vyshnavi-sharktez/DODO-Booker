@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -7,34 +6,31 @@ import '../../features/auth/domain/entities/vendor_user.dart';
 import '../../features/auth/presentation/providers/auth_controller.dart';
 import '../../features/bookings/presentation/providers/bookings_provider.dart';
 import '../../features/dashboard/presentation/providers/dashboard_provider.dart';
+import '../../features/documents/presentation/providers/documents_provider.dart';
 import '../../features/notifications/presentation/providers/notifications_provider.dart';
+import '../../features/services/presentation/providers/services_provider.dart';
 import '../../features/subscription/presentation/providers/subscription_provider.dart';
+import '../../features/wallet/presentation/providers/wallet_provider.dart';
 
 /// Manages all Supabase Realtime subscriptions for the vendor app.
 ///
 /// Channels maintained:
-///   bookings      — PostgresChangeEvent.all    — invalidates booking + dashboard providers.
-///   notifications — PostgresChangeEvent.insert — invalidates vendorNotificationsProvider.
-///   settings      — PostgresChangeEvent.all    — invalidates subscriptionSettingsProvider.
-///   subscription  — PostgresChangeEvent.all    — invalidates mySubscriptionProvider
-///                   (scoped to the vendor's own vendor_subscriptions row).
+///   dodo-vendor-sync      — bookings (all events).
+///   dodo-vendor-settings  — settings (all events).
+///   dodo-vendor-sub-{id}  — vendor_subscriptions scoped to this vendor.
+///   dodo-vendor-notif-{id} — notifications INSERT scoped to this vendor.
+///   dodo-vendor-wallet-{id} — vendor_wallets + wallet_transactions scoped to this vendor.
+///   dodo-vendor-docs-{id}  — vendor_documents scoped to this vendor.
+///   dodo-vendor-catalog    — catalog_nodes (all events, no filter needed — vendor
+///                            browses the global catalog).
 ///
-/// Subscription permissions are snapshotted into vendor_subscriptions at
-/// purchase time.  Admin changes to subscription_plans do NOT affect active
-/// vendor subscriptions, so there is intentionally no channel watching
-/// subscription_plans.
+/// Note: this app uses custom phone auth, not Supabase Auth. The _authSub
+/// listener that previously watched Supabase Auth state changes was dead code
+/// (never fired) and has been removed to avoid confusion.
 ///
-/// The channel is created under the Supabase anon key (this app uses custom
-/// phone auth — there is no Supabase Auth session/JWT).  The `_authSub`
-/// listener handles JWT rotation / reconnection when Supabase Auth IS in use
-/// and is retained for future compatibility, but does not fire under the
-/// current custom-auth implementation.
-///
-/// Notifications channel lifecycle:
-///   vendorRealtimeSyncProvider calls ref.listen(currentVendorUserProvider, ...)
-///   with fireImmediately: true so the channel is created as soon as the
-///   vendor ID is known (including on the initial build if already logged in)
-///   and torn down on sign-out.
+/// Per-vendor channels (wallet, docs, notif, sub) are lifecycle-managed via
+/// ref.listen(currentVendorUserProvider) with fireImmediately:true.
+/// Same-value guards prevent channel churn on repeated emissions of the same ID.
 class VendorRealtimeSync {
   final Ref _ref;
   final SupabaseClient _client;
@@ -43,24 +39,20 @@ class VendorRealtimeSync {
   RealtimeChannel? _notifChannel;
   RealtimeChannel? _subscriptionChannel;
   RealtimeChannel? _settingsChannel;
-  StreamSubscription<AuthState>? _authSub;
+  RealtimeChannel? _walletChannel;
+  RealtimeChannel? _docsChannel;
+  RealtimeChannel? _catalogChannel;
+
+  // Same-value guards to prevent channel churn.
+  String? _activeNotifVendorId;
+  String? _activeWalletVendorId;
+  String? _activeDocsVendorId;
+  String? _activeSubVendorId;
 
   VendorRealtimeSync(this._ref, this._client) {
     _subscribeBookings();
     _subscribeSettings();
-    _authSub = _client.auth.onAuthStateChange.listen((data) {
-      final event = data.event;
-      if ((event == AuthChangeEvent.signedIn ||
-              event == AuthChangeEvent.initialSession ||
-              event == AuthChangeEvent.tokenRefreshed) &&
-          data.session != null) {
-        debugPrint('[DODO][VendorSync] auth=$event — re-subscribing channels');
-        _resubscribeBookings();
-        // Re-subscribe notifications with the vendor ID currently in state.
-        final vendorId = _ref.read(currentVendorUserProvider)?.id;
-        resubscribeNotifications(vendorId);
-      }
-    });
+    _subscribeCatalog();
   }
 
   // ── Bookings ────────────────────────────────────────────────────────────────
@@ -86,29 +78,14 @@ class VendorRealtimeSync {
     debugPrint('[DODO][VendorSync] bookings channel subscribed');
   }
 
-  void _resubscribeBookings() {
-    if (_bookingsChannel != null) {
-      _client.removeChannel(_bookingsChannel!);
-      _bookingsChannel = null;
-    }
-    _subscribeBookings();
-  }
-
   void _invalidateBookings() {
-    debugPrint('[DODO][VendorSync] invalidating vendorBookingsProvider + dashboardStatsProvider + vendorNotificationsProvider');
+    debugPrint('[DODO][VendorSync] invalidating vendorBookingsProvider + dashboardStatsProvider');
     _ref.invalidate(vendorBookingsProvider);
     _ref.invalidate(dashboardStatsProvider);
     _ref.invalidate(vendorNotificationsProvider);
   }
 
   // ── Settings ────────────────────────────────────────────────────────────────
-  //
-  // Listens for UPDATE events on the settings table so that when the admin
-  // changes subscription_enabled (or any other setting), the vendor app
-  // invalidates its cached settings immediately — no manual refresh needed.
-  //
-  // No filter is applied: settings changes are infrequent and global; any
-  // updated row should trigger a re-fetch of the subscription settings.
 
   void _subscribeSettings() {
     _settingsChannel = _client
@@ -118,22 +95,62 @@ class VendorRealtimeSync {
           schema: 'public',
           table: 'settings',
           callback: (payload) {
-            debugPrint(
-                '[DODO][VendorSync] settings ${payload.eventType} → '
+            debugPrint('[DODO][VendorSync] settings ${payload.eventType} → '
                 'invalidating subscriptionSettingsProvider');
             _ref.invalidate(subscriptionSettingsProvider);
           },
         )
         .subscribe((status, error) {
-          debugPrint(
-              '[DODO][VendorSync] settings channel status=$status error=$error');
+          debugPrint('[DODO][VendorSync] settings channel status=$status error=$error');
         });
     debugPrint('[DODO][VendorSync] settings channel subscribed');
+  }
+
+  // ── Global catalog (vendor browses global service catalog) ──────────────────
+  //
+  // No vendor_id filter — vendor browsing catalog_nodes is a global operation.
+  // When admin edits catalog nodes, the vendor's services list and trending
+  // services auto-update without requiring a pull-to-refresh.
+
+  void _subscribeCatalog() {
+    _catalogChannel = _client
+        .channel('dodo-vendor-catalog')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'catalog_nodes',
+          callback: (_) {
+            debugPrint('[DODO][VendorSync] catalog_nodes change → invalidating catalog + services providers');
+            _ref.invalidate(catalogServicesProvider);
+            _ref.invalidate(catalogParentMapProvider);
+            _ref.invalidate(vendorTrendingServicesProvider);
+          },
+        )
+        // Also watch amc_plans — when admin updates plan pricing/features,
+        // vendor's plan-browsing screen updates without a manual refresh.
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'amc_plans',
+          callback: (_) {
+            debugPrint('[DODO][VendorSync] amc_plans change → invalidating vendorServicesProvider');
+            // No dedicated AMC plans provider in vendor app; invalidate
+            // the general services provider as it includes plan metadata.
+            _ref.invalidate(catalogServicesProvider);
+          },
+        )
+        .subscribe((status, error) {
+          debugPrint('[DODO][VendorSync] catalog channel status=$status error=$error');
+        });
+    debugPrint('[DODO][VendorSync] catalog channel subscribed');
   }
 
   // ── Subscription ────────────────────────────────────────────────────────────
 
   void resubscribeSubscription(String? vendorId) {
+    if (vendorId == _activeSubVendorId) return;
+    _activeSubVendorId = vendorId;
+
     if (_subscriptionChannel != null) {
       _client.removeChannel(_subscriptionChannel!);
       _subscriptionChannel = null;
@@ -158,8 +175,7 @@ class VendorRealtimeSync {
           },
         )
         .subscribe((status, error) {
-          debugPrint(
-              '[DODO][VendorSync] subscription channel status=$status error=$error');
+          debugPrint('[DODO][VendorSync] subscription channel status=$status error=$error');
         });
     debugPrint('[DODO][VendorSync] subscription channel subscribed for vendor=$vendorId');
   }
@@ -167,6 +183,9 @@ class VendorRealtimeSync {
   // ── Notifications ───────────────────────────────────────────────────────────
 
   void resubscribeNotifications(String? vendorId) {
+    if (vendorId == _activeNotifVendorId) return;
+    _activeNotifVendorId = vendorId;
+
     if (_notifChannel != null) {
       _client.removeChannel(_notifChannel!);
       _notifChannel = null;
@@ -195,21 +214,121 @@ class VendorRealtimeSync {
     debugPrint('[DODO][VendorSync] notification channel subscribed for vendor=$vendorId');
   }
 
+  // ── Wallet + transactions ────────────────────────────────────────────────────
+  //
+  // Scoped to the vendor's own wallet rows. Admin top-up, transaction creation,
+  // and balance updates auto-refresh the vendor wallet screen.
+
+  void resubscribeWallet(String? vendorId) {
+    if (vendorId == _activeWalletVendorId) return;
+    _activeWalletVendorId = vendorId;
+
+    if (_walletChannel != null) {
+      _client.removeChannel(_walletChannel!);
+      _walletChannel = null;
+    }
+    if (vendorId == null) return;
+
+    _walletChannel = _client
+        .channel('dodo-vendor-wallet-$vendorId')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'vendor_wallets',
+          filter: PostgresChangeFilter(
+            type: PostgresChangeFilterType.eq,
+            column: 'vendor_id',
+            value: vendorId,
+          ),
+          callback: (_) {
+            debugPrint('[DODO][VendorSync] vendor_wallets change → invalidating walletProvider');
+            _ref.invalidate(walletProvider(vendorId));
+          },
+        )
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'wallet_transactions',
+          filter: PostgresChangeFilter(
+            type: PostgresChangeFilterType.eq,
+            column: 'vendor_id',
+            value: vendorId,
+          ),
+          callback: (_) {
+            debugPrint('[DODO][VendorSync] wallet_transactions change → invalidating walletTransactionsProvider');
+            _ref.invalidate(walletTransactionsProvider(vendorId));
+            // Also refresh wallet summary since balance may have changed.
+            _ref.invalidate(walletProvider(vendorId));
+          },
+        )
+        .subscribe((status, error) {
+          debugPrint('[DODO][VendorSync] wallet channel status=$status error=$error');
+        });
+    debugPrint('[DODO][VendorSync] wallet channel subscribed for vendor=$vendorId');
+  }
+
+  // ── Vendor documents ─────────────────────────────────────────────────────────
+  //
+  // Watches vendor_documents for this vendor so approval/rejection by admin
+  // is reflected immediately in the vendor's documents screen.
+
+  void resubscribeDocs(String? vendorId) {
+    if (vendorId == _activeDocsVendorId) return;
+    _activeDocsVendorId = vendorId;
+
+    if (_docsChannel != null) {
+      _client.removeChannel(_docsChannel!);
+      _docsChannel = null;
+    }
+    if (vendorId == null) return;
+
+    _docsChannel = _client
+        .channel('dodo-vendor-docs-$vendorId')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'vendor_documents',
+          filter: PostgresChangeFilter(
+            type: PostgresChangeFilterType.eq,
+            column: 'vendor_id',
+            value: vendorId,
+          ),
+          callback: (_) {
+            debugPrint('[DODO][VendorSync] vendor_documents change → invalidating vendorDocumentsProvider');
+            _ref.invalidate(vendorDocumentsProvider);
+          },
+        )
+        .subscribe((status, error) {
+          debugPrint('[DODO][VendorSync] docs channel status=$status error=$error');
+        });
+    debugPrint('[DODO][VendorSync] docs channel subscribed for vendor=$vendorId');
+  }
+
   // ── Lifecycle ───────────────────────────────────────────────────────────────
 
-  /// Called by the lifecycle observer on resume after an extended pause.
   void refetchAll() {
     _invalidateBookings();
     _ref.invalidate(subscriptionSettingsProvider);
     _ref.invalidate(mySubscriptionProvider);
+    _ref.invalidate(catalogServicesProvider);
+    _ref.invalidate(catalogParentMapProvider);
+    _ref.invalidate(vendorTrendingServicesProvider);
+    _ref.invalidate(vendorDocumentsProvider);
+    final vendorId = _activeWalletVendorId;
+    if (vendorId != null) {
+      _ref.invalidate(walletProvider(vendorId));
+      _ref.invalidate(walletTransactionsProvider(vendorId));
+    }
   }
 
   void dispose() {
-    _authSub?.cancel();
     if (_bookingsChannel != null) _client.removeChannel(_bookingsChannel!);
     if (_notifChannel != null) _client.removeChannel(_notifChannel!);
     if (_subscriptionChannel != null) _client.removeChannel(_subscriptionChannel!);
     if (_settingsChannel != null) _client.removeChannel(_settingsChannel!);
+    if (_walletChannel != null) _client.removeChannel(_walletChannel!);
+    if (_docsChannel != null) _client.removeChannel(_docsChannel!);
+    if (_catalogChannel != null) _client.removeChannel(_catalogChannel!);
   }
 }
 
@@ -217,15 +336,18 @@ final vendorRealtimeSyncProvider = Provider<VendorRealtimeSync>((ref) {
   final sync = VendorRealtimeSync(ref, Supabase.instance.client);
   ref.onDispose(sync.dispose);
 
-  // React to vendor user changes so the notification channel is created/destroyed
+  // React to vendor user changes so per-vendor channels are created/destroyed
   // at the right time. fireImmediately:true covers the case where the vendor is
-  // already authenticated when this provider first runs (e.g., hot-restart or
-  // if the provider is lazily initialised after session restore).
+  // already authenticated when this provider first runs (hot-restart or lazy
+  // initialisation after session restore). Same-value guards inside each
+  // resubscribe* method prevent churn on repeated emissions.
   ref.listen<VendorUser?>(
     currentVendorUserProvider,
     (_, user) {
       sync.resubscribeNotifications(user?.id);
       sync.resubscribeSubscription(user?.id);
+      sync.resubscribeWallet(user?.id);
+      sync.resubscribeDocs(user?.id);
     },
     fireImmediately: true,
   );

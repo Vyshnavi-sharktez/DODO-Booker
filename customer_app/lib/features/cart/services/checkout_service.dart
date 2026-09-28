@@ -427,19 +427,25 @@ class CheckoutService {
     }
 
     // ── Admin notification ────────────────────────────────────────────────────
-    try {
-      await _client.from('notifications').insert({
-        'user_type': 'admin',
-        'user_id': null,
-        'title': 'New Booking Received',
-        'message': 'A new booking has been created.',
-        'notification_type': 'booking_created',
-        'is_read': false,
-        'entity_type': 'booking',
-        'entity_id': bookingId,
-      });
-    } catch (e) {
-      debugPrint('[DODO][Checkout] Warning: admin notification failed (non-fatal): $e');
+    // The DB trigger fn_notify_admin_new_booking fires on INSERT with status='pending'
+    // and creates a richer notification (customer name, booking #, amount).
+    // Only send the Dart notification for non-pending bookings (e.g. preferred-vendor
+    // bookings inserted as 'assigned') where the trigger does not fire.
+    if (bookingData['status'] != 'pending') {
+      try {
+        await _client.from('notifications').insert({
+          'user_type': 'admin',
+          'user_id': null,
+          'title': 'New Booking Received',
+          'message': 'A new booking has been created.',
+          'notification_type': 'booking_created',
+          'is_read': false,
+          'entity_type': 'booking',
+          'entity_id': bookingId,
+        });
+      } catch (e) {
+        debugPrint('[DODO][Checkout] Warning: admin notification failed (non-fatal): $e');
+      }
     }
 
     // ── Customer notification ─────────────────────────────────────────────────

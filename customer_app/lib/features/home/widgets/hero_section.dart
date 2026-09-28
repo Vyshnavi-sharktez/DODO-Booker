@@ -1,4 +1,4 @@
-import 'dart:async';
+﻿import 'dart:async';
 import 'dart:ui' show ImageFilter;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -44,9 +44,9 @@ extension _CheckStateX on _CheckState {
       case _CheckState.noLocationEntered:
         return 'Continue';
       case _CheckState.gettingLocation:
-        return 'Getting location…';
+        return 'Getting location...';
       case _CheckState.checkingAvailability:
-        return 'Checking…';
+        return 'Checking...';
       case _CheckState.serviceable:
         return 'We serve your area!';
       default:
@@ -59,9 +59,9 @@ extension _CheckStateX on _CheckState {
       case _CheckState.idle:
         return 'Get Started';
       case _CheckState.gettingLocation:
-        return 'Getting location…';
+        return 'Getting location...';
       case _CheckState.checkingAvailability:
-        return 'Checking availability…';
+        return 'Checking availability...';
       case _CheckState.serviceable:
         return 'We serve your area!';
       default:
@@ -988,7 +988,7 @@ class _LocationPickerSheetState extends State<_LocationPickerSheet> {
                       color: AppColors.textPrimary,
                     ),
                     decoration: InputDecoration(
-                      hintText: 'Search city, area or address…',
+                      hintText: 'Search city, area or address...',
                       hintStyle: GoogleFonts.inter(
                         fontSize: 14,
                         color: AppColors.textHint,

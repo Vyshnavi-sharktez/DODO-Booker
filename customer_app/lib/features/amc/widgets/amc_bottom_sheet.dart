@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import '../../../core/constants/app_colors.dart';
 import '../models/amc_plan_model.dart';
 
@@ -426,7 +426,7 @@ class _PlanCard extends StatelessWidget {
                                       ),
                                       const SizedBox(width: 4),
                                       Text(
-                                        '${plan.serviceIntervalLabel} · ${plan.packageDurationLabel}',
+                                        '${plan.serviceIntervalLabel} - ${plan.packageDurationLabel}',
                                         style: const TextStyle(
                                           fontSize: 12,
                                           color: AppColors.textSecondary,

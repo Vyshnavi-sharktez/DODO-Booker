@@ -31,11 +31,21 @@ class _RefundDetailDialogState extends ConsumerState<RefundDetailDialog>
   void initState() {
     super.initState();
     _tabs = TabController(length: 4, vsync: this);
+    // Register this ticket as the currently-open one so realtime message
+    // events can scope their invalidation to this dialog only.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        ref.read(selectedRefundRequestIdProvider.notifier).state =
+            widget.requestId;
+      }
+    });
   }
 
   @override
   void dispose() {
     _tabs.dispose();
+    // Clear the open-ticket pointer so realtime events stop targeting this dialog.
+    ref.read(selectedRefundRequestIdProvider.notifier).state = null;
     super.dispose();
   }
 

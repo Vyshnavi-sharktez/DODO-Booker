@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/widgets/page_sheet.dart';
 import '../../../routes/app_router.dart';
 import '../../auth/providers/auth_provider.dart';
+import '../../../features/home/services/home_providers.dart';
 import '../services/profile_providers.dart';
 import 'appearance_screen.dart';
 import 'about_screen.dart';
@@ -364,6 +365,7 @@ class _LogoutCardState extends ConsumerState<_LogoutCard> {
               await ref.read(authServiceProvider).signOut();
               ref.read(authNotifierProvider.notifier).setAuthenticated(false);
               ref.invalidate(profileProvider);
+              ref.read(mobileServicesUnlockedProvider.notifier).state = false;
               if (!mounted) return;
               setState(() => _loading = false);
               router.go(AppRoutes.home);

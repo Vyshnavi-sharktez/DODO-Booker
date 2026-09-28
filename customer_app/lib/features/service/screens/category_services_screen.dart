@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../models/category_model.dart';
@@ -86,7 +86,7 @@ class _CategoryServicesScreenState
             child: TextField(
               controller: _search,
               decoration: InputDecoration(
-                hintText: 'Search in ${widget.category.name}…',
+                hintText: 'Search in ${widget.category.name}...',
                 prefixIcon: const Icon(Icons.search_rounded),
                 suffixIcon: _query.isNotEmpty
                     ? IconButton(

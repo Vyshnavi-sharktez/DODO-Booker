@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/constants/app_colors.dart';
 import '../models/amc_plan_model.dart';
@@ -221,7 +221,7 @@ class _AmcSectionBodyState extends State<_AmcSectionBody> {
                                   const SizedBox(width: 5),
                                 ],
                                 Text(
-                                  '₹${selectedPlan.finalPrice % 1 == 0 ? selectedPlan.finalPrice.toInt() : selectedPlan.finalPrice.toStringAsFixed(2)} · ${selectedPlan.numVisits} visits',
+                                  '₹${selectedPlan.finalPrice % 1 == 0 ? selectedPlan.finalPrice.toInt() : selectedPlan.finalPrice.toStringAsFixed(2)} - ${selectedPlan.numVisits} visits',
                                   style: TextStyle(
                                     fontSize: 11,
                                     color: AppColors.success.withValues(alpha: 0.85),

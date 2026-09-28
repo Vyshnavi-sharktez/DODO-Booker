@@ -3,8 +3,14 @@
 // DODO Booker service worker.
 // A fetch handler is required for Chrome PWA installability (beforeinstallprompt).
 // Strategy: network-first, falling back to cache for GET requests.
+//
+// Cache version is injected via the SW registration URL query param (?v=<version>),
+// which index.html reads from Flutter's generated version.json at registration time.
+// Bumping pubspec.yaml version triggers a new cache name on the next deploy,
+// and the activate handler below removes all caches from previous versions.
 
-const CACHE = 'dodo-booker-v1';
+const _swVersion = new URL(self.location.href).searchParams.get('v') || 'dev';
+const CACHE = 'dodo-booker-' + _swVersion;
 
 // App shell files to pre-cache on install.
 const PRECACHE_URLS = [

@@ -997,17 +997,9 @@ class _AmcSchedulingRequestsPageState
                               _StatusFilterChip(
                                 label: 'Rejected',
                                 selected: _pauseFilter == 'rejected',
-                                color: AppColors.textSecondary,
+                                color: AppColors.error,
                                 onTap: () =>
                                     setState(() => _pauseFilter = 'rejected'),
-                              ),
-                              const SizedBox(width: 8),
-                              _StatusFilterChip(
-                                label: 'Cancelled',
-                                selected: _pauseFilter == 'cancelled',
-                                color: AppColors.textSecondary,
-                                onTap: () =>
-                                    setState(() => _pauseFilter = 'cancelled'),
                               ),
                               const SizedBox(width: 8),
                               _StatusFilterChip(
@@ -1045,17 +1037,9 @@ class _AmcSchedulingRequestsPageState
                               _StatusFilterChip(
                                 label: 'Rejected',
                                 selected: _resumeFilter == 'rejected',
-                                color: AppColors.textSecondary,
+                                color: AppColors.error,
                                 onTap: () =>
                                     setState(() => _resumeFilter = 'rejected'),
-                              ),
-                              const SizedBox(width: 8),
-                              _StatusFilterChip(
-                                label: 'Cancelled',
-                                selected: _resumeFilter == 'cancelled',
-                                color: AppColors.textSecondary,
-                                onTap: () =>
-                                    setState(() => _resumeFilter = 'cancelled'),
                               ),
                               const SizedBox(width: 8),
                               _StatusFilterChip(

@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 
@@ -242,7 +242,7 @@ class _QuestionSheetState extends State<_QuestionSheet> {
             maxLines: 3,
             autofocus: true,
             decoration: InputDecoration(
-              hintText: 'Type your question here…',
+              hintText: 'Type your question here...',
               hintStyle: const TextStyle(color: AppColors.textHint),
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),

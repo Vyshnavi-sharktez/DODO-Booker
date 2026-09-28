@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/widgets/app_modal_dialog.dart';
@@ -173,7 +173,7 @@ class _ReviewForm extends StatelessWidget {
           maxLines: 4,
           maxLength: 500,
           decoration: const InputDecoration(
-            hintText: 'Share your experience…',
+            hintText: 'Share your experience...',
             counterText: '',
           ),
         ),

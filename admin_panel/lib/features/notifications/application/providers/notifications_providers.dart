@@ -45,6 +45,41 @@ class NotificationsNotifier
     state = AsyncValue.data([created, ...current]);
   }
 
+  // ── Realtime payload handlers (no DB round-trip, no stale-read race) ───────
+
+  void applyRealtimeInsert(Map<String, dynamic> record) {
+    if ((record['user_type'] as String?) != 'admin') return;
+    final inserted = AppNotification.fromMap(record);
+    final current = state.valueOrNull;
+    if (current == null) {
+      _load();
+      return;
+    }
+    if (current.any((n) => n.id == inserted.id)) return;
+    state = AsyncValue.data([inserted, ...current]);
+  }
+
+  void applyRealtimeUpdate(Map<String, dynamic> record) {
+    final id = record['id'] as String?;
+    if (id == null) return;
+    final current = state.valueOrNull;
+    if (current == null) return;
+    final idx = current.indexWhere((n) => n.id == id);
+    if (idx == -1) return;
+    final updated = AppNotification.fromMap(record);
+    final newList = List<AppNotification>.from(current);
+    newList[idx] = updated;
+    state = AsyncValue.data(newList);
+  }
+
+  void applyRealtimeDelete(String id) {
+    final current = state.valueOrNull;
+    if (current == null) return;
+    state = AsyncValue.data(current.where((n) => n.id != id).toList());
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────────
+
   Future<void> toggleRead(String id, {required bool currentIsRead}) async {
     final newIsRead = !currentIsRead;
     final current = state.valueOrNull;

@@ -1,4 +1,4 @@
-import 'dart:async';
+﻿import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -34,7 +34,7 @@ class _OtpVerificationModalState extends ConsumerState<OtpVerificationModal> {
   String get _maskedPhone {
     final digits = widget.phone.replaceAll(RegExp(r'^\+91'), '');
     if (digits.length >= 10) {
-      return '+91 ·····${digits.substring(digits.length - 5)}';
+      return '+91 -----${digits.substring(digits.length - 5)}';
     }
     return widget.phone;
   }
