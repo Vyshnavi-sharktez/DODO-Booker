@@ -285,7 +285,10 @@ class MyBookingModel {
 
     // ── Time slot from notes: "Service Name - 10:00 AM" or just the slot ─
     final timeSlot =
-        (json['time_slot'] as String?) ?? _timeSlotFromNotes(notes) ?? '';
+        (json['time_slot'] as String?) ??
+        (json['scheduled_time'] as String?) ??
+        _timeSlotFromNotes(notes) ??
+        '';
 
     // ── Address from text column ──────────────────────────────────────────
     final rawAddress = json['address'];
