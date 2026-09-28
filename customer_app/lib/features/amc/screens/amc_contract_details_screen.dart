@@ -284,7 +284,15 @@ class _AmcContractDetailsScreenState
                   Expanded(
                     child: OutlinedButton(
                       onPressed: () => Navigator.of(ctx).pop(false),
-                      child: const Text('Cancel'),
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 10),
+                      ),
+                      child: const Text(
+                        'Cancel',
+                        style: TextStyle(fontSize: 12),
+                        maxLines: 1,
+                      ),
                     ),
                   ),
                   const SizedBox(width: 12),
@@ -300,8 +308,15 @@ class _AmcContractDetailsScreenState
                             WidgetStateProperty.all(Colors.white),
                         overlayColor: WidgetStateProperty.all(
                             Colors.white.withValues(alpha: 0.12)),
+                        padding: WidgetStateProperty.all(
+                            const EdgeInsets.symmetric(
+                                horizontal: 8, vertical: 10)),
                       ),
-                      child: const Text('Submit Request'),
+                      child: const Text(
+                        'Submit Request',
+                        style: TextStyle(fontSize: 12),
+                        maxLines: 1,
+                      ),
                     ),
                   ),
                 ],
@@ -531,16 +546,35 @@ class _AmcContractDetailsScreenState
             ),
           ],
         ),
+        actionsPadding: EdgeInsets.zero,
         actions: [
-          TextButton(
-            onPressed: () => Navigator.of(dlgCtx).pop(false),
-            child: const Text('Go Back'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(dlgCtx).pop(true),
-            style: FilledButton.styleFrom(
-                backgroundColor: const Color(0xFF3182CE)),
-            child: const Text('Submit Request'),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+            child: Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: () => Navigator.of(dlgCtx).pop(false),
+                    style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 10)),
+                    child: const Text('Go Back',
+                        style: TextStyle(fontSize: 12)),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: FilledButton(
+                    onPressed: () => Navigator.of(dlgCtx).pop(true),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: const Color(0xFF3182CE),
+                      padding: const EdgeInsets.symmetric(vertical: 10),
+                    ),
+                    child: const Text('Submit Request',
+                        style: TextStyle(fontSize: 12)),
+                  ),
+                ),
+              ],
+            ),
           ),
         ],
       ),
@@ -638,19 +672,38 @@ class _AmcContractDetailsScreenState
               ),
             ],
           ),
+          actionsPadding: EdgeInsets.zero,
           actions: [
-            TextButton(
-              onPressed: () => Navigator.of(ctx).pop(false),
-              child: const Text('Keep Membership'),
-            ),
-            FilledButton(
-              onPressed: selectedReason == null
-                  ? null
-                  : () => Navigator.of(ctx).pop(true),
-              style: FilledButton.styleFrom(
-                  backgroundColor: AppColors.error,
-                  foregroundColor: Colors.white),
-              child: const Text('Submit Request'),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: () => Navigator.of(ctx).pop(false),
+                      style: OutlinedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 10)),
+                      child: const Text('Keep Membership',
+                          style: TextStyle(fontSize: 12)),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: FilledButton(
+                      onPressed: selectedReason == null
+                          ? null
+                          : () => Navigator.of(ctx).pop(true),
+                      style: FilledButton.styleFrom(
+                        backgroundColor: AppColors.error,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 10),
+                      ),
+                      child: const Text('Submit Request',
+                          style: TextStyle(fontSize: 12)),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ],
         ),
@@ -716,7 +769,7 @@ class _AmcContractDetailsScreenState
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 500),
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(24, 20, 24, 20),
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -724,12 +777,12 @@ class _AmcContractDetailsScreenState
                   const Text(
                     'Pause Membership',
                     style: TextStyle(
-                      fontSize: 17,
+                      fontSize: 15,
                       fontWeight: FontWeight.w700,
                       color: AppColors.textPrimary,
                     ),
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 8),
                   Text(
                     'Your pause request will be reviewed by our team. '
                     'Scheduling will be disabled once approved.',
@@ -738,10 +791,10 @@ class _AmcContractDetailsScreenState
                         .bodySmall
                         ?.copyWith(color: AppColors.textSecondary),
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 10),
                   TextField(
                     controller: reasonCtrl,
-                    maxLines: 3,
+                    maxLines: 2,
                     maxLength: 300,
                     textCapitalization: TextCapitalization.sentences,
                     onChanged: (_) {
@@ -759,15 +812,20 @@ class _AmcContractDetailsScreenState
                       errorText: errorText,
                     ),
                   ),
-                  const SizedBox(height: 20),
+                  const SizedBox(height: 12),
                   Row(
                     children: [
                       Expanded(
                         child: OutlinedButton(
                           onPressed: () => Navigator.of(ctx).pop(false),
+                          style: OutlinedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 8, vertical: 10),
+                          ),
                           child: const Text(
                             'Cancel',
-                            style: TextStyle(fontSize: 13),
+                            style: TextStyle(fontSize: 12),
+                            maxLines: 1,
                           ),
                         ),
                       ),
@@ -783,11 +841,15 @@ class _AmcContractDetailsScreenState
                             Navigator.of(ctx).pop(true);
                           },
                           style: FilledButton.styleFrom(
-                              backgroundColor: Colors.black,
-                              foregroundColor: Colors.white),
+                            backgroundColor: Colors.black,
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 8, vertical: 10),
+                          ),
                           child: const Text(
                             'Submit Request',
-                            style: TextStyle(fontSize: 13),
+                            style: TextStyle(fontSize: 12),
+                            maxLines: 1,
                           ),
                         ),
                       ),

@@ -20,7 +20,7 @@ Future<String?> showActiveAmcDialog(
       return AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         contentPadding: const EdgeInsets.fromLTRB(24, 20, 24, 0),
-        actionsPadding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+        actionsPadding: EdgeInsets.zero,
         title: Row(
           children: [
             Container(
@@ -55,19 +55,45 @@ Future<String?> showActiveAmcDialog(
             const SizedBox(height: 16),
           ],
         ),
-        actionsAlignment: MainAxisAlignment.end,
         actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(null),
-            child: const Text('Close'),
-          ),
-          OutlinedButton(
-            onPressed: () => Navigator.of(ctx).pop('view'),
-            child: const Text('View AMC'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(ctx).pop('schedule'),
-            child: const Text('Schedule Next Visit'),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: () => Navigator.of(ctx).pop('view'),
+                        style: OutlinedButton.styleFrom(
+                            padding:
+                                const EdgeInsets.symmetric(vertical: 10)),
+                        child: const Text('View AMC',
+                            style: TextStyle(fontSize: 12)),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: FilledButton(
+                        onPressed: () => Navigator.of(ctx).pop('schedule'),
+                        style: FilledButton.styleFrom(
+                            padding:
+                                const EdgeInsets.symmetric(vertical: 10)),
+                        child: const Text('Schedule Visit',
+                            style: TextStyle(fontSize: 12)),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                TextButton(
+                  onPressed: () => Navigator.of(ctx).pop(null),
+                  child: const Text('Close',
+                      style: TextStyle(fontSize: 12)),
+                ),
+              ],
+            ),
           ),
         ],
       );
