@@ -297,11 +297,11 @@ class _ServiceCard extends StatelessWidget {
                           width: 26,
                           height: 26,
                           decoration: const BoxDecoration(
-                            color: AppColors.gold,
+                            color: Colors.black,
                             shape: BoxShape.circle,
                           ),
                           child: const Icon(Icons.arrow_forward_rounded,
-                              size: 14, color: Color(0xFF1A1714)),
+                              size: 14, color: Colors.white),
                         ),
                       ],
                     ),

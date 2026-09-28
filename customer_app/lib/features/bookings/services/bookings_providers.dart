@@ -3,14 +3,17 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'bookings_service.dart';
 import '../../../models/my_booking_model.dart';
 import '../../amc/models/amc_contract_summary.dart';
+import '../../auth/providers/auth_provider.dart';
 
 final bookingsServiceProvider = Provider<BookingsService>(
   (ref) => BookingsService(),
 );
 
-final myBookingsProvider = FutureProvider<List<MyBookingModel>>(
-  (ref) => ref.read(bookingsServiceProvider).fetchMyBookings(),
-);
+final myBookingsProvider = FutureProvider<List<MyBookingModel>>((ref) async {
+  final isAuth = ref.watch(isAuthenticatedProvider);
+  if (!isAuth) return [];
+  return ref.read(bookingsServiceProvider).fetchMyBookings();
+});
 
 final bookingByIdProvider =
     FutureProvider.family<MyBookingModel?, String>(

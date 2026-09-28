@@ -3,8 +3,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../../core/constants/app_colors.dart';
+import '../../../core/widgets/app_modal_dialog.dart';
 import '../../../core/widgets/nav_search.dart';
 import '../../auth/providers/auth_provider.dart';
+import '../../notifications/services/notification_providers.dart';
+import '../../notifications/widgets/notifications_modal.dart';
 import '../../booking/services/coupon_providers.dart';
 import '../../loyalty/providers/loyalty_providers.dart';
 import '../../profile/services/profile_providers.dart';
@@ -175,6 +178,7 @@ class _MobileHomeGreeting extends ConsumerWidget {
     final points = ref.watch(customerLoyaltyProvider).whenOrNull(
           data: (l) => l.availablePoints,
         );
+    final unread = ref.watch(unreadCountProvider);
 
     String firstName = '';
     profileAsync.whenData((p) {
@@ -199,6 +203,57 @@ class _MobileHomeGreeting extends ConsumerWidget {
             ),
           ),
           if (isAuth) ...[
+            GestureDetector(
+              onTap: () => AppModalDialog.show(
+                context: context,
+                child: const NotificationsModal(),
+              ),
+              child: Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF1A1A2E),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(
+                        color: const Color(0xFFFFD700).withAlpha(100),
+                        width: 0.8,
+                      ),
+                    ),
+                    child: const Icon(
+                      Icons.notifications_outlined,
+                      size: 14,
+                      color: Color(0xFFFFD700),
+                    ),
+                  ),
+                  if (unread > 0)
+                    Positioned(
+                      top: -2,
+                      right: -2,
+                      child: Container(
+                        width: 13,
+                        height: 13,
+                        decoration: const BoxDecoration(
+                          color: Color(0xFFE53935),
+                          shape: BoxShape.circle,
+                        ),
+                        alignment: Alignment.center,
+                        child: Text(
+                          unread > 9 ? '9+' : '$unread',
+                          style: const TextStyle(
+                            fontSize: 7,
+                            color: Colors.white,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 6),
             GestureDetector(
               onTap: () => context.push('/wishlist'),
               child: Container(

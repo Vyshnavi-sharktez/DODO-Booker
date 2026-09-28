@@ -373,14 +373,14 @@ class _ServiceTileState extends State<_ServiceTile> {
                 duration: const Duration(milliseconds: 180),
                 width: 34,
                 height: 34,
-                decoration: BoxDecoration(
-                  color: _hovered ? AppColors.gold : AppColors.goldLight,
+                decoration: const BoxDecoration(
+                  color: Colors.black,
                   shape: BoxShape.circle,
                 ),
-                child: Icon(
+                child: const Icon(
                   Icons.arrow_forward_rounded,
                   size: 17,
-                  color: _hovered ? Colors.black : AppColors.gold,
+                  color: Colors.white,
                 ),
               ),
             ],

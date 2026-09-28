@@ -765,7 +765,10 @@ class _AmcContractDetailsScreenState
                       Expanded(
                         child: OutlinedButton(
                           onPressed: () => Navigator.of(ctx).pop(false),
-                          child: const Text('Cancel'),
+                          child: const Text(
+                            'Cancel',
+                            style: TextStyle(fontSize: 13),
+                          ),
                         ),
                       ),
                       const SizedBox(width: 12),
@@ -782,7 +785,10 @@ class _AmcContractDetailsScreenState
                           style: FilledButton.styleFrom(
                               backgroundColor: Colors.black,
                               foregroundColor: Colors.white),
-                          child: const Text('Submit Request'),
+                          child: const Text(
+                            'Submit Request',
+                            style: TextStyle(fontSize: 13),
+                          ),
                         ),
                       ),
                     ],
@@ -837,26 +843,67 @@ class _AmcContractDetailsScreenState
 
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
+      builder: (ctx) => Dialog(
         shape:
             RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text('Cancel Pause Request'),
-        content: const Text(
-          'Cancel your pause request?\n\n'
-          'Your membership will remain active.',
+        insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 400),
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Cancel Pause Request',
+                  style: Theme.of(ctx).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                ),
+                const SizedBox(height: 10),
+                const Text(
+                  'Cancel your pause request?\n'
+                  'Your membership will remain active.',
+                  style: TextStyle(fontSize: 13),
+                ),
+                const SizedBox(height: 20),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: () => Navigator.of(ctx).pop(false),
+                        style: OutlinedButton.styleFrom(
+                          padding:
+                              const EdgeInsets.symmetric(vertical: 10),
+                        ),
+                        child: const Text(
+                          'Keep Request',
+                          style: TextStyle(fontSize: 13),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: FilledButton(
+                        onPressed: () => Navigator.of(ctx).pop(true),
+                        style: FilledButton.styleFrom(
+                          backgroundColor: AppColors.error,
+                          padding:
+                              const EdgeInsets.symmetric(vertical: 10),
+                        ),
+                        child: const Text(
+                          'Cancel Request',
+                          style: TextStyle(fontSize: 13),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(false),
-            child: const Text('Keep Request'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(ctx).pop(true),
-            style: FilledButton.styleFrom(
-                backgroundColor: AppColors.error),
-            child: const Text('Cancel Request'),
-          ),
-        ],
       ),
     );
     if (confirmed != true || !mounted) return;
@@ -942,9 +989,12 @@ class _AmcContractDetailsScreenState
                         onPressed: () => Navigator.of(ctx).pop(false),
                         style: OutlinedButton.styleFrom(
                           padding:
-                              const EdgeInsets.symmetric(vertical: 14),
+                              const EdgeInsets.symmetric(vertical: 12),
                         ),
-                        child: const Text('Cancel'),
+                        child: const Text(
+                          'Cancel',
+                          style: TextStyle(fontSize: 13),
+                        ),
                       ),
                     ),
                     const SizedBox(width: 10),
@@ -955,9 +1005,12 @@ class _AmcContractDetailsScreenState
                           backgroundColor: Colors.black,
                           foregroundColor: Colors.white,
                           padding:
-                              const EdgeInsets.symmetric(vertical: 14),
+                              const EdgeInsets.symmetric(vertical: 12),
                         ),
-                        child: const Text('Submit Request'),
+                        child: const Text(
+                          'Submit Request',
+                          style: TextStyle(fontSize: 13),
+                        ),
                       ),
                     ),
                   ],
@@ -1011,26 +1064,67 @@ class _AmcContractDetailsScreenState
 
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
+      builder: (ctx) => Dialog(
         shape:
             RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text('Cancel Resume Request'),
-        content: const Text(
-          'Cancel your resume request?\n\n'
-          'Your membership will remain paused.',
+        insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 400),
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Cancel Resume Request',
+                  style: Theme.of(ctx).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                ),
+                const SizedBox(height: 10),
+                const Text(
+                  'Cancel your resume request?\n'
+                  'Your membership will remain paused.',
+                  style: TextStyle(fontSize: 13),
+                ),
+                const SizedBox(height: 20),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: () => Navigator.of(ctx).pop(false),
+                        style: OutlinedButton.styleFrom(
+                          padding:
+                              const EdgeInsets.symmetric(vertical: 10),
+                        ),
+                        child: const Text(
+                          'Keep Request',
+                          style: TextStyle(fontSize: 13),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: FilledButton(
+                        onPressed: () => Navigator.of(ctx).pop(true),
+                        style: FilledButton.styleFrom(
+                          backgroundColor: AppColors.error,
+                          padding:
+                              const EdgeInsets.symmetric(vertical: 10),
+                        ),
+                        child: const Text(
+                          'Cancel Request',
+                          style: TextStyle(fontSize: 13),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(false),
-            child: const Text('Keep Request'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(ctx).pop(true),
-            style: FilledButton.styleFrom(
-                backgroundColor: AppColors.error),
-            child: const Text('Cancel Request'),
-          ),
-        ],
       ),
     );
     if (confirmed != true || !mounted) return;
@@ -1191,16 +1285,19 @@ class _ActionBar extends StatelessWidget {
                     onPressed: cancelling ? null : onCancel,
                     icon: cancelling
                         ? const SizedBox(
-                            width: 14,
-                            height: 14,
+                            width: 12,
+                            height: 12,
                             child: CircularProgressIndicator(strokeWidth: 1.5),
                           )
-                        : const Icon(Icons.cancel_outlined, size: 16),
-                    label: const Text('Cancel Membership'),
+                        : const Icon(Icons.cancel_outlined, size: 14),
+                    label: const Text(
+                      'Cancel Membership',
+                      style: TextStyle(fontSize: 12),
+                    ),
                     style: OutlinedButton.styleFrom(
                       foregroundColor: AppColors.error,
                       side: const BorderSide(color: AppColors.error),
-                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      padding: const EdgeInsets.symmetric(vertical: 8),
                     ),
                   ),
                 ),
@@ -1212,36 +1309,42 @@ class _ActionBar extends StatelessWidget {
                               cancellingRequest ? null : onCancelRequest,
                           icon: cancellingRequest
                               ? const SizedBox(
-                                  width: 14,
-                                  height: 14,
+                                  width: 12,
+                                  height: 12,
                                   child: CircularProgressIndicator(
                                       strokeWidth: 1.5),
                                 )
-                              : const Icon(Icons.close_rounded, size: 16),
-                          label: const Text('Cancel Request'),
+                              : const Icon(Icons.close_rounded, size: 14),
+                          label: const Text(
+                            'Cancel Request',
+                            style: TextStyle(fontSize: 12),
+                          ),
                           style: OutlinedButton.styleFrom(
                             foregroundColor: AppColors.error,
                             side: const BorderSide(color: AppColors.error),
                             padding:
-                                const EdgeInsets.symmetric(vertical: 14),
+                                const EdgeInsets.symmetric(vertical: 8),
                           ),
                         )
                       : FilledButton.icon(
                           onPressed: requesting ? null : onRequest,
                           icon: requesting
                               ? const SizedBox(
-                                  width: 14,
-                                  height: 14,
+                                  width: 12,
+                                  height: 12,
                                   child: CircularProgressIndicator(
                                       strokeWidth: 1.5,
                                       color: Colors.white),
                                 )
                               : const Icon(Icons.schedule_send_rounded,
-                                  size: 16),
-                          label: const Text('Request Next Visit'),
+                                  size: 14),
+                          label: const Text(
+                            'Request Next Visit',
+                            style: TextStyle(fontSize: 12),
+                          ),
                           style: FilledButton.styleFrom(
                             padding:
-                                const EdgeInsets.symmetric(vertical: 14),
+                                const EdgeInsets.symmetric(vertical: 8),
                           ),
                         ),
                 ),

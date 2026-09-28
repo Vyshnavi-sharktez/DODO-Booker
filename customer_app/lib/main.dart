@@ -6,6 +6,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'app.dart';
 import 'core/config/supabase_config.dart';
 import 'core/theme/theme_provider.dart';
+import 'features/home/services/home_providers.dart';
 
 void main() async {
   usePathUrlStrategy();
@@ -15,6 +16,7 @@ void main() async {
   final savedTheme = prefs.getString('dodo_theme_mode');
   final initialTheme =
       savedTheme == 'dark' ? ThemeMode.dark : ThemeMode.light;
+  final isLoggedIn = prefs.getString('dodo_auth_phone') != null;
 
   await Supabase.initialize(
     url: SupabaseConfig.supabaseUrl,
@@ -26,6 +28,7 @@ void main() async {
     ProviderScope(
       overrides: [
         themeProvider.overrideWith((ref) => ThemeNotifier(initialTheme)),
+        mobileServicesUnlockedProvider.overrideWith((ref) => isLoggedIn),
       ],
       child: const App(),
     ),

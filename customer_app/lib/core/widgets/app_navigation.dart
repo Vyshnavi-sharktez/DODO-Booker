@@ -2,9 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
-import '../constants/app_colors.dart';
 import 'app_header.dart';
-import '../../features/auth/services/auth_service.dart';
 import '../../features/home/screens/home_screen.dart';
 import '../../features/home/services/home_providers.dart';
 import '../../features/home/widgets/hero_section.dart';
@@ -22,19 +20,6 @@ class AppNavigation extends ConsumerStatefulWidget {
 
 class _AppNavigationState extends ConsumerState<AppNavigation> {
   bool _scrolled = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _autoUnlockIfLoggedIn();
-  }
-
-  Future<void> _autoUnlockIfLoggedIn() async {
-    final authed = await AuthService().isAuthenticated();
-    if (authed && mounted) {
-      ref.read(mobileServicesUnlockedProvider.notifier).state = true;
-    }
-  }
 
   bool _onScroll(ScrollNotification notification) {
     final scrolled = notification.metrics.pixels > 8;
@@ -185,7 +170,7 @@ class _BottomNavItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = active ? AppColors.gold : const Color(0xFF9A948C);
+    final color = active ? Colors.black : const Color(0xFF9A948C);
     return Expanded(
       child: GestureDetector(
         onTap: onTap,
