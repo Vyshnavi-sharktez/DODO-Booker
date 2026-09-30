@@ -10,6 +10,7 @@ import '../../../catalog_configs/presentation/widgets/catalog_node_config_dialog
 import '../../../amc_plans/presentation/widgets/node_amc_plans_dialog.dart';
 import '../../../service_faqs/presentation/widgets/node_faqs_dialog.dart';
 import '../../../service_showcase/presentation/widgets/service_showcase_dialog.dart';
+import '../widgets/catalog_node_addons_drawer.dart';
 import '../../../service_availability_areas/application/providers/service_availability_areas_providers.dart';
 import '../widgets/catalog_node_availability_dialog.dart';
 import '../widgets/catalog_node_form_dialog.dart';
@@ -79,6 +80,8 @@ class _CatalogV2PageState extends ConsumerState<CatalogV2Page> {
           minimumOrderAmount,
           discountType = 'percentage',
           discountValue = 0,
+          includedItems = const [],
+          excludedItems = const [],
           warrantyEnabled = false,
           warrantyDays,
           warrantyCovers,
@@ -100,6 +103,8 @@ class _CatalogV2PageState extends ConsumerState<CatalogV2Page> {
                 minimumOrderAmount: minimumOrderAmount,
                 discountType: discountType,
                 discountValue: discountValue,
+                includedItems: includedItems,
+                excludedItems: excludedItems,
                 warrantyEnabled: warrantyEnabled,
                 warrantyDays: warrantyDays,
                 warrantyCovers: warrantyCovers,
@@ -142,6 +147,8 @@ class _CatalogV2PageState extends ConsumerState<CatalogV2Page> {
           minimumOrderAmount,
           discountType = 'percentage',
           discountValue = 0,
+          includedItems = const [],
+          excludedItems = const [],
           warrantyEnabled = false,
           warrantyDays,
           warrantyCovers,
@@ -163,6 +170,8 @@ class _CatalogV2PageState extends ConsumerState<CatalogV2Page> {
                 minimumOrderAmount: minimumOrderAmount,
                 discountType: discountType,
                 discountValue: discountValue,
+                includedItems: includedItems,
+                excludedItems: excludedItems,
                 warrantyEnabled: warrantyEnabled,
                 warrantyDays: warrantyDays,
                 warrantyCovers: warrantyCovers,
@@ -496,6 +505,19 @@ class _CatalogV2PageState extends ConsumerState<CatalogV2Page> {
     ServiceShowcaseDialog.show(context, node);
   }
 
+  // ── Add-ons ───────────────────────────────────────────────────────────────────
+
+  void _openAddons(CatalogNode node) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => CatalogNodeAddonsDrawer(
+        nodeId: node.id,
+        nodeName: node.name,
+      ),
+    );
+  }
+
   // ── Build ─────────────────────────────────────────────────────────────────────
 
   @override
@@ -515,6 +537,7 @@ class _CatalogV2PageState extends ConsumerState<CatalogV2Page> {
       onOpenAmcPlans: _openAmcPlans,
       onOpenFaqs: _openFaqs,
       onOpenShowcaseImages: _openShowcaseImages,
+      onOpenAddons: _openAddons,
     );
 
     return Scaffold(

@@ -66,6 +66,7 @@ class Booking {
   final String status;
   final String dispatchStatus; // 'idle' | 'dispatching' | 'accepted' | 'exhausted'
   final double subtotal;
+  final double taxAmount;
   final double discountAmount;
   final double totalAmount;
   final String? address;
@@ -120,6 +121,7 @@ class Booking {
     required this.status,
     this.dispatchStatus = 'idle',
     required this.subtotal,
+    this.taxAmount = 0.0,
     required this.discountAmount,
     required this.totalAmount,
     this.address,
@@ -201,6 +203,7 @@ class Booking {
       'warranty_pending_approval'  => ('Pending Approval', const Color(0xFF744210), const Color(0xFFFEFCBF)),
       'assigned'                   => ('Assigned', const Color(0xFF3182CE), const Color(0xFFEBF8FF)),
       'accepted'                   => ('Assigned', const Color(0xFF3182CE), const Color(0xFFEBF8FF)),
+      'en_route'                   => ('En Route', const Color(0xFF5C6BC0), const Color(0xFFE8EAF6)),
       'on_the_way'                 => ('On The Way', const Color(0xFF4A6FA5), const Color(0xFFEBF4FF)),
       'arrived'                    => ('Arrived', const Color(0xFF6B46C1), const Color(0xFFF3E8FF)),
       'in_progress'                => ('In Progress', const Color(0xFF805AD5), const Color(0xFFFAF5FF)),
@@ -255,6 +258,7 @@ class Booking {
       status: map['status'] as String? ?? 'pending',
       dispatchStatus: map['dispatch_status'] as String? ?? 'idle',
       subtotal: (map['subtotal'] as num?)?.toDouble() ?? 0.0,
+      taxAmount: (map['tax_amount'] as num?)?.toDouble() ?? 0.0,
       discountAmount: (map['discount_amount'] as num?)?.toDouble() ?? 0.0,
       totalAmount: (map['total_amount'] as num?)?.toDouble() ?? 0.0,
       address: map['address'] as String?,

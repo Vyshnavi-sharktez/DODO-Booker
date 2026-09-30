@@ -23,6 +23,7 @@ const _statusConfig = <String, (String, Color, Color)>{
     Color(0xFFF3E8FF),
   ),
   'accepted': ('Accepted', Color(0xFF2C7A7B), Color(0xFFE6FFFA)),
+  'en_route': ('En Route', Color(0xFF5C6BC0), Color(0xFFE8EAF6)),
   'on_the_way': ('On The Way', Color(0xFF4A6FA5), Color(0xFFEBF4FF)),
   'arrived': ('Arrived', Color(0xFF6B46C1), Color(0xFFF3E8FF)),
   'in_progress': ('In Progress', Color(0xFF805AD5), Color(0xFFFAF5FF)),
@@ -36,6 +37,7 @@ const _cancellableStatuses = {
   'assigned',
   'assigned_to_dodo_team',
   'accepted',
+  'en_route',
   'on_the_way',
   'arrived',
   'in_progress',
@@ -399,6 +401,8 @@ class _BookingDetailsDialogState extends ConsumerState<BookingDetailsDialog> {
                     _SectionLabel('Financials'),
                     const SizedBox(height: 12),
                     _InfoRow('Subtotal', _currency.format(booking.subtotal)),
+                    if (booking.taxAmount > 0)
+                      _InfoRow('GST / Tax', _currency.format(booking.taxAmount)),
                     _InfoRow(
                       'Discount',
                       _currency.format(booking.discountAmount),
@@ -1066,6 +1070,36 @@ class _PhotoRow extends StatelessWidget {
             separatorBuilder: (_, _) => const SizedBox(width: 8),
             itemBuilder: (_, i) {
               final url = photos[i]['image_url'] as String;
+              final isVideo = photos[i]['media_type'] == 'video';
+              if (isVideo) {
+                return Container(
+                  width: 80,
+                  height: 80,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFE8EAF6),
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(
+                      color: const Color(0xFF5C6BC0).withValues(alpha: 0.4),
+                    ),
+                  ),
+                  child: const Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.videocam_rounded,
+                          color: Color(0xFF5C6BC0), size: 26),
+                      SizedBox(height: 2),
+                      Text(
+                        'Video',
+                        style: TextStyle(
+                          color: Color(0xFF5C6BC0),
+                          fontSize: 9,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              }
               return ClipRRect(
                 borderRadius: BorderRadius.circular(6),
                 child: Image.network(

@@ -45,6 +45,8 @@ class CatalogNodeFormDialog extends StatefulWidget {
     double? minimumOrderAmount,
     String discountType,
     double discountValue,
+    List<String> includedItems,
+    List<String> excludedItems,
     bool warrantyEnabled,
     int? warrantyDays,
     String? warrantyCovers,
@@ -71,6 +73,8 @@ class _CatalogNodeFormDialogState extends State<CatalogNodeFormDialog> {
   late bool _isBookable;
   late String _discountType;
   late final TextEditingController _discountValue;
+  late final TextEditingController _includedItems;
+  late final TextEditingController _excludedItems;
   late bool _warrantyEnabled;
   late final TextEditingController _warrantyDays;
   late final TextEditingController _warrantyCovers;
@@ -103,6 +107,12 @@ class _CatalogNodeFormDialogState extends State<CatalogNodeFormDialog> {
           ? e.discountValue.toStringAsFixed(0)
           : '',
     );
+    _includedItems = TextEditingController(
+      text: e?.includedItems.join('\n') ?? '',
+    );
+    _excludedItems = TextEditingController(
+      text: e?.excludedItems.join('\n') ?? '',
+    );
     _warrantyEnabled = e?.warrantyEnabled ?? false;
     _warrantyDays = TextEditingController(
       text: e?.warrantyDays != null ? e!.warrantyDays!.toString() : '',
@@ -122,6 +132,8 @@ class _CatalogNodeFormDialogState extends State<CatalogNodeFormDialog> {
     _basePrice.dispose();
     _minOrderAmount.dispose();
     _discountValue.dispose();
+    _includedItems.dispose();
+    _excludedItems.dispose();
     _warrantyDays.dispose();
     _warrantyCovers.dispose();
     _warrantyExclusions.dispose();
@@ -167,6 +179,20 @@ class _CatalogNodeFormDialogState extends State<CatalogNodeFormDialog> {
         discountType: _discountType,
         discountValue:
             double.tryParse(_discountValue.text.trim()) ?? 0,
+        includedItems: _isBookable
+            ? _includedItems.text
+                .split('\n')
+                .map((s) => s.trim())
+                .where((s) => s.isNotEmpty)
+                .toList()
+            : const [],
+        excludedItems: _isBookable
+            ? _excludedItems.text
+                .split('\n')
+                .map((s) => s.trim())
+                .where((s) => s.isNotEmpty)
+                .toList()
+            : const [],
         warrantyEnabled: _isBookable ? _warrantyEnabled : false,
         warrantyDays: (_isBookable && _warrantyEnabled && _warrantyDays.text.trim().isNotEmpty)
             ? int.tryParse(_warrantyDays.text.trim())

@@ -10,8 +10,9 @@ class BookingsRepositoryImpl implements IBookingsRepository {
   // Completion requires OTP: use initiateCompletion + verifyCompletionOtp instead.
   // Rejection goes through rejectBooking, not this method.
   //   assigned   → accepted    (vendor accepts the booking)
-  //   accepted   → in_progress (vendor starts the service)
-  static const _validProgressTargets = {'accepted', 'in_progress'};
+  //   accepted   → en_route    (vendor starts journey)
+  //   en_route   → in_progress (vendor starts the service with before photo)
+  static const _validProgressTargets = {'accepted', 'en_route', 'in_progress'};
 
   @override
   Future<List<Booking>> getVendorBookings(String vendorId) async {

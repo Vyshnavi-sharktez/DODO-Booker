@@ -261,7 +261,6 @@ bool _otpVisibleForStatus(String status) => const {
       BookingStatus.inProgress,
       BookingStatus.started,
       BookingStatus.awaitingVerification,
-      BookingStatus.completed,
     }.contains(status);
 
 // ── Status Banner ─────────────────────────────────────────────────────────────
@@ -759,6 +758,36 @@ class _PhotoGallery extends StatelessWidget {
             separatorBuilder: (_, _) => const SizedBox(width: 8),
             itemBuilder: (_, i) {
               final url = photos[i]['image_url'] as String;
+              final isVideo = photos[i]['media_type'] == 'video';
+              if (isVideo) {
+                return Container(
+                  width: 90,
+                  height: 90,
+                  decoration: BoxDecoration(
+                    color: AppColors.primaryLight.withAlpha(60),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                      color: AppColors.primary.withAlpha(50),
+                    ),
+                  ),
+                  child: const Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.videocam_rounded,
+                          color: AppColors.primary, size: 30),
+                      SizedBox(height: 4),
+                      Text(
+                        'Video',
+                        style: TextStyle(
+                          color: AppColors.primary,
+                          fontSize: 10,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              }
               return ClipRRect(
                 borderRadius: BorderRadius.circular(8),
                 child: Image.network(

@@ -214,48 +214,56 @@ class _OverviewSection extends ConsumerWidget {
         value: bookingsLoading ? null : stats.totalBookings,
         icon: Icons.book_online_rounded,
         color: const Color(0xFFDD6B20),
+        route: '/dashboard/bookings',
       ),
       _OverviewCardData(
         label: 'Pending',
         value: bookingsLoading ? null : stats.bookingsPending,
         icon: Icons.hourglass_top_rounded,
         color: const Color(0xFFC05621),
+        route: '/dashboard/bookings',
       ),
       _OverviewCardData(
         label: 'In Progress',
         value: bookingsLoading ? null : stats.bookingsInProgress,
         icon: Icons.pending_actions_rounded,
         color: const Color(0xFF805AD5),
+        route: '/dashboard/bookings',
       ),
       _OverviewCardData(
         label: 'Completed',
         value: bookingsLoading ? null : stats.bookingsCompleted,
         icon: Icons.check_circle_outline_rounded,
         color: const Color(0xFF38A169),
+        route: '/dashboard/bookings',
       ),
       _OverviewCardData(
         label: 'Active Vendors',
         value: vendorsLoading ? null : stats.activeVendors,
         icon: Icons.store_rounded,
         color: const Color(0xFF3182CE),
+        route: '/dashboard/vendors',
       ),
       _OverviewCardData(
         label: 'DODO Teams',
         value: teamsLoading ? null : teams.length,
         icon: Icons.groups_rounded,
         color: const Color(0xFF319795),
+        route: '/dashboard/dodo-teams',
       ),
       _OverviewCardData(
         label: 'Customers',
         value: customersLoading ? null : customers.length,
         icon: Icons.people_alt_rounded,
         color: const Color(0xFF744210),
+        route: '/dashboard/customers',
       ),
       _OverviewCardData(
         label: 'Active Services',
         value: servicesLoading ? null : sysHealth.activeServices,
         icon: Icons.home_repair_service_rounded,
         color: const Color(0xFFB7791F),
+        route: '/dashboard/catalog',
       ),
     ];
 
@@ -281,11 +289,13 @@ class _OverviewCardData {
   final int? value;
   final IconData icon;
   final Color color;
+  final String route;
   const _OverviewCardData({
     required this.label,
     required this.value,
     required this.icon,
     required this.color,
+    required this.route,
   });
 }
 
@@ -295,7 +305,10 @@ class _OverviewCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    return InkWell(
+      onTap: () => context.go(data.route),
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: AppColors.surface,
@@ -353,6 +366,7 @@ class _OverviewCard extends StatelessWidget {
           ),
         ],
       ),
+    ),
     );
   }
 }
@@ -380,6 +394,7 @@ class _RevenueAndActionsRow extends ConsumerWidget {
                 icon: Icons.today_rounded,
                 color: const Color(0xFF38A169),
                 loading: bookingsLoading,
+                route: '/dashboard/bookings',
               ),
             ),
             const SizedBox(width: 12),
@@ -390,6 +405,7 @@ class _RevenueAndActionsRow extends ConsumerWidget {
                 icon: Icons.date_range_rounded,
                 color: const Color(0xFF3182CE),
                 loading: bookingsLoading,
+                route: '/dashboard/bookings',
               ),
             ),
             const SizedBox(width: 12),
@@ -400,6 +416,7 @@ class _RevenueAndActionsRow extends ConsumerWidget {
                 icon: Icons.calendar_month_rounded,
                 color: const Color(0xFF805AD5),
                 loading: bookingsLoading,
+                route: '/dashboard/bookings',
               ),
             ),
           ],
@@ -436,6 +453,7 @@ class _RevenueCard extends StatelessWidget {
   final IconData icon;
   final Color color;
   final bool loading;
+  final String route;
 
   const _RevenueCard({
     required this.label,
@@ -443,11 +461,15 @@ class _RevenueCard extends StatelessWidget {
     required this.icon,
     required this.color,
     required this.loading,
+    required this.route,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    return InkWell(
+      onTap: () => context.go(route),
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: AppColors.surface,
@@ -503,6 +525,7 @@ class _RevenueCard extends StatelessWidget {
           ),
         ],
       ),
+    ),
     );
   }
 }
@@ -523,6 +546,7 @@ class _PendingActionsCard extends StatelessWidget {
             count: actions.unassignedBookings,
             color: const Color(0xFFDD6B20),
             icon: Icons.assignment_late_rounded,
+            route: '/dashboard/bookings',
           ),
           const SizedBox(height: 8),
           _ActionRow(
@@ -530,6 +554,7 @@ class _PendingActionsCard extends StatelessWidget {
             count: actions.pendingSettlements,
             color: const Color(0xFF805AD5),
             icon: Icons.payments_rounded,
+            route: '/dashboard/vendor-settlement',
           ),
           const SizedBox(height: 8),
           _ActionRow(
@@ -537,6 +562,7 @@ class _PendingActionsCard extends StatelessWidget {
             count: actions.pendingVendorVerifications,
             color: const Color(0xFF3182CE),
             icon: Icons.verified_user_rounded,
+            route: '/dashboard/vendors',
           ),
         ],
       ),
@@ -549,17 +575,22 @@ class _ActionRow extends StatelessWidget {
   final int count;
   final Color color;
   final IconData icon;
+  final String route;
 
   const _ActionRow({
     required this.label,
     required this.count,
     required this.color,
     required this.icon,
+    required this.route,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Row(
+    return InkWell(
+      onTap: () => context.go(route),
+      borderRadius: BorderRadius.circular(8),
+      child: Row(
       children: [
         Container(
           width: 30,
@@ -598,6 +629,7 @@ class _ActionRow extends StatelessWidget {
           ),
         ),
       ],
+    ),
     );
   }
 }
@@ -670,6 +702,7 @@ class _BookingAnalyticsCard extends ConsumerWidget {
     return _SectionCard(
       title: 'Booking Status',
       icon: Icons.bar_chart_rounded,
+      route: '/dashboard/bookings',
       child: bookingsAsync.isLoading
           ? const _LoadingPlaceholder(height: 150)
           : bookingsAsync.hasError
@@ -790,6 +823,7 @@ class _RevenueChartCard extends ConsumerWidget {
     return _SectionCard(
       title: 'Revenue — Last 30 Days',
       icon: Icons.show_chart_rounded,
+      route: '/dashboard/bookings',
       child: bookingsAsync.isLoading
           ? const _LoadingPlaceholder(height: 150)
           : bookingsAsync.hasError
@@ -939,6 +973,7 @@ class _TopServicesCard extends ConsumerWidget {
     return _SectionCard(
       title: 'Top Services (Completed)',
       icon: Icons.star_rounded,
+      route: '/dashboard/catalog',
       child: bookingsAsync.isLoading
           ? const _LoadingPlaceholder(height: 120)
           : bookingsAsync.hasError
@@ -976,6 +1011,7 @@ class _VendorPerfCard extends ConsumerWidget {
     return _SectionCard(
       title: 'Vendor Performance',
       icon: Icons.leaderboard_rounded,
+      route: '/dashboard/vendors',
       child: bookingsAsync.isLoading
           ? const _LoadingPlaceholder(height: 120)
           : bookingsAsync.hasError
@@ -1049,6 +1085,7 @@ class _VendorActivityCard extends ConsumerWidget {
     return _SectionCard(
       title: 'Vendor Activity',
       icon: Icons.store_rounded,
+      route: '/dashboard/vendors',
       child: (vendorsLoading || teamsLoading)
           ? const _LoadingPlaceholder(height: 110)
           : Column(
@@ -1058,6 +1095,7 @@ class _VendorActivityCard extends ConsumerWidget {
                   value: '${activity.activeVendors}',
                   color: const Color(0xFF38A169),
                   icon: Icons.store_rounded,
+                  route: '/dashboard/vendors',
                 ),
                 const SizedBox(height: 8),
                 _SummaryRow(
@@ -1065,6 +1103,7 @@ class _VendorActivityCard extends ConsumerWidget {
                   value: '${activity.vendorsOnJobs}',
                   color: const Color(0xFF805AD5),
                   icon: Icons.work_rounded,
+                  route: '/dashboard/vendors',
                 ),
                 const SizedBox(height: 8),
                 _SummaryRow(
@@ -1072,6 +1111,7 @@ class _VendorActivityCard extends ConsumerWidget {
                   value: '${activity.totalTeams}',
                   color: const Color(0xFF319795),
                   icon: Icons.groups_rounded,
+                  route: '/dashboard/dodo-teams',
                 ),
                 const SizedBox(height: 8),
                 _SummaryRow(
@@ -1079,6 +1119,7 @@ class _VendorActivityCard extends ConsumerWidget {
                   value: '${activity.availableTeams}',
                   color: const Color(0xFF3182CE),
                   icon: Icons.check_circle_outline_rounded,
+                  route: '/dashboard/dodo-teams',
                 ),
               ],
             ),
@@ -1100,6 +1141,7 @@ class _SettlementSummaryCard extends ConsumerWidget {
     return _SectionCard(
       title: 'Settlement Summary',
       icon: Icons.payments_rounded,
+      route: '/dashboard/vendor-settlement',
       child: settlementLoading
           ? const _LoadingPlaceholder(height: 110)
           : Column(
@@ -1109,6 +1151,7 @@ class _SettlementSummaryCard extends ConsumerWidget {
                   value: _currencyK.format(totalPending),
                   color: const Color(0xFFDD6B20),
                   icon: Icons.pending_rounded,
+                  route: '/dashboard/vendor-settlement',
                 ),
                 const SizedBox(height: 8),
                 _SummaryRow(
@@ -1116,6 +1159,7 @@ class _SettlementSummaryCard extends ConsumerWidget {
                   value: '$vendorsAwaiting',
                   color: const Color(0xFF805AD5),
                   icon: Icons.store_rounded,
+                  route: '/dashboard/vendor-settlement',
                 ),
                 const SizedBox(height: 8),
                 _SummaryRow(
@@ -1127,6 +1171,7 @@ class _SettlementSummaryCard extends ConsumerWidget {
                   ),
                   color: const Color(0xFF38A169),
                   icon: Icons.check_circle_rounded,
+                  route: '/dashboard/vendor-settlement',
                 ),
                 const SizedBox(height: 8),
                 _SummaryRow(
@@ -1138,6 +1183,7 @@ class _SettlementSummaryCard extends ConsumerWidget {
                   ),
                   color: const Color(0xFF3182CE),
                   icon: Icons.receipt_rounded,
+                  route: '/dashboard/vendor-settlement',
                 ),
               ],
             ),
@@ -1156,6 +1202,7 @@ class _CustomerSummaryCard extends ConsumerWidget {
     return _SectionCard(
       title: 'Customer Summary',
       icon: Icons.people_alt_rounded,
+      route: '/dashboard/customers',
       child: customersLoading
           ? const _LoadingPlaceholder(height: 110)
           : Column(
@@ -1165,6 +1212,7 @@ class _CustomerSummaryCard extends ConsumerWidget {
                   value: '${customerStats.total}',
                   color: const Color(0xFF3182CE),
                   icon: Icons.people_alt_rounded,
+                  route: '/dashboard/customers',
                 ),
                 const SizedBox(height: 8),
                 _SummaryRow(
@@ -1172,6 +1220,7 @@ class _CustomerSummaryCard extends ConsumerWidget {
                   value: '${customerStats.newThisMonth}',
                   color: const Color(0xFF38A169),
                   icon: Icons.person_add_rounded,
+                  route: '/dashboard/customers',
                 ),
                 const SizedBox(height: 8),
                 _SummaryRow(
@@ -1179,6 +1228,7 @@ class _CustomerSummaryCard extends ConsumerWidget {
                   value: '${customerStats.returning}',
                   color: const Color(0xFF805AD5),
                   icon: Icons.repeat_rounded,
+                  route: '/dashboard/customers',
                 ),
               ],
             ),
@@ -1361,6 +1411,7 @@ class _SystemHealthCard extends ConsumerWidget {
     return _SectionCard(
       title: 'System Health',
       icon: Icons.health_and_safety_rounded,
+      route: '/dashboard/catalog',
       child: Column(
         children: [
           _SummaryRow(
@@ -1368,6 +1419,7 @@ class _SystemHealthCard extends ConsumerWidget {
             value: svcLoading ? '…' : '${health.activeServices}',
             color: const Color(0xFF38A169),
             icon: Icons.home_repair_service_rounded,
+            route: '/dashboard/catalog',
           ),
           const SizedBox(height: 8),
           _SummaryRow(
@@ -1375,6 +1427,7 @@ class _SystemHealthCard extends ConsumerWidget {
             value: svcLoading ? '…' : '${stats.totalServices}',
             color: const Color(0xFF3182CE),
             icon: Icons.list_alt_rounded,
+            route: '/dashboard/catalog',
           ),
           const SizedBox(height: 8),
           _SummaryRow(
@@ -1382,6 +1435,7 @@ class _SystemHealthCard extends ConsumerWidget {
             value: catLoading ? '…' : '${health.activeCategories}',
             color: const Color(0xFF805AD5),
             icon: Icons.category_rounded,
+            route: '/dashboard/categories',
           ),
           const SizedBox(height: 8),
           _SummaryRow(
@@ -1389,6 +1443,7 @@ class _SystemHealthCard extends ConsumerWidget {
             value: cpnLoading ? '…' : '${health.activeCoupons}',
             color: const Color(0xFFDD6B20),
             icon: Icons.local_offer_rounded,
+            route: '/dashboard/coupons',
           ),
         ],
       ),
@@ -1406,6 +1461,7 @@ class _RecentVendors extends ConsumerWidget {
     return _SectionCard(
       title: 'Recent Vendors',
       icon: Icons.store_rounded,
+      route: '/dashboard/vendors',
       child: vendorsAsync.when(
         loading: () => const _LoadingPlaceholder(height: 180),
         error: (e, _) => _ErrorPlaceholder(message: e.toString()),
@@ -1424,6 +1480,7 @@ class _RecentVendors extends ConsumerWidget {
                       ? const Color(0xFF38A169)
                       : const Color(0xFF718096),
                   date: v.createdAt,
+                  route: '/dashboard/vendors',
                 )).toList(),
           );
         },
@@ -1442,6 +1499,7 @@ class _RecentCoupons extends ConsumerWidget {
     return _SectionCard(
       title: 'Recent Coupons',
       icon: Icons.local_offer_rounded,
+      route: '/dashboard/coupons',
       child: couponsAsync.when(
         loading: () => const _LoadingPlaceholder(height: 180),
         error: (e, _) => _ErrorPlaceholder(message: e.toString()),
@@ -1472,6 +1530,7 @@ class _RecentCoupons extends ConsumerWidget {
                 trailing: statusLabel,
                 trailingColor: statusColor,
                 date: c.createdAt,
+                route: '/dashboard/coupons',
               );
             }).toList(),
           );
@@ -1487,15 +1546,42 @@ class _SectionCard extends StatelessWidget {
   final String title;
   final IconData icon;
   final Widget child;
+  final String? route;
 
   const _SectionCard({
     required this.title,
     required this.icon,
     required this.child,
+    this.route,
   });
 
   @override
   Widget build(BuildContext context) {
+    final header = InkWell(
+      onTap: route != null ? () => context.go(route!) : null,
+      borderRadius: BorderRadius.circular(6),
+      child: Row(
+        children: [
+          Icon(icon, size: 15, color: AppColors.textSecondary),
+          const SizedBox(width: 7),
+          Expanded(
+            child: Text(
+              title,
+              style: const TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+                color: AppColors.textPrimary,
+              ),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          if (route != null)
+            const Icon(Icons.chevron_right_rounded,
+                size: 15, color: AppColors.textSecondary),
+        ],
+      ),
+    );
+
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
@@ -1506,23 +1592,7 @@ class _SectionCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Icon(icon, size: 15, color: AppColors.textSecondary),
-              const SizedBox(width: 7),
-              Expanded(
-                child: Text(
-                  title,
-                  style: const TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.textPrimary,
-                  ),
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-            ],
-          ),
+          header,
           const SizedBox(height: 14),
           child,
         ],
@@ -1538,17 +1608,19 @@ class _SummaryRow extends StatelessWidget {
   final String value;
   final Color color;
   final IconData icon;
+  final String? route;
 
   const _SummaryRow({
     required this.label,
     required this.value,
     required this.color,
     required this.icon,
+    this.route,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Row(
+    final row = Row(
       children: [
         Container(
           width: 30,
@@ -1579,6 +1651,14 @@ class _SummaryRow extends StatelessWidget {
         ),
       ],
     );
+    if (route != null) {
+      return InkWell(
+        onTap: () => context.go(route!),
+        borderRadius: BorderRadius.circular(8),
+        child: row,
+      );
+    }
+    return row;
   }
 }
 
@@ -1592,6 +1672,7 @@ class _ActivityItem extends StatelessWidget {
   final String trailing;
   final Color trailingColor;
   final DateTime? date;
+  final String? route;
 
   const _ActivityItem({
     required this.icon,
@@ -1601,11 +1682,12 @@ class _ActivityItem extends StatelessWidget {
     required this.trailing,
     required this.trailingColor,
     this.date,
+    this.route,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
+    final content = Padding(
       padding: const EdgeInsets.symmetric(vertical: 5),
       child: Row(
         children: [
@@ -1678,6 +1760,14 @@ class _ActivityItem extends StatelessWidget {
         ],
       ),
     );
+    if (route != null) {
+      return InkWell(
+        onTap: () => context.go(route!),
+        borderRadius: BorderRadius.circular(8),
+        child: content,
+      );
+    }
+    return content;
   }
 }
 

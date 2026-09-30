@@ -38,7 +38,6 @@ class _AddonsPageState extends ConsumerState<AddonsPage> {
           description,
           required price,
           required isActive,
-          serviceId,
           discountType = 'percentage',
           discountValue = 0,
         }) =>
@@ -47,7 +46,6 @@ class _AddonsPageState extends ConsumerState<AddonsPage> {
                   description: description,
                   price: price,
                   isActive: isActive,
-                  serviceId: serviceId,
                   discountType: discountType,
                   discountValue: discountValue,
                 ),
@@ -66,7 +64,6 @@ class _AddonsPageState extends ConsumerState<AddonsPage> {
           description,
           required price,
           required isActive,
-          serviceId,
           discountType = 'percentage',
           discountValue = 0,
         }) =>
@@ -76,7 +73,6 @@ class _AddonsPageState extends ConsumerState<AddonsPage> {
                   description: description,
                   price: price,
                   isActive: isActive,
-                  serviceId: serviceId,
                   discountType: discountType,
                   discountValue: discountValue,
                 ),

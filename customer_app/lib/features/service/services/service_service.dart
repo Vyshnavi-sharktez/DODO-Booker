@@ -142,12 +142,13 @@ class ServiceService {
         .inFilter('service_id', nodeIds)
         .order('sort_order', ascending: true);
 
-    final addonData = await _db
-        .from('addons')
-        .select()
-        .inFilter('service_id', nodeIds)
-        .eq('is_active', true)
-        .order('name', ascending: true);
+    // Fetch addons directly assigned to each service node (no inheritance).
+    final addonData = nodeIds.isEmpty
+        ? <dynamic>[]
+        : await _db.rpc(
+            'get_service_addons_batch',
+            params: {'p_node_ids': nodeIds},
+          );
 
     final faqsByNode = <String, List<Map<String, dynamic>>>{};
     for (final faq in (faqData as List)) {
@@ -157,7 +158,7 @@ class ServiceService {
 
     final addonsByNode = <String, List<Map<String, dynamic>>>{};
     for (final addon in (addonData as List)) {
-      final sid = addon['service_id'] as String;
+      final sid = addon['node_id'] as String;
       addonsByNode
           .putIfAbsent(sid, () => [])
           .add(addon as Map<String, dynamic>);

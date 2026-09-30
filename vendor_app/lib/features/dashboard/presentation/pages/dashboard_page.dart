@@ -126,6 +126,7 @@ class DashboardPage extends ConsumerWidget {
                             value: FormatUtils.compact(stats.totalEarnings),
                             icon: Icons.account_balance_wallet_outlined,
                             color: AppColors.success,
+                            onTap: () => context.go(RoutePaths.wallet),
                           ),
                           StatsCard(
                             label: "Today's Bookings",
@@ -148,6 +149,7 @@ class DashboardPage extends ConsumerWidget {
                         today: stats.todayEarnings,
                         weekly: stats.weeklyEarnings,
                         monthly: stats.monthlyEarnings,
+                        onTap: () => context.go(RoutePaths.wallet),
                       ),
                       const SizedBox(height: 28),
 
@@ -168,6 +170,10 @@ class DashboardPage extends ConsumerWidget {
                                 '${stats.completionRate.toStringAsFixed(1)}%',
                             icon: Icons.check_circle_outline_rounded,
                             color: AppColors.success,
+                            onTap: () => context.goNamed(
+                              RouteNames.bookings,
+                              queryParameters: {'tab': '2'},
+                            ),
                           ),
                           _PerformanceCard(
                             label: 'Rejection',
@@ -175,6 +181,10 @@ class DashboardPage extends ConsumerWidget {
                                 '${stats.rejectionRate.toStringAsFixed(1)}%',
                             icon: Icons.cancel_outlined,
                             color: AppColors.error,
+                            onTap: () => context.goNamed(
+                              RouteNames.bookings,
+                              queryParameters: {'tab': '3'},
+                            ),
                           ),
                           _PerformanceCard(
                             label: 'Unread',
@@ -425,11 +435,13 @@ class _EarningsRow extends StatelessWidget {
     required this.today,
     required this.weekly,
     required this.monthly,
+    this.onTap,
   });
 
   final double today;
   final double weekly;
   final double monthly;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -439,18 +451,21 @@ class _EarningsRow extends StatelessWidget {
           label: "Today",
           amount: today,
           icon: Icons.today_rounded,
+          onTap: onTap,
         ),
         const SizedBox(width: 12),
         _EarningsCell(
           label: 'This Week',
           amount: weekly,
           icon: Icons.date_range_rounded,
+          onTap: onTap,
         ),
         const SizedBox(width: 12),
         _EarningsCell(
           label: 'This Month',
           amount: monthly,
           icon: Icons.calendar_month_rounded,
+          onTap: onTap,
         ),
       ],
     );
@@ -462,19 +477,26 @@ class _EarningsCell extends StatelessWidget {
     required this.label,
     required this.amount,
     required this.icon,
+    this.onTap,
   });
 
   final String label;
   final double amount;
   final IconData icon;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
     return Expanded(
-      child: Container(
+      child: Material(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(14),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(14),
+          child: Container(
         padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
         decoration: BoxDecoration(
-          color: AppColors.surface,
           borderRadius: BorderRadius.circular(14),
           border: Border.all(color: AppColors.border),
         ),
@@ -511,6 +533,8 @@ class _EarningsCell extends StatelessWidget {
               ),
             ),
           ],
+        ),
+      ),
         ),
       ),
     );

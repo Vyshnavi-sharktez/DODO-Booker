@@ -24,7 +24,6 @@ import '../../features/coupons/presentation/pages/coupons_page.dart';
 import '../../features/vendor_settlement/presentation/pages/vendor_settlement_page.dart';
 import '../../features/settings/presentation/pages/settings_page.dart';
 import '../../features/catalog_v2/presentation/pages/catalog_v2_page.dart';
-import '../../features/service_addons/presentation/pages/addons_page.dart';
 import '../../features/marketing/presentation/pages/abandoned_carts_page.dart';
 import '../../features/loyalty/presentation/pages/loyalty_page.dart';
 import '../../features/tax_settings/presentation/pages/tax_settings_page.dart';
@@ -190,13 +189,6 @@ final routerProvider = Provider<GoRouter>((ref) {
             name: 'catalog',
             pageBuilder: (context, state) => const NoTransitionPage(
               child: CatalogV2Page(),
-            ),
-          ),
-          GoRoute(
-            path: '/dashboard/addons',
-            name: 'addons',
-            pageBuilder: (context, state) => const NoTransitionPage(
-              child: AddonsPage(),
             ),
           ),
           GoRoute(

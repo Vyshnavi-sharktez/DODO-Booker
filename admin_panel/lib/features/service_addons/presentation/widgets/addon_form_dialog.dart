@@ -2,8 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/theme/app_theme.dart';
-import '../../../catalog_v2/application/providers/catalog_node_providers.dart';
-import '../../../catalog_v2/domain/models/catalog_node.dart';
 import '../../domain/models/service_addon.dart';
 
 class AddonFormDialog extends ConsumerStatefulWidget {
@@ -13,7 +11,6 @@ class AddonFormDialog extends ConsumerStatefulWidget {
     String? description,
     required double price,
     required bool isActive,
-    String? serviceId,
     String discountType,
     double discountValue,
   }) onSave;
@@ -33,7 +30,6 @@ class _AddonFormDialogState extends ConsumerState<AddonFormDialog> {
   late final TextEditingController _name;
   late final TextEditingController _price;
   late bool _isActive;
-  String? _selectedServiceId;
   late String _discountType;
   late final TextEditingController _discountValue;
   bool _saving = false;
@@ -47,7 +43,6 @@ class _AddonFormDialogState extends ConsumerState<AddonFormDialog> {
       text: e != null ? e.price.toStringAsFixed(2) : '',
     );
     _isActive = e?.isActive ?? true;
-    _selectedServiceId = e?.serviceId;
     _discountType = e?.discountType ?? 'percentage';
     _discountValue = TextEditingController(
       text: (e != null && e.discountValue > 0)
@@ -72,7 +67,6 @@ class _AddonFormDialogState extends ConsumerState<AddonFormDialog> {
         name: _name.text.trim(),
         price: double.parse(_price.text.trim()),
         isActive: _isActive,
-        serviceId: _selectedServiceId,
         discountType: _discountType,
         discountValue: double.tryParse(_discountValue.text.trim()) ?? 0,
       );
@@ -94,11 +88,6 @@ class _AddonFormDialogState extends ConsumerState<AddonFormDialog> {
   @override
   Widget build(BuildContext context) {
     final isEdit = widget.existing != null;
-    final nodesAsync = ref.watch(catalogNodeNotifierProvider);
-    final leafNodes = nodesAsync.valueOrNull
-            ?.where((n) => n.isBookable && n.childrenCount == 0)
-            .toList() ??
-        [];
 
     return Dialog(
       insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
@@ -185,16 +174,6 @@ class _AddonFormDialogState extends ConsumerState<AddonFormDialog> {
                         },
                       ),
                       const SizedBox(height: 16),
-
-                      // Service assignment
-                      _ServiceSelector(
-                        leafNodes: leafNodes,
-                        selectedId: _selectedServiceId,
-                        loading: nodesAsync.isLoading,
-                        onChanged: (id) =>
-                            setState(() => _selectedServiceId = id),
-                      ),
-                      const SizedBox(height: 20),
 
                       // Active toggle
                       _ToggleRow(
@@ -336,77 +315,6 @@ class _AddonFormDialogState extends ConsumerState<AddonFormDialog> {
           ],
         ),
       ),
-    );
-  }
-}
-
-// ── Service selector ──────────────────────────────────────────────────────────
-
-class _ServiceSelector extends StatelessWidget {
-  const _ServiceSelector({
-    required this.leafNodes,
-    required this.selectedId,
-    required this.loading,
-    required this.onChanged,
-  });
-
-  final List<CatalogNode> leafNodes;
-  final String? selectedId;
-  final bool loading;
-  final ValueChanged<String?> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'Assign to Service',
-          style: TextStyle(
-            fontSize: 12,
-            fontWeight: FontWeight.w500,
-            color: AppColors.textSecondary,
-          ),
-        ),
-        const SizedBox(height: 6),
-        loading
-            ? const SizedBox(
-                height: 48,
-                child: Center(
-                    child: CircularProgressIndicator(strokeWidth: 2)),
-              )
-            : DropdownButtonFormField<String?>(
-                value: selectedId,
-                isExpanded: true,
-                decoration: const InputDecoration(
-                  hintText: 'No service (unassigned)',
-                  contentPadding:
-                      EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                ),
-                items: [
-                  const DropdownMenuItem<String?>(
-                    value: null,
-                    child: Text('No service (unassigned)',
-                        style: TextStyle(color: AppColors.textSecondary)),
-                  ),
-                  ...leafNodes.map((n) => DropdownMenuItem<String?>(
-                        value: n.id,
-                        child: Text(
-                          n.parentName != null
-                              ? '${n.parentName} › ${n.name}'
-                              : n.name,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      )),
-                ],
-                onChanged: onChanged,
-              ),
-        const SizedBox(height: 4),
-        Text(
-          'Customers see only the add-ons assigned to the service they are viewing.',
-          style: TextStyle(fontSize: 11, color: AppColors.textSecondary),
-        ),
-      ],
     );
   }
 }

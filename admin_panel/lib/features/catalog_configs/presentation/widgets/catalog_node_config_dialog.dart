@@ -1,5 +1,6 @@
 ﻿import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../vendor_subscriptions/domain/models/subscription_plan.dart'
@@ -7,6 +8,9 @@ import '../../../vendor_subscriptions/domain/models/subscription_plan.dart'
 import '../../data/catalog_node_configs_repository.dart';
 import '../../domain/models/catalog_node_config_model.dart';
 import '../../../vendor_subscriptions/domain/subscription_feature_registry.dart';
+import '../../../catalog_v2/application/providers/catalog_node_providers.dart';
+import '../../../service_attributes/domain/models/service_attribute.dart';
+import '../../../service_attributes/presentation/widgets/attribute_form_dialog.dart';
 
 // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 // CatalogNodeConfigDialog
@@ -25,7 +29,7 @@ import '../../../vendor_subscriptions/domain/subscription_feature_registry.dart'
 // (root-level tiles), in which case only node-scoped config is available.
 // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
-class CatalogNodeConfigDialog extends StatefulWidget {
+class CatalogNodeConfigDialog extends ConsumerStatefulWidget {
   final String nodeId;
   final String nodeName;
   final String? parentNodeId;
@@ -44,11 +48,11 @@ class CatalogNodeConfigDialog extends StatefulWidget {
   });
 
   @override
-  State<CatalogNodeConfigDialog> createState() =>
+  ConsumerState<CatalogNodeConfigDialog> createState() =>
       _CatalogNodeConfigDialogState();
 }
 
-class _CatalogNodeConfigDialogState extends State<CatalogNodeConfigDialog>
+class _CatalogNodeConfigDialogState extends ConsumerState<CatalogNodeConfigDialog>
     with SingleTickerProviderStateMixin {
   final _repo = CatalogNodeConfigsRepository(Supabase.instance.client);
 
@@ -118,6 +122,20 @@ class _CatalogNodeConfigDialogState extends State<CatalogNodeConfigDialog>
   // Refund Period override
   final _refundPeriodCtrl = TextEditingController();
 
+  // Content tab — direct catalog_nodes fields
+  List<String> _includedItems = [];
+  List<String> _excludedItems = [];
+  bool _addingIncluded = false;
+  bool _addingExcluded = false;
+  final _newIncludedCtrl = TextEditingController();
+  final _newExcludedCtrl = TextEditingController();
+
+  // Before & After tab — direct catalog_nodes field
+  List<Map<String, String>> _beforeAfterPairs = [];
+  bool _addingPair = false;
+  final _newBeforeUrlCtrl = TextEditingController();
+  final _newAfterUrlCtrl = TextEditingController();
+
   // Vendor Subscription â€” plan config embedded in catalog_node_configs JSONB
   bool _vsEnabled = false;
   final _vsNameCtrl = TextEditingController();
@@ -142,7 +160,7 @@ class _CatalogNodeConfigDialogState extends State<CatalogNodeConfigDialog>
   ];
   static const _tabLabels = [
     'Tax', 'Loyalty', 'Scheduling', 'Platform Commission', 'Surge Fee', 'Preferred Vendors',
-    'Vendor Subscription', 'Refund Period',
+    'Vendor Subscription', 'Refund Period', 'Content', 'Attributes', 'Before & After',
   ];
   static const _dayLabels = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
@@ -151,7 +169,7 @@ class _CatalogNodeConfigDialogState extends State<CatalogNodeConfigDialog>
   void initState() {
     super.initState();
     _tabController = TabController(
-        length: 8, vsync: this, initialIndex: widget.initialTabIndex.clamp(0, 7));
+        length: 11, vsync: this, initialIndex: widget.initialTabIndex.clamp(0, 10));
     for (final m in _modules) {
       _applyToChildren[m] = false;
     }
@@ -182,6 +200,10 @@ class _CatalogNodeConfigDialogState extends State<CatalogNodeConfigDialog>
       ctrl.dispose();
     }
     _refundPeriodCtrl.dispose();
+    _newIncludedCtrl.dispose();
+    _newExcludedCtrl.dispose();
+    _newBeforeUrlCtrl.dispose();
+    _newAfterUrlCtrl.dispose();
     super.dispose();
   }
 
@@ -279,6 +301,36 @@ class _CatalogNodeConfigDialogState extends State<CatalogNodeConfigDialog>
       _populatePreferredVendors();
       _populateVendorSubscription();
       _populateRefund();
+
+      // Load content and before_after directly from catalog_nodes
+      final nodeRow = await Supabase.instance.client
+          .from('catalog_nodes')
+          .select('included_items, excluded_items, before_after_pairs')
+          .eq('id', widget.nodeId)
+          .maybeSingle();
+      if (nodeRow != null) {
+        _includedItems = (nodeRow['included_items'] as List<dynamic>?)
+                ?.map((e) => e.toString())
+                .toList() ??
+            [];
+        _excludedItems = (nodeRow['excluded_items'] as List<dynamic>?)
+                ?.map((e) => e.toString())
+                .toList() ??
+            [];
+        _beforeAfterPairs =
+            (nodeRow['before_after_pairs'] as List<dynamic>?)?.map((e) {
+              final m = e as Map<String, dynamic>;
+              return {
+                'before_url': (m['before_url'] ?? '').toString(),
+                'after_url': (m['after_url'] ?? '').toString(),
+              };
+            }).toList() ??
+            [];
+      }
+
+      // Kick off attribute load for the Attributes tab
+      ref.read(catalogNodeAttributesNotifierProvider.notifier)
+          .loadForNode(widget.nodeId);
 
       if (mounted) setState(() => _loading = false);
     } catch (e) {
@@ -857,7 +909,12 @@ class _CatalogNodeConfigDialogState extends State<CatalogNodeConfigDialog>
               Expanded(
                 child: TabBarView(
                   controller: _tabController,
-                  children: _modules.map((m) => _buildModuleTab(m)).toList(),
+                  children: [
+                    ..._modules.map((m) => _buildModuleTab(m)),
+                    _buildContentTab(),
+                    _buildAttributesTab(),
+                    _buildBeforeAfterTab(),
+                  ],
                 ),
               ),
             ],
@@ -2059,6 +2116,643 @@ class _CatalogNodeConfigDialogState extends State<CatalogNodeConfigDialog>
         ),
         activeColor: AppColors.primary,
         controlAffinity: ListTileControlAffinity.leading,
+      ),
+    );
+  }
+
+  // ── Content tab ─────────────────────────────────────────────────────────────
+
+  Future<void> _saveContent() async {
+    setState(() {
+      _saving = true;
+      _error = null;
+    });
+    try {
+      await Supabase.instance.client
+          .from('catalog_nodes')
+          .update({
+            'included_items': _includedItems,
+            'excluded_items': _excludedItems,
+          })
+          .eq('id', widget.nodeId);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Content saved.')),
+        );
+      }
+    } catch (e) {
+      if (mounted) setState(() => _error = e.toString());
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  Future<void> _saveBeforeAfter() async {
+    setState(() {
+      _saving = true;
+      _error = null;
+    });
+    try {
+      await Supabase.instance.client
+          .from('catalog_nodes')
+          .update({'before_after_pairs': _beforeAfterPairs})
+          .eq('id', widget.nodeId);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Before & After pairs saved.')),
+        );
+      }
+    } catch (e) {
+      if (mounted) setState(() => _error = e.toString());
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  Widget _buildContentTab() {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // What's Included
+          _buildAccentSection(
+            icon: Icons.check_circle_outline_rounded,
+            title: "What's Included",
+            color: const Color(0xFF4CAF50),
+          ),
+          const SizedBox(height: 8),
+          ..._includedItems.asMap().entries.map((e) => _buildItemRow(
+                e.value,
+                () => setState(() => _includedItems.removeAt(e.key)),
+              )),
+          if (_includedItems.isEmpty && !_addingIncluded)
+            _emptyNote('No items yet.'),
+          if (_addingIncluded)
+            _buildInlineItemInput(
+              ctrl: _newIncludedCtrl,
+              onAdd: () {
+                final v = _newIncludedCtrl.text.trim();
+                if (v.isNotEmpty) {
+                  setState(() {
+                    _includedItems.add(v);
+                    _newIncludedCtrl.clear();
+                    _addingIncluded = false;
+                  });
+                }
+              },
+              onCancel: () => setState(() {
+                _addingIncluded = false;
+                _newIncludedCtrl.clear();
+              }),
+            )
+          else
+            _buildAddLink(
+              '+ Add included item',
+              () => setState(() => _addingIncluded = true),
+            ),
+
+          const SizedBox(height: 20),
+
+          // What's Excluded
+          _buildAccentSection(
+            icon: Icons.cancel_outlined,
+            title: "What's Excluded",
+            color: const Color(0xFFF44336),
+          ),
+          const SizedBox(height: 8),
+          ..._excludedItems.asMap().entries.map((e) => _buildItemRow(
+                e.value,
+                () => setState(() => _excludedItems.removeAt(e.key)),
+              )),
+          if (_excludedItems.isEmpty && !_addingExcluded)
+            _emptyNote('No items yet.'),
+          if (_addingExcluded)
+            _buildInlineItemInput(
+              ctrl: _newExcludedCtrl,
+              onAdd: () {
+                final v = _newExcludedCtrl.text.trim();
+                if (v.isNotEmpty) {
+                  setState(() {
+                    _excludedItems.add(v);
+                    _newExcludedCtrl.clear();
+                    _addingExcluded = false;
+                  });
+                }
+              },
+              onCancel: () => setState(() {
+                _addingExcluded = false;
+                _newExcludedCtrl.clear();
+              }),
+            )
+          else
+            _buildAddLink(
+              '+ Add excluded item',
+              () => setState(() => _addingExcluded = true),
+            ),
+
+          const SizedBox(height: 24),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              FilledButton(
+                onPressed: _saving ? null : _saveContent,
+                child: _saving
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(
+                            strokeWidth: 2, color: Colors.white),
+                      )
+                    : const Text('Save'),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ── Attributes tab ──────────────────────────────────────────────────────────
+
+  void _openCreateAttribute() {
+    final notifier = ref.read(catalogNodeAttributesNotifierProvider.notifier);
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => AttributeFormDialog(
+        serviceId: widget.nodeId,
+        serviceName: widget.nodeName,
+        onSave: ({
+          required serviceId,
+          required name,
+          required price,
+          required discountType,
+          required discountValue,
+        }) async {
+          final attrId = await notifier.createAttribute(
+            nodeId: serviceId,
+            name: name,
+            fieldType: 'dropdown',
+            isRequired: false,
+          );
+          await notifier.createOption(
+            attributeId: attrId,
+            optionName: name,
+            priceAdjustment: price,
+            discountType: discountType,
+            discountValue: discountValue,
+          );
+        },
+      ),
+    );
+  }
+
+  void _openEditAttribute(ServiceAttribute attr) {
+    final notifier = ref.read(catalogNodeAttributesNotifierProvider.notifier);
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => AttributeFormDialog(
+        existing: attr,
+        serviceId: widget.nodeId,
+        serviceName: widget.nodeName,
+        onSave: ({
+          required serviceId,
+          required name,
+          required price,
+          required discountType,
+          required discountValue,
+        }) async {
+          await notifier.updateAttribute(attr.id,
+              name: name, fieldType: 'dropdown', isRequired: false);
+          if (attr.options.isNotEmpty) {
+            await notifier.updateOption(attr.options.first.id,
+                optionName: name,
+                priceAdjustment: price,
+                discountType: discountType,
+                discountValue: discountValue);
+          } else {
+            await notifier.createOption(
+              attributeId: attr.id,
+              optionName: name,
+              priceAdjustment: price,
+              discountType: discountType,
+              discountValue: discountValue,
+            );
+          }
+        },
+      ),
+    );
+  }
+
+  Future<void> _deleteAttribute(ServiceAttribute attr) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        title: const Text('Delete Attribute'),
+        content: Text('Delete "${attr.name}"?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: AppColors.error),
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    await ref
+        .read(catalogNodeAttributesNotifierProvider.notifier)
+        .deleteAttribute(attr.id);
+    if (mounted) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('Attribute deleted.')));
+    }
+  }
+
+  Widget _buildAttributesTab() {
+    final attrsAsync = ref.watch(catalogNodeAttributesNotifierProvider);
+    return attrsAsync.when(
+      loading: () => const Center(child: CircularProgressIndicator()),
+      error: (e, _) => Center(
+        child: Text('Error: $e',
+            style: const TextStyle(color: AppColors.error, fontSize: 12)),
+      ),
+      data: (attrs) => SingleChildScrollView(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _buildAccentSection(
+              icon: Icons.tune_rounded,
+              title: 'Attributes',
+              color: AppColors.accent,
+            ),
+            const SizedBox(height: 4),
+            const Text(
+              'Add-ons or variants for this service, each with a price adjustment.',
+              style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+            ),
+            const SizedBox(height: 12),
+            if (attrs.isEmpty) _emptyNote('No attributes yet.'),
+            for (final attr in attrs)
+              _buildAttributeCard(attr),
+            const SizedBox(height: 8),
+            _buildAddLink('+ Add Attribute', _openCreateAttribute),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildAttributeCard(ServiceAttribute attr) {
+    final price = attr.options.isNotEmpty
+        ? attr.options.first.priceAdjustment
+        : 0.0;
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: AppColors.background,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: AppColors.border, width: 0.8),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  attr.name,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w600,
+                    fontSize: 13,
+                    color: AppColors.textPrimary,
+                  ),
+                ),
+                if (price > 0) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    '₹${price.toStringAsFixed(0)}',
+                    style: const TextStyle(
+                        fontSize: 12, color: AppColors.textSecondary),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.edit_outlined, size: 15),
+            tooltip: 'Edit',
+            color: AppColors.textSecondary,
+            onPressed: () => _openEditAttribute(attr),
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+          ),
+          IconButton(
+            icon: const Icon(Icons.delete_outline, size: 15),
+            tooltip: 'Delete',
+            color: AppColors.error,
+            onPressed: () => _deleteAttribute(attr),
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBeforeAfterTab() {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildAccentSection(
+            icon: Icons.swap_horiz_rounded,
+            title: 'Before & After',
+            color: AppColors.primary,
+          ),
+          const SizedBox(height: 4),
+          const Text(
+            'Add image URL pairs showing the before and after state of this service.',
+            style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+          ),
+          const SizedBox(height: 12),
+
+          ..._beforeAfterPairs.asMap().entries.map(
+                (e) => _buildPairCard(e.key, e.value),
+              ),
+
+          if (_beforeAfterPairs.isEmpty && !_addingPair)
+            _emptyNote('No pairs yet.'),
+
+          if (_addingPair) _buildAddPairCard(),
+
+          if (!_addingPair)
+            _buildAddLink(
+              '+ Add Before/After Pair',
+              () => setState(() => _addingPair = true),
+            ),
+
+          const SizedBox(height: 24),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              FilledButton(
+                onPressed: _saving ? null : _saveBeforeAfter,
+                child: _saving
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(
+                            strokeWidth: 2, color: Colors.white),
+                      )
+                    : const Text('Save'),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAccentSection({
+    required IconData icon,
+    required String title,
+    required Color color,
+  }) {
+    return Container(
+      decoration: BoxDecoration(
+        border: Border(left: BorderSide(color: color, width: 3)),
+      ),
+      padding: const EdgeInsets.only(left: 10),
+      child: Row(
+        children: [
+          Icon(icon, size: 16, color: color),
+          const SizedBox(width: 6),
+          Text(
+            title,
+            style: const TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: AppColors.textPrimary),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildItemRow(String text, VoidCallback onRemove) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Row(
+        children: [
+          const Icon(Icons.drag_indicator_rounded,
+              size: 16, color: AppColors.textSecondary),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text(text,
+                style: const TextStyle(
+                    fontSize: 13, color: AppColors.textPrimary)),
+          ),
+          GestureDetector(
+            onTap: onRemove,
+            child: const Icon(Icons.close_rounded,
+                size: 16, color: AppColors.error),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInlineItemInput({
+    required TextEditingController ctrl,
+    required VoidCallback onAdd,
+    required VoidCallback onCancel,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Row(
+        children: [
+          Expanded(
+            child: TextField(
+              controller: ctrl,
+              autofocus: true,
+              decoration: _inputDeco('Enter item...'),
+            ),
+          ),
+          const SizedBox(width: 8),
+          TextButton(onPressed: onAdd, child: const Text('Add')),
+          TextButton(onPressed: onCancel, child: const Text('Cancel')),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPairCard(int index, Map<String, String> pair) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        border: Border.all(color: AppColors.border, width: 0.8),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Pair ${index + 1}',
+                  style: const TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.textSecondary),
+                ),
+                const SizedBox(height: 4),
+                Row(
+                  children: [
+                    const Icon(Icons.photo_outlined,
+                        size: 12, color: AppColors.textSecondary),
+                    const SizedBox(width: 4),
+                    Expanded(
+                      child: Text(
+                        pair['before_url']?.isNotEmpty == true
+                            ? pair['before_url']!
+                            : '(no before URL)',
+                        style: const TextStyle(
+                            fontSize: 12, color: AppColors.textPrimary),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 2),
+                Row(
+                  children: [
+                    const Icon(Icons.photo_outlined,
+                        size: 12, color: AppColors.primary),
+                    const SizedBox(width: 4),
+                    Expanded(
+                      child: Text(
+                        pair['after_url']?.isNotEmpty == true
+                            ? pair['after_url']!
+                            : '(no after URL)',
+                        style: const TextStyle(
+                            fontSize: 12, color: AppColors.textPrimary),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          GestureDetector(
+            onTap: () => setState(() => _beforeAfterPairs.removeAt(index)),
+            child: const Icon(Icons.close_rounded,
+                size: 16, color: AppColors.error),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAddPairCard() {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        border: Border.all(
+            color: AppColors.primary.withValues(alpha: 0.3), width: 0.8),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _label('Before Image URL'),
+          const SizedBox(height: 4),
+          TextField(
+            controller: _newBeforeUrlCtrl,
+            decoration: _inputDeco('https://...'),
+          ),
+          const SizedBox(height: 10),
+          _label('After Image URL'),
+          const SizedBox(height: 4),
+          TextField(
+            controller: _newAfterUrlCtrl,
+            decoration: _inputDeco('https://...'),
+          ),
+          const SizedBox(height: 10),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              TextButton(
+                onPressed: () => setState(() {
+                  _addingPair = false;
+                  _newBeforeUrlCtrl.clear();
+                  _newAfterUrlCtrl.clear();
+                }),
+                child: const Text('Cancel'),
+              ),
+              const SizedBox(width: 8),
+              FilledButton(
+                onPressed: () {
+                  final before = _newBeforeUrlCtrl.text.trim();
+                  final after = _newAfterUrlCtrl.text.trim();
+                  if (before.isNotEmpty || after.isNotEmpty) {
+                    setState(() {
+                      _beforeAfterPairs
+                          .add({'before_url': before, 'after_url': after});
+                      _addingPair = false;
+                      _newBeforeUrlCtrl.clear();
+                      _newAfterUrlCtrl.clear();
+                    });
+                  }
+                },
+                child: const Text('Add Pair'),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAddLink(String label, VoidCallback onTap) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.only(top: 4),
+        child: Text(
+          label,
+          style: const TextStyle(
+              fontSize: 13,
+              color: AppColors.primary,
+              fontWeight: FontWeight.w500),
+        ),
+      ),
+    );
+  }
+
+  Widget _emptyNote(String text) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Text(
+        text,
+        style: const TextStyle(
+            fontSize: 12, color: AppColors.textSecondary),
       ),
     );
   }
