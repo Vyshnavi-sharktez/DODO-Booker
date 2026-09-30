@@ -33,6 +33,10 @@ class CatalogNode {
   final double? rating;
   final int reviewCount;
 
+  // Content — what's included / excluded in this service
+  final List<String> includedItems;
+  final List<String> excludedItems;
+
   // Warranty Configuration
   final bool warrantyEnabled;
   final int? warrantyDays;
@@ -76,6 +80,8 @@ class CatalogNode {
     this.discountValue = 0,
     this.rating,
     required this.reviewCount,
+    this.includedItems = const [],
+    this.excludedItems = const [],
     this.warrantyEnabled = false,
     this.warrantyDays,
     this.warrantyCovers,
@@ -131,6 +137,14 @@ class CatalogNode {
       discountValue: (map['discount_value'] as num?)?.toDouble() ?? 0,
       rating: (map['rating'] as num?)?.toDouble(),
       reviewCount: map['review_count'] as int? ?? 0,
+      includedItems: (map['included_items'] as List<dynamic>?)
+              ?.map((e) => e.toString())
+              .toList() ??
+          const [],
+      excludedItems: (map['excluded_items'] as List<dynamic>?)
+              ?.map((e) => e.toString())
+              .toList() ??
+          const [],
       warrantyEnabled: map['warranty_enabled'] as bool? ?? false,
       warrantyDays: map['warranty_days'] as int?,
       warrantyCovers: map['warranty_covers'] as String?,

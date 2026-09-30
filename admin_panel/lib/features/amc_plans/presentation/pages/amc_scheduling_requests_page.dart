@@ -2342,14 +2342,14 @@ class _ResumeRequestCardState extends ConsumerState<_ResumeRequestCard> {
     setState(() => _approving = true);
     try {
       final client = Supabase.instance.client;
-      final today = DateTime.now();
-      final nowUtc = today.toUtc().toIso8601String();
+      final today = DateTime.now().toUtc();
+      final nowUtc = today.toIso8601String();
 
       // Compute pause duration and shift planned_due_dates
       int pauseDays = 0;
       final pauseStart = r.pauseStartDate;
       if (pauseStart != null) {
-        pauseDays = today.difference(pauseStart).inDays;
+        pauseDays = today.difference(pauseStart.toUtc()).inDays;
         if (pauseDays > 0) {
           final futureBookings = await client
               .from('bookings')

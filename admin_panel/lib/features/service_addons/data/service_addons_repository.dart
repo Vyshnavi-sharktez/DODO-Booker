@@ -81,4 +81,37 @@ class ServiceAddonsRepository {
   Future<void> delete(String id) async {
     await _supabase.from('addons').delete().eq('id', id);
   }
+
+  // ── Node-level addon assignment (catalog_node_addons junction) ───────────────
+
+  Future<List<ServiceAddon>> fetchNodeAddons(String nodeId) async {
+    final data = await _supabase
+        .from('catalog_node_addons')
+        .select('sort_order, addons(*)')
+        .eq('node_id', nodeId)
+        .order('sort_order', ascending: true);
+    return (data as List).map((row) {
+      final addonMap =
+          Map<String, dynamic>.from(row['addons'] as Map<String, dynamic>);
+      return ServiceAddon.fromMap(addonMap);
+    }).toList();
+  }
+
+  Future<void> assignAddon(String nodeId, String addonId,
+      {int sortOrder = 0}) async {
+    await _supabase.from('catalog_node_addons').upsert({
+      'node_id': nodeId,
+      'addon_id': addonId,
+      'sort_order': sortOrder,
+    });
+  }
+
+  Future<void> unassignAddon(String nodeId, String addonId) async {
+    await _supabase
+        .from('catalog_node_addons')
+        .delete()
+        .eq('node_id', nodeId)
+        .eq('addon_id', addonId);
+  }
+
 }

@@ -67,6 +67,7 @@ class _ServiceDetailModalState extends ConsumerState<ServiceDetailModal> {
   ) {
     setState(() {
       _selections[attrId] = optId;
+      _selectedAddonIds.clear();
       _priceAdjustment = attrs.fold(0.0, (sum, attr) {
         final sel = _selections[attr.id];
         if (sel == null) return sum;
@@ -96,7 +97,7 @@ class _ServiceDetailModalState extends ConsumerState<ServiceDetailModal> {
 
     final attrs =
         ref.watch(serviceAttributesProvider(service.id)).valueOrNull ?? [];
-    final addOns = ref.watch(allActiveAddonsProvider).valueOrNull ?? [];
+    final addOns = ref.watch(nodeAddonsProvider(service.id)).valueOrNull ?? [];
     final addonsTotal = totalAddonsPrice(
       buildSelectedAddons(addOns, _selectedAddonIds),
     );

@@ -10,15 +10,17 @@ class BookingImagesDatasource {
   static const _bucket = 'booking-photos';
 
   /// Uploads [bytes] to Storage and inserts a row in booking_images.
-  /// Returns the public URL of the uploaded image.
+  /// Returns the public URL of the uploaded file.
   Future<String> uploadAndSave({
     required String bookingId,
     required String imageType,
     required Uint8List bytes,
     required String contentType,
     String? uploadedBy,
+    String mediaType = 'photo', // 'photo' | 'video'
   }) async {
-    final fileName = '${DateTime.now().millisecondsSinceEpoch}.jpg';
+    final ext = mediaType == 'video' ? '.mp4' : '.jpg';
+    final fileName = '${DateTime.now().millisecondsSinceEpoch}$ext';
     final path = '$bookingId/$imageType/$fileName';
 
     // ── TEMP LOGGING ──────────────────────────────────────────────────────────
@@ -47,6 +49,7 @@ class BookingImagesDatasource {
         'booking_id': bookingId,
         'image_type': imageType,
         'image_url': url,
+        'media_type': mediaType,
         // ignore: use_null_aware_elements
         if (uploadedBy != null) 'uploaded_by': uploadedBy,
       });

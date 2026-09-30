@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:geolocator/geolocator.dart';
@@ -42,14 +43,21 @@ class _MapPickerScreenState extends State<MapPickerScreen> {
   static const _streetZoom = 13.0;
 
   late final MapController _mapController;
+  late final TextEditingController _searchCtrl;
   late LatLng _selectedLatLng;
   double _currentZoom = _streetZoom;
   bool _isConfirming = false;
+
+  List<NominatimSearchResult> _searchResults = [];
+  bool _searching = false;
+  bool _showResults = false;
+  Timer? _debounce;
 
   @override
   void initState() {
     super.initState();
     _mapController = MapController();
+    _searchCtrl = TextEditingController();
     if (widget.initialLatitude != null && widget.initialLongitude != null) {
       _selectedLatLng =
           LatLng(widget.initialLatitude!, widget.initialLongitude!);
@@ -58,6 +66,62 @@ class _MapPickerScreenState extends State<MapPickerScreen> {
       _selectedLatLng = _fallback;
       _tryJumpToCurrentLocation();
     }
+  }
+
+  @override
+  void dispose() {
+    _debounce?.cancel();
+    _searchCtrl.dispose();
+    super.dispose();
+  }
+
+  void _onSearchChanged(String value) {
+    _debounce?.cancel();
+    if (value.trim().isEmpty) {
+      setState(() {
+        _searchResults = [];
+        _showResults = false;
+      });
+      return;
+    }
+    _debounce =
+        Timer(const Duration(milliseconds: 500), () => _doSearch(value));
+  }
+
+  Future<void> _doSearch(String query) async {
+    if (!mounted) return;
+    setState(() {
+      _searching = true;
+      _showResults = true;
+    });
+    try {
+      final results =
+          await NominatimService().search(query, countrycodes: 'in');
+      if (!mounted) return;
+      setState(() {
+        _searchResults = results;
+        _searching = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _searchResults = [];
+        _searching = false;
+      });
+    }
+  }
+
+  void _selectSearchResult(NominatimSearchResult result) {
+    final newCenter = LatLng(result.lat, result.lon);
+    setState(() {
+      _selectedLatLng = newCenter;
+      _showResults = false;
+      _searchResults = [];
+      _searchCtrl.text = result.displayName;
+    });
+    try {
+      _mapController.move(newCenter, 15);
+    } catch (_) {}
   }
 
   Future<void> _tryJumpToCurrentLocation() async {
@@ -155,6 +219,122 @@ class _MapPickerScreenState extends State<MapPickerScreen> {
                   const SizedBox(height: 24),
                 ],
               ),
+            ),
+          ),
+
+          // Search Bar Overlay
+          Positioned(
+            top: 12,
+            left: 16,
+            right: 16,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  decoration: BoxDecoration(
+                    color: AppColors.surface,
+                    borderRadius: BorderRadius.circular(10),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.12),
+                        blurRadius: 8,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: TextFormField(
+                    controller: _searchCtrl,
+                    onChanged: _onSearchChanged,
+                    decoration: InputDecoration(
+                      hintText: 'Search location…',
+                      hintStyle: const TextStyle(fontSize: 13),
+                      prefixIcon: const Icon(Icons.search_rounded, size: 20),
+                      suffixIcon: _searching
+                          ? const Padding(
+                              padding: EdgeInsets.all(12),
+                              child: SizedBox.square(
+                                dimension: 16,
+                                child: CircularProgressIndicator(strokeWidth: 2),
+                              ),
+                            )
+                          : _searchCtrl.text.isNotEmpty
+                              ? IconButton(
+                                  icon: const Icon(Icons.clear_rounded, size: 18),
+                                  onPressed: () {
+                                    _searchCtrl.clear();
+                                    setState(() {
+                                      _searchResults = [];
+                                      _showResults = false;
+                                    });
+                                  },
+                                )
+                              : null,
+                      border: InputBorder.none,
+                      contentPadding:
+                          const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                      isDense: true,
+                    ),
+                  ),
+                ),
+                if (_showResults)
+                  Container(
+                    margin: const EdgeInsets.only(top: 4),
+                    constraints: const BoxConstraints(maxHeight: 200),
+                    decoration: BoxDecoration(
+                      color: AppColors.surface,
+                      borderRadius: BorderRadius.circular(10),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.12),
+                          blurRadius: 8,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: SingleChildScrollView(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: _searchResults.isEmpty && !_searching
+                            ? [
+                                const Padding(
+                                  padding: EdgeInsets.all(12),
+                                  child: Text(
+                                    'No results found.',
+                                    style: TextStyle(
+                                        fontSize: 13, color: AppColors.textSecondary),
+                                  ),
+                                ),
+                              ]
+                            : _searchResults.map((r) {
+                                return InkWell(
+                                  onTap: () => _selectSearchResult(r),
+                                  borderRadius: BorderRadius.circular(10),
+                                  child: Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 14, vertical: 10),
+                                    child: Row(
+                                      children: [
+                                        const Icon(Icons.place_rounded,
+                                            size: 16, color: AppColors.primary),
+                                        const SizedBox(width: 10),
+                                        Expanded(
+                                          child: Text(
+                                            r.displayName,
+                                            style: const TextStyle(
+                                                fontSize: 13, color: AppColors.textPrimary),
+                                            maxLines: 2,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                );
+                              }).toList(),
+                      ),
+                    ),
+                  ),
+              ],
             ),
           ),
 

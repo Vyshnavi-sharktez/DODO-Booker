@@ -12,15 +12,22 @@ class NominatimAddress {
 }
 
 class NominatimSearchResult {
-  final double latitude;
-  final double longitude;
+  final double lat;
+  final double lon;
   final String displayName;
+  final String? city;
+  final String? placeType;
 
   const NominatimSearchResult({
-    required this.latitude,
-    required this.longitude,
+    required this.lat,
+    required this.lon,
     required this.displayName,
+    this.city,
+    this.placeType,
   });
+
+  double get latitude => lat;
+  double get longitude => lon;
 
   /// Returns the first segment before the first comma — short enough for a pill.
   String get shortLabel => displayName.split(',').first.trim();
@@ -78,18 +85,22 @@ class NominatimService {
     );
   }
 
-  /// Forward geocoding: returns up to 5 place suggestions for [query].
-  /// Restricted to India. Returns [] on error or empty query.
-  Future<List<NominatimSearchResult>> search(String query) async {
+  /// Forward geocoding: returns place suggestions for [query].
+  Future<List<NominatimSearchResult>> search(
+    String query, {
+    String? countrycodes = 'in',
+  }) async {
     if (query.trim().isEmpty) return [];
-    final uri = Uri.https(_host, '/search', {
+    final params = <String, String>{
       'q': query.trim(),
       'format': 'json',
-      'limit': '5',
-      'countrycodes': 'in',
+      'limit': '8',
       'accept-language': 'en',
-    });
-    debugPrint('[DODO][Nominatim] search → q=$query');
+      'addressdetails': '1',
+    };
+    if (countrycodes != null) params['countrycodes'] = countrycodes;
+    final uri = Uri.https(_host, '/search', params);
+    debugPrint('[DODO][Nominatim] search → q=$query countrycodes=$countrycodes');
     try {
       final res = await http
           .get(uri, headers: {'User-Agent': 'DODO-Booker/1.0'})
@@ -98,10 +109,17 @@ class NominatimService {
       final body = jsonDecode(res.body) as List;
       return body.map((item) {
         final m = item as Map<String, dynamic>;
+        final addr = (m['address'] as Map<String, dynamic>?) ?? {};
+        final city = (addr['city'] as String?)
+            ?? (addr['town'] as String?)
+            ?? (addr['village'] as String?)
+            ?? (addr['county'] as String?);
         return NominatimSearchResult(
-          latitude: double.parse(m['lat'] as String),
-          longitude: double.parse(m['lon'] as String),
+          lat: double.parse(m['lat'] as String),
+          lon: double.parse(m['lon'] as String),
           displayName: m['display_name'] as String? ?? '',
+          city: city,
+          placeType: m['type'] as String?,
         );
       }).toList();
     } catch (_) {

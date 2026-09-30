@@ -11,6 +11,25 @@ class NominatimAddress {
   const NominatimAddress({this.line1, this.city, this.state, this.pincode});
 }
 
+class NominatimSearchResult {
+  final String displayName;
+  final double lat;
+  final double lon;
+  final String? city;
+  final String? placeType;
+
+  const NominatimSearchResult({
+    required this.displayName,
+    required this.lat,
+    required this.lon,
+    this.city,
+    this.placeType,
+  });
+
+  double get latitude => lat;
+  double get longitude => lon;
+}
+
 class NominatimService {
   static const _host = 'nominatim.openstreetmap.org';
 
@@ -59,5 +78,46 @@ class NominatimService {
       state: addr['state'] as String?,
       pincode: addr['postcode'] as String?,
     );
+  }
+
+  Future<List<NominatimSearchResult>> search(
+    String query, {
+    String? countrycodes,
+  }) async {
+    final params = <String, String>{
+      'q': query,
+      'format': 'json',
+      'limit': '8',
+      'accept-language': 'en',
+      'addressdetails': '1',
+    };
+    if (countrycodes != null) params['countrycodes'] = countrycodes;
+    final uri = Uri.https(_host, '/search', params);
+
+    debugPrint('[DODO][Nominatim] search → "$query" countrycodes=$countrycodes');
+    try {
+      final res = await http
+          .get(uri, headers: {'User-Agent': 'DODO-Booker/1.0'})
+          .timeout(const Duration(seconds: 8));
+      if (res.statusCode != 200) return [];
+      final list = jsonDecode(res.body) as List<dynamic>;
+      return list.map((item) {
+        final m = item as Map<String, dynamic>;
+        final addr = (m['address'] as Map<String, dynamic>?) ?? {};
+        final city = (addr['city'] as String?)
+            ?? (addr['town'] as String?)
+            ?? (addr['village'] as String?)
+            ?? (addr['county'] as String?);
+        return NominatimSearchResult(
+          displayName: m['display_name'] as String? ?? '',
+          lat: double.parse(m['lat'] as String),
+          lon: double.parse(m['lon'] as String),
+          city: city,
+          placeType: m['type'] as String?,
+        );
+      }).toList();
+    } catch (_) {
+      return [];
+    }
   }
 }

@@ -75,7 +75,8 @@ class _BookingCardState extends ConsumerState<BookingCard> {
     if (_isDodoBooking) return null;
     return switch (_booking.status) {
       'pending' || 'assigned' => _booking.isWarrantyRework ? 'Accept Rework' : 'Accept Service',
-      'accepted' => _booking.isWarrantyRework ? 'Start Rework' : 'Start Service',
+      'accepted' => "I'm On My Way",
+      'en_route' => _booking.isWarrantyRework ? 'Start Rework' : 'Start Service',
       _ => null,
     };
   }
@@ -84,7 +85,8 @@ class _BookingCardState extends ConsumerState<BookingCard> {
     if (_isDodoBooking) return null;
     return switch (_booking.status) {
       'pending' || 'assigned' => 'accepted',
-      'accepted' => 'in_progress',
+      'accepted' => 'en_route',
+      'en_route' => 'in_progress',
       _ => null,
     };
   }
@@ -99,6 +101,12 @@ class _BookingCardState extends ConsumerState<BookingCard> {
           _booking.isWarrantyRework ? 'Accept Warranty Rework' : 'Accept Service',
           'Accept ${_booking.isWarrantyRework ? "warranty rework " : ""}booking #${_booking.bookingNumber}?\n\n'
               'Confirm that you are available to carry out this service.',
+          AppColors.primary,
+        ),
+      'en_route' => (
+          "I'm On My Way",
+          'Confirm you are heading to the customer\'s location for booking #${_booking.bookingNumber}.\n\n'
+              'The customer will be notified that you are on the way.',
           AppColors.primary,
         ),
       'in_progress' => (
@@ -166,6 +174,21 @@ class _BookingCardState extends ConsumerState<BookingCard> {
           title: titleCust,
           message: msgCust,
           notificationType: 'vendor_accepted',
+          entityId: _booking.id,
+        ).ignore();
+      } else if (targetStatus == 'en_route') {
+        ref.read(bookingsRepositoryProvider).createAdminNotification(
+          title: 'Vendor En Route',
+          message: 'Vendor $_vendorName is on the way to booking $_bookingRef.',
+          notificationType: 'vendor_en_route',
+          entityId: _booking.id,
+        ).ignore();
+
+        ref.read(bookingsRepositoryProvider).createCustomerNotification(
+          customerId: _booking.customerId,
+          title: 'Technician On The Way',
+          message: 'Your technician is heading to your location for booking $_bookingRef.',
+          notificationType: 'vendor_en_route',
           entityId: _booking.id,
         ).ignore();
       } else if (targetStatus == 'in_progress') {
@@ -507,6 +530,7 @@ class _BookingCardState extends ConsumerState<BookingCard> {
         !_isDodoBooking &&
         !isOfferExpired;
     final isAccepted = _booking.status == 'accepted' && !_isDodoBooking;
+    final isEnRoute = _booking.status == 'en_route' && !_isDodoBooking;
     final isInProgress = _booking.status == 'in_progress';
     final isAwaitingVerification = _booking.status == 'awaiting_verification';
     final showOtpPanel = isAwaitingVerification;
@@ -689,7 +713,7 @@ class _BookingCardState extends ConsumerState<BookingCard> {
                 maxLines: 2,
               ),
 
-            if (['assigned', 'accepted', 'in_progress'].contains(_booking.status.toLowerCase())) ...[
+            if (['assigned', 'accepted', 'en_route', 'in_progress'].contains(_booking.status.toLowerCase())) ...[
               const SizedBox(height: 8),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -899,8 +923,32 @@ class _BookingCardState extends ConsumerState<BookingCard> {
               ),
             ],
 
-            // ── Actions: Accepted (vendor only) — Start Service ────────────
+            // ── Actions: Accepted (vendor only) — I'm On My Way ──────────
             if (isAccepted) ...[
+              const SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton.icon(
+                  onPressed: _busy ? null : _handleAction,
+                  style: FilledButton.styleFrom(
+                    backgroundColor: const Color(0xFF5C6BC0),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                  icon: _updating
+                      ? const _Spinner(color: Colors.white)
+                      : const Icon(Icons.directions_bike_rounded, size: 18),
+                  label: _updating
+                      ? const SizedBox.shrink()
+                      : const Text("I'm On My Way"),
+                ),
+              ),
+            ],
+
+            // ── Actions: En Route (vendor only) — Start Service ───────────
+            if (isEnRoute) ...[
               const SizedBox(height: 12),
               SizedBox(
                 width: double.infinity,

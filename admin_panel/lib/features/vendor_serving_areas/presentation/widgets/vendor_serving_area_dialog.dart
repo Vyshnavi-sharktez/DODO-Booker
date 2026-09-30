@@ -99,24 +99,85 @@ class _VendorServingAreaDialogState extends State<VendorServingAreaDialog> {
     }
   }
 
+  bool _isGeocoding = false;
+
+  void _moveMap(LatLng center, double zoom) {
+    try {
+      _mapController.move(center, zoom);
+    } catch (_) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        try {
+          _mapController.move(center, zoom);
+        } catch (_) {}
+      });
+    }
+  }
+
   void _selectResult(NominatimSearchResult result) {
     final newCenter = LatLng(result.lat, result.lon);
+    final parts = result.displayName.split(',');
+    final extractedName = parts.first.trim();
+    final extractedCity = result.city?.trim();
+
     setState(() {
       _center = newCenter;
       _showResults = false;
+      _searchResults = [];
       _searchCtrl.clear();
-      if (_nameCtrl.text.isEmpty) {
-        // Extract first segment of display_name as suggested name
-        final parts = result.displayName.split(',');
-        _nameCtrl.text = parts.first.trim();
+      
+      if (extractedName.isNotEmpty) {
+        _nameCtrl.text = extractedName;
       }
-      if (_cityCtrl.text.isEmpty && result.city != null) {
-        _cityCtrl.text = result.city!;
+      if (extractedCity != null && extractedCity.isNotEmpty) {
+        _cityCtrl.text = extractedCity;
       }
     });
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _mapController.move(newCenter, 13.0);
+
+    _moveMap(newCenter, 13.0);
+
+    if (extractedCity == null || extractedCity.isEmpty) {
+      _reverseGeocodeLocation(newCenter, overwriteName: false);
+    }
+  }
+
+  Future<void> _onMapTap(LatLng point) async {
+    setState(() {
+      _center = point;
     });
+
+    _moveMap(point, _mapController.camera.zoom);
+    await _reverseGeocodeLocation(point, overwriteName: true);
+  }
+
+  Future<void> _reverseGeocodeLocation(
+    LatLng point, {
+    bool overwriteName = false,
+  }) async {
+    if (_isGeocoding) return;
+    setState(() => _isGeocoding = true);
+
+    try {
+      final addr = await NominatimService()
+          .reverseGeocode(point.latitude, point.longitude);
+      if (!mounted) return;
+
+      setState(() {
+        _isGeocoding = false;
+        if (addr.line1 != null && addr.line1!.trim().isNotEmpty) {
+          if (overwriteName || _nameCtrl.text.trim().isEmpty) {
+            _nameCtrl.text = addr.line1!.trim();
+          }
+        }
+        if (addr.city != null && addr.city!.trim().isNotEmpty) {
+          _cityCtrl.text = addr.city!.trim();
+        }
+      });
+    } catch (e) {
+      debugPrint('[VendorServingAreaDialog] Reverse geocode error: $e');
+      if (mounted) {
+        setState(() => _isGeocoding = false);
+      }
+    }
   }
 
   void _onRadiusChanged(String value) {
@@ -368,6 +429,18 @@ class _VendorServingAreaDialogState extends State<VendorServingAreaDialog> {
               '(tap to reposition center)',
               style: TextStyle(fontSize: 11, color: AppColors.textSecondary),
             ),
+            if (_isGeocoding) ...[
+              const SizedBox(width: 8),
+              const SizedBox.square(
+                dimension: 12,
+                child: CircularProgressIndicator(strokeWidth: 1.5),
+              ),
+              const SizedBox(width: 4),
+              Text(
+                'Locating…',
+                style: TextStyle(fontSize: 11, color: AppColors.primary),
+              ),
+            ],
           ],
         ),
         const SizedBox(height: 6),
@@ -380,10 +453,7 @@ class _VendorServingAreaDialogState extends State<VendorServingAreaDialog> {
               options: MapOptions(
                 initialCenter: _center,
                 initialZoom: _streetZoom,
-                onTap: (_, point) {
-                  setState(() => _center = point);
-                  _mapController.move(point, _mapController.camera.zoom);
-                },
+                onTap: (_, point) => _onMapTap(point),
                 onPositionChanged: (camera, _) {},
               ),
               children: [

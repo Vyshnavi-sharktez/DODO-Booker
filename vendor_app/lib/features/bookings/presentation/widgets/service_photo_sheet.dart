@@ -6,10 +6,12 @@ import '../../../../core/constants/app_colors.dart';
 import '../../../auth/presentation/providers/auth_controller.dart';
 import '../providers/bookings_provider.dart';
 
-/// Bottom sheet that lets the vendor upload before/after service photos.
+typedef _MediaItem = ({String url, String mediaType});
+
+/// Bottom sheet that lets the vendor upload before/after service photos and videos.
 ///
 /// Returns `true` via [Navigator.pop] when the user taps "Done" with ≥ 1
-/// uploaded photo, or `null` if they cancel.
+/// uploaded file, or `null` if they cancel.
 class ServicePhotoSheet extends ConsumerStatefulWidget {
   const ServicePhotoSheet({
     super.key,
@@ -41,92 +43,114 @@ class ServicePhotoSheet extends ConsumerStatefulWidget {
 
 class _ServicePhotoSheetState extends ConsumerState<ServicePhotoSheet> {
   final _picker = ImagePicker();
-  final List<String> _urls = [];
+  final List<_MediaItem> _media = [];
   bool _isUploading = false;
 
   String get _title =>
-      widget.imageType == 'before' ? 'Before Service Photos' : 'After Service Photos';
+      widget.imageType == 'before' ? 'Before Service Media' : 'After Service Media';
 
   String get _subtitle => widget.imageType == 'before'
-      ? 'Capture the work area BEFORE starting the service. At least 1 photo required.'
-      : 'Capture the completed work AFTER the service. At least 1 photo required.';
+      ? 'Capture the work area BEFORE starting. At least 1 photo or video required.'
+      : 'Capture the completed work AFTER service. At least 1 photo or video required.';
 
-  Future<void> _addPhoto() async {
+  static String _mediaTypeFrom(String? mimeType) {
+    if (mimeType != null && mimeType.startsWith('video/')) return 'video';
+    return 'photo';
+  }
+
+  Future<void> _addMedia() async {
     if (_isUploading) return;
 
-    ImageSource? source;
     if (kIsWeb) {
-      source = ImageSource.gallery;
-    } else {
-      source = await showDialog<ImageSource>(
-        context: context,
-        builder: (_) => SimpleDialog(
-          title: const Text('Add Photo'),
-          children: [
-            SimpleDialogOption(
-              onPressed: () => Navigator.of(context).pop(ImageSource.camera),
-              child: const Row(children: [
-                Icon(Icons.camera_alt_outlined),
-                SizedBox(width: 12),
-                Text('Take Photo'),
-              ]),
-            ),
-            SimpleDialogOption(
-              onPressed: () => Navigator.of(context).pop(ImageSource.gallery),
-              child: const Row(children: [
-                Icon(Icons.photo_library_outlined),
-                SizedBox(width: 12),
-                Text('Choose from Gallery'),
-              ]),
-            ),
-          ],
-        ),
-      );
+      await _pickAndUpload(await _picker.pickMultipleMedia());
+      return;
     }
-    if (source == null || !mounted) return;
 
-    List<XFile> pickedList = [];
+    final choice = await showDialog<_PickChoice>(
+      context: context,
+      builder: (_) => SimpleDialog(
+        title: const Text('Add Media'),
+        children: [
+          SimpleDialogOption(
+            onPressed: () => Navigator.of(context).pop(_PickChoice.cameraPhoto),
+            child: const Row(children: [
+              Icon(Icons.camera_alt_outlined),
+              SizedBox(width: 12),
+              Text('Take Photo'),
+            ]),
+          ),
+          SimpleDialogOption(
+            onPressed: () => Navigator.of(context).pop(_PickChoice.cameraVideo),
+            child: const Row(children: [
+              Icon(Icons.videocam_outlined),
+              SizedBox(width: 12),
+              Text('Record Video'),
+            ]),
+          ),
+          SimpleDialogOption(
+            onPressed: () => Navigator.of(context).pop(_PickChoice.gallery),
+            child: const Row(children: [
+              Icon(Icons.photo_library_outlined),
+              SizedBox(width: 12),
+              Text('Choose from Gallery'),
+            ]),
+          ),
+        ],
+      ),
+    );
+    if (choice == null || !mounted) return;
+
+    List<XFile> picked = [];
     try {
-      if (source == ImageSource.gallery && !kIsWeb) {
-        pickedList = await _picker.pickMultiImage(
-          imageQuality: 80,
-          maxWidth: 1920,
-        );
-      } else {
-        final single = await _picker.pickImage(
-          source: source,
-          imageQuality: 80,
-          maxWidth: 1920,
-        );
-        if (single != null) pickedList.add(single);
+      switch (choice) {
+        case _PickChoice.cameraPhoto:
+          final f = await _picker.pickImage(
+            source: ImageSource.camera,
+            imageQuality: 80,
+            maxWidth: 1920,
+          );
+          if (f != null) picked.add(f);
+        case _PickChoice.cameraVideo:
+          final f = await _picker.pickVideo(source: ImageSource.camera);
+          if (f != null) picked.add(f);
+        case _PickChoice.gallery:
+          picked = await _picker.pickMultipleMedia();
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Could not open image picker: $e'),
+            content: Text('Could not open picker: $e'),
             backgroundColor: AppColors.error,
           ),
         );
       }
       return;
     }
-    if (pickedList.isEmpty || !mounted) return;
 
+    if (picked.isEmpty || !mounted) return;
+    await _pickAndUpload(picked);
+  }
+
+  Future<void> _pickAndUpload(List<XFile> files) async {
+    if (files.isEmpty || !mounted) return;
     setState(() => _isUploading = true);
     try {
       final vendorName = ref.read(currentVendorUserProvider)?.name;
-      for (final picked in pickedList) {
-        final bytes = await picked.readAsBytes();
-        final contentType = picked.mimeType ?? 'image/jpeg';
+      for (final file in files) {
+        final mediaType = _mediaTypeFrom(file.mimeType);
+        final contentType = file.mimeType ??
+            (mediaType == 'video' ? 'video/mp4' : 'image/jpeg');
+        final bytes = await file.readAsBytes();
         final url = await ref.read(bookingImagesDatasourceProvider).uploadAndSave(
               bookingId: widget.bookingId,
               imageType: widget.imageType,
               bytes: bytes,
               contentType: contentType,
               uploadedBy: vendorName,
+              mediaType: mediaType,
             );
-        if (mounted) setState(() => _urls.add(url));
+        if (mounted) setState(() => _media.add((url: url, mediaType: mediaType)));
       }
     } catch (e) {
       if (mounted) {
@@ -145,7 +169,8 @@ class _ServicePhotoSheetState extends ConsumerState<ServicePhotoSheet> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final canDone = _urls.isNotEmpty && !_isUploading;
+    final canDone = _media.isNotEmpty && !_isUploading;
+    final count = _media.length;
 
     return Dialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -196,12 +221,12 @@ class _ServicePhotoSheetState extends ConsumerState<ServicePhotoSheet> {
               ),
               const Divider(height: 1),
 
-              // Photo grid / empty state
+              // Media grid / empty state
               ConstrainedBox(
                 constraints: const BoxConstraints(maxHeight: 240),
-                child: _urls.isEmpty && !_isUploading
+                child: _media.isEmpty && !_isUploading
                     ? InkWell(
-                        onTap: _addPhoto,
+                        onTap: _addMedia,
                         child: SizedBox(
                           width: double.infinity,
                           child: Padding(
@@ -214,7 +239,7 @@ class _ServicePhotoSheetState extends ConsumerState<ServicePhotoSheet> {
                                     size: 52, color: AppColors.textHint),
                                 const SizedBox(height: 12),
                                 Text(
-                                  'Tap to add a photo',
+                                  'Tap to add photos or videos',
                                   style: theme.textTheme.bodyMedium
                                       ?.copyWith(
                                     color: AppColors.textSecondary,
@@ -231,11 +256,13 @@ class _ServicePhotoSheetState extends ConsumerState<ServicePhotoSheet> {
                           spacing: 10,
                           runSpacing: 10,
                           children: [
-                            ..._urls.map((url) => _PhotoTile(url: url)),
+                            ..._media.map((m) => m.mediaType == 'video'
+                                ? _VideoTile(url: m.url)
+                                : _PhotoTile(url: m.url)),
                             if (_isUploading)
                               const _UploadingTile()
                             else
-                              _AddPhotoTile(onTap: _addPhoto),
+                              _AddMediaTile(onTap: _addMedia),
                           ],
                         ),
                       ),
@@ -276,9 +303,9 @@ class _ServicePhotoSheetState extends ConsumerState<ServicePhotoSheet> {
                               borderRadius: BorderRadius.circular(8)),
                         ),
                         child: Text(
-                          _urls.isEmpty
+                          count == 0
                               ? 'Done'
-                              : 'Done (${_urls.length} photo${_urls.length == 1 ? '' : 's'})',
+                              : 'Done ($count file${count == 1 ? '' : 's'})',
                         ),
                       ),
                     ),
@@ -292,6 +319,8 @@ class _ServicePhotoSheetState extends ConsumerState<ServicePhotoSheet> {
     );
   }
 }
+
+enum _PickChoice { cameraPhoto, cameraVideo, gallery }
 
 // ── Helper widgets ────────────────────────────────────────────────────────────
 
@@ -320,6 +349,39 @@ class _PhotoTile extends StatelessWidget {
   }
 }
 
+class _VideoTile extends StatelessWidget {
+  const _VideoTile({required this.url});
+  final String url;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 100,
+      height: 100,
+      decoration: BoxDecoration(
+        color: AppColors.primaryLight.withValues(alpha: 0.4),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: AppColors.primary.withValues(alpha: 0.3)),
+      ),
+      child: const Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.videocam_rounded, color: AppColors.primary, size: 34),
+          SizedBox(height: 4),
+          Text(
+            'Video',
+            style: TextStyle(
+              color: AppColors.primary,
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _UploadingTile extends StatelessWidget {
   const _UploadingTile();
 
@@ -339,8 +401,8 @@ class _UploadingTile extends StatelessWidget {
   }
 }
 
-class _AddPhotoTile extends StatelessWidget {
-  const _AddPhotoTile({required this.onTap});
+class _AddMediaTile extends StatelessWidget {
+  const _AddMediaTile({required this.onTap});
   final VoidCallback onTap;
 
   @override

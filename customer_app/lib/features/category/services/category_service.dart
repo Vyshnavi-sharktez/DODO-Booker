@@ -144,33 +144,25 @@ class CategoryService {
   }
 
   // ── Add-ons ────────────────────────────────────────────────────────────────
+  // Addons are assigned directly to bookable service nodes (no inheritance).
 
-  Future<List<AddOnModel>> fetchAllActiveAddons() async {
+  Future<List<AddOnModel>> fetchAddonsForNode(String nodeId) async {
     if (!_ready) {
-      debugPrint('[DODO][CategoryService] fetchAllActiveAddons → MOCK');
+      debugPrint('[DODO][CategoryService] fetchAddonsForNode($nodeId) → MOCK');
       return [];
     }
-    debugPrint('[DODO][CategoryService] fetchAllActiveAddons → SUPABASE');
+    debugPrint('[DODO][CategoryService] fetchAddonsForNode($nodeId) → SUPABASE');
     final data = await _db
-        .from('addons')
-        .select()
-        .eq('is_active', true)
-        .order('name', ascending: true);
+        .from('catalog_node_addons')
+        .select('sort_order, addons(*)')
+        .eq('node_id', nodeId)
+        .order('sort_order', ascending: true);
     return (data as List)
-        .map((e) => AddOnModel.fromJson(e as Map<String, dynamic>))
-        .toList();
-  }
-
-  Future<List<AddOnModel>> fetchAddonsForService(String serviceId) async {
-    if (!_ready) return [];
-    final data = await _db
-        .from('addons')
-        .select()
-        .eq('is_active', true)
-        .eq('service_id', serviceId)
-        .order('name', ascending: true);
-    return (data as List)
-        .map((e) => AddOnModel.fromJson(e as Map<String, dynamic>))
+        .where((row) {
+          final addon = row['addons'] as Map<String, dynamic>?;
+          return addon != null && (addon['is_active'] as bool? ?? false);
+        })
+        .map((row) => AddOnModel.fromJson(row['addons'] as Map<String, dynamic>))
         .toList();
   }
 

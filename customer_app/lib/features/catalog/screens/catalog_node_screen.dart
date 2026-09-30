@@ -142,7 +142,7 @@ class _CatalogNodeScreenState extends ConsumerState<CatalogNodeScreen> {
         ? (ref.watch(serviceAttributesProvider(node.id)).valueOrNull ?? [])
         : <ServiceAttributeModel>[];
     final addOns = node.isLeafBookable
-        ? (ref.watch(allActiveAddonsProvider).valueOrNull ?? [])
+        ? (ref.watch(nodeAddonsProvider(node.id)).valueOrNull ?? [])
         : <AddOnModel>[];
     final faqs = node.isLeafBookable
         ? (ref
@@ -245,7 +245,10 @@ class _CatalogNodeScreenState extends ConsumerState<CatalogNodeScreen> {
         onAddonToggled: _onAddonToggled,
         onAmcPlanSelected: (plan) => setState(() => _selectedAmcPlan = plan),
         effectiveAttrId: effectiveAttrId,
-        onAttrSelected: (id) => setState(() => _selectedAttrId = id),
+        onAttrSelected: (id) => setState(() {
+          _selectedAttrId = id;
+          _selectedAddonIds.clear();
+        }),
         selectedAttrPrice: selectedAttrPrice,
         selectedAttrOriginalPrice: selectedAttrOriginalPrice,
         startsAtPrice: startsAtPrice,
@@ -370,8 +373,10 @@ class _CatalogNodeScreenState extends ConsumerState<CatalogNodeScreen> {
                           _AttributeVariantSection(
                             attrs: attrEntries,
                             selectedAttrId: effectiveAttrId,
-                            onAttrSelected: (id) =>
-                                setState(() => _selectedAttrId = id),
+                            onAttrSelected: (id) => setState(() {
+                              _selectedAttrId = id;
+                              _selectedAddonIds.clear();
+                            }),
                             quantities: _quantities,
                             onQtyChanged: _setQty,
                           ),
@@ -638,7 +643,10 @@ class _CatalogNodeScreenState extends ConsumerState<CatalogNodeScreen> {
                   _AttributeVariantSection(
                     attrs: attrEntries,
                     selectedAttrId: effectiveAttrId,
-                    onAttrSelected: (id) => setState(() => _selectedAttrId = id),
+                    onAttrSelected: (id) => setState(() {
+                      _selectedAttrId = id;
+                      _selectedAddonIds.clear();
+                    }),
                     quantities: _quantities,
                     onQtyChanged: _setQty,
                   ),

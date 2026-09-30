@@ -1,7 +1,7 @@
 class LoyaltyTransactionModel {
   final String id;
   final String? bookingId;
-  final String type; // 'earn' | 'redeem'
+  final String type; // 'EARN' | 'REDEEM' | 'ADJUST'
   final int points;
   final String? description;
   final DateTime createdAt;
@@ -15,7 +15,7 @@ class LoyaltyTransactionModel {
     required this.createdAt,
   });
 
-  bool get isEarn => type == 'earn';
+  bool get isEarn => type.toUpperCase() == 'EARN';
 
   factory LoyaltyTransactionModel.fromJson(Map<String, dynamic> json) {
     return LoyaltyTransactionModel(

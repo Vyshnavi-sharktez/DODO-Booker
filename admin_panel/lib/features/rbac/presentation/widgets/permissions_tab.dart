@@ -36,15 +36,38 @@ class PermissionsTab extends ConsumerWidget {
   }
 }
 
-class _PermissionsView extends StatelessWidget {
+class _PermissionsView extends StatefulWidget {
   const _PermissionsView({required this.permissions});
   final List<Permission> permissions;
 
   @override
+  State<_PermissionsView> createState() => _PermissionsViewState();
+}
+
+class _PermissionsViewState extends State<_PermissionsView> {
+  final TextEditingController _searchCtrl = TextEditingController();
+  String _query = '';
+
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final filtered = widget.permissions.where((p) {
+      if (_query.isEmpty) return true;
+      final q = _query.toLowerCase();
+      final nameMatch = p.name.toLowerCase().contains(q);
+      final descMatch = (p.description ?? '').toLowerCase().contains(q);
+      final moduleMatch = p.module.toLowerCase().contains(q);
+      return nameMatch || descMatch || moduleMatch;
+    }).toList();
+
     // Group by module
     final byModule = <String, List<Permission>>{};
-    for (final p in permissions) {
+    for (final p in filtered) {
       byModule.putIfAbsent(p.module, () => []).add(p);
     }
 
@@ -70,11 +93,40 @@ class _PermissionsView extends StatelessWidget {
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: Text(
-                  '${permissions.length} total',
+                  '${widget.permissions.length} total',
                   style: TextStyle(
                     color: AppColors.primary,
                     fontSize: 12,
                     fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 16),
+              SizedBox(
+                width: 260,
+                child: TextField(
+                  controller: _searchCtrl,
+                  onChanged: (val) => setState(() => _query = val.trim()),
+                  decoration: InputDecoration(
+                    hintText: 'Filter permissions…',
+                    hintStyle: const TextStyle(fontSize: 13),
+                    prefixIcon: const Icon(Icons.search_rounded, size: 18),
+                    suffixIcon: _query.isNotEmpty
+                        ? IconButton(
+                            icon: const Icon(Icons.clear_rounded, size: 16),
+                            onPressed: () {
+                              _searchCtrl.clear();
+                              setState(() => _query = '');
+                            },
+                          )
+                        : null,
+                    isDense: true,
+                    contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 10, vertical: 8),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      borderSide: BorderSide(color: AppColors.border),
+                    ),
                   ),
                 ),
               ),
@@ -94,7 +146,14 @@ class _PermissionsView extends StatelessWidget {
         ),
         Expanded(
           child: byModule.isEmpty
-              ? const Center(child: Text('No permissions found.'))
+              ? Center(
+                  child: Text(
+                    _query.isEmpty
+                        ? 'No permissions found.'
+                        : 'No permissions matching "$_query".',
+                    style: TextStyle(color: AppColors.textSecondary),
+                  ),
+                )
               : ListView(
                   padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
                   children: byModule.entries.map((entry) {
@@ -197,37 +256,40 @@ class _PermissionRow extends StatelessWidget {
       child: Row(
         children: [
           // Permission name badge (identifier, e.g. "booking.view")
-          Flexible(
-            child: Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-              decoration: BoxDecoration(
-                color: AppColors.background,
-                borderRadius: BorderRadius.circular(4),
-                border: Border.all(color: AppColors.border),
-              ),
-              child: Text(
-                permission.name,
-                style: const TextStyle(
-                  fontFamily: 'monospace',
-                  fontSize: 12,
-                  fontWeight: FontWeight.w500,
+          SizedBox(
+            width: 200,
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: AppColors.background,
+                  borderRadius: BorderRadius.circular(4),
+                  border: Border.all(color: AppColors.border),
                 ),
-                overflow: TextOverflow.ellipsis,
+                child: Text(
+                  permission.name,
+                  style: const TextStyle(
+                    fontFamily: 'monospace',
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
               ),
             ),
           ),
           const SizedBox(width: 16),
-          if (permission.description != null)
-            Expanded(
-              child: Text(
-                permission.description!,
-                style: TextStyle(
-                  color: AppColors.textSecondary,
-                  fontSize: 12,
-                ),
+          Expanded(
+            child: Text(
+              permission.description ?? 'No description available.',
+              style: TextStyle(
+                color: AppColors.textSecondary,
+                fontSize: 13,
               ),
             ),
+          ),
         ],
       ),
     );

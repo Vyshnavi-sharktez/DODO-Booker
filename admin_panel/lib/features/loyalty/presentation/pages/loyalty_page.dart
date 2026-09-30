@@ -70,11 +70,11 @@ class _LoyaltyPageState extends State<LoyaltyPage> {
       final earnData = await _client
           .from('loyalty_transactions')
           .select('points')
-          .eq('transaction_type', 'earn');
+          .eq('transaction_type', 'EARN');
       final redeemData = await _client
           .from('loyalty_transactions')
           .select('points')
-          .eq('transaction_type', 'redeem');
+          .eq('transaction_type', 'REDEEM');
 
       int earnedSum = 0;
       int redeemedSum = 0;

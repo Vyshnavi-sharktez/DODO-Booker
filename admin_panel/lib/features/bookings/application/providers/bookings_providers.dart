@@ -8,7 +8,7 @@ final bookingImagesProvider = FutureProvider.autoDispose
   final client = ref.watch(supabaseClientProvider);
   final rows = await client
       .from('booking_images')
-      .select('image_type, image_url, created_at')
+      .select('image_type, image_url, media_type, created_at')
       .eq('booking_id', bookingId)
       .order('created_at');
   return List<Map<String, dynamic>>.from(rows as List);

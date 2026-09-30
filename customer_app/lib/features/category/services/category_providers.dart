@@ -36,14 +36,12 @@ final servicesBySubcategoryProvider =
   },
 );
 
-final allActiveAddonsProvider = FutureProvider<List<AddOnModel>>((ref) {
-  debugPrint('[DODO][Provider] allActiveAddonsProvider');
-  return ref.read(categoryServiceProvider).fetchAllActiveAddons();
-});
-
-final serviceAddonsProvider =
-    FutureProvider.family<List<AddOnModel>, String>((ref, serviceId) {
-  return ref.read(categoryServiceProvider).fetchAddonsForService(serviceId);
+/// Addons directly assigned to a specific bookable service node.
+/// No inheritance — only addons explicitly assigned to [nodeId] are returned.
+final nodeAddonsProvider =
+    FutureProvider.family<List<AddOnModel>, String>((ref, nodeId) {
+  debugPrint('[DODO][Provider] nodeAddonsProvider(nodeId=$nodeId)');
+  return ref.read(categoryServiceProvider).fetchAddonsForNode(nodeId);
 });
 
 final serviceAttributesProvider =

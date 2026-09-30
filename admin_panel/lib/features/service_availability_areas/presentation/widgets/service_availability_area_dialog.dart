@@ -5,6 +5,7 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/services/nominatim_service.dart';
+import '../../../vendors/presentation/widgets/vendor_location_picker_dialog.dart';
 import '../../domain/models/service_availability_area.dart';
 
 class ServiceAvailabilityAreaDialog extends StatefulWidget {
@@ -104,23 +105,117 @@ class _ServiceAvailabilityAreaDialogState
     }
   }
 
+  bool _isGeocoding = false;
+
+  void _moveMap(LatLng center, double zoom) {
+    try {
+      _mapController.move(center, zoom);
+    } catch (_) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        try {
+          _mapController.move(center, zoom);
+        } catch (_) {}
+      });
+    }
+  }
+
   void _selectResult(NominatimSearchResult result) {
     final newCenter = LatLng(result.lat, result.lon);
+    final parts = result.displayName.split(',');
+    final extractedName = parts.first.trim();
+    final extractedCity = result.city?.trim();
+
     setState(() {
       _center = newCenter;
       _showResults = false;
-      _searchCtrl.clear();
-      if (_nameCtrl.text.isEmpty) {
-        final parts = result.displayName.split(',');
-        _nameCtrl.text = parts.first.trim();
+      _searchResults = [];
+      _searchCtrl.text = result.displayName;
+      
+      if (extractedName.isNotEmpty) {
+        _nameCtrl.text = extractedName;
       }
-      if (_cityCtrl.text.isEmpty && result.city != null) {
-        _cityCtrl.text = result.city!;
+      if (extractedCity != null && extractedCity.isNotEmpty) {
+        _cityCtrl.text = extractedCity;
       }
     });
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _mapController.move(newCenter, 13.0);
+
+    _moveMap(newCenter, 13.0);
+
+    if (extractedCity == null || extractedCity.isEmpty) {
+      _reverseGeocodeLocation(newCenter, overwriteName: false);
+    }
+  }
+
+  Future<void> _pickOnMap() async {
+    final result = await showDialog<VendorLocationPickerResult>(
+      context: context,
+      builder: (_) => VendorLocationPickerDialog(
+        initialLatitude: _center.latitude,
+        initialLongitude: _center.longitude,
+      ),
+    );
+
+    if (result == null || !mounted) return;
+
+    final newCenter = LatLng(result.latitude, result.longitude);
+    final areaName = result.address?.trim();
+    final city = result.city?.trim();
+
+    setState(() {
+      _center = newCenter;
+      final fullAddr = [areaName, city].where((e) => e != null && e.isNotEmpty).join(', ');
+      if (fullAddr.isNotEmpty) {
+        _searchCtrl.text = fullAddr;
+      }
+      if (areaName != null && areaName.isNotEmpty) {
+        _nameCtrl.text = areaName;
+      }
+      if (city != null && city.isNotEmpty) {
+        _cityCtrl.text = city;
+      }
     });
+
+    _moveMap(newCenter, 13.0);
+  }
+
+  Future<void> _onMapTap(LatLng point) async {
+    setState(() {
+      _center = point;
+    });
+
+    _moveMap(point, _mapController.camera.zoom);
+    await _reverseGeocodeLocation(point, overwriteName: true);
+  }
+
+  Future<void> _reverseGeocodeLocation(
+    LatLng point, {
+    bool overwriteName = false,
+  }) async {
+    if (_isGeocoding) return;
+    setState(() => _isGeocoding = true);
+
+    try {
+      final addr = await NominatimService()
+          .reverseGeocode(point.latitude, point.longitude);
+      if (!mounted) return;
+
+      setState(() {
+        _isGeocoding = false;
+        if (addr.line1 != null && addr.line1!.trim().isNotEmpty) {
+          if (overwriteName || _nameCtrl.text.trim().isEmpty) {
+            _nameCtrl.text = addr.line1!.trim();
+          }
+        }
+        if (addr.city != null && addr.city!.trim().isNotEmpty) {
+          _cityCtrl.text = addr.city!.trim();
+        }
+      });
+    } catch (e) {
+      debugPrint('[ServiceAreaDialog] Reverse geocode error: $e');
+      if (mounted) {
+        setState(() => _isGeocoding = false);
+      }
+    }
   }
 
   void _onRadiusChanged(String value) {
@@ -281,7 +376,18 @@ class _ServiceAvailabilityAreaDialogState
                       child: CircularProgressIndicator(strokeWidth: 2),
                     ),
                   )
-                : null,
+                : _searchCtrl.text.isNotEmpty
+                    ? IconButton(
+                        icon: const Icon(Icons.clear_rounded, size: 18),
+                        onPressed: () {
+                          _searchCtrl.clear();
+                          setState(() {
+                            _searchResults = [];
+                            _showResults = false;
+                          });
+                        },
+                      )
+                    : null,
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(10),
             ),
@@ -420,6 +526,29 @@ class _ServiceAvailabilityAreaDialogState
               '(tap to reposition center)',
               style: TextStyle(fontSize: 11, color: AppColors.textSecondary),
             ),
+            if (_isGeocoding) ...[
+              const SizedBox(width: 8),
+              const SizedBox.square(
+                dimension: 12,
+                child: CircularProgressIndicator(strokeWidth: 1.5),
+              ),
+              const SizedBox(width: 4),
+              Text(
+                'Locating…',
+                style: TextStyle(fontSize: 11, color: AppColors.primary),
+              ),
+            ],
+            const Spacer(),
+            OutlinedButton.icon(
+              onPressed: _pickOnMap,
+              icon: const Icon(Icons.map_outlined, size: 14),
+              label: const Text('Pick on Map', style: TextStyle(fontSize: 11)),
+              style: OutlinedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                minimumSize: Size.zero,
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+            ),
           ],
         ),
         const SizedBox(height: 6),
@@ -432,10 +561,7 @@ class _ServiceAvailabilityAreaDialogState
               options: MapOptions(
                 initialCenter: _center,
                 initialZoom: _streetZoom,
-                onTap: (_, point) {
-                  setState(() => _center = point);
-                  _mapController.move(point, _mapController.camera.zoom);
-                },
+                onTap: (_, point) => _onMapTap(point),
                 onPositionChanged: (camera, _) {},
               ),
               children: [

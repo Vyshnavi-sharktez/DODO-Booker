@@ -126,6 +126,7 @@ class _CatalogNodeModalState extends ConsumerState<CatalogNodeModal> {
       String attrId, String optId, List<ServiceAttributeModel> attrs) {
     setState(() {
       _selections[attrId] = optId;
+      _selectedAddonIds.clear();
       _priceAdjustment = attrs.fold(0.0, (sum, attr) {
         final sel = _selections[attr.id];
         if (sel == null) return sum;
@@ -153,7 +154,7 @@ class _CatalogNodeModalState extends ConsumerState<CatalogNodeModal> {
         ? (ref.watch(serviceAttributesProvider(node.id)).valueOrNull ?? [])
         : <ServiceAttributeModel>[];
     final addOns = node.isLeafBookable
-        ? (ref.watch(allActiveAddonsProvider).valueOrNull ?? [])
+        ? (ref.watch(nodeAddonsProvider(node.id)).valueOrNull ?? [])
         : <AddOnModel>[];
     final faqs = node.isLeafBookable
         ? (ref

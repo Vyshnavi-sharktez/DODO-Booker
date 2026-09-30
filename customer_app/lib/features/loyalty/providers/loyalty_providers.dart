@@ -12,13 +12,16 @@ final loyaltySettingsProvider =
 
 // Watches auth state so the provider re-runs after login/logout, ensuring
 // loyalty points are fetched from the correct customer on mobile fresh sessions.
-final customerLoyaltyProvider = FutureProvider<CustomerLoyaltyModel>((ref) {
+// autoDispose so the balance re-fetches each time the loyalty modal opens,
+// ensuring points earned from completed bookings are always shown fresh.
+final customerLoyaltyProvider =
+    FutureProvider.autoDispose<CustomerLoyaltyModel>((ref) {
   ref.watch(authNotifierProvider);
   return _loyaltyService.getCustomerLoyalty();
 });
 
 final loyaltyTransactionsProvider =
-    FutureProvider<List<LoyaltyTransactionModel>>(
+    FutureProvider.autoDispose<List<LoyaltyTransactionModel>>(
         (ref) => _loyaltyService.getTransactions());
 
 /// Scoped loyalty resolution: returns the resolved loyalty config JSONB for a
