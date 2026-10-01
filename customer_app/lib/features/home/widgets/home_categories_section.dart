@@ -43,8 +43,13 @@ class HomeCategoriesSection extends StatelessWidget {
           loading: () => const _Skeleton(),
           error: (_, _) => const SizedBox.shrink(),
           data: (nodes) {
-            final visible =
-                nodes.where((n) => n.name.trim().isNotEmpty).toList();
+            // Hidden nodes occupy sort_order slots but are not rendered.
+            // Non-hidden nodes appear in their natural sort_order positions.
+            final visible = nodes
+                .where((n) =>
+                    n.availabilityStatus != 'hidden' &&
+                    n.name.trim().isNotEmpty)
+                .toList();
             return visible.isEmpty
                 ? const SizedBox.shrink()
                 : _Carousel(nodes: visible, onSelect: onCategorySelected);
