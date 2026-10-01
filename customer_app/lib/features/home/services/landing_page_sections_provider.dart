@@ -49,6 +49,15 @@ final _kDefaultSections = const [
     config: {'title': 'Our Services', 'show_see_all': true},
   ),
   LandingPageSection(
+    id: 'default-mobile-promo-banner',
+    sectionType: 'mobile_promo_banner',
+    sectionName: 'Daily Offer',
+    displayOrder: 25,
+    isEnabled: true,
+    isPublished: true,
+    config: {},
+  ),
+  LandingPageSection(
     id: 'default-sub-services',
     sectionType: 'sub_services',
     sectionName: 'Sub Services',

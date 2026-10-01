@@ -11,7 +11,7 @@ final homeBannersProvider = FutureProvider<List<BannerModel>>((ref) {
 
 /// Root catalog nodes shown in the home categories carousel.
 final featuredCatalogNodesProvider =
-    FutureProvider<List<CatalogNodeModel>>((ref) {
+    FutureProvider.autoDispose<List<CatalogNodeModel>>((ref) {
   return ref.read(homeServiceProvider).fetchFeaturedCatalogNodes();
 });
 

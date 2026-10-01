@@ -708,25 +708,73 @@ class _RightPaneContent extends ConsumerWidget {
                   child: Center(child: Text('Could not load services'))),
               data: (cards) {
                 if (cards.isEmpty) return const _SliverEmpty();
-                // Both desktop and mobile use a single-column list card.
-                // Desktop keeps the existing _DesktopListCard layout.
-                // Mobile uses the same card (full-width, one per row) so all
-                // content (image, loyalty, price, description, View details,
-                // Add/Not Available) is preserved — only the grid is removed.
-                return SliverList(
-                  delegate: SliverChildBuilderDelegate(
-                    (ctx, i) => Padding(
-                      padding: EdgeInsets.only(
-                          bottom: i < cards.length - 1 ? 14 : 0),
-                      child: _DesktopListCard(
-                        node: cards[i],
-                        parentId: sub?.id ?? categoryId,
-                        onBrowse: cards[i].hasChildren
-                            ? () => onBrowseNode(cards[i].id)
-                            : null,
+
+                final isMobileScreen =
+                    MediaQuery.sizeOf(context).width < _kBreakpoint;
+
+                // Desktop: single-column list, all cards identical.
+                if (!isMobileScreen) {
+                  return SliverList(
+                    delegate: SliverChildBuilderDelegate(
+                      (ctx, i) => Padding(
+                        padding: EdgeInsets.only(
+                            bottom: i < cards.length - 1 ? 14 : 0),
+                        child: _DesktopListCard(
+                          node: cards[i],
+                          parentId: sub?.id ?? categoryId,
+                          onBrowse: cards[i].hasChildren
+                              ? () => onBrowseNode(cards[i].id)
+                              : null,
+                        ),
                       ),
+                      childCount: cards.length,
                     ),
-                    childCount: cards.length,
+                  );
+                }
+
+                // Mobile: hybrid layout.
+                // hasChildren → compact 3-col grid (non-bookable subcategory).
+                // !hasChildren → full-width horizontal card (bookable service).
+                final browsable =
+                    cards.where((n) => n.hasChildren).toList();
+                final bookable =
+                    cards.where((n) => !n.hasChildren).toList();
+
+                return SliverToBoxAdapter(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // 3-column grid for non-bookable subcategories
+                      if (browsable.isNotEmpty)
+                        _MobileCategoryGrid(
+                          nodes: browsable,
+                          onTap: (id) => onBrowseNode(id),
+                        ),
+                      // Bookable services section
+                      if (bookable.isNotEmpty) ...[
+                        if (browsable.isNotEmpty) ...[
+                          const SizedBox(height: 24),
+                          Text(
+                            'Services',
+                            style: GoogleFonts.poppins(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w700,
+                              color: _kTextDark,
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                        ],
+                        ...List.generate(bookable.length, (i) => Padding(
+                          padding: EdgeInsets.only(
+                              bottom: i < bookable.length - 1 ? 14 : 0),
+                          child: _DesktopListCard(
+                            node: bookable[i],
+                            parentId: sub?.id ?? categoryId,
+                            onBrowse: null,
+                          ),
+                        )),
+                      ],
+                    ],
                   ),
                 );
               },
@@ -977,6 +1025,112 @@ class _DesktopListCard extends ConsumerWidget {
           ),
         );
       }
+      // Mobile: side-by-side row, each button fills half the space.
+      if (isMobile) {
+        return Row(
+          children: [
+            Expanded(
+              child: GestureDetector(
+                onTap: () =>
+                    openCatalogNode(context, node, parentId: parentId),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(100),
+                    border: Border.all(color: _kBorderColor),
+                  ),
+                  child: Center(
+                    child: Text(
+                      'View Details',
+                      style: GoogleFonts.inter(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        color: _kTextDark,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: inCart
+                  ? Container(
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      decoration: BoxDecoration(
+                        color: _kTextDark,
+                        borderRadius: BorderRadius.circular(100),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          GestureDetector(
+                            onTap: () => ref
+                                .read(cartProvider.notifier)
+                                .updateQuantity(cartItem.bookingId, qty - 1),
+                            child: const Padding(
+                              padding: EdgeInsets.symmetric(horizontal: 10),
+                              child: Text('-',
+                                  style: TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w700,
+                                      color: Colors.white)),
+                            ),
+                          ),
+                          Text('$qty',
+                              style: GoogleFonts.poppins(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.white)),
+                          GestureDetector(
+                            onTap: () => ref
+                                .read(cartProvider.notifier)
+                                .updateQuantity(cartItem.bookingId, qty + 1),
+                            child: const Padding(
+                              padding: EdgeInsets.symmetric(horizontal: 10),
+                              child: Text('+',
+                                  style: TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w700,
+                                      color: Colors.white)),
+                            ),
+                          ),
+                        ],
+                      ),
+                    )
+                  : GestureDetector(
+                      onTap: () => _addToCart(ref),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(vertical: 8),
+                        decoration: BoxDecoration(
+                          color: _kTextDark,
+                          borderRadius: BorderRadius.circular(100),
+                        ),
+                        child: Center(
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(Icons.shopping_cart_outlined,
+                                  size: 13, color: Colors.white),
+                              const SizedBox(width: 5),
+                              Text(
+                                'Add to Cart',
+                                style: GoogleFonts.inter(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.white,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+            ),
+          ],
+        );
+      }
       return Wrap(
         spacing: 8,
         runSpacing: 8,
@@ -1022,10 +1176,9 @@ class _DesktopListCard extends ConsumerWidget {
       );
     }
 
-    // ── Mobile: vertical card (image top, content below) ───────────────────
+    // ── Mobile: horizontal card (image left, content right) ────────────────
     if (isMobile) {
       return Container(
-        clipBehavior: Clip.antiAlias,
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(16),
@@ -1038,210 +1191,212 @@ class _DesktopListCard extends ConsumerWidget {
             ),
           ],
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // Image on top
-            ClipRRect(
-              borderRadius:
-                  const BorderRadius.vertical(top: Radius.circular(15)),
-              child: Container(
-                height: 148,
-                color: const Color(0xFFF3EDE0),
-                child: Image.network(
-                  imageUrl,
-                  fit: BoxFit.cover,
-                  errorBuilder: (_, __, ___) => Center(
-                    child: Icon(
-                      IconRegistry.resolve(node.iconKey, node.name),
-                      size: 36,
-                      color: _kTextMuted,
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // ── LEFT: compact square image ──────────────────────────────
+              ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: Container(
+                  width: 100,
+                  height: 100,
+                  color: const Color(0xFFF3EDE0),
+                  child: Image.network(
+                    imageUrl,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) => Center(
+                      child: Icon(
+                        IconRegistry.resolve(node.iconKey, node.name),
+                        size: 32,
+                        color: _kTextMuted,
+                      ),
                     ),
                   ),
                 ),
               ),
-            ),
-            // Content
-            Padding(
-              padding: const EdgeInsets.all(14),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  // Loyalty earn badge
-                  if (node.isLeafBookable && node.loyaltyEarnEnabled)
-                    Consumer(
-                      builder: (_, lr, _) {
-                        final settings =
-                            lr.watch(loyaltySettingsProvider).valueOrNull;
-                        if (settings == null ||
-                            !settings.isEnabled ||
-                            !settings.earnEnabled) {
-                          return const SizedBox.shrink();
-                        }
-                        final cfgAsync =
-                            lr.watch(resolvedLoyaltyConfigProvider((
-                          serviceId: node.id,
-                          parentNodeId: parentId,
-                        )));
-                        if (!cfgAsync.hasValue) {
-                          return const SizedBox.shrink();
-                        }
-                        final pts = computeLoyaltyPoints(
-                          cfgAsync.valueOrNull,
-                          settings,
-                          node.basePrice ?? 0,
-                        );
-                        if (pts <= 0) return const SizedBox.shrink();
-                        return Padding(
-                          padding: const EdgeInsets.only(bottom: 6),
-                          child: LoyaltyEarnBadge(points: pts),
-                        );
-                      },
-                    ),
-                  // Name
-                  Text(
-                    node.name,
-                    style: GoogleFonts.poppins(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w700,
-                      color: _kTextDark,
-                      height: 1.25,
-                    ),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  // Price
-                  Consumer(
-                    builder: (_, ref, _) {
-                      final attrs =
-                          ref.watch(serviceAttributesProvider(node.id)).valueOrNull ?? [];
-                      final attrOpts =
-                          attrs.where((a) => a.options.isNotEmpty).toList();
-                      if (attrOpts.isNotEmpty) {
-                        final startsAt = attrOpts
-                            .map((a) => a.options.first.finalPrice)
-                            .reduce((a, b) => a < b ? a : b);
-                        final origStartsAt = attrOpts
-                            .map((a) => a.options.first.priceAdjustment)
-                            .reduce((a, b) => a < b ? a : b);
-                        final hasDisc = startsAt < origStartsAt;
-                        return Padding(
-                          padding: const EdgeInsets.only(top: 3),
-                          child: Wrap(
-                            spacing: 5,
-                            crossAxisAlignment: WrapCrossAlignment.center,
-                            children: [
-                              Text(
-                                'Starts at ₹${startsAt.toInt()}',
-                                style: GoogleFonts.inter(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w700,
-                                  color: _kTextDark,
-                                ),
-                              ),
-                              if (hasDisc)
-                                Text(
-                                  '₹${origStartsAt.toInt()}',
-                                  style: GoogleFonts.inter(
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w500,
-                                    color: _kTextMuted,
-                                    decoration: TextDecoration.lineThrough,
-                                  ),
-                                ),
-                            ],
-                          ),
-                        );
-                      }
-                      if (node.basePrice != null) {
-                        return Padding(
-                          padding: const EdgeInsets.only(top: 3),
-                          child: Wrap(
-                            spacing: 5,
-                            crossAxisAlignment: WrapCrossAlignment.center,
-                            children: [
-                              Text(
-                                '₹${(node.finalPrice ?? node.basePrice)!.toStringAsFixed(0)}',
-                                style: GoogleFonts.inter(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w800,
-                                  color: _kTextDark,
-                                ),
-                              ),
-                              if (node.hasDiscount)
-                                Text(
-                                  '₹${node.basePrice!.toStringAsFixed(0)}',
-                                  style: GoogleFonts.inter(
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w500,
-                                    color: _kTextMuted,
-                                    decoration: TextDecoration.lineThrough,
-                                  ),
-                                ),
-                            ],
-                          ),
-                        );
-                      }
-                      if (isBrowsable) {
-                        return Padding(
-                          padding: const EdgeInsets.only(top: 3),
-                          child: Text(
-                            '${node.childrenCount} options',
-                            style: GoogleFonts.inter(
-                                fontSize: 12, color: _kTextMuted),
-                          ),
-                        );
-                      }
-                      return const SizedBox.shrink();
-                    },
-                  ),
-                  // Description
-                  if (node.description?.isNotEmpty == true) ...[
-                    const SizedBox(height: 5),
+              const SizedBox(width: 12),
+              // ── RIGHT: content ──────────────────────────────────────────
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // Loyalty earn badge
+                    if (node.isLeafBookable && node.loyaltyEarnEnabled)
+                      Consumer(
+                        builder: (_, lr, _) {
+                          final settings =
+                              lr.watch(loyaltySettingsProvider).valueOrNull;
+                          if (settings == null ||
+                              !settings.isEnabled ||
+                              !settings.earnEnabled) {
+                            return const SizedBox.shrink();
+                          }
+                          final cfgAsync =
+                              lr.watch(resolvedLoyaltyConfigProvider((
+                            serviceId: node.id,
+                            parentNodeId: parentId,
+                          )));
+                          if (!cfgAsync.hasValue) {
+                            return const SizedBox.shrink();
+                          }
+                          final pts = computeLoyaltyPoints(
+                            cfgAsync.valueOrNull,
+                            settings,
+                            node.basePrice ?? 0,
+                          );
+                          if (pts <= 0) return const SizedBox.shrink();
+                          return Padding(
+                            padding: const EdgeInsets.only(bottom: 5),
+                            child: LoyaltyEarnBadge(points: pts),
+                          );
+                        },
+                      ),
+                    // Name
                     Text(
-                      node.description!,
-                      style: GoogleFonts.inter(
-                        fontSize: 12,
-                        color: _kTextMuted,
-                        height: 1.5,
+                      node.name,
+                      style: GoogleFonts.poppins(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                        color: _kTextDark,
+                        height: 1.25,
                       ),
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                     ),
-                  ],
-                  // Rating
-                  if (node.rating > 0) ...[
-                    const SizedBox(height: 6),
-                    Row(
-                      children: [
-                        const Icon(Icons.star_rounded,
-                            size: 14, color: AppColors.gold),
-                        const SizedBox(width: 4),
-                        Text(
-                          node.rating.toStringAsFixed(1),
-                          style: GoogleFonts.inter(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w700,
-                            color: _kTextDark,
-                          ),
-                        ),
-                        const SizedBox(width: 5),
-                        Text(
-                          '${_formatReviews(node.reviewCount)}+ reviews',
-                          style: GoogleFonts.inter(
-                              fontSize: 11, color: _kTextMuted),
-                        ),
-                      ],
+                    // Price
+                    Consumer(
+                      builder: (_, ref, _) {
+                        final attrs =
+                            ref.watch(serviceAttributesProvider(node.id)).valueOrNull ?? [];
+                        final attrOpts =
+                            attrs.where((a) => a.options.isNotEmpty).toList();
+                        if (attrOpts.isNotEmpty) {
+                          final startsAt = attrOpts
+                              .map((a) => a.options.first.finalPrice)
+                              .reduce((a, b) => a < b ? a : b);
+                          final origStartsAt = attrOpts
+                              .map((a) => a.options.first.priceAdjustment)
+                              .reduce((a, b) => a < b ? a : b);
+                          final hasDisc = startsAt < origStartsAt;
+                          return Padding(
+                            padding: const EdgeInsets.only(top: 2),
+                            child: Wrap(
+                              spacing: 5,
+                              crossAxisAlignment: WrapCrossAlignment.center,
+                              children: [
+                                Text(
+                                  'Starts at ₹${startsAt.toInt()}',
+                                  style: GoogleFonts.inter(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w700,
+                                    color: _kTextDark,
+                                  ),
+                                ),
+                                if (hasDisc)
+                                  Text(
+                                    '₹${origStartsAt.toInt()}',
+                                    style: GoogleFonts.inter(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w500,
+                                      color: _kTextMuted,
+                                      decoration: TextDecoration.lineThrough,
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          );
+                        }
+                        if (node.basePrice != null) {
+                          return Padding(
+                            padding: const EdgeInsets.only(top: 2),
+                            child: Wrap(
+                              spacing: 5,
+                              crossAxisAlignment: WrapCrossAlignment.center,
+                              children: [
+                                Text(
+                                  '₹${(node.finalPrice ?? node.basePrice)!.toStringAsFixed(0)}',
+                                  style: GoogleFonts.inter(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w800,
+                                    color: _kTextDark,
+                                  ),
+                                ),
+                                if (node.hasDiscount)
+                                  Text(
+                                    '₹${node.basePrice!.toStringAsFixed(0)}',
+                                    style: GoogleFonts.inter(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w500,
+                                      color: _kTextMuted,
+                                      decoration: TextDecoration.lineThrough,
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          );
+                        }
+                        if (isBrowsable) {
+                          return Padding(
+                            padding: const EdgeInsets.only(top: 2),
+                            child: Text(
+                              '${node.childrenCount} options',
+                              style: GoogleFonts.inter(
+                                  fontSize: 12, color: _kTextMuted),
+                            ),
+                          );
+                        }
+                        return const SizedBox.shrink();
+                      },
                     ),
+                    // Description
+                    if (node.description?.isNotEmpty == true) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        node.description!,
+                        style: GoogleFonts.inter(
+                          fontSize: 11,
+                          color: _kTextMuted,
+                          height: 1.4,
+                        ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                    // Rating
+                    if (node.rating > 0) ...[
+                      const SizedBox(height: 5),
+                      Row(
+                        children: [
+                          const Icon(Icons.star_rounded,
+                              size: 13, color: AppColors.gold),
+                          const SizedBox(width: 3),
+                          Text(
+                            node.rating.toStringAsFixed(1),
+                            style: GoogleFonts.inter(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                              color: _kTextDark,
+                            ),
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            '${_formatReviews(node.reviewCount)}+ reviews',
+                            style: GoogleFonts.inter(
+                                fontSize: 11, color: _kTextMuted),
+                          ),
+                        ],
+                      ),
+                    ],
+                    const SizedBox(height: 10),
+                    actionButtons(),
                   ],
-                  const SizedBox(height: 10),
-                  actionButtons(),
-                ],
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       );
     }
@@ -1945,6 +2100,122 @@ class _SliverEmpty extends StatelessWidget {
             'No services in this sub-category yet.',
             style: GoogleFonts.inter(fontSize: 14, color: _kTextMuted),
           ),
+        ),
+      ),
+    );
+  }
+}
+
+// ── Mobile 3-column subcategory grid ─────────────────────────────────────────
+
+class _MobileCategoryGrid extends StatelessWidget {
+  final List<CatalogNodeModel> nodes;
+  final ValueChanged<String> onTap;
+
+  const _MobileCategoryGrid({
+    required this.nodes,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GridView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 3,
+        mainAxisSpacing: 12,
+        crossAxisSpacing: 12,
+        childAspectRatio: 0.65,
+      ),
+      itemCount: nodes.length,
+      itemBuilder: (_, i) => _MobileCategoryGridItem(
+        node: nodes[i],
+        onTap: () => onTap(nodes[i].id),
+      ),
+    );
+  }
+}
+
+class _MobileCategoryGridItem extends StatelessWidget {
+  final CatalogNodeModel node;
+  final VoidCallback onTap;
+
+  const _MobileCategoryGridItem({
+    required this.node,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final imageUrl = ServiceImageRegistry.resolveMobile(
+        node.mobileImageUrl, node.imageUrl, node.name);
+
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: _kBorderColor),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withAlpha(8),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        padding: const EdgeInsets.all(8),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            // Inset image with its own rounded corners
+            ClipRRect(
+              borderRadius: BorderRadius.circular(10),
+              child: AspectRatio(
+                aspectRatio: 1.0,
+                child: Container(
+                  color: const Color(0xFFF3EDE0),
+                  child: Image.network(
+                    imageUrl,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) => Center(
+                      child: Icon(
+                        IconRegistry.resolve(node.iconKey, node.name),
+                        size: 28,
+                        color: _kTextMuted,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 7),
+            Text(
+              node.name,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.center,
+              style: GoogleFonts.poppins(
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                color: _kTextDark,
+                height: 1.3,
+              ),
+            ),
+            if (node.childrenCount > 0) ...[
+              const SizedBox(height: 2),
+              Text(
+                '${node.childrenCount} ${node.childrenCount == 1 ? 'option' : 'options'}',
+                textAlign: TextAlign.center,
+                style: GoogleFonts.inter(
+                  fontSize: 10,
+                  color: _kTextMuted,
+                ),
+              ),
+            ],
+          ],
         ),
       ),
     );
