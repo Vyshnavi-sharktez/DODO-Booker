@@ -39,7 +39,6 @@ class CatalogNodeNotifier
     String? imageUrl,
     String? mobileImageUrl,
     String? iconKey,
-    required int sortOrder,
     required bool isActive,
     required bool isBookable,
     double? basePrice,
@@ -54,6 +53,7 @@ class CatalogNodeNotifier
     String? warrantyCovers,
     String? warrantyExclusions,
   }) async {
+    final sortOrder = await _repo.getNextSortOrder(parentId);
     await _repo.createNode(
       parentId: parentId,
       name: name,
@@ -131,6 +131,20 @@ class CatalogNodeNotifier
 
   Future<void> deleteNode(String id) async {
     await _repo.deleteNode(id);
+    await _load();
+  }
+
+  // ── Reordering ─────────────────────────────────────────────────────────────
+
+  Future<void> moveNode(
+      String nodeId, String? parentId, String direction) async {
+    await _repo.moveNode(nodeId, parentId, direction);
+    await _load();
+  }
+
+  Future<void> repositionNode(
+      String nodeId, String? parentId, int targetPosition) async {
+    await _repo.repositionNode(nodeId, parentId, targetPosition);
     await _load();
   }
 
@@ -306,7 +320,17 @@ class CatalogNodeAttributesNotifier
   }
 
   Future<void> deleteOption(String optionId) async {
+    // Resolve attributeId before delete for normalization.
+    final attrs = state.valueOrNull ?? [];
+    final attributeId = attrs
+        .expand((a) => a.options.map((o) => (attrId: a.id, optId: o.id)))
+        .where((pair) => pair.optId == optionId)
+        .map((pair) => pair.attrId)
+        .firstOrNull;
     await _repo.deleteOption(optionId);
+    if (attributeId != null) {
+      await _repo.normalizeOptionSortOrders(attributeId);
+    }
     await _reload();
   }
 

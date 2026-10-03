@@ -121,6 +121,14 @@ class ServiceAttributesRepository {
     await _supabase.from('service_attribute_options').delete().eq('id', id);
   }
 
+  /// Closes gaps in sort_order after a deletion.
+  Future<void> normalizeOptionSortOrders(String attributeId) async {
+    await _supabase.rpc(
+      'normalize_attribute_option_sort_orders',
+      params: {'p_attribute_id': attributeId},
+    );
+  }
+
   /// Batch-updates sort_order for a reordered list of options in one request.
   Future<void> reorderOptions(
       List<({String id, int sortOrder})> updates) async {

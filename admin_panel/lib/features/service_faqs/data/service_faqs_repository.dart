@@ -87,4 +87,23 @@ class ServiceFaqsRepository {
   Future<void> delete(String id) async {
     await _supabase.from('service_faqs').delete().eq('id', id);
   }
+
+  /// Swaps sort_order with the adjacent FAQ in the given direction.
+  Future<void> moveFaq(String id, String direction) async {
+    await _supabase.rpc('move_service_faq', params: {
+      'p_faq_id': id,
+      'p_direction': direction,
+    });
+  }
+
+  /// Closes gaps in sort_order after a deletion.
+  Future<void> normalizeSortOrders({
+    String? serviceId,
+    String? customServiceId,
+  }) async {
+    await _supabase.rpc('normalize_service_faq_sort_orders', params: {
+      'p_service_id': serviceId,
+      'p_custom_service_id': customServiceId,
+    });
+  }
 }

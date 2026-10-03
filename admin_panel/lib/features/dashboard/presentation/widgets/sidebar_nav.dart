@@ -324,7 +324,7 @@ class SidebarNav extends ConsumerStatefulWidget {
 }
 
 class _SidebarNavState extends ConsumerState<SidebarNav> {
-  final Set<String> _expandedGroups = {};
+  String? _expandedGroup;
   final Set<String> _userClosedGroups = {};
 
   bool _isActive(String location, String route) {
@@ -345,11 +345,12 @@ class _SidebarNavState extends ConsumerState<SidebarNav> {
       }
     }
 
-    // Active groups auto-expand unless the user has explicitly closed them.
-    final effectiveExpanded = {
-      ..._expandedGroups,
-      ...activeGroupLabels.difference(_userClosedGroups),
-    };
+    // Accordion: at most ONE group is ever open.
+    // If the user manually expanded a group, only that group shows.
+    // Otherwise the active route's group auto-expands (unless manually closed).
+    final effectiveExpanded = _expandedGroup != null
+        ? {_expandedGroup!}
+        : activeGroupLabels.difference(_userClosedGroups);
 
     return Container(
       color: AppColors.sidebarBg,
@@ -417,11 +418,13 @@ class _SidebarNavState extends ConsumerState<SidebarNav> {
       onToggle: () {
         setState(() {
           if (isExpanded) {
-            _expandedGroups.remove(group.label);
+            if (_expandedGroup == group.label) _expandedGroup = null;
             _userClosedGroups.add(group.label);
           } else {
-            _expandedGroups.add(group.label);
+            _expandedGroup = group.label;
             _userClosedGroups.remove(group.label);
+            // Close any auto-expanded active groups (accordion: only one open at a time).
+            _userClosedGroups.addAll(activeGroupLabels);
           }
         });
       },

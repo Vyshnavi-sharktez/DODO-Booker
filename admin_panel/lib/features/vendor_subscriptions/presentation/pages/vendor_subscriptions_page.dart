@@ -66,7 +66,6 @@ class _VendorSubscriptionsPageState
           subscriptionFee,
           required permissions,
           required isActive,
-          required sortOrder,
         }) async {
           final notifier = ref.read(plansNotifierProvider.notifier);
           if (existing == null) {
@@ -79,7 +78,6 @@ class _VendorSubscriptionsPageState
               subscriptionFee: subscriptionFee,
               permissions: permissions,
               isActive: isActive,
-              sortOrder: sortOrder,
             );
           } else {
             await notifier.updatePlan(
@@ -92,7 +90,7 @@ class _VendorSubscriptionsPageState
               subscriptionFee: subscriptionFee,
               permissions: permissions,
               isActive: isActive,
-              sortOrder: sortOrder,
+              sortOrder: existing.sortOrder,
             );
           }
         },
@@ -362,6 +360,16 @@ class _PlansTab extends ConsumerWidget {
                             .read(plansNotifierProvider.notifier)
                             .toggleActive(plans[i].id,
                                 currentIsActive: plans[i].isActive),
+                        onMoveUp: i > 0
+                            ? () => ref
+                                .read(plansNotifierProvider.notifier)
+                                .movePlan(plans[i].id, 'up')
+                            : null,
+                        onMoveDown: i < plans.length - 1
+                            ? () => ref
+                                .read(plansNotifierProvider.notifier)
+                                .movePlan(plans[i].id, 'down')
+                            : null,
                       ),
                     ),
             ),
@@ -379,6 +387,8 @@ class _PlanCard extends StatelessWidget {
     required this.onEdit,
     required this.onDelete,
     required this.onToggle,
+    this.onMoveUp,
+    this.onMoveDown,
   });
 
   final SubscriptionPlan plan;
@@ -386,6 +396,8 @@ class _PlanCard extends StatelessWidget {
   final VoidCallback onEdit;
   final VoidCallback onDelete;
   final VoidCallback onToggle;
+  final VoidCallback? onMoveUp;
+  final VoidCallback? onMoveDown;
 
   @override
   Widget build(BuildContext context) {
@@ -423,7 +435,21 @@ class _PlanCard extends StatelessWidget {
                 ),
               ),
               _StatusChip(isActive: plan.isActive),
-              const SizedBox(width: 8),
+              const SizedBox(width: 4),
+              IconButton(
+                icon: const Icon(Icons.keyboard_arrow_up_rounded, size: 18),
+                tooltip: 'Move up',
+                color: AppColors.textSecondary,
+                visualDensity: VisualDensity.compact,
+                onPressed: onMoveUp,
+              ),
+              IconButton(
+                icon: const Icon(Icons.keyboard_arrow_down_rounded, size: 18),
+                tooltip: 'Move down',
+                color: AppColors.textSecondary,
+                visualDensity: VisualDensity.compact,
+                onPressed: onMoveDown,
+              ),
               IconButton(
                 icon: const Icon(Icons.edit_outlined, size: 18),
                 tooltip: 'Edit',

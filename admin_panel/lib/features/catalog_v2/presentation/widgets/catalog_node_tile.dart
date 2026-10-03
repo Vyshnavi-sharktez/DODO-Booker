@@ -22,6 +22,8 @@ class NodeCallbacks {
     required this.onOpenFaqs,
     required this.onOpenShowcaseImages,
     required this.onOpenAddons,
+    required this.onMoveNode,
+    required this.onRepositionNode,
   });
 
   final void Function(CatalogNode parent) onAddChild;
@@ -58,6 +60,13 @@ class NodeCallbacks {
 
   /// Opens the add-ons management drawer for this node.
   final void Function(CatalogNode node) onOpenAddons;
+
+  /// Moves [node] up or down within its parent scope.
+  /// [parentIdContext] is null for root nodes.
+  final void Function(CatalogNode node, String? parentIdContext, String direction) onMoveNode;
+
+  /// Moves [node] directly to [targetPosition] (0-based) within its parent scope.
+  final void Function(CatalogNode node, String? parentIdContext, int targetPosition) onRepositionNode;
 }
 
 /// Renders a single catalog item row and recursively renders its children
@@ -78,6 +87,8 @@ class CatalogNodeTile extends StatelessWidget {
     required this.callbacks,
     this.parentIdContext,
     this.searchQuery = '',
+    this.position = 0,
+    this.siblingCount = 1,
   });
 
   final CatalogNode node;
@@ -90,13 +101,19 @@ class CatalogNodeTile extends StatelessWidget {
 
   final int depth;
   final Set<String> expandedIds;
-  final void Function(String nodeId) onToggleExpand;
+  final void Function(String nodeId, String? parentIdContext) onToggleExpand;
   final NodeCallbacks callbacks;
 
   /// The parent category ID this tile is rendered under; null for root tiles.
   final String? parentIdContext;
 
   final String searchQuery;
+
+  /// Position within its sibling list (0-based).
+  final int position;
+
+  /// Total number of siblings (including self).
+  final int siblingCount;
 
   bool get _isExpanded => expandedIds.contains(node.id);
 
@@ -108,13 +125,13 @@ class CatalogNodeTile extends StatelessWidget {
       children: [
         _buildRow(context),
         if (_isExpanded) ...[
-          for (final child in children)
+          for (int j = 0; j < children.length; j++)
             CatalogNodeTile(
               // Key encodes (parent, child) so the same node appearing
               // under two different parents gets two distinct widget keys.
-              key: ValueKey('${node.id}_${child.id}'),
-              node: child,
-              children: allByParent[child.id] ?? [],
+              key: ValueKey('${node.id}_${children[j].id}'),
+              node: children[j],
+              children: allByParent[children[j].id] ?? [],
               allByParent: allByParent,
               depth: depth + 1,
               expandedIds: expandedIds,
@@ -122,6 +139,8 @@ class CatalogNodeTile extends StatelessWidget {
               callbacks: callbacks,
               parentIdContext: node.id,
               searchQuery: searchQuery,
+              position: j,
+              siblingCount: children.length,
             ),
           _buildAddChildButton(),
         ],
@@ -144,7 +163,7 @@ class CatalogNodeTile extends StatelessWidget {
           border: Border.all(color: AppColors.border),
         ),
         child: InkWell(
-          onTap: hasChildren ? () => onToggleExpand(node.id) : null,
+          onTap: hasChildren ? () => onToggleExpand(node.id, parentIdContext) : null,
           borderRadius: BorderRadius.circular(8),
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -372,6 +391,34 @@ class CatalogNodeTile extends StatelessWidget {
                         callbacks.onRemoveFromParent(node, parentIdContext!),
                   ),
 
+                // Move controls — hidden during search
+                if (searchQuery.isEmpty && siblingCount > 1) ...[
+                  IconButton(
+                    icon: const Icon(Icons.keyboard_arrow_up_rounded, size: 17),
+                    tooltip: 'Move up',
+                    color: AppColors.textSecondary,
+                    visualDensity: VisualDensity.compact,
+                    onPressed: position > 0
+                        ? () => callbacks.onMoveNode(node, parentIdContext, 'up')
+                        : null,
+                  ),
+                  _PositionPicker(
+                    position: position,
+                    siblingCount: siblingCount,
+                    onSelect: (target) =>
+                        callbacks.onRepositionNode(node, parentIdContext, target),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.keyboard_arrow_down_rounded, size: 17),
+                    tooltip: 'Move down',
+                    color: AppColors.textSecondary,
+                    visualDensity: VisualDensity.compact,
+                    onPressed: position < siblingCount - 1
+                        ? () => callbacks.onMoveNode(node, parentIdContext, 'down')
+                        : null,
+                  ),
+                ],
+
                 // Delete
                 IconButton(
                   icon: const Icon(Icons.delete_outline, size: 17),
@@ -534,6 +581,64 @@ class _AvailabilityButton extends StatelessWidget {
         icon: Icon(icon, size: 17, color: color),
         onPressed: onTap,
         visualDensity: VisualDensity.compact,
+      ),
+    );
+  }
+}
+
+// ── Position picker ───────────────────────────────────────────────────────────
+// A compact badge showing the 1-based position. Tapping opens a menu listing
+// every other valid position so the admin can jump directly there.
+
+class _PositionPicker extends StatelessWidget {
+  const _PositionPicker({
+    required this.position,
+    required this.siblingCount,
+    required this.onSelect,
+  });
+
+  final int position;
+  final int siblingCount;
+  final void Function(int targetPosition) onSelect;
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: 'Jump to position',
+      child: PopupMenuButton<int>(
+        tooltip: '',
+        onSelected: onSelect,
+        offset: const Offset(0, 28),
+        itemBuilder: (_) => [
+          for (int p = 0; p < siblingCount; p++)
+            if (p != position)
+              PopupMenuItem<int>(
+                value: p,
+                height: 36,
+                child: Text(
+                  'Position ${p + 1}',
+                  style: const TextStyle(fontSize: 13),
+                ),
+              ),
+        ],
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+          decoration: BoxDecoration(
+            color: AppColors.primary.withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(6),
+            border: Border.all(
+              color: AppColors.primary.withValues(alpha: 0.25),
+            ),
+          ),
+          child: Text(
+            '${position + 1}',
+            style: const TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+              color: AppColors.primary,
+            ),
+          ),
+        ),
       ),
     );
   }

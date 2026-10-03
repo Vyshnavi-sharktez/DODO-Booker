@@ -126,7 +126,16 @@ class ServiceAttributesNotifier
   }
 
   Future<void> deleteOption(String optionId) async {
+    final attrs = state.valueOrNull ?? [];
+    final attributeId = attrs
+        .expand((a) => a.options.map((o) => (attrId: a.id, optId: o.id)))
+        .where((pair) => pair.optId == optionId)
+        .map((pair) => pair.attrId)
+        .firstOrNull;
     await _repo.deleteOption(optionId);
+    if (attributeId != null) {
+      await _repo.normalizeOptionSortOrders(attributeId);
+    }
     await _reload();
   }
 

@@ -207,6 +207,12 @@ class _NodeFaqsDialogState extends ConsumerState<NodeFaqsDialog>
                             const SizedBox(height: 8),
                         itemBuilder: (ctx, i) => _FaqTile(
                           faq: faqs[i],
+                          onMoveUp: i > 0
+                              ? () => notifier.move(faqs[i].id, 'up')
+                              : null,
+                          onMoveDown: i < faqs.length - 1
+                              ? () => notifier.move(faqs[i].id, 'down')
+                              : null,
                           onEdit: () =>
                               _openEdit(context, notifier, faqs[i]),
                           onDelete: () =>
@@ -292,11 +298,15 @@ class _NodeFaqsDialogState extends ConsumerState<NodeFaqsDialog>
 class _FaqTile extends StatelessWidget {
   const _FaqTile({
     required this.faq,
+    this.onMoveUp,
+    this.onMoveDown,
     required this.onEdit,
     required this.onDelete,
   });
 
   final ServiceFaq faq;
+  final VoidCallback? onMoveUp;
+  final VoidCallback? onMoveDown;
   final VoidCallback onEdit;
   final VoidCallback onDelete;
 
@@ -345,7 +355,26 @@ class _FaqTile extends StatelessWidget {
                 ],
               ),
             ),
-            Row(
+            Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                IconButton(
+                  icon: const Icon(Icons.keyboard_arrow_up_rounded, size: 16),
+                  tooltip: 'Move up',
+                  color: AppColors.textSecondary,
+                  visualDensity: VisualDensity.compact,
+                  onPressed: onMoveUp,
+                ),
+                IconButton(
+                  icon: const Icon(Icons.keyboard_arrow_down_rounded, size: 16),
+                  tooltip: 'Move down',
+                  color: AppColors.textSecondary,
+                  visualDensity: VisualDensity.compact,
+                  onPressed: onMoveDown,
+                ),
+              ],
+            ),
+            Column(
               mainAxisSize: MainAxisSize.min,
               children: [
                 IconButton(

@@ -17,7 +17,6 @@ class PlanFormDialog extends StatefulWidget {
     double? subscriptionFee,
     required Map<String, dynamic> permissions,
     required bool isActive,
-    required int sortOrder,
   }) onSave;
 
   @override
@@ -31,7 +30,6 @@ class _PlanFormDialogState extends State<PlanFormDialog> {
   late final TextEditingController _durationCtrl;
   late final TextEditingController _joiningFeeCtrl;
   late final TextEditingController _subFeeCtrl;
-  late final TextEditingController _sortCtrl;
   late String _billingCycle;
   late bool _isActive;
   bool _saving = false;
@@ -52,7 +50,6 @@ class _PlanFormDialogState extends State<PlanFormDialog> {
         text: p?.joiningFee != null ? p!.joiningFee!.toStringAsFixed(2) : '');
     _subFeeCtrl = TextEditingController(
         text: p?.subscriptionFee != null ? p!.subscriptionFee!.toStringAsFixed(2) : '');
-    _sortCtrl = TextEditingController(text: '${p?.sortOrder ?? 0}');
     _billingCycle = p?.billingCycle ?? 'monthly';
     _isActive = p?.isActive ?? true;
     for (final feature in kSubscriptionFeatures) {
@@ -99,7 +96,6 @@ class _PlanFormDialogState extends State<PlanFormDialog> {
     _durationCtrl.dispose();
     _joiningFeeCtrl.dispose();
     _subFeeCtrl.dispose();
-    _sortCtrl.dispose();
     for (final ctrl in _percentCtrls.values) {
       ctrl.dispose();
     }
@@ -156,7 +152,6 @@ class _PlanFormDialogState extends State<PlanFormDialog> {
             : double.parse(_subFeeCtrl.text.trim()),
         permissions: perms,
         isActive: _isActive,
-        sortOrder: int.tryParse(_sortCtrl.text.trim()) ?? 0,
       );
       if (mounted) Navigator.of(context).pop();
     } catch (e) {
@@ -335,33 +330,21 @@ class _PlanFormDialogState extends State<PlanFormDialog> {
                       ),
                   const SizedBox(height: 14),
 
-                  // Sort + Active row
+                  // Active toggle
                   Row(
                     children: [
-                      SizedBox(
-                        width: 120,
-                        child: _field('Sort Order', _sortCtrl,
-                            hint: '0',
-                            keyboardType: TextInputType.number,
-                            inputFormatters: [FilteringTextInputFormatter.digitsOnly]),
+                      Switch(
+                        value: _isActive,
+                        onChanged: (v) => setState(() => _isActive = v),
+                        activeColor: AppColors.success,
                       ),
-                      const SizedBox(width: 20),
-                      Row(
-                        children: [
-                          Switch(
-                            value: _isActive,
-                            onChanged: (v) => setState(() => _isActive = v),
-                            activeColor: AppColors.success,
-                          ),
-                          const SizedBox(width: 6),
-                          Text(_isActive ? 'Active' : 'Inactive',
-                              style: TextStyle(
-                                  color: _isActive
-                                      ? AppColors.success
-                                      : AppColors.textSecondary,
-                                  fontWeight: FontWeight.w500)),
-                        ],
-                      ),
+                      const SizedBox(width: 6),
+                      Text(_isActive ? 'Active' : 'Inactive',
+                          style: TextStyle(
+                              color: _isActive
+                                  ? AppColors.success
+                                  : AppColors.textSecondary,
+                              fontWeight: FontWeight.w500)),
                     ],
                   ),
                   const SizedBox(height: 28),

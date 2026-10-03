@@ -38,7 +38,6 @@ class CatalogNodeFormDialog extends StatefulWidget {
     String? imageUrl,
     String? mobileImageUrl,
     String? iconKey,
-    required int sortOrder,
     required bool isActive,
     required bool isBookable,
     double? basePrice,
@@ -66,7 +65,6 @@ class _CatalogNodeFormDialogState extends State<CatalogNodeFormDialog> {
   String? _imageUrl;
   String? _mobileImageUrl;
   late final TextEditingController _iconKey;
-  late final TextEditingController _sortOrder;
   late final TextEditingController _basePrice;
   late final TextEditingController _minOrderAmount;
 
@@ -97,7 +95,6 @@ class _CatalogNodeFormDialogState extends State<CatalogNodeFormDialog> {
     _imageUrl = e?.imageUrl?.isNotEmpty == true ? e!.imageUrl : null;
     _mobileImageUrl = e?.mobileImageUrl?.isNotEmpty == true ? e!.mobileImageUrl : null;
     _iconKey = TextEditingController(text: e?.iconKey ?? '');
-    _sortOrder = TextEditingController(text: (e?.sortOrder ?? 0).toString());
     _basePrice = TextEditingController(
       text: e?.basePrice != null ? e!.basePrice!.toStringAsFixed(2) : '',
     );
@@ -133,7 +130,6 @@ class _CatalogNodeFormDialogState extends State<CatalogNodeFormDialog> {
     _name.dispose();
     _description.dispose();
     _iconKey.dispose();
-    _sortOrder.dispose();
     _basePrice.dispose();
     _minOrderAmount.dispose();
     _discountValue.dispose();
@@ -167,7 +163,6 @@ class _CatalogNodeFormDialogState extends State<CatalogNodeFormDialog> {
         imageUrl: _imageUrl,
         mobileImageUrl: _mobileImageUrl,
         iconKey: _iconKey.text.trim().isEmpty ? null : _iconKey.text.trim(),
-        sortOrder: int.tryParse(_sortOrder.text.trim()) ?? 0,
         isActive: _isActive,
         isBookable: _isRootContext ? false : _isBookable,
         basePrice: _isBookable && !_isRootContext && _basePrice.text.trim().isNotEmpty
@@ -310,19 +305,6 @@ class _CatalogNodeFormDialogState extends State<CatalogNodeFormDialog> {
               textCapitalization: TextCapitalization.words,
               validator: (v) =>
                   v == null || v.trim().isEmpty ? 'Required' : null,
-            ),
-            const SizedBox(height: 16),
-
-            // Sort Order
-            SizedBox(
-              width: 140,
-              child: TextFormField(
-                controller: _sortOrder,
-                decoration:
-                    const InputDecoration(labelText: 'Sort Order'),
-                keyboardType: TextInputType.number,
-                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-              ),
             ),
             const SizedBox(height: 16),
 

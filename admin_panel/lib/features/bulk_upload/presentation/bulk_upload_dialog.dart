@@ -8,6 +8,19 @@ import '../data/download_helper.dart';
 import '../data/excel_utils.dart' as xu;
 import '../models/bulk_row.dart';
 
+// ── Step machine ──────────────────────────────────────────────────────────────
+//
+//  initial ──[upload]──> validating ──> preview ──[import]──> importing ──> done
+//                                          │
+//                                    [cancel / back]
+//                                          │
+//                                       initial
+//
+// "Upload File"  → picks file, validates, shows preview.  Nothing is written
+//                  to the database until the admin clicks "Import" in preview.
+// "Import N Rows" (in preview) → writes to the database, shows done screen.
+// ─────────────────────────────────────────────────────────────────────────────
+
 enum _Step { initial, validating, preview, importing, done }
 
 class BulkUploadDialog extends StatefulWidget {
@@ -37,6 +50,7 @@ class _BulkUploadDialogState extends State<BulkUploadDialog> {
   List<BulkRow> _rows = [];
   ImportResult? _result;
   String? _error;
+  bool _exportLoading = false;
 
   BulkUploadModule get _m => widget.module;
 
@@ -45,7 +59,7 @@ class _BulkUploadDialogState extends State<BulkUploadDialog> {
   int get _invalidCount =>
       _rows.where((r) => r.status == RowStatus.invalid).length;
 
-  // ── Actions ───────────────────────────────────────────────────────────────────
+  // ── Step 1: download template ─────────────────────────────────────────────
 
   Future<void> _downloadTemplate() async {
     try {
@@ -56,11 +70,12 @@ class _BulkUploadDialogState extends State<BulkUploadDialog> {
       );
       await downloadXlsx(bytes, _m.templateFilename);
     } catch (e) {
-      if (mounted) {
-        setState(() => _error = 'Template download failed: $e');
-      }
+      if (mounted) setState(() => _error = 'Template download failed: $e');
     }
   }
+
+  // ── Step 2: upload file → validate → preview ──────────────────────────────
+  // Nothing is written to the database in this step.
 
   Future<void> _pickAndValidate() async {
     setState(() => _error = null);
@@ -76,12 +91,11 @@ class _BulkUploadDialogState extends State<BulkUploadDialog> {
       setState(() => _error = 'Could not open file picker: $e');
       return;
     }
-
     if (bytes == null) return; // user cancelled
 
     setState(() => _step = _Step.validating);
 
-    String _stage = 'parseXlsx';
+    String stage = 'parseXlsx';
     try {
       debugPrint('[BulkUpload] stage=parseXlsx');
       final rawRows = _m.parseXlsx(bytes);
@@ -95,7 +109,7 @@ class _BulkUploadDialogState extends State<BulkUploadDialog> {
         return;
       }
 
-      _stage = 'validateRows';
+      stage = 'validateRows';
       debugPrint('[BulkUpload] stage=validateRows');
       final validated = await _m.validateRows(rawRows);
       debugPrint('[BulkUpload] validateRows done: ${validated.length} results');
@@ -105,13 +119,34 @@ class _BulkUploadDialogState extends State<BulkUploadDialog> {
         _step = _Step.preview;
       });
     } catch (e, stackTrace) {
-      debugPrint('[BulkUpload] ERROR at stage=$_stage: $e\n$stackTrace');
+      debugPrint('[BulkUpload] ERROR at stage=$stage: $e\n$stackTrace');
       setState(() {
         _step = _Step.initial;
-        _error = 'Validation failed at $_stage: $e';
+        _error = 'Validation failed at $stage: $e';
       });
     }
   }
+
+  // ── Step 3: download existing catalog ────────────────────────────────────
+
+  Future<void> _downloadExistingData() async {
+    setState(() {
+      _exportLoading = true;
+      _error = null;
+    });
+    try {
+      final bytes = await _m.exportCurrentData();
+      await downloadXlsx(bytes, 'catalog_export.xlsx');
+    } catch (e) {
+      if (mounted) setState(() => _error = 'Export failed: $e');
+    } finally {
+      if (mounted) setState(() => _exportLoading = false);
+    }
+  }
+
+  // ── Step 4 (preview action): import ──────────────────────────────────────
+  // Only valid rows are written. Partial import does not happen: if validation
+  // produced any invalid rows the Import button is disabled in the preview.
 
   Future<void> _confirmImport() async {
     setState(() => _step = _Step.importing);
@@ -131,7 +166,7 @@ class _BulkUploadDialogState extends State<BulkUploadDialog> {
     }
   }
 
-  // ── Build ─────────────────────────────────────────────────────────────────────
+  // ── Build ─────────────────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
@@ -159,7 +194,8 @@ class _BulkUploadDialogState extends State<BulkUploadDialog> {
       ),
       child: Row(
         children: [
-          const Icon(Icons.upload_file_rounded, size: 22, color: AppColors.primary),
+          const Icon(Icons.upload_file_rounded,
+              size: 22, color: AppColors.primary),
           const SizedBox(width: 10),
           Expanded(
             child: Text(
@@ -175,7 +211,8 @@ class _BulkUploadDialogState extends State<BulkUploadDialog> {
             IconButton(
               onPressed: () => Navigator.of(context).pop(),
               icon: const Icon(Icons.close_rounded, size: 20),
-              style: IconButton.styleFrom(foregroundColor: AppColors.textSecondary),
+              style: IconButton.styleFrom(
+                  foregroundColor: AppColors.textSecondary),
             ),
         ],
       ),
@@ -192,7 +229,7 @@ class _BulkUploadDialogState extends State<BulkUploadDialog> {
     };
   }
 
-  // ── Initial step ──────────────────────────────────────────────────────────────
+  // ── Initial ───────────────────────────────────────────────────────────────
 
   Widget _buildInitial() {
     return SingleChildScrollView(
@@ -204,15 +241,56 @@ class _BulkUploadDialogState extends State<BulkUploadDialog> {
             _ErrorBanner(message: _error!),
             const SizedBox(height: 16),
           ],
-          _Step1Card(onDownload: _downloadTemplate),
+          _StepCard(
+            step: '1',
+            title: 'Download the template',
+            subtitle:
+                'Get the .xlsx template with column headers and example rows.',
+            action: OutlinedButton.icon(
+              onPressed: _downloadTemplate,
+              icon: const Icon(Icons.download_rounded, size: 16),
+              label: const Text('Download Template (.xlsx)'),
+            ),
+          ),
           const SizedBox(height: 16),
-          _Step2Card(onUpload: _pickAndValidate),
+          _StepCard(
+            step: '2',
+            title: 'Upload & validate your file',
+            subtitle:
+                'Select your filled .xlsx file. Rows are validated and '
+                'shown in a preview — nothing is saved yet.',
+            action: OutlinedButton.icon(
+              onPressed: _pickAndValidate,
+              icon: const Icon(Icons.upload_file_rounded, size: 16),
+              label: const Text('Upload File (.xlsx)'),
+            ),
+          ),
+          if (_m.supportsExport) ...[
+            const SizedBox(height: 16),
+            _StepCard(
+              step: '3',
+              title: 'Download existing catalog',
+              subtitle:
+                  'Export all current categories and services to Excel.',
+              action: FilledButton.icon(
+                onPressed: _exportLoading ? null : _downloadExistingData,
+                icon: _exportLoading
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.download_rounded, size: 16),
+                label: const Text('Download (.xlsx)'),
+              ),
+            ),
+          ],
         ],
       ),
     );
   }
 
-  // ── Spinner ───────────────────────────────────────────────────────────────────
+  // ── Spinner ───────────────────────────────────────────────────────────────
 
   Widget _buildSpinner(String label) {
     return Padding(
@@ -222,15 +300,18 @@ class _BulkUploadDialogState extends State<BulkUploadDialog> {
         children: [
           const CircularProgressIndicator(),
           const SizedBox(height: 20),
-          Text(label, style: const TextStyle(color: AppColors.textSecondary)),
+          Text(label,
+              style: const TextStyle(color: AppColors.textSecondary)),
         ],
       ),
     );
   }
 
-  // ── Preview step ──────────────────────────────────────────────────────────────
+  // ── Preview ───────────────────────────────────────────────────────────────
 
   Widget _buildPreview() {
+    final canImport = _validCount > 0 && _invalidCount == 0;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -270,7 +351,7 @@ class _BulkUploadDialogState extends State<BulkUploadDialog> {
                     _Chip(
                       icon: Icons.cancel_rounded,
                       color: AppColors.error,
-                      label: '$_invalidCount invalid',
+                      label: '$_invalidCount invalid — fix before importing',
                     ),
                 ],
               ),
@@ -281,7 +362,7 @@ class _BulkUploadDialogState extends State<BulkUploadDialog> {
         Expanded(
           child: ListView.separated(
             itemCount: _rows.length,
-            separatorBuilder: (_, _) =>
+            separatorBuilder: (_, __) =>
                 const Divider(height: 1, color: AppColors.border),
             itemBuilder: (_, i) => _RowTile(row: _rows[i]),
           ),
@@ -297,15 +378,28 @@ class _BulkUploadDialogState extends State<BulkUploadDialog> {
                   _rows = [];
                   _error = null;
                 }),
-                child: const Text('Cancel'),
+                child: const Text('Back'),
               ),
               const Spacer(),
+              if (!canImport && _invalidCount > 0)
+                Padding(
+                  padding: const EdgeInsets.only(right: 12),
+                  child: Text(
+                    'Fix $_invalidCount error${_invalidCount == 1 ? '' : 's'} before importing',
+                    style: const TextStyle(
+                        fontSize: 12, color: AppColors.error),
+                  ),
+                ),
               FilledButton.icon(
-                onPressed: _validCount > 0 ? _confirmImport : null,
-                icon: const Icon(Icons.upload_rounded, size: 18),
-                label: Text('Import $_validCount Row${_validCount == 1 ? '' : 's'}'),
+                onPressed: canImport ? _confirmImport : null,
+                icon: const Icon(Icons.publish_rounded, size: 18),
+                label: Text(
+                  canImport
+                      ? 'Import $_validCount Row${_validCount == 1 ? '' : 's'}'
+                      : 'Import',
+                ),
                 style: FilledButton.styleFrom(
-                  backgroundColor: AppColors.primary,
+                  backgroundColor: AppColors.success,
                 ),
               ),
             ],
@@ -315,7 +409,7 @@ class _BulkUploadDialogState extends State<BulkUploadDialog> {
     );
   }
 
-  // ── Done step ─────────────────────────────────────────────────────────────────
+  // ── Done ──────────────────────────────────────────────────────────────────
 
   Widget _buildDone() {
     final r = _result!;
@@ -335,7 +429,9 @@ class _BulkUploadDialogState extends State<BulkUploadDialog> {
               ),
               const SizedBox(width: 10),
               Text(
-                r.failed == 0 ? 'Import Complete' : 'Import Finished with Errors',
+                r.failed == 0
+                    ? 'Import Complete'
+                    : 'Import Finished with Errors',
                 style: const TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.w700,
@@ -354,7 +450,7 @@ class _BulkUploadDialogState extends State<BulkUploadDialog> {
             _ResultRow(
               icon: Icons.skip_next_rounded,
               color: AppColors.warning,
-              label: '${r.skipped} skipped',
+              label: '${r.skipped} skipped (already exist)',
             ),
           if (r.failed > 0) ...[
             _ResultRow(
@@ -377,9 +473,7 @@ class _BulkUploadDialogState extends State<BulkUploadDialog> {
                 child: Text(
                   'Row ${f.row}: ${f.reason}',
                   style: const TextStyle(
-                    fontSize: 12,
-                    color: AppColors.error,
-                  ),
+                      fontSize: 12, color: AppColors.error),
                 ),
               ),
             ),
@@ -390,8 +484,7 @@ class _BulkUploadDialogState extends State<BulkUploadDialog> {
             child: FilledButton(
               onPressed: () => Navigator.of(context).pop(),
               style: FilledButton.styleFrom(
-                backgroundColor: AppColors.primary,
-              ),
+                  backgroundColor: AppColors.primary),
               child: const Text('Done'),
             ),
           ),
@@ -401,46 +494,7 @@ class _BulkUploadDialogState extends State<BulkUploadDialog> {
   }
 }
 
-// ── Small widgets ─────────────────────────────────────────────────────────────
-
-class _Step1Card extends StatelessWidget {
-  final VoidCallback onDownload;
-  const _Step1Card({required this.onDownload});
-
-  @override
-  Widget build(BuildContext context) {
-    return _StepCard(
-      step: '1',
-      title: 'Download the template',
-      subtitle: 'Fill in your data using the provided .xlsx template.',
-      action: OutlinedButton.icon(
-        onPressed: onDownload,
-        icon: const Icon(Icons.download_rounded, size: 16),
-        label: const Text('Download Template (.xlsx)'),
-      ),
-    );
-  }
-}
-
-class _Step2Card extends StatelessWidget {
-  final VoidCallback onUpload;
-  const _Step2Card({required this.onUpload});
-
-  @override
-  Widget build(BuildContext context) {
-    return _StepCard(
-      step: '2',
-      title: 'Upload your filled file',
-      subtitle: 'Select your completed .xlsx file to validate and preview.',
-      action: FilledButton.icon(
-        onPressed: onUpload,
-        icon: const Icon(Icons.upload_rounded, size: 16),
-        label: const Text('Upload File (.xlsx)'),
-        style: FilledButton.styleFrom(backgroundColor: AppColors.primary),
-      ),
-    );
-  }
-}
+// ── Shared card widget ────────────────────────────────────────────────────────
 
 class _StepCard extends StatelessWidget {
   final String step;
@@ -516,6 +570,8 @@ class _StepCard extends StatelessWidget {
   }
 }
 
+// ── Row tile ──────────────────────────────────────────────────────────────────
+
 class _RowTile extends StatelessWidget {
   final BulkRow row;
   const _RowTile({required this.row});
@@ -523,11 +579,7 @@ class _RowTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final (icon, color, detail) = switch (row.status) {
-      RowStatus.valid => (
-          Icons.check_circle_rounded,
-          AppColors.success,
-          null,
-        ),
+      RowStatus.valid => (Icons.check_circle_rounded, AppColors.success, null),
       RowStatus.skipped => (
           Icons.warning_amber_rounded,
           AppColors.warning,
@@ -586,11 +638,12 @@ class _RowTile extends StatelessWidget {
   }
 }
 
+// ── Status chip ───────────────────────────────────────────────────────────────
+
 class _Chip extends StatelessWidget {
   final IconData icon;
   final Color color;
   final String label;
-
   const _Chip({required this.icon, required this.color, required this.label});
 
   @override
@@ -602,18 +655,20 @@ class _Chip extends StatelessWidget {
         const SizedBox(width: 4),
         Text(
           label,
-          style: TextStyle(fontSize: 12, color: color, fontWeight: FontWeight.w600),
+          style:
+              TextStyle(fontSize: 12, color: color, fontWeight: FontWeight.w600),
         ),
       ],
     );
   }
 }
 
+// ── Result row ────────────────────────────────────────────────────────────────
+
 class _ResultRow extends StatelessWidget {
   final IconData icon;
   final Color color;
   final String label;
-
   const _ResultRow({
     required this.icon,
     required this.color,
@@ -642,6 +697,8 @@ class _ResultRow extends StatelessWidget {
   }
 }
 
+// ── Error banner ──────────────────────────────────────────────────────────────
+
 class _ErrorBanner extends StatelessWidget {
   final String message;
   const _ErrorBanner({required this.message});
@@ -657,7 +714,8 @@ class _ErrorBanner extends StatelessWidget {
       ),
       child: Row(
         children: [
-          const Icon(Icons.error_outline_rounded, size: 16, color: AppColors.error),
+          const Icon(Icons.error_outline_rounded,
+              size: 16, color: AppColors.error),
           const SizedBox(width: 8),
           Expanded(
             child: Text(

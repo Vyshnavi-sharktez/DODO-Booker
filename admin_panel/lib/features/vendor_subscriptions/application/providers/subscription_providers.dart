@@ -34,8 +34,8 @@ class PlansNotifier extends StateNotifier<AsyncValue<List<SubscriptionPlan>>> {
     double? subscriptionFee,
     required Map<String, dynamic> permissions,
     required bool isActive,
-    required int sortOrder,
   }) async {
+    final sortOrder = await _repo.getNextSortOrder();
     final created = await _repo.createPlan(
       name: name,
       description: description,
@@ -83,6 +83,11 @@ class PlansNotifier extends StateNotifier<AsyncValue<List<SubscriptionPlan>>> {
 
   Future<void> deletePlan(String id) async {
     await _repo.deletePlan(id);
+    await _load();
+  }
+
+  Future<void> movePlan(String id, String direction) async {
+    await _repo.movePlan(id, direction);
     await _load();
   }
 
