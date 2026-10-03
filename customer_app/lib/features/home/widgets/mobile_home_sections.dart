@@ -1,4 +1,5 @@
-﻿import 'package:flutter/material.dart';
+﻿import 'dart:async';
+import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -10,11 +11,377 @@ import '../../../models/coupon_model.dart';
 import '../../../routes/app_router.dart';
 import '../../booking/services/coupon_providers.dart';
 import '../../catalog/models/catalog_node_model.dart';
+import '../../catalog/services/catalog_service.dart';
 import '../../catalog/utils/catalog_launcher.dart';
 import '../models/landing_page_section.dart';
 import '../services/home_providers.dart';
 import '../services/home_service.dart';
 import 'how_it_works_section.dart';
+
+// ── Mobile Promo Banner (first section, above CMS sections) ──────────────────
+//
+// Uses activeCouponsProvider — the real data source. Renders nothing if empty.
+// Single coupon: plain card. Multiple: PageView + dots + 5s auto-scroll.
+
+class MobilePromoBanner extends ConsumerStatefulWidget {
+  const MobilePromoBanner({super.key});
+
+  @override
+  ConsumerState<MobilePromoBanner> createState() => _MobilePromoBannerState();
+}
+
+class _MobilePromoBannerState extends ConsumerState<MobilePromoBanner> {
+  late final PageController _pageCtrl;
+  Timer? _autoTimer;
+  int _page = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _pageCtrl = PageController();
+  }
+
+  void _ensureTimer(int count) {
+    if (_autoTimer != null || count <= 1) return;
+    _autoTimer = Timer.periodic(const Duration(seconds: 5), (_) {
+      if (!mounted || !_pageCtrl.hasClients) return;
+      final next = (_page + 1) % count;
+      _pageCtrl.animateToPage(next,
+          duration: const Duration(milliseconds: 420),
+          curve: Curves.easeInOut);
+    });
+  }
+
+  @override
+  void dispose() {
+    _autoTimer?.cancel();
+    _pageCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final couponsAsync = ref.watch(activeCouponsProvider);
+    return couponsAsync.when(
+      loading: () => const SizedBox.shrink(),
+      error: (_, __) => const SizedBox.shrink(),
+      data: (coupons) {
+        if (coupons.isEmpty) return const SizedBox.shrink();
+        _ensureTimer(coupons.length);
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              SizedBox(
+                height: 148,
+                child: coupons.length == 1
+                    ? _PromoCouponCard(coupon: coupons.first)
+                    : PageView.builder(
+                        controller: _pageCtrl,
+                        physics: const BouncingScrollPhysics(),
+                        itemCount: coupons.length,
+                        onPageChanged: (i) => setState(() => _page = i),
+                        itemBuilder: (_, i) =>
+                            _PromoCouponCard(coupon: coupons[i]),
+                      ),
+              ),
+              if (coupons.length > 1) ...[
+                const SizedBox(height: 10),
+                _PromoDotIndicator(count: coupons.length, current: _page),
+              ],
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _PromoCouponCard extends StatefulWidget {
+  final CouponModel coupon;
+  const _PromoCouponCard({required this.coupon});
+
+  @override
+  State<_PromoCouponCard> createState() => _PromoCouponCardState();
+}
+
+class _PromoCouponCardState extends State<_PromoCouponCard> {
+  bool _loading = false;
+
+  String get _headline {
+    final d = widget.coupon.discountValue;
+    final isInt = d == d.floorToDouble();
+    final val = isInt ? d.toInt().toString() : d.toStringAsFixed(1);
+    return widget.coupon.discountType == 'percentage' ? '$val% OFF' : '₹$val OFF';
+  }
+
+  String get _subtitle =>
+      widget.coupon.description?.isNotEmpty == true
+          ? widget.coupon.description!
+          : widget.coupon.applicabilityLabel;
+
+  Future<void> _onViewServices() async {
+    if (widget.coupon.applicabilityType == 'all' ||
+        widget.coupon.applicableNodeIds.isEmpty) {
+      context.push(AppRoutes.search);
+      return;
+    }
+    setState(() => _loading = true);
+    final node = await CatalogService()
+        .fetchNode(widget.coupon.applicableNodeIds.first);
+    if (!mounted) return;
+    setState(() => _loading = false);
+    if (node == null) {
+      context.push(AppRoutes.search);
+      return;
+    }
+    // openCatalogNode handles routing:
+    // - category/non-bookable node → CategoryExplorerScreen
+    // - leaf bookable node (service/product) → detail sheet
+    openCatalogNode(context, node);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: () {
+        Clipboard.setData(ClipboardData(text: widget.coupon.code));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('Code "${widget.coupon.code}" copied!'),
+          duration: const Duration(seconds: 2),
+          behavior: SnackBarBehavior.floating,
+        ));
+      },
+      child: Container(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(18),
+          gradient: const LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [Color(0xFFFFF9F2), Color(0xFFFFF0D0)],
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.07),
+              blurRadius: 14,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(18),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // Gold accent stripe
+              Container(width: 4, color: AppColors.gold),
+              // Left: text panel
+              Expanded(
+                flex: 56,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(14, 14, 10, 14),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Accent line
+                      Container(
+                        width: 24,
+                        height: 3,
+                        decoration: BoxDecoration(
+                          color: AppColors.gold,
+                          borderRadius: BorderRadius.circular(2),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      // Big headline: "10% OFF"
+                      Text(
+                        _headline,
+                        style: GoogleFonts.poppins(
+                          fontSize: 20,
+                          fontWeight: FontWeight.w800,
+                          color: const Color(0xFF1A1714),
+                          height: 1.1,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 4),
+                      // Description
+                      Expanded(
+                        child: Text(
+                          _subtitle,
+                          style: GoogleFonts.inter(
+                            fontSize: 11,
+                            color: const Color(0xFF6E6A64),
+                            height: 1.35,
+                          ),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      // Dark CTA
+                      GestureDetector(
+                        onTap: _loading ? null : _onViewServices,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 14, vertical: 7),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF1A1714),
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: _loading
+                              ? const SizedBox(
+                                  width: 14,
+                                  height: 14,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: Colors.white,
+                                  ),
+                                )
+                              : Text(
+                                  'View Services →',
+                                  style: GoogleFonts.inter(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w700,
+                                    color: Colors.white,
+                                    height: 1.2,
+                                  ),
+                                ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              // Right: styled coupon visual
+              Expanded(
+                flex: 44,
+                child: _PromoCouponVisual(coupon: widget.coupon),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _PromoCouponVisual extends StatelessWidget {
+  final CouponModel coupon;
+  const _PromoCouponVisual({required this.coupon});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFFFFD166), Color(0xFFFFA836)],
+        ),
+      ),
+      child: Stack(
+        children: [
+          // Decorative circles
+          Positioned(
+            right: -20,
+            top: -20,
+            child: Container(
+              width: 90,
+              height: 90,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: Colors.white.withValues(alpha: 0.15),
+              ),
+            ),
+          ),
+          Positioned(
+            left: -12,
+            bottom: -12,
+            child: Container(
+              width: 60,
+              height: 60,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: Colors.white.withValues(alpha: 0.1),
+              ),
+            ),
+          ),
+          // Coupon code pill centered
+          Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  'USE CODE',
+                  style: GoogleFonts.inter(
+                    fontSize: 8,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.white.withValues(alpha: 0.85),
+                    letterSpacing: 1.2,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 10, vertical: 5),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    coupon.code,
+                    style: GoogleFonts.inter(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w800,
+                      color: const Color(0xFFF5A623),
+                      letterSpacing: 0.5,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Icon(
+                  Icons.content_copy_rounded,
+                  size: 14,
+                  color: Colors.white.withValues(alpha: 0.8),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PromoDotIndicator extends StatelessWidget {
+  final int count;
+  final int current;
+  const _PromoDotIndicator({required this.count, required this.current});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: List.generate(count, (i) {
+        final active = i == current;
+        return AnimatedContainer(
+          duration: const Duration(milliseconds: 280),
+          margin: const EdgeInsets.symmetric(horizontal: 3),
+          width: active ? 18 : 6,
+          height: 6,
+          decoration: BoxDecoration(
+            color: active ? AppColors.gold : const Color(0xFFD8D3CA),
+            borderRadius: BorderRadius.circular(3),
+          ),
+        );
+      }),
+    );
+  }
+}
 
 // ── Public entry: renders a single section in mobile style ────────────────────
 
@@ -239,7 +606,7 @@ class _MobileServicesSectionState extends State<_MobileServicesSection> {
                     physics: const NeverScrollableScrollPhysics(),
                     mainAxisSpacing: 16,
                     crossAxisSpacing: 16,
-                    childAspectRatio: 0.9,
+                    childAspectRatio: 0.72,
                     children: [
                       ...display.map(
                         (n) => _CategoryGridItem(
@@ -301,32 +668,33 @@ class _CategoryGridItem extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         mainAxisAlignment: MainAxisAlignment.start,
         children: [
-          Container(
-            width: 56,
-            height: 56,
-            decoration: BoxDecoration(
-              color: const Color(0xFFEDE8DF),
-              borderRadius: BorderRadius.circular(14),
+          Expanded(
+            child: Container(
+              decoration: BoxDecoration(
+                color: const Color(0xFFEDE8DF),
+                borderRadius: BorderRadius.circular(14),
+              ),
+              clipBehavior: Clip.antiAlias,
+              child: imgUrl.isNotEmpty
+                  ? Image.network(
+                      imgUrl,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, _, _) =>
+                          _CategoryIconFallback(name: node.name),
+                      loadingBuilder: (_, child, progress) =>
+                          progress == null ? child : _CategoryIconFallback(name: node.name),
+                    )
+                  : _CategoryIconFallback(name: node.name),
             ),
-            clipBehavior: Clip.antiAlias,
-            child: imgUrl.isNotEmpty
-                ? Image.network(
-                    imgUrl,
-                    fit: BoxFit.cover,
-                    errorBuilder: (_, _, _) =>
-                        _CategoryIconFallback(name: node.name),
-                    loadingBuilder: (_, child, progress) =>
-                        progress == null ? child : _CategoryIconFallback(name: node.name),
-                  )
-                : _CategoryIconFallback(name: node.name),
           ),
           const SizedBox(height: 6),
           Text(
             node.name,
             style: GoogleFonts.inter(
-              fontSize: 11,
+              fontSize: 12,
               fontWeight: FontWeight.w600,
               color: AppColors.textPrimary,
               height: 1.2,
@@ -371,27 +739,28 @@ class _MoreGridItem extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         mainAxisAlignment: MainAxisAlignment.start,
         children: [
-          Container(
-            width: 56,
-            height: 56,
-            decoration: BoxDecoration(
-              color: const Color(0xFFEDE8DF),
-              borderRadius: BorderRadius.circular(14),
-            ),
-            alignment: Alignment.center,
-            child: const Icon(
-              Icons.grid_view_rounded,
-              size: 26,
-              color: AppColors.textSecondary,
+          Expanded(
+            child: Container(
+              decoration: BoxDecoration(
+                color: const Color(0xFFEDE8DF),
+                borderRadius: BorderRadius.circular(14),
+              ),
+              alignment: Alignment.center,
+              child: const Icon(
+                Icons.grid_view_rounded,
+                size: 30,
+                color: AppColors.textSecondary,
+              ),
             ),
           ),
           const SizedBox(height: 6),
           Text(
             'More',
             style: GoogleFonts.inter(
-              fontSize: 11,
+              fontSize: 12,
               fontWeight: FontWeight.w600,
               color: AppColors.textPrimary,
               height: 1.2,
@@ -419,19 +788,19 @@ class _CategoryGridSkeleton extends StatelessWidget {
         children: List.generate(
           6,
           (_) => Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Container(
-                width: 56,
-                height: 56,
-                decoration: BoxDecoration(
-                  color: const Color(0xFFEDE8DF),
-                  borderRadius: BorderRadius.circular(14),
+              Expanded(
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFEDE8DF),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
                 ),
               ),
               const SizedBox(height: 6),
               Container(
                 height: 10,
-                width: 40,
                 decoration: BoxDecoration(
                   color: const Color(0xFFE5E0D8),
                   borderRadius: BorderRadius.circular(4),
@@ -606,7 +975,7 @@ class _MobileSubServicesSection extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const SizedBox(height: 24),
-        _SectionHeader(title: title, onSeeAll: onSeeAll),
+        _SectionHeader(title: title, onSeeAll: null),
         SizedBox(
           height: 155,
           child: ListView.builder(
@@ -715,113 +1084,96 @@ class _MobileOffersSection extends StatelessWidget {
       children: [
         const SizedBox(height: 24),
         const _SectionHeader(title: 'Best Offers for You'),
-        SizedBox(
-          height: 120,
-          child: ListView.builder(
-            scrollDirection: Axis.horizontal,
+        const SizedBox(height: 12),
+        if (coupons.isEmpty)
+          Padding(
             padding: const EdgeInsets.symmetric(horizontal: 20),
-            itemCount: coupons.isEmpty ? 2 : coupons.length,
-            itemBuilder: (context, i) {
-              if (coupons.isEmpty) return _CouponCardSkeleton();
-              return _CouponCard(coupon: coupons[i]);
-            },
-          ),
-        ),
+            child: _PromoCouponCardSkeleton(),
+          )
+        else
+          _OffersBannerPager(coupons: coupons),
       ],
     );
   }
 }
 
-class _CouponCard extends StatelessWidget {
-  final CouponModel coupon;
+// Stateful pager for the offers section — same card style as MobilePromoBanner.
+class _OffersBannerPager extends StatefulWidget {
+  final List<CouponModel> coupons;
+  const _OffersBannerPager({required this.coupons});
 
-  const _CouponCard({required this.coupon});
+  @override
+  State<_OffersBannerPager> createState() => _OffersBannerPagerState();
+}
 
-  String get _discountText {
-    if (coupon.discountType == 'percentage') {
-      return '${coupon.discountValue.toInt()}% OFF';
+class _OffersBannerPagerState extends State<_OffersBannerPager> {
+  late final PageController _ctrl;
+  Timer? _timer;
+  int _page = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = PageController();
+    if (widget.coupons.length > 1) {
+      _timer = Timer.periodic(const Duration(seconds: 5), (_) {
+        if (!mounted || !_ctrl.hasClients) return;
+        final next = (_page + 1) % widget.coupons.length;
+        _ctrl.animateToPage(next,
+            duration: const Duration(milliseconds: 420),
+            curve: Curves.easeInOut);
+      });
     }
-    return '₹${coupon.discountValue.toInt()} OFF';
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    _ctrl.dispose();
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: () {
-        Clipboard.setData(ClipboardData(text: coupon.code));
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Code "${coupon.code}" copied!'),
-            duration: const Duration(seconds: 2),
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-      },
-      child: Container(
-        width: 175,
-        margin: const EdgeInsets.only(right: 12),
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: const Color(0xFFFFF3D6),
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: const Color(0xFFFFE0A0), width: 1),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text(
-              _discountText,
-              style: GoogleFonts.poppins(
-                fontSize: 22,
-                fontWeight: FontWeight.w800,
-                color: AppColors.textPrimary,
-                height: 1.1,
-              ),
-            ),
-            if (coupon.description != null)
-              Text(
-                coupon.description!,
-                style: GoogleFonts.inter(
-                  fontSize: 11,
-                  color: AppColors.textSecondary,
-                ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    'Use Code: ${coupon.code}',
-                    style: GoogleFonts.inter(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.gold,
-                    ),
-                    overflow: TextOverflow.ellipsis,
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        SizedBox(
+          height: 148,
+          child: widget.coupons.length == 1
+              ? Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  child: _PromoCouponCard(coupon: widget.coupons.first),
+                )
+              : PageView.builder(
+                  controller: _ctrl,
+                  physics: const BouncingScrollPhysics(),
+                  itemCount: widget.coupons.length,
+                  onPageChanged: (i) => setState(() => _page = i),
+                  itemBuilder: (_, i) => Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    child: _PromoCouponCard(coupon: widget.coupons[i]),
                   ),
                 ),
-                const SizedBox(width: 4),
-                const Icon(Icons.copy_rounded, size: 13, color: AppColors.gold),
-              ],
-            ),
-          ],
         ),
-      ),
+        if (widget.coupons.length > 1) ...[
+          const SizedBox(height: 10),
+          _PromoDotIndicator(
+              count: widget.coupons.length, current: _page),
+        ],
+      ],
     );
   }
 }
 
-class _CouponCardSkeleton extends StatelessWidget {
+class _PromoCouponCardSkeleton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 175,
-      margin: const EdgeInsets.only(right: 12),
+      height: 148,
       decoration: BoxDecoration(
-        color: const Color(0xFFFFF3D6),
-        borderRadius: BorderRadius.circular(16),
+        color: const Color(0xFFF0EDE8),
+        borderRadius: BorderRadius.circular(18),
       ),
     );
   }
@@ -866,7 +1218,7 @@ class _MobilePopularSection extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const SizedBox(height: 24),
-        _SectionHeader(title: title, onSeeAll: onSeeAll),
+        _SectionHeader(title: title, onSeeAll: null),
         SizedBox(
           height: 165,
           child: ListView.builder(
@@ -1003,11 +1355,18 @@ class _MobileWhyDodoSection extends StatelessWidget {
             ),
           ),
         ),
-        SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
+        Padding(
           padding: const EdgeInsets.symmetric(horizontal: 20),
-          child: Row(
-            children: _kWhyDodoChips.map((chip) => _WhyDodoChipWidget(chip: chip)).toList(),
+          child: GridView.count(
+            crossAxisCount: 2,
+            crossAxisSpacing: 10,
+            mainAxisSpacing: 10,
+            childAspectRatio: 2.6,
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            children: _kWhyDodoChips
+                .map((chip) => _WhyDodoChipWidget(chip: chip))
+                .toList(),
           ),
         ),
         const SizedBox(height: 4),
@@ -1023,24 +1382,24 @@ class _WhyDodoChipWidget extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      margin: const EdgeInsets.only(right: 10),
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       decoration: BoxDecoration(
         color: const Color(0xFFF2EFE9),
         borderRadius: BorderRadius.circular(12),
       ),
       child: Row(
-        mainAxisSize: MainAxisSize.min,
         children: [
           Icon(chip.icon, size: 18, color: AppColors.textPrimary),
           const SizedBox(width: 8),
-          Text(
-            chip.label,
-            style: GoogleFonts.inter(
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-              color: AppColors.textPrimary,
-              height: 1.3,
+          Expanded(
+            child: Text(
+              chip.label,
+              style: GoogleFonts.inter(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: AppColors.textPrimary,
+                height: 1.3,
+              ),
             ),
           ),
         ],

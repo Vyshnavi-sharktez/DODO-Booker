@@ -25,7 +25,12 @@ class LandingPageCmsNotifier
 
   @override
   Future<List<LandingPageSection>> build() async {
-    return _repo.fetchAll();
+    var sections = await _repo.fetchAll();
+    if (sections.isEmpty) {
+      await _repo.seedDefaults();
+      sections = await _repo.fetchAll();
+    }
+    return sections;
   }
 
   // ── Enable / disable ───────────────────────────────────────────────────────
