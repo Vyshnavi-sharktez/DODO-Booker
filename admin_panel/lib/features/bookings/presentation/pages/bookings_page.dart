@@ -1421,6 +1421,7 @@ class _BookingsTable extends StatelessWidget {
                           const Divider(height: 1),
                           Expanded(
                             child: ListView.separated(
+                              key: const PageStorageKey<String>('admin_bookings_regular'),
                               itemCount: bookings.length,
                               separatorBuilder: (_, idx) =>
                                   const Divider(height: 1),
@@ -2298,6 +2299,7 @@ class _AmcContractTable extends StatelessWidget {
                           const Divider(height: 1),
                           Expanded(
                             child: ListView.separated(
+                              key: const PageStorageKey<String>('admin_bookings_amc'),
                               itemCount: contracts.length,
                               separatorBuilder: (_, _) =>
                                   const Divider(height: 1),

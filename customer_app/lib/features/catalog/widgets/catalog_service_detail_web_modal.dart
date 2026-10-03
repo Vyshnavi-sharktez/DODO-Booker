@@ -1393,6 +1393,7 @@ class _WebDetailBookingBar extends ConsumerWidget {
     required this.priceAdjustment,
     required this.addonsTotal,
     this.parentNodeId,
+    this.rootCategoryId,
     required this.attrs,
     required this.selections,
     required this.addOns,
@@ -1406,6 +1407,7 @@ class _WebDetailBookingBar extends ConsumerWidget {
   final double priceAdjustment;
   final double addonsTotal;
   final String? parentNodeId;
+  final String? rootCategoryId;
   final List<ServiceAttributeModel> attrs;
   final Map<String, String> selections;
   final List<AddOnModel> addOns;
@@ -1468,24 +1470,126 @@ class _WebDetailBookingBar extends ConsumerWidget {
         return;
       }
     }
+    final bool added;
     if (amcPlan != null) {
-      ref.read(cartProvider.notifier).addToCart(
+      added = ref.read(cartProvider.notifier).addToCart(
             node,
             priceAdjustment: 0.0,
             parentNodeId: parentNodeId,
+            rootCategoryId: rootCategoryId,
             amcPlan: amcPlan,
             amcQuantity: 1,
           );
     } else {
       final selAddons = buildSelectedAddons(addOns, selectedAddonIds);
-      ref.read(cartProvider.notifier).addToCart(
+      added = ref.read(cartProvider.notifier).addToCart(
             node,
             unitPriceOverride: (node.finalPrice ?? node.basePrice ?? 0.0) +
                 priceAdjustment +
                 totalAddonsPrice(selAddons),
             addons: selAddons,
             parentNodeId: parentNodeId,
+            rootCategoryId: rootCategoryId,
           );
+    }
+    if (!added && context.mounted) {
+      showDialog<void>(
+        context: context,
+        builder: (ctx) => Dialog(
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          insetPadding:
+              const EdgeInsets.symmetric(horizontal: 40, vertical: 40),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 360),
+            child: Stack(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(24, 32, 24, 24),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        width: 60,
+                        height: 60,
+                        decoration: const BoxDecoration(
+                          color: Color(0xFFFEF3C7),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Center(
+                          child: Text(
+                            '!',
+                            style: TextStyle(
+                              fontSize: 28,
+                              fontWeight: FontWeight.w800,
+                              color: Color(0xFFD97706),
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      const Text(
+                        'Different Category Service',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 17,
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFF1A1A1A),
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      const Text(
+                        "Sorry, you can't book services from different categories in the same booking. "
+                        'Please complete this booking first or remove the existing service.',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: Color(0xFF888888),
+                          height: 1.55,
+                        ),
+                      ),
+                      const SizedBox(height: 20),
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton(
+                          onPressed: () => Navigator.of(ctx).pop(),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFFFBBF24),
+                            foregroundColor: const Color(0xFF1A1A1A),
+                            elevation: 0,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(100),
+                            ),
+                            padding:
+                                const EdgeInsets.symmetric(vertical: 14),
+                          ),
+                          child: const Text(
+                            'OK',
+                            style: TextStyle(
+                                fontSize: 15, fontWeight: FontWeight.w600),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Positioned(
+                  top: 8,
+                  right: 8,
+                  child: GestureDetector(
+                    onTap: () => Navigator.of(ctx).pop(),
+                    child: const Padding(
+                      padding: EdgeInsets.all(4),
+                      child: Icon(Icons.close,
+                          size: 18, color: Color(0xFF999999)),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
     }
   }
 

@@ -9,7 +9,9 @@ import '../../../core/widgets/page_sheet.dart';
 import '../../../models/address_model.dart';
 import '../../../models/coupon_model.dart';
 import '../../../models/time_slot_model.dart';
+import '../../../features/booking/widgets/time_slot_card.dart';
 import '../../../features/booking/services/booking_providers.dart';
+import '../../../features/booking/services/coupon_providers.dart';
 import '../../../features/booking/widgets/available_coupons_sheet.dart';
 import '../../../features/booking/widgets/booking_success_dialog.dart';
 import '../../../features/address/screens/address_screen.dart';
@@ -72,6 +74,19 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
 
   double get _discount =>
       _selectedCoupon?.calculateDiscount(_subtotal) ?? 0.0;
+
+  // Union of serviceId + parentNodeId + rootCategoryId for every cart item.
+  // Passed to AvailableCouponsSheet and validate_coupon RPC for applicability.
+  List<String> get _cartNodeIds {
+    final items = ref.read(cartProvider);
+    final ids = <String>{};
+    for (final item in items) {
+      ids.add(item.serviceId);
+      if (item.parentNodeId != null) ids.add(item.parentNodeId!);
+      if (item.rootCategoryId != null) ids.add(item.rootCategoryId!);
+    }
+    return ids.toList();
+  }
 
   double get _tax => _taxTotal;
 
@@ -136,6 +151,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       builder: (_) => AvailableCouponsSheet(
         subtotal: _subtotal,
         selectedCoupon: _selectedCoupon,
+        cartNodeIds: _cartNodeIds,
       ),
     );
     if (result != null) {
@@ -216,6 +232,24 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     if (locationError != null) {
       await showServiceAreaUnavailableDialog(context, message: locationError);
       return;
+    }
+
+    // ── Server-side coupon applicability check ───────────────────────────────
+    if (_selectedCoupon != null) {
+      try {
+        await ref
+            .read(couponServiceProvider)
+            .validateCoupon(
+              code: _selectedCoupon!.code,
+              subtotal: _subtotal,
+              cartNodeIds: _cartNodeIds,
+            );
+      } catch (e) {
+        if (!mounted) return;
+        setState(() => _selectedCoupon = null);
+        _showError(e.toString().replaceFirst('Exception: ', ''));
+        return;
+      }
     }
 
     // ── Payment method selection ─────────────────────────────────────────────
@@ -643,6 +677,17 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Auto-pop when every item is removed while the booking flow is inactive.
+    // The _placing guard prevents this from firing on the success path where
+    // clearCart() is called while _placing == true.
+    ref.listen<List<CartItem>>(cartProvider, (previous, next) {
+      if (next.isEmpty && !_placing && mounted) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted && !_placing) _navigateBackToCart();
+        });
+      }
+    });
+
     final items = ref.watch(cartProvider);
     final addressAsync = ref.watch(addressNotifierProvider);
 
@@ -1528,73 +1573,26 @@ class _SlotGrid extends StatelessWidget {
       );
     }
 
-    final groups = <SlotPeriod, List<TimeSlotModel>>{};
-    for (final s in slots) {
-      groups.putIfAbsent(s.period, () => []).add(s);
-    }
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: groups.entries.map((entry) {
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Padding(
-              padding: const EdgeInsets.only(bottom: 8, top: 4),
-              child: Text(
-                entry.key.label,
-                style: tt.labelSmall?.copyWith(
-                  color: AppColors.textSecondary,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: entry.value.map((slot) {
-                final isSelected = selected?.id == slot.id;
-                return Clickable(
-                  onTap: slot.isAvailable ? () => onSelect(slot) : null,
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 150),
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 14, vertical: 8),
-                    decoration: BoxDecoration(
-                      color: isSelected
-                          ? AppColors.primary
-                          : slot.isAvailable
-                              ? AppColors.surfaceVariant
-                              : AppColors.border.withAlpha(60),
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(
-                        color: isSelected
-                            ? AppColors.primary
-                            : AppColors.border,
-                        width: isSelected ? 1.5 : 1,
-                      ),
-                    ),
-                    child: Text(
-                      slot.label,
-                      style: tt.labelSmall?.copyWith(
-                        color: isSelected
-                            ? Colors.white
-                            : slot.isAvailable
-                                ? AppColors.textPrimary
-                                : AppColors.textHint,
-                        fontWeight: isSelected
-                            ? FontWeight.w700
-                            : FontWeight.w500,
-                      ),
-                    ),
-                  ),
-                );
-              }).toList(),
-            ),
-            const SizedBox(height: 8),
-          ],
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final cols = constraints.maxWidth >= 460 ? 4 : constraints.maxWidth >= 300 ? 3 : 2;
+        return GridView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: cols,
+            crossAxisSpacing: 8,
+            mainAxisSpacing: 8,
+            childAspectRatio: (constraints.maxWidth - (cols - 1) * 8) / cols / 44,
+          ),
+          itemCount: slots.length,
+          itemBuilder: (_, i) => TimeSlotCard(
+            slot: slots[i],
+            isSelected: selected?.id == slots[i].id,
+            onTap: slots[i].isAvailable ? () => onSelect(slots[i]) : null,
+          ),
         );
-      }).toList(),
+      },
     );
   }
 }

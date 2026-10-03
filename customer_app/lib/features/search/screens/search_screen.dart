@@ -7,9 +7,12 @@ import '../../../core/config/supabase_config.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/utils/icon_registry.dart';
 import '../../../features/catalog/models/catalog_node_model.dart';
+import 'package:go_router/go_router.dart';
+
 import '../../../features/catalog/utils/catalog_launcher.dart';
 import '../../../features/vendor_custom_service/models/vendor_custom_service_model.dart';
 import '../../../features/vendor_custom_service/widgets/vendor_custom_service_sheet.dart';
+import '../../../routes/app_router.dart';
 
 class SearchScreen extends StatefulWidget {
   final String initialQuery;
@@ -203,7 +206,13 @@ class _SearchScreenState extends State<SearchScreen> {
           ..._results.map(
             (node) => _NodeResult(
               node: node,
-              onTap: () => openCatalogNode(context, node),
+              onTap: () {
+                if (node.isLeafBookable) {
+                  openCatalogNode(context, node);
+                } else {
+                  context.push(AppRoutes.categoryExplorer, extra: {'node': node});
+                }
+              },
             ),
           ),
         ],

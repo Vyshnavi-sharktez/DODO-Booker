@@ -48,6 +48,7 @@ class WishlistScreen extends ConsumerWidget {
                   } catch (_) {}
                 },
                 child: ListView.builder(
+                  key: const PageStorageKey<String>('wishlist_list'),
                   padding: const EdgeInsets.symmetric(vertical: 8),
                   itemCount: items.length,
                   itemBuilder: (_, i) => WishlistItemCard(

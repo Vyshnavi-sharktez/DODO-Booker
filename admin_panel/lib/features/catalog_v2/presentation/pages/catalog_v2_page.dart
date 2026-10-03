@@ -337,6 +337,18 @@ class _CatalogV2PageState extends ConsumerState<CatalogV2Page> {
               .saveLocationRestrictions(node.id, parentIdContext, areaIds);
           ref.invalidate(locationRestrictionsProvider);
         },
+        // Pass node-level status so the dialog can show the global section
+        // for child nodes and allow the admin to fix a stuck hidden state.
+        nodeAvailabilityStatus: node.availabilityStatus,
+        nodeUnavailabilityMessage: node.unavailabilityMessage,
+        onSaveGlobal: parentIdContext != null
+            ? (status, message) async {
+                // Always writes node-level (parentIdContext: null).
+                await ref
+                    .read(catalogNodeNotifierProvider.notifier)
+                    .setAvailability(node.id, null, status, message);
+              }
+            : null,
       ),
     );
   }

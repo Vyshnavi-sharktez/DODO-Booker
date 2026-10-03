@@ -396,7 +396,7 @@ class _VendorsPageState extends ConsumerState<VendorsPage> {
                   onDelete: _confirmDelete,
                   onToggle: _toggle,
                   onViewDetails: (v) =>
-                      context.go('/dashboard/vendors/${v.id}'),
+                      context.push('/dashboard/vendors/${v.id}'),
                 );
               },
             ),
@@ -475,6 +475,7 @@ class _VendorsTable extends StatelessWidget {
                           const Divider(height: 1),
                           Expanded(
                             child: ListView.separated(
+                              key: const PageStorageKey<String>('vendors_list'),
                               itemCount: vendors.length,
                               separatorBuilder: (_, idx) =>
                                   const Divider(height: 1),

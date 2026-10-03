@@ -32,14 +32,20 @@ class PublicReview {
   }
 
   factory PublicReview.fromJson(Map<String, dynamic> json) {
+    // Handles both the flat RPC response (get_public_reviews) and the legacy
+    // PostgREST nested-join format { customers: { full_name, ... } }.
     final cust = json['customers'] as Map<String, dynamic>?;
-    final rawName =
-        cust?['full_name'] as String? ?? cust?['name'] as String? ?? 'Customer';
+    final rawName = cust != null
+        ? (cust['full_name'] as String? ?? cust['name'] as String? ?? 'Customer')
+        : (json['customer_name'] as String? ?? 'Customer');
+    final avatarUrl = cust != null
+        ? cust['profile_image_url'] as String?
+        : json['customer_avatar_url'] as String?;
     final firstName = rawName.trim().split(' ').first;
     return PublicReview(
       id: json['id'] as String,
       customerName: firstName,
-      customerAvatarUrl: cust?['profile_image_url'] as String?,
+      customerAvatarUrl: avatarUrl,
       rating: (json['rating'] as num).toInt(),
       reviewText: json['review_text'] as String? ?? '',
       createdAt: DateTime.parse(json['created_at'] as String),
@@ -295,19 +301,18 @@ class HomeService {
   }
 
   // ── Public reviews for home page ───────────────────────────────────────────
+  // Uses the get_public_reviews RPC (SECURITY DEFINER) so anon callers never
+  // need direct SELECT access to customer_reviews or customers.
 
   Future<List<PublicReview>> fetchPublicReviews() async {
     if (!_ready) return [];
     try {
-      final data = await _db
-          .from('customer_reviews')
-          .select('*, customers(full_name, profile_image_url)')
-          .gte('rating', 4)
-          .order('created_at', ascending: false)
-          .limit(12);
+      final data = await _db.rpc(
+        'get_public_reviews',
+        params: {'p_limit': 12},
+      );
       return (data as List)
           .map((e) => PublicReview.fromJson(e as Map<String, dynamic>))
-          .where((r) => r.reviewText.trim().isNotEmpty)
           .toList();
     } catch (e) {
       debugPrint('[DODO][HomeService] fetchPublicReviews error: $e');

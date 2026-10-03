@@ -10,6 +10,7 @@ import '../../../models/coupon_model.dart';
 import '../../../routes/app_router.dart';
 import '../../booking/services/coupon_providers.dart';
 import '../../catalog/models/catalog_node_model.dart';
+import '../../catalog/utils/catalog_launcher.dart';
 import '../models/landing_page_section.dart';
 import '../services/home_providers.dart';
 import '../services/home_service.dart';
@@ -44,7 +45,7 @@ class MobileHomeSectionRenderer extends ConsumerWidget {
         return _MobileSubServicesSection(
           title: section.config['title'] as String? ?? section.sectionName,
           asyncNodes: nodes,
-          onNodeTap: (n) => _openNode(context, n),
+          onNodeTap: (n) => openCatalogNode(context, n),
           onSeeAll: () => context.push(AppRoutes.search),
         );
 
@@ -71,7 +72,7 @@ class MobileHomeSectionRenderer extends ConsumerWidget {
         return _MobilePopularSection(
           title: section.config['title'] as String? ?? section.sectionName,
           asyncNodes: nodes,
-          onNodeTap: (n) => _openNode(context, n),
+          onNodeTap: (n) => openCatalogNode(context, n),
           onSeeAll: () => context.push(AppRoutes.search),
         );
 
@@ -1057,26 +1058,81 @@ class _MobileReviewsSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final reviews = asyncReviews.asData?.value ?? [];
+    return asyncReviews.when(
+      loading: () => _shell(child: _skeletons()),
+      error: (_, __) => const SizedBox.shrink(),
+      data: (reviews) => reviews.isEmpty
+          ? _shell(child: _emptyState(context))
+          : _shell(child: _cards(reviews)),
+    );
+  }
+
+  Widget _shell({required Widget child}) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const SizedBox(height: 24),
         const _SectionHeader(title: 'What our customers say'),
-        SizedBox(
-          height: 170,
-          child: ListView.builder(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 20),
-            itemCount: reviews.isEmpty ? 3 : reviews.length,
-            itemBuilder: (context, i) {
-              if (reviews.isEmpty) return _ReviewCardSkeleton();
-              return _ReviewCard(review: reviews[i]);
-            },
-          ),
-        ),
+        child,
         const SizedBox(height: 24),
       ],
+    );
+  }
+
+  Widget _cards(List<PublicReview> reviews) {
+    return SizedBox(
+      height: 170,
+      child: ListView.builder(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 20),
+        itemCount: reviews.length,
+        itemBuilder: (_, i) => _ReviewCard(review: reviews[i]),
+      ),
+    );
+  }
+
+  Widget _skeletons() {
+    return SizedBox(
+      height: 170,
+      child: ListView.builder(
+        scrollDirection: Axis.horizontal,
+        physics: const NeverScrollableScrollPhysics(),
+        padding: const EdgeInsets.symmetric(horizontal: 20),
+        itemCount: 3,
+        itemBuilder: (_, __) => _ReviewCardSkeleton(),
+      ),
+    );
+  }
+
+  Widget _emptyState(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 4, 20, 0),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: const Color(0xFFECE7DE), width: 0.8),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.star_outline_rounded,
+                size: 28, color: AppColors.gold),
+            const SizedBox(height: 8),
+            Text(
+              'Be the first to share your experience!',
+              style: GoogleFonts.inter(
+                fontSize: 13,
+                color: AppColors.textSecondary,
+                fontWeight: FontWeight.w500,
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

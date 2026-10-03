@@ -161,12 +161,15 @@ class CartNotifier extends StateNotifier<List<CartItem>> {
 
   // ── Mutations ─────────────────────────────────────────────────────────────
 
-  void addToCart(
+  /// Returns false when the service belongs to a different root category than
+  /// the items already in the cart. The caller should show the conflict dialog.
+  bool addToCart(
     CatalogNodeModel service, {
     double priceAdjustment = 0.0,
     double? unitPriceOverride,
     double? originalUnitPrice,
     String? parentNodeId,
+    String? rootCategoryId,
     AmcPlanModel? amcPlan,
     int amcQuantity = 1,
     bool amcIsRenewal = false,
@@ -177,6 +180,17 @@ class CartNotifier extends StateNotifier<List<CartItem>> {
     int? quantity,
   }) {
     debugPrint('[DODO][CartSync][1] addToCart() entered — serviceId=${service.id} name=${service.name} parentNodeId=$parentNodeId isAmc=${amcPlan != null}');
+
+    // Root category enforcement: block if any existing item belongs to a
+    // different known root category.
+    if (rootCategoryId != null && state.isNotEmpty) {
+      final hasConflict = state.any(
+        (item) =>
+            item.rootCategoryId != null &&
+            item.rootCategoryId != rootCategoryId,
+      );
+      if (hasConflict) return false;
+    }
     final isAmc = amcPlan != null;
     final unitPrice = isAmc
         ? amcPlan.finalPrice * amcQuantity
@@ -200,7 +214,7 @@ class CartNotifier extends StateNotifier<List<CartItem>> {
         existing.bookingId,
         quantity ?? (existing.quantity + 1),
       );
-      return;
+      return true;
     }
 
     final bookingId = '${service.id}_${DateTime.now().millisecondsSinceEpoch}';
@@ -214,6 +228,7 @@ class CartNotifier extends StateNotifier<List<CartItem>> {
       minimumOrderAmount: isAmc ? null : service.minimumOrderAmount,
       originalUnitPrice: isAmc ? null : originalUnitPrice,
       parentNodeId: parentNodeId,
+      rootCategoryId: rootCategoryId,
       isAmc: isAmc,
       amcPlanName: amcPlan?.planName,
       amcRecurrenceInterval: amcPlan?.serviceIntervalLabel,
@@ -235,6 +250,7 @@ class CartNotifier extends StateNotifier<List<CartItem>> {
     state = [...state, newItem];
     _save();
     unawaited(_sync.upsertItem(newItem));
+    return true;
   }
 
   void removeFromCart(String bookingId) {

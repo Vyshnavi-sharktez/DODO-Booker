@@ -657,6 +657,7 @@ class _AllServicesWide extends StatelessWidget {
         return RefreshIndicator(
           onRefresh: () async {},
           child: ListView.builder(
+            key: const PageStorageKey<String>('vendor_services_list'),
             padding: const EdgeInsets.all(24),
             itemCount: visibleRoots.length,
             itemBuilder: (_, i) {

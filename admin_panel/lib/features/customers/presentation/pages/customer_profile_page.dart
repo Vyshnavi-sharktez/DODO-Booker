@@ -153,7 +153,9 @@ class _ProfileHeader extends ConsumerWidget {
       children: [
         AdminBackButton(
           label: 'Customers',
-          onTap: () => context.go('/dashboard/customers'),
+          onTap: () => context.canPop()
+              ? context.pop()
+              : context.go('/dashboard/customers'),
         ),
         const SizedBox(height: 12),
         Row(

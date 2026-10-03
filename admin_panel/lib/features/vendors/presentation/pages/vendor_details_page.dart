@@ -170,7 +170,9 @@ class _PageHeader extends StatelessWidget {
       children: [
         AdminBackButton(
           label: 'Vendors',
-          onTap: () => context.go('/dashboard/vendors'),
+          onTap: () => context.canPop()
+              ? context.pop()
+              : context.go('/dashboard/vendors'),
         ),
         const SizedBox(height: 12),
         Row(

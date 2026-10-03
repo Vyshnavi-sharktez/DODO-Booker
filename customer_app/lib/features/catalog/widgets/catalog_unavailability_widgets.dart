@@ -99,15 +99,58 @@ class CatalogUnavailabilityBanner extends StatelessWidget {
 }
 
 /// Compact bar shown at the bottom of the screen/modal instead of the
-/// booking bar when a leaf service is temporarily unavailable or hidden.
+/// booking bar when a leaf service is temporarily unavailable or hidden,
+/// or while the availability check is still in-flight.
 class CatalogUnavailabilityBar extends StatelessWidget {
-  const CatalogUnavailabilityBar({super.key, this.message});
+  const CatalogUnavailabilityBar({
+    super.key,
+    this.message,
+    this.isChecking = false,
+  });
 
   /// Admin-defined message; null when node is hidden (show generic text).
   final String? message;
 
+  /// True while the async availability check is still loading.
+  /// Shows a neutral "Checking availability…" state instead of the
+  /// unavailability message to avoid a confusing flash.
+  final bool isChecking;
+
   @override
   Widget build(BuildContext context) {
+    if (isChecking) {
+      return Container(
+        padding: EdgeInsets.fromLTRB(
+          16,
+          12,
+          16,
+          12 + MediaQuery.of(context).padding.bottom,
+        ),
+        decoration: BoxDecoration(
+          color: AppColors.surfaceVariant,
+          border: Border(
+              top: BorderSide(color: AppColors.border, width: 0.8)),
+        ),
+        child: const Row(
+          children: [
+            SizedBox(
+              width: 16,
+              height: 16,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
+            SizedBox(width: 10),
+            Text(
+              'Checking availability…',
+              style: TextStyle(
+                  fontSize: 13,
+                  color: AppColors.textSecondary,
+                  height: 1.4),
+            ),
+          ],
+        ),
+      );
+    }
+
     return Container(
       padding: EdgeInsets.fromLTRB(
         16,

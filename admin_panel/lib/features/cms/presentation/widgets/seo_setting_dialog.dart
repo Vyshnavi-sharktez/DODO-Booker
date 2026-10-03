@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/theme/app_theme.dart';
+import '../../../../core/widgets/image_upload_field.dart';
 import '../../application/providers/cms_providers.dart';
 
 class SeoSettingDialog extends ConsumerStatefulWidget {
@@ -21,7 +22,7 @@ class _SeoSettingDialogState extends ConsumerState<SeoSettingDialog> {
   final _metaTitleCtrl = TextEditingController();
   final _metaDescCtrl = TextEditingController();
   final _keywordsCtrl = TextEditingController();
-  final _ogImageCtrl = TextEditingController();
+  String? _ogImage;
   final _canonicalCtrl = TextEditingController();
 
   bool _loading = true;
@@ -42,7 +43,6 @@ class _SeoSettingDialogState extends ConsumerState<SeoSettingDialog> {
     _metaTitleCtrl.dispose();
     _metaDescCtrl.dispose();
     _keywordsCtrl.dispose();
-    _ogImageCtrl.dispose();
     _canonicalCtrl.dispose();
     super.dispose();
   }
@@ -59,7 +59,9 @@ class _SeoSettingDialogState extends ConsumerState<SeoSettingDialog> {
             _metaTitleCtrl.text = seo.metaTitle ?? '';
             _metaDescCtrl.text = seo.metaDescription ?? '';
             _keywordsCtrl.text = seo.metaKeywords ?? '';
-            _ogImageCtrl.text = seo.ogImageUrl ?? '';
+            _ogImage = seo.ogImageUrl?.isNotEmpty == true
+                ? seo.ogImageUrl
+                : null;
             _canonicalCtrl.text = seo.canonicalUrl ?? '';
           }
         });
@@ -83,7 +85,7 @@ class _SeoSettingDialogState extends ConsumerState<SeoSettingDialog> {
             metaTitle: _metaTitleCtrl.text.trim(),
             metaDescription: _metaDescCtrl.text.trim(),
             metaKeywords: _keywordsCtrl.text.trim(),
-            ogImageUrl: _ogImageCtrl.text.trim(),
+            ogImageUrl: _ogImage ?? '',
             canonicalUrl: _canonicalCtrl.text.trim(),
           );
       if (mounted) {
@@ -180,26 +182,14 @@ class _SeoSettingDialogState extends ConsumerState<SeoSettingDialog> {
                                 ),
                                 const SizedBox(height: 16),
 
-                                // OG Image URL
-                                TextFormField(
-                                  controller: _ogImageCtrl,
-                                  decoration: const InputDecoration(
-                                    labelText: 'OG Image URL',
-                                    hintText:
-                                        'https://example.com/og-image.jpg',
-                                    prefixIcon: Icon(
-                                      Icons.image_outlined,
-                                      size: 18,
-                                    ),
-                                  ),
-                                  validator: (v) {
-                                    final val = v?.trim() ?? '';
-                                    if (val.isNotEmpty &&
-                                        !val.startsWith('http')) {
-                                      return 'Must be a valid URL starting with http';
-                                    }
-                                    return null;
-                                  },
+                                // OG Image
+                                ImageUploadField(
+                                  label: 'OG Image',
+                                  value: _ogImage,
+                                  onChanged: (url) =>
+                                      setState(() => _ogImage = url),
+                                  bucket: 'cms-media',
+                                  pathPrefix: 'seo/',
                                 ),
                                 const SizedBox(height: 16),
 

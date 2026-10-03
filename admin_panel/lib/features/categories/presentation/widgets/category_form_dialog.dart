@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/theme/app_theme.dart';
+import '../../../../core/widgets/image_upload_field.dart';
 import '../../../commission/application/providers/commission_providers.dart';
 import '../../domain/models/category.dart';
 
@@ -29,7 +30,7 @@ class _CategoryFormDialogState extends ConsumerState<CategoryFormDialog> {
   final _formKey = GlobalKey<FormState>();
   late final TextEditingController _name;
   late final TextEditingController _slug;
-  late final TextEditingController _imageUrl;
+  String? _imageUrl;
   late final TextEditingController _sortOrder;
   late bool _isActive;
   bool _saving = false;
@@ -46,7 +47,7 @@ class _CategoryFormDialogState extends ConsumerState<CategoryFormDialog> {
     final e = widget.existing;
     _name = TextEditingController(text: e?.name ?? '');
     _slug = TextEditingController(text: e?.slug ?? '');
-    _imageUrl = TextEditingController(text: e?.imageUrl ?? '');
+    _imageUrl = e?.imageUrl?.isNotEmpty == true ? e!.imageUrl : null;
     _sortOrder = TextEditingController(text: (e?.sortOrder ?? 0).toString());
     _isActive = e?.isActive ?? true;
     _slugEdited = e != null;
@@ -57,7 +58,6 @@ class _CategoryFormDialogState extends ConsumerState<CategoryFormDialog> {
   void dispose() {
     _name.dispose();
     _slug.dispose();
-    _imageUrl.dispose();
     _sortOrder.dispose();
     _commissionValue.dispose();
     super.dispose();
@@ -123,8 +123,7 @@ class _CategoryFormDialogState extends ConsumerState<CategoryFormDialog> {
       final categoryId = await widget.onSave(
         name: _name.text.trim(),
         slug: _slug.text.trim(),
-        imageUrl:
-            _imageUrl.text.trim().isEmpty ? null : _imageUrl.text.trim(),
+        imageUrl: _imageUrl,
         sortOrder: int.tryParse(_sortOrder.text.trim()) ?? 0,
         isActive: _isActive,
       );
@@ -268,15 +267,13 @@ class _CategoryFormDialogState extends ConsumerState<CategoryFormDialog> {
                       ),
                       const SizedBox(height: 16),
 
-                      // Image URL
-                      TextFormField(
-                        controller: _imageUrl,
-                        decoration: const InputDecoration(
-                          labelText: 'Image URL',
-                          hintText: 'https://...',
-                          prefixIcon: Icon(Icons.image_outlined),
-                        ),
-                        keyboardType: TextInputType.url,
+                      // Category Image
+                      ImageUploadField(
+                        label: 'Category Image',
+                        value: _imageUrl,
+                        onChanged: (url) => setState(() => _imageUrl = url),
+                        bucket: 'catalog-images',
+                        pathPrefix: 'categories/',
                       ),
                       const SizedBox(height: 20),
 

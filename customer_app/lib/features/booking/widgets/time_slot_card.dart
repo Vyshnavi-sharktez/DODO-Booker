@@ -23,25 +23,25 @@ class TimeSlotCard extends StatelessWidget {
       onTap: available ? onTap : null,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 180),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        // No padding — the grid cell provides the size; alignment centres text.
+        alignment: Alignment.center,
         decoration: BoxDecoration(
           color: isSelected
-              ? AppColors.primary
+              ? AppColors.primary          // dark near-black fill
               : available
-                  ? AppColors.surface
-                  : AppColors.surfaceVariant,
+                  ? AppColors.surface      // white
+                  : AppColors.surfaceVariant, // muted warm-grey
           borderRadius: BorderRadius.circular(10),
           border: Border.all(
             color: isSelected
                 ? AppColors.primary
-                : available
-                    ? AppColors.border
-                    : Colors.transparent,
-            width: isSelected ? 1.5 : 1,
+                : AppColors.border,        // same subtle border for both states
+            width: 1,
           ),
         ),
         child: Text(
           slot.label,
+          textAlign: TextAlign.center,
           style: TextStyle(
             fontSize: 13,
             fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
@@ -49,8 +49,7 @@ class TimeSlotCard extends StatelessWidget {
                 ? Colors.white
                 : available
                     ? AppColors.textPrimary
-                    : AppColors.textHint,
-            decoration: available ? null : TextDecoration.lineThrough,
+                    : AppColors.textHint,  // dimmed; no strikethrough
           ),
         ),
       ),

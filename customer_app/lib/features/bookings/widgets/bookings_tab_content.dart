@@ -115,6 +115,7 @@ class BookingTabContent extends ConsumerWidget {
         return RefreshIndicator(
           onRefresh: onRefresh,
           child: ListView.builder(
+            key: PageStorageKey<String>('bookings_${tab.name}'),
             padding: const EdgeInsets.symmetric(vertical: 8),
             itemCount: entries.length,
             itemBuilder: (_, i) {

@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../../core/theme/app_theme.dart';
+import '../../../../core/widgets/image_upload_field.dart';
 import '../../../vendor_subscriptions/domain/models/subscription_plan.dart'
     show kBillingCycles;
 import '../../data/catalog_node_configs_repository.dart';
@@ -99,9 +100,12 @@ class _CatalogNodeConfigDialogState extends ConsumerState<CatalogNodeConfigDialo
 
   // Scheduling
   bool _schedEnabled = true;
-  final List<bool> _schedDays = List.filled(7, true); // Sunâ€“Sat
+  final List<bool> _schedDays = List.filled(7, true); // Sunâ€”Sat
   final _schedMaxCtrl = TextEditingController(text: '5');
-  final _schedSlotsCtrl = TextEditingController();
+  String? _schedStartTime;
+  String? _schedEndTime;
+  final _schedIntervalHours = TextEditingController(text: '0');
+  final _schedIntervalMinutes = TextEditingController(text: '30');
 
   // Commission
   final _commValueCtrl = TextEditingController();
@@ -133,8 +137,8 @@ class _CatalogNodeConfigDialogState extends ConsumerState<CatalogNodeConfigDialo
   // Before & After tab — direct catalog_nodes field
   List<Map<String, String>> _beforeAfterPairs = [];
   bool _addingPair = false;
-  final _newBeforeUrlCtrl = TextEditingController();
-  final _newAfterUrlCtrl = TextEditingController();
+  String? _newBeforeUrl;
+  String? _newAfterUrl;
 
   // Vendor Subscription â€” plan config embedded in catalog_node_configs JSONB
   bool _vsEnabled = false;
@@ -173,6 +177,8 @@ class _CatalogNodeConfigDialogState extends ConsumerState<CatalogNodeConfigDialo
     for (final m in _modules) {
       _applyToChildren[m] = false;
     }
+    _schedIntervalHours.addListener(() => setState(() {}));
+    _schedIntervalMinutes.addListener(() => setState(() {}));
     _loadData();
   }
 
@@ -184,7 +190,8 @@ class _CatalogNodeConfigDialogState extends ConsumerState<CatalogNodeConfigDialo
     _loyaltyFixedCtrl.dispose();
     _loyaltyPercentCtrl.dispose();
     _schedMaxCtrl.dispose();
-    _schedSlotsCtrl.dispose();
+    _schedIntervalHours.dispose();
+    _schedIntervalMinutes.dispose();
     _commValueCtrl.dispose();
     _surgeValueCtrl.dispose();
     _surgeNameCtrl.dispose();
@@ -202,8 +209,6 @@ class _CatalogNodeConfigDialogState extends ConsumerState<CatalogNodeConfigDialo
     _refundPeriodCtrl.dispose();
     _newIncludedCtrl.dispose();
     _newExcludedCtrl.dispose();
-    _newBeforeUrlCtrl.dispose();
-    _newAfterUrlCtrl.dispose();
     super.dispose();
   }
 
@@ -425,9 +430,12 @@ class _CatalogNodeConfigDialogState extends ConsumerState<CatalogNodeConfigDialo
       debugPrint('[DODO][SchedCfg] _schedDays=${List.from(_schedDays)}');
       _schedMaxCtrl.text =
           (cfg.config['max_bookings_per_slot'] as num?)?.toString() ?? '5';
-      final slots =
-          (cfg.config['slots'] as List<dynamic>?)?.cast<String>() ?? [];
-      _schedSlotsCtrl.text = slots.join(', ');
+      _schedStartTime = cfg.config['slot_start_time'] as String?;
+      _schedEndTime = cfg.config['slot_end_time'] as String?;
+      _schedIntervalHours.text =
+          (cfg.config['slot_interval_hours'] as num?)?.toString() ?? '0';
+      _schedIntervalMinutes.text =
+          (cfg.config['slot_interval_minutes'] as num?)?.toString() ?? '30';
     }
   }
 
@@ -745,17 +753,18 @@ class _CatalogNodeConfigDialogState extends ConsumerState<CatalogNodeConfigDialo
         for (int i = 0; i < 7; i++) {
           if (_schedDays[i]) days.add(i);
         }
-        final rawSlots = _schedSlotsCtrl.text
-            .split(',')
-            .map((s) => s.trim())
-            .where((s) => s.isNotEmpty)
-            .toList();
         return {
           'is_enabled': _schedEnabled,
           'working_days': days,
           'max_bookings_per_slot':
               int.tryParse(_schedMaxCtrl.text.trim()) ?? 5,
-          'slots': rawSlots,
+          'slots': _schedGeneratedSlots,
+          'slot_start_time': _schedStartTime,
+          'slot_end_time': _schedEndTime,
+          'slot_interval_hours':
+              int.tryParse(_schedIntervalHours.text.trim()) ?? 0,
+          'slot_interval_minutes':
+              int.tryParse(_schedIntervalMinutes.text.trim()) ?? 30,
         };
       case 'commission':
         return {
@@ -1387,9 +1396,12 @@ class _CatalogNodeConfigDialogState extends ConsumerState<CatalogNodeConfigDialo
         }
         _schedMaxCtrl.text =
             (cfg['max_bookings_per_slot'] as num?)?.toString() ?? '5';
-        final slots =
-            (cfg['slots'] as List<dynamic>?)?.cast<String>() ?? [];
-        _schedSlotsCtrl.text = slots.join(', ');
+        _schedStartTime = cfg['slot_start_time'] as String?;
+        _schedEndTime = cfg['slot_end_time'] as String?;
+        _schedIntervalHours.text =
+            (cfg['slot_interval_hours'] as num?)?.toString() ?? '0';
+        _schedIntervalMinutes.text =
+            (cfg['slot_interval_minutes'] as num?)?.toString() ?? '30';
       case 'commission':
         _commType = cfg['commission_type'] as String? ?? 'percentage';
         _commValueCtrl.text =
@@ -1569,7 +1581,115 @@ class _CatalogNodeConfigDialogState extends ConsumerState<CatalogNodeConfigDialo
     );
   }
 
+  List<String> get _schedGeneratedSlots {
+    if (_schedStartTime == null || _schedEndTime == null) return [];
+    final h = int.tryParse(_schedIntervalHours.text.trim()) ?? 0;
+    final m = int.tryParse(_schedIntervalMinutes.text.trim()) ?? 0;
+    return _generateSlots(_schedStartTime!, _schedEndTime!, h, m);
+  }
+
+  List<String> _generateSlots(
+      String start, String end, int hours, int minutes) {
+    final startMin = _toMinutes(start);
+    final endMin = _toMinutes(end);
+    final interval = hours * 60 + minutes;
+    if (interval <= 0 || startMin >= endMin) return [];
+    final slots = <String>[];
+    var current = startMin;
+    while (current < endMin) {
+      slots.add(_minutesToLabel(current));
+      current += interval;
+    }
+    return slots;
+  }
+
+  int _toMinutes(String label) {
+    final parts = label.trim().split(' ');
+    if (parts.length < 2) return 0;
+    final timeParts = parts[0].split(':');
+    if (timeParts.length < 2) return 0;
+    var h = int.tryParse(timeParts[0]) ?? 0;
+    final m = int.tryParse(timeParts[1]) ?? 0;
+    final isPm = parts[1].toUpperCase() == 'PM';
+    if (isPm && h != 12) h += 12;
+    if (!isPm && h == 12) h = 0;
+    return h * 60 + m;
+  }
+
+  String _minutesToLabel(int totalMinutes) {
+    final hour24 = totalMinutes ~/ 60;
+    final minute = totalMinutes % 60;
+    final isPm = hour24 >= 12;
+    var hour12 = hour24 % 12;
+    if (hour12 == 0) hour12 = 12;
+    return '${hour12.toString().padLeft(2, '0')}:'
+        '${minute.toString().padLeft(2, '0')} ${isPm ? 'PM' : 'AM'}';
+  }
+
+  TimeOfDay _parseSchedTime(String label) {
+    final parts = label.trim().split(' ');
+    if (parts.length < 2) return const TimeOfDay(hour: 0, minute: 0);
+    final timeParts = parts[0].split(':');
+    var h = int.tryParse(timeParts[0]) ?? 0;
+    final m =
+        int.tryParse(timeParts.length > 1 ? timeParts[1] : '0') ?? 0;
+    final isPm = parts[1].toUpperCase() == 'PM';
+    if (isPm && h != 12) h += 12;
+    if (!isPm && h == 12) h = 0;
+    return TimeOfDay(hour: h, minute: m);
+  }
+
+  String _formatSchedTime(TimeOfDay t) {
+    final isPm = t.hour >= 12;
+    var h = t.hour % 12;
+    if (h == 0) h = 12;
+    return '${h.toString().padLeft(2, '0')}:'
+        '${t.minute.toString().padLeft(2, '0')} ${isPm ? 'PM' : 'AM'}';
+  }
+
+  Widget _schedTimeRow(
+      {required String? value, required VoidCallback onTap}) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(
+          border: Border.all(
+            color:
+                value != null ? AppColors.primary : AppColors.border,
+            width: value != null ? 1.4 : 0.8,
+          ),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Row(
+          children: [
+            Icon(
+              Icons.access_time_rounded,
+              size: 16,
+              color: value != null
+                  ? AppColors.primary
+                  : AppColors.textSecondary,
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                value ?? 'Tap to set',
+                style: TextStyle(
+                  fontSize: 13,
+                  color: value != null
+                      ? AppColors.textPrimary
+                      : AppColors.textSecondary,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildSchedulingFields() {
+    final preview = _schedGeneratedSlots;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -1586,14 +1706,31 @@ class _CatalogNodeConfigDialogState extends ConsumerState<CatalogNodeConfigDialo
         const SizedBox(height: 4),
         Wrap(
           spacing: 6,
+          runSpacing: 6,
           children: List.generate(7, (i) {
-            return FilterChip(
-              label: Text(_dayLabels[i],
-                  style: const TextStyle(fontSize: 12)),
-              selected: _schedDays[i],
-              selectedColor: AppColors.primary.withValues(alpha: 0.15),
-              checkmarkColor: AppColors.primary,
-              onSelected: (v) => setState(() => _schedDays[i] = v),
+            final sel = _schedDays[i];
+            return GestureDetector(
+              onTap: () => setState(() => _schedDays[i] = !_schedDays[i]),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 150),
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  color: sel ? AppColors.primary : AppColors.background,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                      color: sel ? AppColors.primary : AppColors.border),
+                ),
+                alignment: Alignment.center,
+                child: Text(
+                  _dayLabels[i],
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: sel ? Colors.white : AppColors.textSecondary,
+                  ),
+                ),
+              ),
             );
           }),
         ),
@@ -1607,13 +1744,109 @@ class _CatalogNodeConfigDialogState extends ConsumerState<CatalogNodeConfigDialo
           inputFormatters: [FilteringTextInputFormatter.digitsOnly],
         ),
         const SizedBox(height: 12),
-        _label('Time Slots (comma-separated, e.g. 09:00 AM, 11:00 AM)'),
+        _label('Start Time'),
         const SizedBox(height: 4),
-        TextField(
-          controller: _schedSlotsCtrl,
-          decoration: _inputDeco('09:00 AM, 11:00 AM, 02:00 PM'),
-          maxLines: 2,
+        _schedTimeRow(
+          value: _schedStartTime,
+          onTap: () async {
+            final t = await showTimePicker(
+              context: context,
+              initialTime: _schedStartTime != null
+                  ? _parseSchedTime(_schedStartTime!)
+                  : const TimeOfDay(hour: 9, minute: 0),
+            );
+            if (t != null && mounted) {
+              setState(() => _schedStartTime = _formatSchedTime(t));
+            }
+          },
         ),
+        const SizedBox(height: 12),
+        _label('End Time'),
+        const SizedBox(height: 4),
+        _schedTimeRow(
+          value: _schedEndTime,
+          onTap: () async {
+            final t = await showTimePicker(
+              context: context,
+              initialTime: _schedEndTime != null
+                  ? _parseSchedTime(_schedEndTime!)
+                  : const TimeOfDay(hour: 18, minute: 0),
+            );
+            if (t != null && mounted) {
+              setState(() => _schedEndTime = _formatSchedTime(t));
+            }
+          },
+        ),
+        const SizedBox(height: 12),
+        _label('Interval'),
+        const SizedBox(height: 4),
+        Row(
+          children: [
+            Expanded(
+              child: TextField(
+                controller: _schedIntervalHours,
+                decoration: _inputDeco('0').copyWith(suffixText: 'hr'),
+                keyboardType: TextInputType.number,
+                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: TextField(
+                controller: _schedIntervalMinutes,
+                decoration: _inputDeco('30').copyWith(suffixText: 'min'),
+                keyboardType: TextInputType.number,
+                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+              ),
+            ),
+          ],
+        ),
+        if (preview.isNotEmpty) ...[
+          const SizedBox(height: 12),
+          _label('Preview (${preview.length} slots)'),
+          const SizedBox(height: 4),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: AppColors.background,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: AppColors.border),
+            ),
+            child: Wrap(
+              spacing: 6,
+              runSpacing: 4,
+              children: preview
+                  .map((s) => Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: AppColors.primary.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: Text(s,
+                            style: const TextStyle(
+                                fontSize: 11, color: AppColors.primary)),
+                      ))
+                  .toList(),
+            ),
+          ),
+        ] else if (_schedStartTime != null || _schedEndTime != null) ...[
+          const SizedBox(height: 12),
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: AppColors.background,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: AppColors.border),
+            ),
+            child: const Text(
+              'No slots — check interval is > 0 and start time < end time.',
+              style: TextStyle(
+                  fontSize: 11, color: AppColors.textSecondary),
+            ),
+          ),
+        ],
       ],
     );
   }
@@ -2598,6 +2831,57 @@ class _CatalogNodeConfigDialogState extends ConsumerState<CatalogNodeConfigDialo
   }
 
   Widget _buildPairCard(int index, Map<String, String> pair) {
+    final beforeUrl =
+        pair['before_url']?.isNotEmpty == true ? pair['before_url']! : null;
+    final afterUrl =
+        pair['after_url']?.isNotEmpty == true ? pair['after_url']! : null;
+
+    Widget thumb(String? url, String label, Color iconColor) {
+      if (url == null) {
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(label,
+                style: const TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.textSecondary)),
+            const SizedBox(height: 4),
+            const Text('(no image)',
+                style: TextStyle(
+                    fontSize: 11, color: AppColors.textSecondary)),
+          ],
+        );
+      }
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label,
+              style: const TextStyle(
+                  fontSize: 10,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.textSecondary)),
+          const SizedBox(height: 4),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(4),
+            child: Image.network(
+              url,
+              width: 72,
+              height: 48,
+              fit: BoxFit.cover,
+              errorBuilder: (context, err, stack) => Container(
+                width: 72,
+                height: 48,
+                color: AppColors.background,
+                child: Icon(Icons.broken_image_outlined,
+                    size: 16, color: iconColor),
+              ),
+            ),
+          ),
+        ],
+      );
+    }
+
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.all(10),
@@ -2608,57 +2892,21 @@ class _CatalogNodeConfigDialogState extends ConsumerState<CatalogNodeConfigDialo
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Pair ${index + 1}',
-                  style: const TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w600,
-                      color: AppColors.textSecondary),
-                ),
-                const SizedBox(height: 4),
-                Row(
-                  children: [
-                    const Icon(Icons.photo_outlined,
-                        size: 12, color: AppColors.textSecondary),
-                    const SizedBox(width: 4),
-                    Expanded(
-                      child: Text(
-                        pair['before_url']?.isNotEmpty == true
-                            ? pair['before_url']!
-                            : '(no before URL)',
-                        style: const TextStyle(
-                            fontSize: 12, color: AppColors.textPrimary),
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 2),
-                Row(
-                  children: [
-                    const Icon(Icons.photo_outlined,
-                        size: 12, color: AppColors.primary),
-                    const SizedBox(width: 4),
-                    Expanded(
-                      child: Text(
-                        pair['after_url']?.isNotEmpty == true
-                            ? pair['after_url']!
-                            : '(no after URL)',
-                        style: const TextStyle(
-                            fontSize: 12, color: AppColors.textPrimary),
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
+          Text(
+            '${index + 1}.',
+            style: const TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                color: AppColors.textSecondary),
           ),
           const SizedBox(width: 8),
+          thumb(beforeUrl, 'Before', AppColors.textSecondary),
+          const SizedBox(width: 12),
+          const Icon(Icons.arrow_forward_rounded,
+              size: 14, color: AppColors.textSecondary),
+          const SizedBox(width: 12),
+          thumb(afterUrl, 'After', AppColors.primary),
+          const Spacer(),
           GestureDetector(
             onTap: () => setState(() => _beforeAfterPairs.removeAt(index)),
             child: const Icon(Icons.close_rounded,
@@ -2681,18 +2929,20 @@ class _CatalogNodeConfigDialogState extends ConsumerState<CatalogNodeConfigDialo
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _label('Before Image URL'),
-          const SizedBox(height: 4),
-          TextField(
-            controller: _newBeforeUrlCtrl,
-            decoration: _inputDeco('https://...'),
+          ImageUploadField(
+            label: 'Before Image',
+            value: _newBeforeUrl,
+            onChanged: (url) => setState(() => _newBeforeUrl = url),
+            bucket: 'catalog-images',
+            pathPrefix: 'before-after/',
           ),
-          const SizedBox(height: 10),
-          _label('After Image URL'),
-          const SizedBox(height: 4),
-          TextField(
-            controller: _newAfterUrlCtrl,
-            decoration: _inputDeco('https://...'),
+          const SizedBox(height: 12),
+          ImageUploadField(
+            label: 'After Image',
+            value: _newAfterUrl,
+            onChanged: (url) => setState(() => _newAfterUrl = url),
+            bucket: 'catalog-images',
+            pathPrefix: 'before-after/',
           ),
           const SizedBox(height: 10),
           Row(
@@ -2701,23 +2951,23 @@ class _CatalogNodeConfigDialogState extends ConsumerState<CatalogNodeConfigDialo
               TextButton(
                 onPressed: () => setState(() {
                   _addingPair = false;
-                  _newBeforeUrlCtrl.clear();
-                  _newAfterUrlCtrl.clear();
+                  _newBeforeUrl = null;
+                  _newAfterUrl = null;
                 }),
                 child: const Text('Cancel'),
               ),
               const SizedBox(width: 8),
               FilledButton(
                 onPressed: () {
-                  final before = _newBeforeUrlCtrl.text.trim();
-                  final after = _newAfterUrlCtrl.text.trim();
+                  final before = _newBeforeUrl ?? '';
+                  final after = _newAfterUrl ?? '';
                   if (before.isNotEmpty || after.isNotEmpty) {
                     setState(() {
                       _beforeAfterPairs
                           .add({'before_url': before, 'after_url': after});
                       _addingPair = false;
-                      _newBeforeUrlCtrl.clear();
-                      _newAfterUrlCtrl.clear();
+                      _newBeforeUrl = null;
+                      _newAfterUrl = null;
                     });
                   }
                 },

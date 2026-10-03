@@ -83,6 +83,8 @@ class _CouponsPageState extends ConsumerState<CouponsPage> {
           validFrom,
           validTo,
           required isActive,
+          required applicabilityType,
+          required applicableNodeIds,
         }) async {
           await ref.read(couponsNotifierProvider.notifier).createCoupon(
                 code: code,
@@ -95,6 +97,8 @@ class _CouponsPageState extends ConsumerState<CouponsPage> {
                 validFrom: validFrom,
                 validTo: validTo,
                 isActive: isActive,
+                applicabilityType: applicabilityType,
+                applicableNodeIds: applicableNodeIds,
               );
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
@@ -123,6 +127,8 @@ class _CouponsPageState extends ConsumerState<CouponsPage> {
           validFrom,
           validTo,
           required isActive,
+          required applicabilityType,
+          required applicableNodeIds,
         }) async {
           await ref.read(couponsNotifierProvider.notifier).updateCoupon(
                 coupon.id,
@@ -136,6 +142,8 @@ class _CouponsPageState extends ConsumerState<CouponsPage> {
                 validFrom: validFrom,
                 validTo: validTo,
                 isActive: isActive,
+                applicabilityType: applicabilityType,
+                applicableNodeIds: applicableNodeIds,
               );
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(

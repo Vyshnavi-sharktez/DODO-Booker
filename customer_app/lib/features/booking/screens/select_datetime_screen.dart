@@ -102,64 +102,31 @@ class _SlotsGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tt = Theme.of(context).textTheme;
-    final grouped = {
-      SlotPeriod.morning: slots.where((s) => s.period == SlotPeriod.morning).toList(),
-      SlotPeriod.afternoon: slots.where((s) => s.period == SlotPeriod.afternoon).toList(),
-      SlotPeriod.evening: slots.where((s) => s.period == SlotPeriod.evening).toList(),
-    };
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: grouped.entries.map((entry) {
-        final period = entry.key;
-        final periodSlots = entry.value;
-        if (periodSlots.isEmpty) return const SizedBox.shrink();
-
-        return Padding(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Icon(_periodIcon(period), size: 16, color: AppColors.textSecondary),
-                  const SizedBox(width: 6),
-                  Text(
-                    period.label,
-                    style: tt.labelMedium?.copyWith(
-                      color: AppColors.textSecondary,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: periodSlots.map((slot) => TimeSlotCard(
-                  slot: slot,
-                  isSelected: selectedSlot?.id == slot.id,
-                  onTap: () => onSlotSelected(slot),
-                )).toList(),
-              ),
-            ],
-          ),
-        );
-      }).toList(),
+    if (slots.isEmpty) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final cols = constraints.maxWidth >= 460 ? 4 : constraints.maxWidth >= 300 ? 3 : 2;
+          return GridView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: cols,
+              crossAxisSpacing: 8,
+              mainAxisSpacing: 8,
+              childAspectRatio: (constraints.maxWidth - (cols - 1) * 8) / cols / 44,
+            ),
+            itemCount: slots.length,
+            itemBuilder: (_, i) => TimeSlotCard(
+              slot: slots[i],
+              isSelected: selectedSlot?.id == slots[i].id,
+              onTap: slots[i].isAvailable ? () => onSlotSelected(slots[i]) : null,
+            ),
+          );
+        },
+      ),
     );
-  }
-
-  IconData _periodIcon(SlotPeriod period) {
-    switch (period) {
-      case SlotPeriod.morning:
-        return Icons.wb_sunny_outlined;
-      case SlotPeriod.afternoon:
-        return Icons.wb_cloudy_outlined;
-      case SlotPeriod.evening:
-        return Icons.nights_stay_outlined;
-    }
   }
 }
 

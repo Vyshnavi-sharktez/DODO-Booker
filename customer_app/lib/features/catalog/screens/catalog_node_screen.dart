@@ -26,9 +26,105 @@ import '../models/catalog_node_model.dart';
 import '../widgets/warranty_badge.dart';
 import '../providers/catalog_providers.dart';
 import '../utils/catalog_launcher.dart';
-import '../widgets/catalog_node_modal.dart';
 import '../widgets/catalog_unavailability_widgets.dart';
 import 'category_explorer_screen.dart';
+
+void _showCategoryConflictDialog(BuildContext context) {
+  showDialog<void>(
+    context: context,
+    builder: (ctx) => Dialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      insetPadding: const EdgeInsets.symmetric(horizontal: 40, vertical: 40),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 360),
+        child: Stack(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(24, 32, 24, 24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 60,
+                    height: 60,
+                    decoration: const BoxDecoration(
+                      color: Color(0xFFFEF3C7),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Center(
+                      child: Text(
+                        '!',
+                        style: TextStyle(
+                          fontSize: 28,
+                          fontWeight: FontWeight.w800,
+                          color: Color(0xFFD97706),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  const Text(
+                    'Different Category Service',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 17,
+                      fontWeight: FontWeight.w700,
+                      color: Color(0xFF1A1A1A),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  const Text(
+                    "Sorry, you can't book services from different categories in the same booking. "
+                    'Please complete this booking first or remove the existing service.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: Color(0xFF888888),
+                      height: 1.55,
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      onPressed: () => Navigator.of(ctx).pop(),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFFFBBF24),
+                        foregroundColor: const Color(0xFF1A1A1A),
+                        elevation: 0,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(100),
+                        ),
+                        padding:
+                            const EdgeInsets.symmetric(vertical: 14),
+                      ),
+                      child: const Text(
+                        'OK',
+                        style: TextStyle(
+                            fontSize: 15, fontWeight: FontWeight.w600),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Positioned(
+              top: 8,
+              right: 8,
+              child: GestureDetector(
+                onTap: () => Navigator.of(ctx).pop(),
+                child: const Padding(
+                  padding: EdgeInsets.all(4),
+                  child: Icon(Icons.close, size: 18, color: Color(0xFF999999)),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
+}
 
 // ── Design tokens (from handoff) ──────────────────────────────────────────────
 const _kInk = Color(0xFF1A1714);
@@ -71,12 +167,14 @@ class CatalogNodeScreen extends ConsumerStatefulWidget {
     super.key,
     required this.node,
     this.parentNodeId,
+    this.rootCategoryId,
     this.inModal = false,
     this.inSheet = false,
   });
 
   final CatalogNodeModel node;
   final String? parentNodeId;
+  final String? rootCategoryId;
   final bool inModal;
 
   /// When true, renders as a draggable bottom-sheet body (no Scaffold/AppBar).
@@ -136,6 +234,9 @@ class _CatalogNodeScreenState extends ConsumerState<CatalogNodeScreen> {
     final width = MediaQuery.sizeOf(context).width;
     final isWeb = width >= 768;
 
+    // Root is this node when it has no parents; otherwise inherited from caller.
+    final effectiveRootId = node.isRoot ? node.id : widget.rootCategoryId;
+
     final children =
         ref.watch(catalogNodeChildrenProvider(node.id)).valueOrNull ?? [];
     final attrs = node.isLeafBookable
@@ -181,6 +282,12 @@ class _CatalogNodeScreenState extends ConsumerState<CatalogNodeScreen> {
         node.relAvailabilityStatus == 'unavailable';
     final isEffectivelyHidden = avail?.status == 'hidden' ||
         node.relAvailabilityStatus == 'hidden';
+    // While the async availability check is still in-flight, treat the node
+    // as unavailable so the booking bar is not interactive before we know
+    // whether the service can actually be booked.
+    final availChecking = availAsync.isLoading &&
+        node.relAvailabilityStatus != 'unavailable' &&
+        node.relAvailabilityStatus != 'hidden';
 
     final addonsTotal = totalAddonsPrice(
       buildSelectedAddons(addOns, _selectedAddonIds),
@@ -235,9 +342,11 @@ class _CatalogNodeScreenState extends ConsumerState<CatalogNodeScreen> {
         isUnavailable: isUnavailable,
         isEffectivelyHidden: isEffectivelyHidden,
         avail: avail,
+        availChecking: availChecking,
         priceAdjustment: _priceAdjustment,
         addonsTotal: addonsTotal,
         parentNodeId: widget.parentNodeId,
+        rootCategoryId: effectiveRootId,
         selections: _selections,
         selectedAddonIds: _selectedAddonIds,
         selectedAmcPlan: _selectedAmcPlan,
@@ -390,7 +499,9 @@ class _CatalogNodeScreenState extends ConsumerState<CatalogNodeScreen> {
                                   isHidden: isEffectivelyHidden,
                                 )
                               : _ChildrenSection(
-                                  node: node, children: children),
+                                  node: node,
+                                  children: children,
+                                  rootCategoryId: effectiveRootId),
                         if (node.isLeafBookable && addOns.isNotEmpty) ...[
                           Padding(
                             padding:
@@ -526,12 +637,13 @@ class _CatalogNodeScreenState extends ConsumerState<CatalogNodeScreen> {
                 ),
                 // Sticky booking bar
                 if (node.isLeafBookable)
-                  (isUnavailable || isEffectivelyHidden)
+                  (availChecking || isUnavailable || isEffectivelyHidden)
                       ? CatalogUnavailabilityBar(
                           message: isUnavailable
                               ? (avail?.message ??
                                   node.relUnavailabilityMessage)
                               : null,
+                          isChecking: availChecking,
                         )
                       : _NodeBookingBar(
                           node: node,
@@ -539,6 +651,7 @@ class _CatalogNodeScreenState extends ConsumerState<CatalogNodeScreen> {
                           priceAdjustment: _priceAdjustment,
                           addonsTotal: addonsTotal,
                           parentNodeId: widget.parentNodeId,
+                          rootCategoryId: effectiveRootId,
                           attrs: attrs,
                           selections: _selections,
                           addOns: addOns,
@@ -548,6 +661,7 @@ class _CatalogNodeScreenState extends ConsumerState<CatalogNodeScreen> {
                           attrOptionPrice: selectedAttrPrice,
                           attrOptionOriginalPrice: selectedAttrOriginalPrice,
                           attrQty: effectiveQty,
+                          isUnavailable: isUnavailable,
                         ),
               ],
             ),
@@ -660,7 +774,10 @@ class _CatalogNodeScreenState extends ConsumerState<CatalogNodeScreen> {
                               : null,
                           isHidden: isEffectivelyHidden,
                         )
-                      : _ChildrenSection(node: node, children: children),
+                      : _ChildrenSection(
+                          node: node,
+                          children: children,
+                          rootCategoryId: effectiveRootId),
 
                 // ── Suggested Add-ons ──────────────────────────────────────
                 if (node.isLeafBookable && addOns.isNotEmpty) ...[
@@ -790,11 +907,12 @@ class _CatalogNodeScreenState extends ConsumerState<CatalogNodeScreen> {
 
       // ── Sticky booking bar ────────────────────────────────────────────────
       bottomNavigationBar: node.isLeafBookable
-          ? (isUnavailable || isEffectivelyHidden)
+          ? (availChecking || isUnavailable || isEffectivelyHidden)
                 ? CatalogUnavailabilityBar(
                     message: isUnavailable
                         ? (avail?.message ?? node.relUnavailabilityMessage)
                         : null,
+                    isChecking: availChecking,
                   )
                 : _NodeBookingBar(
                     node: node,
@@ -802,6 +920,7 @@ class _CatalogNodeScreenState extends ConsumerState<CatalogNodeScreen> {
                     priceAdjustment: _priceAdjustment,
                     addonsTotal: addonsTotal,
                     parentNodeId: widget.parentNodeId,
+                    rootCategoryId: effectiveRootId,
                     attrs: attrs,
                     selections: _selections,
                     addOns: addOns,
@@ -811,6 +930,7 @@ class _CatalogNodeScreenState extends ConsumerState<CatalogNodeScreen> {
                     attrOptionPrice: selectedAttrPrice,
                     attrOptionOriginalPrice: selectedAttrOriginalPrice,
                     attrQty: effectiveQty,
+                    isUnavailable: isUnavailable,
                   )
           : null,
     );
@@ -867,11 +987,8 @@ class _CatalogNodeFetchScreenState
       _modalOpened = true;
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
-        if (_node!.isLeafBookable) {
-          openCatalogNode(context, _node!);
-        } else {
-          CatalogNodeModal.open(context, _node!);
-        }
+        if (_node!.isLeafBookable) openCatalogNode(context, _node!);
+        // Non-bookable: CategoryExplorerScreen(initialNode: _node) already renders the correct UI.
       });
     }
 
@@ -2006,9 +2123,14 @@ class _NodeInfoHeader extends StatelessWidget {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 class _ChildrenSection extends StatelessWidget {
-  const _ChildrenSection({required this.node, required this.children});
+  const _ChildrenSection({
+    required this.node,
+    required this.children,
+    this.rootCategoryId,
+  });
   final CatalogNodeModel node;
   final List<CatalogNodeModel> children;
+  final String? rootCategoryId;
 
   @override
   Widget build(BuildContext context) {
@@ -2040,7 +2162,10 @@ class _ChildrenSection extends StatelessWidget {
               node: children[i],
               parentNodeId: node.id,
               onTap: () =>
-                  openCatalogNode(ctx, children[i], parentId: node.id),
+                  openCatalogNode(ctx, children[i],
+                      parentId: node.id,
+                      rootCategoryId:
+                          node.isRoot ? node.id : rootCategoryId),
             ),
           ),
         const SizedBox(height: 8),
@@ -2337,6 +2462,7 @@ class _NodeBookingBar extends ConsumerWidget {
     required this.priceAdjustment,
     required this.addonsTotal,
     this.parentNodeId,
+    this.rootCategoryId,
     required this.attrs,
     required this.selections,
     required this.addOns,
@@ -2346,6 +2472,7 @@ class _NodeBookingBar extends ConsumerWidget {
     this.attrOptionPrice,
     this.attrOptionOriginalPrice,
     this.attrQty = 1,
+    required this.isUnavailable,
   });
 
   final CatalogNodeModel node;
@@ -2353,6 +2480,7 @@ class _NodeBookingBar extends ConsumerWidget {
   final double priceAdjustment;
   final double addonsTotal;
   final String? parentNodeId;
+  final String? rootCategoryId;
   final List<ServiceAttributeModel> attrs;
   final Map<String, String> selections;
   final List<AddOnModel> addOns;
@@ -2364,34 +2492,48 @@ class _NodeBookingBar extends ConsumerWidget {
   final double? attrOptionOriginalPrice;
   // Quantity from the chip stepper for the selected variant (1 when no variants).
   final int attrQty;
+  final bool isUnavailable;
 
-  void _addToCart(WidgetRef ref) {
+  void _addToCart(BuildContext context, WidgetRef ref) {
+    if (isUnavailable) return;
+    if (amcPlan == null &&
+        attrOptionPrice == null &&
+        node.basePrice == null &&
+        node.finalPrice == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Price not set for this service')),
+      );
+      return;
+    }
+    final bool added;
     if (attrOptionPrice != null) {
       // Attribute service: embed addons in unitPrice so totalPrice = attrPrice + addonsTotal.
       // Addons still passed separately for cart display breakdown.
       final selAddons = buildSelectedAddons(addOns, selectedAddonIds);
-      ref.read(cartProvider.notifier).addToCart(
+      added = ref.read(cartProvider.notifier).addToCart(
             node,
             unitPriceOverride: attrOptionPrice! + totalAddonsPrice(selAddons),
             originalUnitPrice: attrOptionOriginalPrice,
             addons: selAddons,
             parentNodeId: parentNodeId,
+            rootCategoryId: rootCategoryId,
             amcPlan: amcPlan,
             amcQuantity: amcQuantity,
             quantity: attrQty,
           );
     } else if (amcPlan != null) {
-      ref.read(cartProvider.notifier).addToCart(
+      added = ref.read(cartProvider.notifier).addToCart(
             node,
             priceAdjustment: 0.0,
             parentNodeId: parentNodeId,
+            rootCategoryId: rootCategoryId,
             amcPlan: amcPlan,
             amcQuantity: amcQuantity,
           );
     } else {
       // Normal service: unitPriceOverride = discounted base + attr adj + addons.
       final selAddons = buildSelectedAddons(addOns, selectedAddonIds);
-      ref.read(cartProvider.notifier).addToCart(
+      added = ref.read(cartProvider.notifier).addToCart(
             node,
             unitPriceOverride: (node.finalPrice ?? node.basePrice ?? 0.0) +
                 priceAdjustment +
@@ -2399,8 +2541,10 @@ class _NodeBookingBar extends ConsumerWidget {
             originalUnitPrice: node.hasDiscount ? node.basePrice : null,
             addons: selAddons,
             parentNodeId: parentNodeId,
+            rootCategoryId: rootCategoryId,
           );
     }
+    if (!added) _showCategoryConflictDialog(context);
   }
 
   @override
@@ -2496,7 +2640,9 @@ class _NodeBookingBar extends ConsumerWidget {
             child: MouseRegion(
               cursor: SystemMouseCursors.click,
               child: GestureDetector(
-                onTap: inCart ? () => openCheckout(context, ref) : () => _addToCart(ref),
+                onTap: inCart
+                    ? () => openCheckout(context, ref)
+                    : () => _addToCart(context, ref),
                 child: Container(
                   padding: const EdgeInsets.symmetric(vertical: 13),
                   decoration: BoxDecoration(
@@ -2539,9 +2685,11 @@ class _WebScaffold extends ConsumerWidget {
     required this.isUnavailable,
     required this.isEffectivelyHidden,
     required this.avail,
+    required this.availChecking,
     required this.priceAdjustment,
     required this.addonsTotal,
     required this.parentNodeId,
+    this.rootCategoryId,
     required this.selections,
     required this.selectedAddonIds,
     required this.selectedAmcPlan,
@@ -2571,9 +2719,11 @@ class _WebScaffold extends ConsumerWidget {
   final bool isUnavailable;
   final bool isEffectivelyHidden;
   final dynamic avail;
+  final bool availChecking;
   final double priceAdjustment;
   final double addonsTotal;
   final String? parentNodeId;
+  final String? rootCategoryId;
   final Map<String, String> selections;
   final Set<String> selectedAddonIds;
   final AmcPlanModel? selectedAmcPlan;
@@ -2634,30 +2784,43 @@ class _WebScaffold extends ConsumerWidget {
     final cartQty = cartItem?.quantity ?? 1;
 
     void addToCart() {
+      if (isUnavailable || availChecking) return;
+      if (selectedAmcPlan == null &&
+          selectedAttrPrice == null &&
+          node.basePrice == null &&
+          node.finalPrice == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Price not set for this service')),
+        );
+        return;
+      }
+      final bool added;
       if (selectedAttrPrice != null) {
         // Attribute service: embed addons in unitPrice so totalPrice = attrPrice + addonsTotal.
         // Addons still passed separately for cart display breakdown.
-        ref.read(cartProvider.notifier).addToCart(
+        added = ref.read(cartProvider.notifier).addToCart(
               node,
               unitPriceOverride: selectedAttrPrice! + addonsTotal,
               originalUnitPrice: selectedAttrOriginalPrice,
               addons: selectedAddons,
               parentNodeId: parentNodeId,
+              rootCategoryId: rootCategoryId,
               amcPlan: selectedAmcPlan,
               amcQuantity: 1,
               quantity: effectiveAttrQty,
             );
       } else if (selectedAmcPlan != null) {
-        ref.read(cartProvider.notifier).addToCart(
+        added = ref.read(cartProvider.notifier).addToCart(
               node,
               priceAdjustment: 0.0,
               parentNodeId: parentNodeId,
+              rootCategoryId: rootCategoryId,
               amcPlan: selectedAmcPlan,
               amcQuantity: 1,
             );
       } else {
         // Normal service: unitPriceOverride = discounted base + attr adj + addons.
-        ref.read(cartProvider.notifier).addToCart(
+        added = ref.read(cartProvider.notifier).addToCart(
               node,
               unitPriceOverride: (node.finalPrice ?? node.basePrice ?? 0.0) +
                   priceAdjustment +
@@ -2665,8 +2828,10 @@ class _WebScaffold extends ConsumerWidget {
               originalUnitPrice: node.hasDiscount ? node.basePrice : null,
               addons: selectedAddons,
               parentNodeId: parentNodeId,
+              rootCategoryId: rootCategoryId,
             );
       }
+      if (!added) _showCategoryConflictDialog(context);
     }
 
     final screenH = MediaQuery.sizeOf(context).height;
@@ -2820,7 +2985,10 @@ class _WebScaffold extends ConsumerWidget {
                           : null,
                       isHidden: isEffectivelyHidden,
                     )
-                  : _ChildrenSection(node: node, children: children),
+                  : _ChildrenSection(
+                      node: node,
+                      children: children,
+                      rootCategoryId: rootCategoryId),
 
             if (!node.hasChildren && !node.isBookable)
               const _ComingSoonBanner(),
@@ -2830,11 +2998,12 @@ class _WebScaffold extends ConsumerWidget {
     ];
 
     final footer = node.isLeafBookable
-        ? (isUnavailable || isEffectivelyHidden)
+        ? (availChecking || isUnavailable || isEffectivelyHidden)
             ? CatalogUnavailabilityBar(
                 message: isUnavailable
                     ? (avail?.message ?? node.relUnavailabilityMessage)
                     : null,
+                isChecking: availChecking,
               )
             : Container(
             padding:

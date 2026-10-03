@@ -195,7 +195,7 @@ class CatalogNodeTile extends StatelessWidget {
                 const SizedBox(width: 6),
 
                 // Chips
-                if (!hasChildren && node.isBookable) ...[
+                if (!hasChildren && node.isBookable && !node.isRoot) ...[
                   _Chip(
                     'Bookable',
                     AppColors.accent.withValues(alpha: 0.12),
@@ -205,7 +205,8 @@ class CatalogNodeTile extends StatelessWidget {
                 ],
                 if (!hasChildren &&
                     node.basePrice != null &&
-                    node.isBookable) ...[
+                    node.isBookable &&
+                    !node.isRoot) ...[
                   _Chip(
                     '₹${node.basePrice!.toStringAsFixed(0)}',
                     const Color(0xFFEBF8F0),
@@ -243,7 +244,7 @@ class CatalogNodeTile extends StatelessWidget {
                     final locationKeys =
                         ref.watch(locationRestrictionsProvider).valueOrNull ??
                             {};
-                    final effectiveStatus = parentIdContext != null
+                    final relStatus = parentIdContext != null
                         ? (relMap['$parentIdContext|${node.id}'] ?? 'active')
                         : node.availabilityStatus;
                     final hasLocationRestriction = parentIdContext != null
@@ -252,7 +253,8 @@ class CatalogNodeTile extends StatelessWidget {
                         : locationKeys.contains('node:${node.id}');
                     return _AvailabilityButton(
                       isGloballyDisabled: !node.isActive,
-                      availabilityStatus: effectiveStatus,
+                      availabilityStatus: relStatus,
+                      nodeAvailabilityStatus: node.availabilityStatus,
                       isPathScoped: parentIdContext != null,
                       hasLocationRestriction: hasLocationRestriction,
                       onTap: () =>
@@ -261,8 +263,8 @@ class CatalogNodeTile extends StatelessWidget {
                   },
                 ),
 
-                // Bookable toggle — hidden when node has children
-                if (!hasChildren)
+                // Bookable toggle — hidden when node has children or is a root category
+                if (!hasChildren && !node.isRoot)
                   Tooltip(
                     message: node.isBookable
                         ? 'Bookable — click to disable'
@@ -282,8 +284,8 @@ class CatalogNodeTile extends StatelessWidget {
                     ),
                   ),
 
-                // Scheduling — bookable leaf nodes only
-                if (!hasChildren && node.isBookable)
+                // Scheduling — bookable leaf nodes only (never root categories)
+                if (!hasChildren && node.isBookable && !node.isRoot)
                   IconButton(
                     icon: const Icon(Icons.schedule_rounded, size: 17),
                     tooltip: 'Scheduling',
@@ -291,8 +293,8 @@ class CatalogNodeTile extends StatelessWidget {
                     onPressed: () => callbacks.onOpenScheduling(node),
                   ),
 
-                // AMC Plans — bookable leaf nodes only
-                if (!hasChildren && node.isBookable)
+                // AMC Plans — bookable leaf nodes only (never root categories)
+                if (!hasChildren && node.isBookable && !node.isRoot)
                   IconButton(
                     icon: const Icon(Icons.auto_mode_rounded, size: 17),
                     tooltip: 'AMC Plans',
@@ -300,8 +302,8 @@ class CatalogNodeTile extends StatelessWidget {
                     onPressed: () => callbacks.onOpenAmcPlans(node),
                   ),
 
-                // FAQs — bookable leaf nodes only
-                if (!hasChildren && node.isBookable)
+                // FAQs — bookable leaf nodes only (never root categories)
+                if (!hasChildren && node.isBookable && !node.isRoot)
                   IconButton(
                     icon: const Icon(Icons.quiz_rounded, size: 17),
                     tooltip: 'FAQs',
@@ -309,8 +311,8 @@ class CatalogNodeTile extends StatelessWidget {
                     onPressed: () => callbacks.onOpenFaqs(node, parentIdContext),
                   ),
 
-                // Showcase Photos — bookable leaf nodes only
-                if (!hasChildren && node.isBookable)
+                // Showcase Photos — bookable leaf nodes only (never root categories)
+                if (!hasChildren && node.isBookable && !node.isRoot)
                   IconButton(
                     icon: const Icon(Icons.photo_library_rounded, size: 17),
                     tooltip: 'Showcase Photos',
@@ -318,8 +320,8 @@ class CatalogNodeTile extends StatelessWidget {
                     onPressed: () => callbacks.onOpenShowcaseImages(node),
                   ),
 
-                // Add-ons — bookable leaf nodes only
-                if (!hasChildren && node.isBookable)
+                // Add-ons — bookable leaf nodes only (never root categories)
+                if (!hasChildren && node.isBookable && !node.isRoot)
                   IconButton(
                     icon: const Icon(Icons.extension_rounded, size: 17),
                     tooltip: 'Add-ons',
@@ -431,6 +433,7 @@ class _AvailabilityButton extends StatelessWidget {
   const _AvailabilityButton({
     required this.isGloballyDisabled,
     required this.availabilityStatus,
+    required this.nodeAvailabilityStatus,
     required this.isPathScoped,
     required this.hasLocationRestriction,
     required this.onTap,
@@ -438,19 +441,34 @@ class _AvailabilityButton extends StatelessWidget {
 
   final bool isGloballyDisabled;
 
-  /// Effective availability status — relationship-scoped for non-root nodes,
-  /// node-scoped for root nodes.
+  /// Relationship-scoped status for child nodes, node-scoped for root nodes.
   final String availabilityStatus;
+
+  /// Always the node-level catalog_nodes.availability_status.
+  /// For child nodes this may differ from [availabilityStatus] and can cause
+  /// the node to be invisible to customers even when the relationship is active.
+  final String nodeAvailabilityStatus;
 
   /// True when this tile is rendered under a specific parent (non-root).
   final bool isPathScoped;
 
   /// True when at least one location restriction row exists for this
-  /// node/path. Only shown when [availabilityStatus] is 'active' — if the
-  /// node is also marked unavailable/hidden that state takes precedence.
+  /// node/path. Only shown when the effective status is 'active'.
   final bool hasLocationRestriction;
 
   final VoidCallback onTap;
+
+  /// For child nodes the global node-level status takes precedence when it is
+  /// non-active, because the customer RPC checks BOTH levels.
+  String get _effectiveStatus {
+    if (isPathScoped && nodeAvailabilityStatus != 'active') {
+      return nodeAvailabilityStatus;
+    }
+    return availabilityStatus;
+  }
+
+  bool get _isGlobalOverride =>
+      isPathScoped && nodeAvailabilityStatus != 'active';
 
   @override
   Widget build(BuildContext context) {
@@ -463,31 +481,53 @@ class _AvailabilityButton extends StatelessWidget {
         ),
       );
     }
-    final scope = isPathScoped ? 'this path' : 'globally';
-    final (IconData icon, Color color, String tooltip) =
-        hasLocationRestriction && availabilityStatus == 'active'
-            ? (
-                Icons.location_on_rounded,
-                const Color(0xFF6366F1),
-                'Location-wise Availability — click to change',
-              )
-            : switch (availabilityStatus) {
+
+    final eff = _effectiveStatus;
+
+    // Build a tooltip that surfaces the conflict when global and category differ.
+    final String tooltip;
+    if (_isGlobalOverride) {
+      final globalLabel =
+          nodeAvailabilityStatus == 'hidden' ? 'Hidden' : 'Unavailable';
+      if (availabilityStatus == 'active') {
+        tooltip =
+            'Global: $globalLabel | Category: Active — click to fix global status';
+      } else {
+        final relLabel = availabilityStatus == 'hidden'
+            ? 'Hidden'
+            : (availabilityStatus == 'unavailable' ? 'Unavailable' : 'Active');
+        tooltip =
+            'Global: $globalLabel | Category: $relLabel — click to manage availability';
+      }
+    } else {
+      final scope = isPathScoped ? 'this category' : 'globally';
+      tooltip = hasLocationRestriction && eff == 'active'
+          ? 'Location-wise Availability — click to change'
+          : switch (eff) {
+              'unavailable' => 'Temporarily unavailable ($scope) — click to change',
+              'hidden' => 'Hidden ($scope) — click to change',
+              _ => 'Active — click to set availability',
+            };
+    }
+
+    final (IconData icon, Color color) =
+        hasLocationRestriction && eff == 'active'
+            ? (Icons.location_on_rounded, const Color(0xFF6366F1))
+            : switch (eff) {
                 'unavailable' => (
                     Icons.pause_circle_outline_rounded,
                     const Color(0xFFF59E0B),
-                    'Temporarily unavailable ($scope) — click to change',
                   ),
                 'hidden' => (
                     Icons.visibility_off_outlined,
                     AppColors.textSecondary,
-                    'Hidden ($scope) — click to change',
                   ),
                 _ => (
                     Icons.check_circle_outline_rounded,
                     AppColors.success,
-                    'Active — click to set availability',
                   ),
               };
+
     return Tooltip(
       message: tooltip,
       child: IconButton(

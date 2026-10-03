@@ -584,6 +584,8 @@ class _RightPane extends ConsumerWidget {
           // Pass effectiveId so the content widget uses the correct browse context
           // for both the "All" card query and card parentId.
           categoryId: effectiveId,
+          // categoryId (root) is always the true root regardless of browse depth.
+          rootCategoryId: categoryId,
           categoryName: categoryName,
           chips: chips,
           activeSubId: activeSubId,
@@ -598,6 +600,7 @@ class _RightPane extends ConsumerWidget {
 
 class _RightPaneContent extends ConsumerWidget {
   final String categoryId; // effective browse context (may differ from root)
+  final String? rootCategoryId; // true root, constant across browse depth
   final String categoryName;
   final List<CatalogNodeModel> chips;
   final String? activeSubId;
@@ -607,6 +610,7 @@ class _RightPaneContent extends ConsumerWidget {
 
   const _RightPaneContent({
     required this.categoryId,
+    this.rootCategoryId,
     required this.categoryName,
     required this.chips,
     required this.activeSubId,
@@ -722,6 +726,7 @@ class _RightPaneContent extends ConsumerWidget {
                         child: _DesktopListCard(
                           node: cards[i],
                           parentId: sub?.id ?? categoryId,
+                          rootCategoryId: rootCategoryId,
                           onBrowse: cards[i].hasChildren
                               ? () => onBrowseNode(cards[i].id)
                               : null,
@@ -770,6 +775,7 @@ class _RightPaneContent extends ConsumerWidget {
                           child: _DesktopListCard(
                             node: bookable[i],
                             parentId: sub?.id ?? categoryId,
+                            rootCategoryId: rootCategoryId,
                             onBrowse: null,
                           ),
                         )),
@@ -937,19 +943,123 @@ class _SubChip extends StatelessWidget {
 
 // ── Desktop list card (horizontal: image-left, info-right, web/desktop only) ──
 
+void _showCategoryConflictDialog(BuildContext context) {
+  showDialog<void>(
+    context: context,
+    builder: (ctx) => Dialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      insetPadding: const EdgeInsets.symmetric(horizontal: 40, vertical: 40),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 360),
+        child: Stack(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(24, 32, 24, 24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 60,
+                    height: 60,
+                    decoration: const BoxDecoration(
+                      color: Color(0xFFFEF3C7),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Center(
+                      child: Text(
+                        '!',
+                        style: TextStyle(
+                          fontSize: 28,
+                          fontWeight: FontWeight.w800,
+                          color: Color(0xFFD97706),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  const Text(
+                    'Different Category Service',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 17,
+                      fontWeight: FontWeight.w700,
+                      color: Color(0xFF1A1A1A),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  const Text(
+                    "Sorry, you can't book services from different categories in the same booking. "
+                    'Please complete this booking first or remove the existing service.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: Color(0xFF888888),
+                      height: 1.55,
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      onPressed: () => Navigator.of(ctx).pop(),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFFFBBF24),
+                        foregroundColor: const Color(0xFF1A1A1A),
+                        elevation: 0,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(100),
+                        ),
+                        padding:
+                            const EdgeInsets.symmetric(vertical: 14),
+                      ),
+                      child: const Text(
+                        'OK',
+                        style: TextStyle(
+                            fontSize: 15, fontWeight: FontWeight.w600),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Positioned(
+              top: 8,
+              right: 8,
+              child: GestureDetector(
+                onTap: () => Navigator.of(ctx).pop(),
+                child: const Padding(
+                  padding: EdgeInsets.all(4),
+                  child: Icon(Icons.close, size: 18, color: Color(0xFF999999)),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
+}
+
 class _DesktopListCard extends ConsumerWidget {
   final CatalogNodeModel node;
   final String parentId;
+  final String? rootCategoryId;
   final VoidCallback? onBrowse;
 
   const _DesktopListCard({
     required this.node,
     required this.parentId,
+    this.rootCategoryId,
     this.onBrowse,
   });
 
-  void _addToCart(WidgetRef ref) {
-    ref.read(cartProvider.notifier).addToCart(node, parentNodeId: parentId);
+  void _addToCart(BuildContext context, WidgetRef ref) {
+    final added = ref.read(cartProvider.notifier).addToCart(
+          node,
+          parentNodeId: parentId,
+          rootCategoryId: rootCategoryId,
+        );
+    if (!added) _showCategoryConflictDialog(context);
   }
 
   String _formatReviews(int count) {
@@ -1032,7 +1142,7 @@ class _DesktopListCard extends ConsumerWidget {
             Expanded(
               child: GestureDetector(
                 onTap: () =>
-                    openCatalogNode(context, node, parentId: parentId),
+                    openCatalogNode(context, node, parentId: parentId, rootCategoryId: rootCategoryId),
                 child: Container(
                   padding: const EdgeInsets.symmetric(vertical: 8),
                   decoration: BoxDecoration(
@@ -1100,7 +1210,7 @@ class _DesktopListCard extends ConsumerWidget {
                       ),
                     )
                   : GestureDetector(
-                      onTap: () => _addToCart(ref),
+                      onTap: () => _addToCart(context, ref),
                       child: Container(
                         padding: const EdgeInsets.symmetric(vertical: 8),
                         decoration: BoxDecoration(
@@ -1138,7 +1248,7 @@ class _DesktopListCard extends ConsumerWidget {
           _OutlinedBtn(
             label: 'View Details',
             onTap: () =>
-                openCatalogNode(context, node, parentId: parentId),
+                openCatalogNode(context, node, parentId: parentId, rootCategoryId: rootCategoryId),
           ),
           if (inCart)
             Row(
@@ -1171,7 +1281,7 @@ class _DesktopListCard extends ConsumerWidget {
               ],
             )
           else
-            _AddToCartBtn(onTap: () => _addToCart(ref)),
+            _AddToCartBtn(onTap: () => _addToCart(context, ref)),
         ],
       );
     }

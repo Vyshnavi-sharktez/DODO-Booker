@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../../../../core/theme/app_theme.dart';
+import '../../../../../core/widgets/image_upload_field.dart';
 import '../../domain/models/catalog_node.dart';
 
 /// Single form dialog for creating and editing any catalog node at any depth.
@@ -62,8 +63,8 @@ class _CatalogNodeFormDialogState extends State<CatalogNodeFormDialog> {
 
   late final TextEditingController _name;
   late final TextEditingController _description;
-  late final TextEditingController _imageUrl;
-  late final TextEditingController _mobileImageUrl;
+  String? _imageUrl;
+  String? _mobileImageUrl;
   late final TextEditingController _iconKey;
   late final TextEditingController _sortOrder;
   late final TextEditingController _basePrice;
@@ -81,14 +82,20 @@ class _CatalogNodeFormDialogState extends State<CatalogNodeFormDialog> {
   late final TextEditingController _warrantyExclusions;
   bool _saving = false;
 
+  /// True when this dialog is creating or editing a root-level (no-parent) node.
+  /// Root nodes are always navigation categories — they can never be bookable.
+  bool get _isRootContext =>
+      widget.parentNode == null &&
+      (widget.existing == null || widget.existing!.isRoot);
+
   @override
   void initState() {
     super.initState();
     final e = widget.existing;
     _name = TextEditingController(text: e?.name ?? '');
     _description = TextEditingController(text: e?.description ?? '');
-    _imageUrl = TextEditingController(text: e?.imageUrl ?? '');
-    _mobileImageUrl = TextEditingController(text: e?.mobileImageUrl ?? '');
+    _imageUrl = e?.imageUrl?.isNotEmpty == true ? e!.imageUrl : null;
+    _mobileImageUrl = e?.mobileImageUrl?.isNotEmpty == true ? e!.mobileImageUrl : null;
     _iconKey = TextEditingController(text: e?.iconKey ?? '');
     _sortOrder = TextEditingController(text: (e?.sortOrder ?? 0).toString());
     _basePrice = TextEditingController(
@@ -125,8 +132,6 @@ class _CatalogNodeFormDialogState extends State<CatalogNodeFormDialog> {
   void dispose() {
     _name.dispose();
     _description.dispose();
-    _imageUrl.dispose();
-    _mobileImageUrl.dispose();
     _iconKey.dispose();
     _sortOrder.dispose();
     _basePrice.dispose();
@@ -159,16 +164,13 @@ class _CatalogNodeFormDialogState extends State<CatalogNodeFormDialog> {
         slug: _toSlug(_name.text.trim()),
         description:
             _description.text.trim().isEmpty ? null : _description.text.trim(),
-        imageUrl:
-            _imageUrl.text.trim().isEmpty ? null : _imageUrl.text.trim(),
-        mobileImageUrl: _mobileImageUrl.text.trim().isEmpty
-            ? null
-            : _mobileImageUrl.text.trim(),
+        imageUrl: _imageUrl,
+        mobileImageUrl: _mobileImageUrl,
         iconKey: _iconKey.text.trim().isEmpty ? null : _iconKey.text.trim(),
         sortOrder: int.tryParse(_sortOrder.text.trim()) ?? 0,
         isActive: _isActive,
-        isBookable: _isBookable,
-        basePrice: _isBookable && _basePrice.text.trim().isNotEmpty
+        isBookable: _isRootContext ? false : _isBookable,
+        basePrice: _isBookable && !_isRootContext && _basePrice.text.trim().isNotEmpty
             ? double.tryParse(_basePrice.text.trim())
             : null,
         estimatedDuration: widget.existing?.estimatedDuration,
@@ -324,27 +326,23 @@ class _CatalogNodeFormDialogState extends State<CatalogNodeFormDialog> {
             ),
             const SizedBox(height: 16),
 
-            // Web Image URL
-            TextFormField(
-              controller: _imageUrl,
-              decoration: const InputDecoration(
-                labelText: 'Web Image URL',
-                hintText: 'https://...',
-                prefixIcon: Icon(Icons.image_outlined),
-              ),
-              keyboardType: TextInputType.url,
+            // Web Image
+            ImageUploadField(
+              label: 'Web Image',
+              value: _imageUrl,
+              onChanged: (url) => setState(() => _imageUrl = url),
+              bucket: 'catalog-images',
+              pathPrefix: 'catalog-nodes/',
             ),
             const SizedBox(height: 12),
 
-            // Mobile Image URL
-            TextFormField(
-              controller: _mobileImageUrl,
-              decoration: const InputDecoration(
-                labelText: 'Mobile Image URL',
-                hintText: 'https://... (leave empty to use Web Image URL)',
-                prefixIcon: Icon(Icons.phone_android_outlined),
-              ),
-              keyboardType: TextInputType.url,
+            // Mobile Image
+            ImageUploadField(
+              label: 'Mobile Image (leave empty to use Web Image)',
+              value: _mobileImageUrl,
+              onChanged: (url) => setState(() => _mobileImageUrl = url),
+              bucket: 'catalog-images',
+              pathPrefix: 'catalog-nodes/mobile/',
             ),
             const SizedBox(height: 20),
 
@@ -387,6 +385,38 @@ class _CatalogNodeFormDialogState extends State<CatalogNodeFormDialog> {
                         'Booking configuration is hidden because this node '
                         'has children. It acts as a navigation node. '
                         'Remove all children to configure booking details.',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: AppColors.primary,
+                          height: 1.5,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ] else if (_isRootContext) ...[
+              const SizedBox(height: 16),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 14, vertical: 12),
+                decoration: BoxDecoration(
+                  color: AppColors.primary.withValues(alpha: 0.05),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                    color: AppColors.primary.withValues(alpha: 0.18),
+                  ),
+                ),
+                child: const Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(Icons.category_outlined,
+                        size: 16, color: AppColors.primary),
+                    SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        'Root category nodes cannot be bookable. '
+                        'Use "Add Item inside" to create bookable services under this category.',
                         style: TextStyle(
                           fontSize: 12,
                           color: AppColors.primary,

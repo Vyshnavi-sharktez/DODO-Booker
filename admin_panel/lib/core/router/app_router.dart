@@ -49,6 +49,7 @@ import '../../features/vendor_service_requests/presentation/pages/vendor_service
 import '../../features/vendor_catalog/presentation/pages/vendor_catalog_page.dart';
 import '../../features/refunds/presentation/pages/refund_requests_page.dart';
 import '../../features/support/presentation/pages/support_inbox_page.dart';
+import '../../features/availability_blocks/presentation/pages/availability_blocks_page.dart';
 import '../../shared/pages/unauthorized_page.dart';
 import '../rbac/permission_guard.dart';
 
@@ -471,6 +472,13 @@ final routerProvider = Provider<GoRouter>((ref) {
             name: 'refundRequests',
             pageBuilder: (context, state) => const NoTransitionPage(
               child: RefundRequestsPage(),
+            ),
+          ),
+          GoRoute(
+            path: '/dashboard/availability-blocks',
+            name: 'availabilityBlocks',
+            pageBuilder: (context, state) => const NoTransitionPage(
+              child: AvailabilityBlocksPage(),
             ),
           ),
         ],
