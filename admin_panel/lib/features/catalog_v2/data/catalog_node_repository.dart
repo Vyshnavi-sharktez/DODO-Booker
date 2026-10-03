@@ -154,7 +154,17 @@ class CatalogNodeRepository {
   ///   3. service_attributes.node_id  — service config, deleted.
   ///   4. service_scheduling.service_id — scheduling config, deleted.
   ///   5. catalog_nodes               — deleted; DB CASCADE removes relationship rows.
+  ///   6. normalize_catalog_sort_order — closes gap for root nodes or single-parent nodes.
   Future<void> deleteNode(String id) async {
+    // Collect parent IDs before cascade deletes them.
+    final rels = await _supabase
+        .from('catalog_node_relationships')
+        .select('parent_id')
+        .eq('child_id', id);
+    final parentIds = (rels as List<dynamic>)
+        .map((r) => (r as Map<String, dynamic>)['parent_id'] as String)
+        .toList();
+
     // 1. Wishlists: customer data — remove referencing rows.
     await _supabase.from('wishlists').delete().eq('node_id', id);
 
@@ -179,6 +189,19 @@ class CatalogNodeRepository {
 
     // 5. Delete the node; catalog_node_relationships rows cascade automatically.
     await _supabase.from('catalog_nodes').delete().eq('id', id);
+
+    // 6. Close the gap left by this deletion.
+    if (parentIds.isEmpty) {
+      // Was a root node — normalize root sort_orders.
+      await _supabase.rpc('normalize_catalog_sort_order');
+    } else if (parentIds.length == 1) {
+      // Single-parent node — normalize that parent's children.
+      await _supabase.rpc(
+        'normalize_catalog_sort_order',
+        params: {'p_parent_id': parentIds.first},
+      );
+    }
+    // Multi-parent: skip normalization to avoid cross-context reordering.
   }
 
   Future<void> toggleActive(String id, {required bool isActive}) async {
@@ -366,6 +389,38 @@ class CatalogNodeRepository {
   }
 
   // ── Category relationship management ─────────────────────────────────────────
+
+  /// Returns the next available sort_order position within [parentId]'s children.
+  /// When [parentId] is null, returns the next position among root nodes.
+  Future<int> getNextSortOrder(String? parentId) async {
+    final result = await _supabase.rpc(
+      'get_next_catalog_sort_order',
+      params: {'p_parent_id': parentId},
+    );
+    return (result as num?)?.toInt() ?? 0;
+  }
+
+  /// Swaps sort_order with the adjacent sibling in the given direction.
+  /// [parentId] null → root scope; non-null → children of that parent.
+  Future<void> moveNode(
+      String nodeId, String? parentId, String direction) async {
+    await _supabase.rpc('move_catalog_node', params: {
+      'p_node_id': nodeId,
+      'p_parent_id': parentId,
+      'p_direction': direction,
+    });
+  }
+
+  /// Moves [nodeId] directly to [targetPosition] (0-based) within its scope,
+  /// shifting all items between the old and new positions by one slot.
+  Future<void> repositionNode(
+      String nodeId, String? parentId, int targetPosition) async {
+    await _supabase.rpc('reposition_catalog_node', params: {
+      'p_node_id': nodeId,
+      'p_parent_id': parentId,
+      'p_target_position': targetPosition,
+    });
+  }
 
   /// Lists [nodeId] under [parentId] as a new parent category.
   /// The DB rejects the relationship if it would create a loop

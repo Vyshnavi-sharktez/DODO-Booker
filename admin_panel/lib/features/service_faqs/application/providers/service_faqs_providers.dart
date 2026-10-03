@@ -54,6 +54,12 @@ class ServiceFaqsNotifier
 
   Future<void> delete(String id) async {
     await _repo.delete(id);
+    await _repo.normalizeSortOrders(serviceId: _serviceId);
+    await _load();
+  }
+
+  Future<void> move(String id, String direction) async {
+    await _repo.moveFaq(id, direction);
     await _load();
   }
 }
@@ -111,6 +117,12 @@ class CustomServiceFaqsNotifier
 
   Future<void> delete(String id) async {
     await _repo.delete(id);
+    await _repo.normalizeSortOrders(customServiceId: _customServiceId);
+    await _load();
+  }
+
+  Future<void> move(String id, String direction) async {
+    await _repo.moveFaq(id, direction);
     await _load();
   }
 }

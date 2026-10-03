@@ -15,4 +15,8 @@ abstract class BulkUploadModule {
   /// Parses an uploaded xlsx file into raw string maps keyed by header name.
   /// Blank cells produce a null value; missing cells are absent from the map.
   List<Map<String, String?>> parseXlsx(Uint8List bytes);
+
+  bool get supportsExport => false;
+  Future<Uint8List> exportCurrentData() =>
+      Future.error(UnimplementedError('Export not supported'));
 }

@@ -35,6 +35,27 @@ Uint8List generateTemplate({
   return Uint8List.fromList(encoded);
 }
 
+/// Generates a single-sheet .xlsx export (no Instructions sheet).
+Uint8List generateExport({
+  required List<String> columns,
+  required List<List<String>> dataRows,
+  String sheetName = 'Export',
+}) {
+  final workbook = Excel.createExcel();
+
+  final sheet = workbook[sheetName];
+  sheet.appendRow(columns.map<CellValue>(TextCellValue.new).toList());
+  for (final row in dataRows) {
+    sheet.appendRow(row.map<CellValue>(TextCellValue.new).toList());
+  }
+
+  workbook.delete('Sheet1');
+
+  final encoded = workbook.encode();
+  if (encoded == null) throw Exception('Excel encode() returned null');
+  return Uint8List.fromList(encoded);
+}
+
 /// Parses an xlsx file into rows keyed by header name (lowercase, trimmed).
 ///
 /// Blank/empty cells produce a null value in the returned map.

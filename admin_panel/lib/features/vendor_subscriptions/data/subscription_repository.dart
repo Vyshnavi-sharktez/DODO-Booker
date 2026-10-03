@@ -78,6 +78,23 @@ class SubscriptionRepository {
     return SubscriptionPlan.fromMap(data);
   }
 
+  Future<int> getNextSortOrder() async {
+    final result =
+        await _supabase.rpc('get_next_subscription_plan_sort_order');
+    return (result as num?)?.toInt() ?? 0;
+  }
+
+  Future<void> movePlan(String id, String direction) async {
+    await _supabase.rpc('move_subscription_plan', params: {
+      'p_plan_id': id,
+      'p_direction': direction,
+    });
+  }
+
+  Future<void> _normalizeAfterDelete() async {
+    await _supabase.rpc('normalize_subscription_plan_sort_orders');
+  }
+
   Future<void> deletePlan(String id) async {
     final refs = await _supabase
         .from('vendor_subscriptions')
@@ -91,6 +108,7 @@ class SubscriptionRepository {
       );
     }
     await _supabase.from('subscription_plans').delete().eq('id', id);
+    await _normalizeAfterDelete();
   }
 
   Future<void> togglePlanActive(String id, {required bool isActive}) async {

@@ -239,6 +239,110 @@ Notes:
     );
   }
 
+  // ── Export ────────────────────────────────────────────────────────────────────
+
+  @override
+  bool get supportsExport => true;
+
+  @override
+  Future<Uint8List> exportCurrentData() async {
+    final client = Supabase.instance.client;
+
+    final nodesRaw = await client.from('catalog_nodes').select(
+      'id, name, is_bookable, base_price, estimated_duration, '
+      'minimum_order_amount, description, icon_key, sort_order, is_active',
+    );
+    final relsRaw = await client
+        .from('catalog_node_relationships')
+        .select('parent_id, child_id');
+
+    final nodesById = <String, Map<String, dynamic>>{};
+    for (final n in nodesRaw as List) {
+      final id = n['id'] as String?;
+      if (id == null) continue;
+      nodesById[id] = Map<String, dynamic>.from(n as Map);
+    }
+
+    final allChildIds = <String>{};
+    final childrenOf = <String, List<String>>{};
+    for (final r in relsRaw as List) {
+      final parentId = r['parent_id'] as String?;
+      final childId = r['child_id'] as String?;
+      if (childId == null) continue;
+      allChildIds.add(childId);
+      if (parentId != null) (childrenOf[parentId] ??= []).add(childId);
+    }
+
+    final rootIds =
+        nodesById.keys.where((id) => !allChildIds.contains(id)).toList();
+
+    var maxDepth = 1;
+    final rawRows = <({List<String> path, List<String> attrs})>[];
+
+    void dfs(String nodeId, List<String> parentPath) {
+      final n = nodesById[nodeId];
+      if (n == null) return;
+      final path = [...parentPath, (n['name'] as String?) ?? ''];
+      if (path.length > maxDepth) maxDepth = path.length;
+
+      rawRows.add((
+        path: path,
+        attrs: [
+          ((n['is_bookable'] as bool?) ?? false) ? 'TRUE' : 'FALSE',
+          _numStr(n['base_price']),
+          _numStr(n['estimated_duration']),
+          _numStr(n['minimum_order_amount']),
+          (n['description'] as String?) ?? '',
+          (n['icon_key'] as String?) ?? '',
+          _numStr(n['sort_order']),
+          ((n['is_active'] as bool?) ?? true) ? 'TRUE' : 'FALSE',
+        ],
+      ));
+
+      for (final childId in (childrenOf[nodeId] ?? [])) {
+        dfs(childId, path);
+      }
+    }
+
+    for (final rootId in rootIds) {
+      dfs(rootId, []);
+    }
+
+    final numLevels = maxDepth < 5 ? 5 : maxDepth;
+    final columns = [
+      for (var i = 1; i <= numLevels; i++) 'level_$i',
+      'is_bookable',
+      'base_price',
+      'estimated_duration',
+      'minimum_order_amount',
+      'description',
+      'icon_key',
+      'sort_order',
+      'is_active',
+    ];
+
+    final dataRows = rawRows.map((r) {
+      final path = List<String>.from(r.path);
+      while (path.length < numLevels) path.add('');
+      return [...path, ...r.attrs];
+    }).toList();
+
+    return xu.generateExport(
+      columns: columns,
+      dataRows: dataRows,
+      sheetName: 'Catalog',
+    );
+  }
+
+  static String _numStr(dynamic v) {
+    if (v == null) return '';
+    if (v is int) return v.toString();
+    if (v is double) {
+      return v == v.truncateToDouble() ? v.toInt().toString() : v.toString();
+    }
+    return v.toString();
+  }
+
   // ── Helpers ───────────────────────────────────────────────────────────────────
 
   Future<String> _uniqueSlug(SupabaseClient client, String name) async {

@@ -47,11 +47,22 @@ class _CatalogV2PageState extends ConsumerState<CatalogV2Page> {
 
   // ── Expand / collapse ────────────────────────────────────────────────────────
 
-  void _toggleExpand(String nodeId) {
+  void _toggleExpand(String nodeId, String? parentIdContext) {
     setState(() {
       if (_expandedIds.contains(nodeId)) {
         _expandedIds.remove(nodeId);
       } else {
+        // Accordion: close every sibling (same parent) before opening this one.
+        // parentIdContext == null means root level; we close all other roots.
+        final allNodes =
+            ref.read(catalogNodeNotifierProvider).valueOrNull ?? [];
+        final siblingIds = allNodes
+            .where((n) => parentIdContext == null
+                ? n.isRoot
+                : n.parentIds.contains(parentIdContext))
+            .map((n) => n.id)
+            .toSet();
+        _expandedIds.removeAll(siblingIds);
         _expandedIds.add(nodeId);
       }
     });
@@ -72,7 +83,6 @@ class _CatalogV2PageState extends ConsumerState<CatalogV2Page> {
           imageUrl,
           mobileImageUrl,
           iconKey,
-          required sortOrder,
           required isActive,
           required isBookable,
           basePrice,
@@ -95,7 +105,6 @@ class _CatalogV2PageState extends ConsumerState<CatalogV2Page> {
                 imageUrl: imageUrl,
                 mobileImageUrl: mobileImageUrl,
                 iconKey: iconKey,
-                sortOrder: sortOrder,
                 isActive: isActive,
                 isBookable: isBookable,
                 basePrice: basePrice,
@@ -139,7 +148,6 @@ class _CatalogV2PageState extends ConsumerState<CatalogV2Page> {
           imageUrl,
           mobileImageUrl,
           iconKey,
-          required sortOrder,
           required isActive,
           required isBookable,
           basePrice,
@@ -162,7 +170,7 @@ class _CatalogV2PageState extends ConsumerState<CatalogV2Page> {
                 imageUrl: imageUrl,
                 mobileImageUrl: mobileImageUrl,
                 iconKey: iconKey,
-                sortOrder: sortOrder,
+                sortOrder: node.sortOrder,
                 isActive: isActive,
                 isBookable: isBookable,
                 basePrice: basePrice,
@@ -282,6 +290,21 @@ class _CatalogV2PageState extends ConsumerState<CatalogV2Page> {
         );
       }
     }
+  }
+
+  // ── Move ──────────────────────────────────────────────────────────────────────
+
+  void _moveNode(CatalogNode node, String? parentIdContext, String direction) {
+    ref
+        .read(catalogNodeNotifierProvider.notifier)
+        .moveNode(node.id, parentIdContext, direction);
+  }
+
+  void _repositionNode(
+      CatalogNode node, String? parentIdContext, int targetPosition) {
+    ref
+        .read(catalogNodeNotifierProvider.notifier)
+        .repositionNode(node.id, parentIdContext, targetPosition);
   }
 
   // ── Availability ──────────────────────────────────────────────────────────────
@@ -550,6 +573,8 @@ class _CatalogV2PageState extends ConsumerState<CatalogV2Page> {
       onOpenFaqs: _openFaqs,
       onOpenShowcaseImages: _openShowcaseImages,
       onOpenAddons: _openAddons,
+      onMoveNode: _moveNode,
+      onRepositionNode: _repositionNode,
     );
 
     return Scaffold(
@@ -752,13 +777,13 @@ class _CatalogV2PageState extends ConsumerState<CatalogV2Page> {
     return ListView(
       padding: const EdgeInsets.all(24),
       children: [
-        for (final root in visibleRoots)
+        for (int i = 0; i < visibleRoots.length; i++)
           CatalogNodeTile(
             // Root tiles have no parent context; key includes 'root' prefix
             // to distinguish from child appearances of the same node.
-            key: ValueKey('root_${root.id}'),
-            node: root,
-            children: displayByParent[root.id] ?? [],
+            key: ValueKey('root_${visibleRoots[i].id}'),
+            node: visibleRoots[i],
+            children: displayByParent[visibleRoots[i].id] ?? [],
             allByParent: displayByParent,
             depth: 0,
             expandedIds: effectiveExpandedIds,
@@ -766,6 +791,8 @@ class _CatalogV2PageState extends ConsumerState<CatalogV2Page> {
             callbacks: callbacks,
             parentIdContext: null,
             searchQuery: _searchQuery,
+            position: i,
+            siblingCount: visibleRoots.length,
           ),
         const SizedBox(height: 8),
       ],
