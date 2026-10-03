@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../../../core/theme/app_theme.dart';
+import '../../../../core/widgets/image_upload_field.dart';
 
 class CustomerCreateDialog extends StatefulWidget {
   final Future<void> Function({
@@ -58,7 +59,7 @@ class _CustomerCreateDialogState extends State<CustomerCreateDialog> {
   final _fullName = TextEditingController();
   final _phone = TextEditingController();
   final _email = TextEditingController();
-  final _profileImageUrl = TextEditingController();
+  String? _profileImageUrl;
   bool _isActive = true;
   bool _saving = false;
   final List<_AddressEntry> _addresses = [];
@@ -68,7 +69,6 @@ class _CustomerCreateDialogState extends State<CustomerCreateDialog> {
     _fullName.dispose();
     _phone.dispose();
     _email.dispose();
-    _profileImageUrl.dispose();
     for (final a in _addresses) {
       a.dispose();
     }
@@ -122,9 +122,7 @@ class _CustomerCreateDialogState extends State<CustomerCreateDialog> {
         fullName: _fullName.text.trim(),
         phone: _phone.text.trim(),
         email: _email.text.trim(),
-        profileImageUrl: _profileImageUrl.text.trim().isEmpty
-            ? null
-            : _profileImageUrl.text.trim(),
+        profileImageUrl: _profileImageUrl,
         isActive: _isActive,
         addresses: addressList,
       );
@@ -287,15 +285,14 @@ class _CustomerCreateDialogState extends State<CustomerCreateDialog> {
                       ),
                       const SizedBox(height: 16),
 
-                      // Profile Image URL
-                      TextFormField(
-                        controller: _profileImageUrl,
-                        decoration: const InputDecoration(
-                          labelText: 'Profile Image URL',
-                          hintText: 'https://…',
-                          prefixIcon: Icon(Icons.image_rounded),
-                        ),
-                        keyboardType: TextInputType.url,
+                      // Profile Image
+                      ImageUploadField(
+                        label: 'Profile Image',
+                        value: _profileImageUrl,
+                        onChanged: (url) =>
+                            setState(() => _profileImageUrl = url),
+                        bucket: 'avatars',
+                        pathPrefix: 'customers/',
                       ),
                       const SizedBox(height: 16),
 

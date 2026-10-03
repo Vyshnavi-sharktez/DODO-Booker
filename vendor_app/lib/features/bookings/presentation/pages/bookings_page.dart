@@ -128,6 +128,7 @@ class _BookingsPageState extends ConsumerState<BookingsPage>
     return RefreshIndicator(
       onRefresh: () async => ref.invalidate(vendorBookingsProvider),
       child: ListView.builder(
+        key: PageStorageKey<String>('vendor_bookings_$status'),
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         itemCount: filtered.length,
         itemBuilder: (_, i) => BookingCard(booking: filtered[i]),
@@ -148,6 +149,7 @@ class _BookingsPageState extends ConsumerState<BookingsPage>
     return RefreshIndicator(
       onRefresh: () async => ref.invalidate(vendorBookingsProvider),
       child: ListView.builder(
+        key: const PageStorageKey<String>('vendor_bookings_today'),
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         itemCount: filtered.length,
         itemBuilder: (_, i) => BookingCard(booking: filtered[i]),

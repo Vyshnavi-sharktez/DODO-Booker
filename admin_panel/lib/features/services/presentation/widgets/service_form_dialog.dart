@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../../../core/theme/app_theme.dart';
+import '../../../../core/widgets/image_upload_field.dart';
 import '../../domain/models/service.dart';
 
 class ServiceFormDialog extends StatefulWidget {
@@ -42,7 +43,7 @@ class _ServiceFormDialogState extends State<ServiceFormDialog> {
   late final TextEditingController _slug;
   late final TextEditingController _basePrice;
   late final TextEditingController _estimatedDuration;
-  late final TextEditingController _imageUrl;
+  String? _imageUrl;
   late final TextEditingController _warrantyDays;
   late bool _isActive;
   late bool _warrantyEnabled;
@@ -61,7 +62,7 @@ class _ServiceFormDialogState extends State<ServiceFormDialog> {
     _estimatedDuration = TextEditingController(
       text: e != null ? e.estimatedDuration.toString() : '',
     );
-    _imageUrl = TextEditingController(text: e?.imageUrl ?? '');
+    _imageUrl = e?.imageUrl?.isNotEmpty == true ? e!.imageUrl : null;
     _isActive = e?.isActive ?? true;
     _warrantyEnabled = e?.warrantyEnabled ?? false;
     _warrantyDays = TextEditingController(
@@ -76,7 +77,6 @@ class _ServiceFormDialogState extends State<ServiceFormDialog> {
     _slug.dispose();
     _basePrice.dispose();
     _estimatedDuration.dispose();
-    _imageUrl.dispose();
     _warrantyDays.dispose();
     super.dispose();
   }
@@ -111,7 +111,7 @@ class _ServiceFormDialogState extends State<ServiceFormDialog> {
         slug: _slug.text.trim(),
         basePrice: double.parse(_basePrice.text.trim()),
         estimatedDuration: int.tryParse(_estimatedDuration.text.trim()) ?? 0,
-        imageUrl: _imageUrl.text.trim().isEmpty ? null : _imageUrl.text.trim(),
+        imageUrl: _imageUrl,
         isActive: _isActive,
         warrantyEnabled: _warrantyEnabled,
         warrantyDays: days,
@@ -297,13 +297,13 @@ class _ServiceFormDialogState extends State<ServiceFormDialog> {
                       ),
                       const SizedBox(height: 16),
 
-                      // Image URL
-                      TextFormField(
-                        controller: _imageUrl,
-                        decoration: const InputDecoration(
-                          labelText: 'Image URL',
-                          hintText: 'https://…',
-                        ),
+                      // Service Image
+                      ImageUploadField(
+                        label: 'Service Image',
+                        value: _imageUrl,
+                        onChanged: (url) => setState(() => _imageUrl = url),
+                        bucket: 'catalog-images',
+                        pathPrefix: 'services/',
                       ),
                       const SizedBox(height: 20),
 

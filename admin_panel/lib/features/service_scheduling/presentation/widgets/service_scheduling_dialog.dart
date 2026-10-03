@@ -27,17 +27,19 @@ class _ServiceSchedulingDialogState extends State<ServiceSchedulingDialog> {
   bool _saving = false;
   String? _error;
 
-  // True when the admin has enabled the global scheduling master switch.
-  // When true, all services use global automatically — the per-service
-  // "Use Global Schedule" toggle is hidden and custom fields remain editable
-  // so the admin can pre-configure the service schedule for when global is off.
+  // True when the global scheduling master switch is ON.
   bool _globalEnabled = false;
 
   late bool _isEnabled;
   late bool _useGlobalSchedule;
-  late List<bool> _days;       // index 0=Sun … 6=Sat
+  late List<bool> _days; // index 0=Sun … 6=Sat
   late TextEditingController _maxBookings;
-  late List<String> _slots;    // sorted "HH:MM AM/PM" labels
+
+  // Slot generator inputs
+  String? _startTime;
+  String? _endTime;
+  late TextEditingController _intervalHours;
+  late TextEditingController _intervalMinutes;
 
   static const _dayLabels = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
@@ -45,19 +47,23 @@ class _ServiceSchedulingDialogState extends State<ServiceSchedulingDialog> {
   void initState() {
     super.initState();
     _maxBookings = TextEditingController();
+    _intervalHours = TextEditingController();
+    _intervalMinutes = TextEditingController();
+    _intervalHours.addListener(() => setState(() {}));
+    _intervalMinutes.addListener(() => setState(() {}));
     _loadConfig();
   }
 
   @override
   void dispose() {
     _maxBookings.dispose();
+    _intervalHours.dispose();
+    _intervalMinutes.dispose();
     super.dispose();
   }
 
   Future<void> _loadConfig() async {
     try {
-      // Fire both requests in parallel — the global check decides whether
-      // the per-service toggle is visible, so we need it before first render.
       final serviceFuture = _repo.fetchForService(widget.serviceId);
       final globalFuture =
           GlobalSchedulingRepository(Supabase.instance.client).fetch();
@@ -80,12 +86,15 @@ class _ServiceSchedulingDialogState extends State<ServiceSchedulingDialog> {
     _useGlobalSchedule = cfg.useGlobalSchedule;
     _days = List.generate(7, (i) => cfg.workingDays.contains(i));
     _maxBookings.text = cfg.maxBookingsPerSlot.toString();
-    _slots = List<String>.from(cfg.slots)..sort(_slotComparator);
+    _startTime = cfg.slotStartTime;
+    _endTime = cfg.slotEndTime;
+    _intervalHours.text = cfg.slotIntervalHours.toString();
+    _intervalMinutes.text = cfg.slotIntervalMinutes.toString();
   }
 
-  // ── Slot helpers ─────────────────────────────────────────────────────────────
+  // ── Time helpers ──────────────────────────────────────────────────────────────
 
-  // "09:00 AM" → minutes since midnight (for sorting / period detection)
+  // "09:00 AM" → minutes since midnight
   int _toMinutes(String label) {
     final parts = label.split(' ');
     final hp = parts[0].split(':');
@@ -97,8 +106,15 @@ class _ServiceSchedulingDialogState extends State<ServiceSchedulingDialog> {
     return hour * 60 + minute;
   }
 
-  int _slotComparator(String a, String b) =>
-      _toMinutes(a).compareTo(_toMinutes(b));
+  // minutes since midnight → "09:00 AM"
+  String _minutesToLabel(int totalMinutes) {
+    final hour24 = totalMinutes ~/ 60;
+    final minute = totalMinutes % 60;
+    final isPm = hour24 >= 12;
+    var hour12 = hour24 % 12;
+    if (hour12 == 0) hour12 = 12;
+    return '${hour12.toString().padLeft(2, '0')}:${minute.toString().padLeft(2, '0')} ${isPm ? 'PM' : 'AM'}';
+  }
 
   String _formatTimeOfDay(TimeOfDay t) {
     final hour = t.hourOfPeriod == 0 ? 12 : t.hourOfPeriod;
@@ -117,57 +133,57 @@ class _ServiceSchedulingDialogState extends State<ServiceSchedulingDialog> {
     return TimeOfDay(hour: hour, minute: minute);
   }
 
-  // ── Slot actions ─────────────────────────────────────────────────────────────
+  // ── Slot generation ───────────────────────────────────────────────────────────
 
-  Future<void> _addSlot() async {
+  List<String> get _generatedSlots {
+    if (_startTime == null || _endTime == null) return [];
+    final iH = int.tryParse(_intervalHours.text.trim()) ?? 0;
+    final iM = int.tryParse(_intervalMinutes.text.trim()) ?? 0;
+    return _generateSlots(_startTime!, _endTime!, iH, iM);
+  }
+
+  List<String> _generateSlots(
+    String start,
+    String end,
+    int hours,
+    int minutes,
+  ) {
+    final startMin = _toMinutes(start);
+    final endMin = _toMinutes(end);
+    final interval = hours * 60 + minutes;
+    if (interval <= 0 || startMin >= endMin) return [];
+    final slots = <String>[];
+    var current = startMin;
+    while (current < endMin) {
+      slots.add(_minutesToLabel(current));
+      current += interval;
+    }
+    return slots;
+  }
+
+  // ── Time picker ───────────────────────────────────────────────────────────────
+
+  Future<void> _pickTime({required bool isStart}) async {
+    final current = isStart ? _startTime : _endTime;
+    final initial =
+        current != null ? _parseLabel(current) : TimeOfDay.now();
     final picked = await showTimePicker(
       context: context,
-      initialTime: TimeOfDay.now(),
-      helpText: 'Add time slot',
+      initialTime: initial,
+      helpText: isStart ? 'Select start time' : 'Select end time',
       builder: (ctx, child) => MediaQuery(
         data: MediaQuery.of(ctx).copyWith(alwaysUse24HourFormat: false),
         child: child!,
       ),
     );
     if (picked == null || !mounted) return;
-    final label = _formatTimeOfDay(picked);
-    if (_slots.contains(label)) {
-      setState(() => _error = '"$label" is already in the list.');
-      return;
-    }
     setState(() {
-      _error = null;
-      _slots = [..._slots, label]..sort(_slotComparator);
-    });
-  }
-
-  Future<void> _editSlot(int index) async {
-    final picked = await showTimePicker(
-      context: context,
-      initialTime: _parseLabel(_slots[index]),
-      helpText: 'Edit time slot',
-      builder: (ctx, child) => MediaQuery(
-        data: MediaQuery.of(ctx).copyWith(alwaysUse24HourFormat: false),
-        child: child!,
-      ),
-    );
-    if (picked == null || !mounted) return;
-    final label = _formatTimeOfDay(picked);
-    // Allow same value (no-op) or reject true duplicate with another slot
-    final otherSlots = List<String>.from(_slots)..removeAt(index);
-    if (otherSlots.contains(label)) {
-      setState(() => _error = '"$label" is already in the list.');
-      return;
-    }
-    setState(() {
-      _error = null;
-      _slots = [...otherSlots, label]..sort(_slotComparator);
-    });
-  }
-
-  void _deleteSlot(int index) {
-    setState(() {
-      _slots = List<String>.from(_slots)..removeAt(index);
+      final label = _formatTimeOfDay(picked);
+      if (isStart) {
+        _startTime = label;
+      } else {
+        _endTime = label;
+      }
       _error = null;
     });
   }
@@ -180,8 +196,19 @@ class _ServiceSchedulingDialogState extends State<ServiceSchedulingDialog> {
         setState(() => _error = 'Select at least one working day.');
         return;
       }
-      if (_slots.isEmpty) {
-        setState(() => _error = 'Add at least one time slot.');
+      if (_startTime == null || _endTime == null) {
+        setState(() => _error = 'Set a start time and end time.');
+        return;
+      }
+      final iH = int.tryParse(_intervalHours.text.trim()) ?? 0;
+      final iM = int.tryParse(_intervalMinutes.text.trim()) ?? 0;
+      if (iH * 60 + iM <= 0) {
+        setState(() => _error = 'Interval must be at least 1 minute.');
+        return;
+      }
+      if (_generatedSlots.isEmpty) {
+        setState(
+            () => _error = 'End time must be after start time to generate slots.');
         return;
       }
     }
@@ -196,13 +223,23 @@ class _ServiceSchedulingDialogState extends State<ServiceSchedulingDialog> {
       _error = null;
     });
     try {
+      final iH = int.tryParse(_intervalHours.text.trim()) ?? 0;
+      final iM = int.tryParse(_intervalMinutes.text.trim()) ?? 0;
+      final generatedSlots = (_startTime != null && _endTime != null)
+          ? _generateSlots(_startTime!, _endTime!, iH, iM)
+          : <String>[];
+
       await _repo.upsert(ServiceSchedulingConfig(
         serviceId: widget.serviceId,
         isEnabled: _isEnabled,
         useGlobalSchedule: _useGlobalSchedule,
         workingDays: [for (int i = 0; i < 7; i++) if (_days[i]) i],
         maxBookingsPerSlot: maxVal ?? 5,
-        slots: _slots,
+        slots: generatedSlots,
+        slotStartTime: _startTime,
+        slotEndTime: _endTime,
+        slotIntervalHours: iH,
+        slotIntervalMinutes: iM,
       ));
       if (mounted) {
         Navigator.of(context).pop();
@@ -292,9 +329,6 @@ class _ServiceSchedulingDialogState extends State<ServiceSchedulingDialog> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // ── Global master active banner ────────────────────────────────────
-          // Shown when the global scheduling master switch is ON.
-          // Hides the per-service toggle because it is irrelevant — all
-          // services already use global regardless of their individual flag.
           if (_globalEnabled) ...[
             Container(
               padding: const EdgeInsets.all(12),
@@ -361,8 +395,6 @@ class _ServiceSchedulingDialogState extends State<ServiceSchedulingDialog> {
           const SizedBox(height: 12),
 
           // ── Use Global Schedule toggle (hidden when global master is ON) ───
-          // When the master is ON every service already uses global, so
-          // the per-service opt-in toggle is meaningless and confusing.
           if (!_globalEnabled) ...[
             _SectionCard(
               child: Row(
@@ -409,7 +441,6 @@ class _ServiceSchedulingDialogState extends State<ServiceSchedulingDialog> {
               ),
             ),
 
-            // Info banner when per-service opt-in is ON
             if (_useGlobalSchedule) ...[
               const SizedBox(height: 12),
               Container(
@@ -444,10 +475,6 @@ class _ServiceSchedulingDialogState extends State<ServiceSchedulingDialog> {
           const SizedBox(height: 12),
 
           // ── Custom schedule fields ─────────────────────────────────────────
-          // Dimmed only when the per-service "Use Global Schedule" opt-in is ON
-          // AND the global master is OFF. When global master is ON, leave the
-          // fields fully editable so the admin can pre-configure the service
-          // schedule that will apply once global scheduling is disabled.
           AnimatedOpacity(
             opacity: (!_globalEnabled && _useGlobalSchedule) ? 0.4 : 1.0,
             duration: const Duration(milliseconds: 200),
@@ -473,7 +500,7 @@ class _ServiceSchedulingDialogState extends State<ServiceSchedulingDialog> {
                   ),
                   const SizedBox(height: 20),
 
-                  // Max bookings
+                  // Max Bookings per Slot
                   const _SectionLabel('Max Bookings per Slot'),
                   const SizedBox(height: 8),
                   TextFormField(
@@ -487,61 +514,114 @@ class _ServiceSchedulingDialogState extends State<ServiceSchedulingDialog> {
                   ),
                   const SizedBox(height: 20),
 
-                  // Time Slots
-                  Row(
-                    children: [
-                      const Expanded(child: _SectionLabel('Time Slots')),
-                      TextButton.icon(
-                        onPressed: _addSlot,
-                        icon: const Icon(Icons.add_rounded, size: 16),
-                        label: const Text('Add Slot'),
-                        style: TextButton.styleFrom(
-                          foregroundColor: AppColors.primary,
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 12, vertical: 6),
-                        ),
-                      ),
-                    ],
-                  ),
+                  // Slot Generator
+                  const _SectionLabel('Slot Generator'),
                   const SizedBox(height: 8),
-
-                  if (_slots.isEmpty)
-                    _SectionCard(
-                      child: Center(
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 8),
-                          child: Text(
-                            'No slots configured yet.\nTap "Add Slot" to add a time.',
-                            textAlign: TextAlign.center,
-                            style: TextStyle(
-                              fontSize: 13,
-                              color: AppColors.textSecondary,
-                              height: 1.5,
-                            ),
-                          ),
+                  _SectionCard(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _TimeRow(
+                          label: 'Start Time',
+                          value: _startTime,
+                          onTap: () => _pickTime(isStart: true),
                         ),
-                      ),
-                    )
-                  else
-                    _SectionCard(
-                      child: Column(
-                        children: List.generate(_slots.length, (i) {
-                          final isLast = i == _slots.length - 1;
-                          return Column(
-                            children: [
-                              _SlotRow(
-                                label: _slots[i],
-                                onEdit: () => _editSlot(i),
-                                onDelete: () => _deleteSlot(i),
+                        const Divider(height: 20, color: AppColors.border),
+                        _TimeRow(
+                          label: 'End Time',
+                          value: _endTime,
+                          onTap: () => _pickTime(isStart: false),
+                        ),
+                        const Divider(height: 20, color: AppColors.border),
+                        Row(
+                          children: [
+                            const Text(
+                              'Interval',
+                              style: TextStyle(
+                                fontSize: 13,
+                                color: AppColors.textSecondary,
+                                fontWeight: FontWeight.w500,
                               ),
-                              if (!isLast)
-                                const Divider(
-                                    height: 1, color: AppColors.border),
-                            ],
-                          );
-                        }),
-                      ),
+                            ),
+                            const Spacer(),
+                            SizedBox(
+                              width: 60,
+                              child: TextField(
+                                controller: _intervalHours,
+                                textAlign: TextAlign.center,
+                                keyboardType: TextInputType.number,
+                                inputFormatters: [
+                                  FilteringTextInputFormatter.digitsOnly
+                                ],
+                                style: const TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                                decoration: InputDecoration(
+                                  isDense: true,
+                                  contentPadding:
+                                      const EdgeInsets.symmetric(
+                                          horizontal: 8, vertical: 8),
+                                  border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(6),
+                                  ),
+                                  hintText: '0',
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                            const Text(
+                              'hr',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: AppColors.textSecondary,
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            SizedBox(
+                              width: 60,
+                              child: TextField(
+                                controller: _intervalMinutes,
+                                textAlign: TextAlign.center,
+                                keyboardType: TextInputType.number,
+                                inputFormatters: [
+                                  FilteringTextInputFormatter.digitsOnly
+                                ],
+                                style: const TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                                decoration: InputDecoration(
+                                  isDense: true,
+                                  contentPadding:
+                                      const EdgeInsets.symmetric(
+                                          horizontal: 8, vertical: 8),
+                                  border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(6),
+                                  ),
+                                  hintText: '30',
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                            const Text(
+                              'min',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: AppColors.textSecondary,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
                     ),
+                  ),
+                  const SizedBox(height: 12),
+
+                  // Generated slots preview
+                  const _SectionLabel('Generated Slots'),
+                  const SizedBox(height: 8),
+                  _SlotPreviewCard(slots: _generatedSlots),
                 ],
               ),
             ),
@@ -671,57 +751,118 @@ class _DayChip extends StatelessWidget {
   }
 }
 
-class _SlotRow extends StatelessWidget {
-  const _SlotRow({
+class _TimeRow extends StatelessWidget {
+  const _TimeRow({
     required this.label,
-    required this.onEdit,
-    required this.onDelete,
+    required this.value,
+    required this.onTap,
   });
   final String label;
-  final VoidCallback onEdit;
-  final VoidCallback onDelete;
+  final String? value;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(
-        children: [
-          const Icon(
-            Icons.access_time_rounded,
-            size: 15,
-            color: AppColors.textSecondary,
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(6),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 2),
+        child: Row(
+          children: [
+            Text(
               label,
               style: const TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w600,
-                color: AppColors.textPrimary,
+                fontSize: 13,
+                color: AppColors.textSecondary,
+                fontWeight: FontWeight.w500,
               ),
             ),
-          ),
-          IconButton(
-            onPressed: onEdit,
-            icon: const Icon(Icons.edit_outlined, size: 15),
-            tooltip: 'Edit',
-            color: AppColors.textSecondary,
-            visualDensity: VisualDensity.compact,
-            padding: EdgeInsets.zero,
-          ),
-          const SizedBox(width: 4),
-          IconButton(
-            onPressed: onDelete,
-            icon: const Icon(Icons.delete_outline, size: 15),
-            tooltip: 'Remove',
-            color: AppColors.error,
-            visualDensity: VisualDensity.compact,
-            padding: EdgeInsets.zero,
-          ),
-        ],
+            const Spacer(),
+            Text(
+              value ?? 'Tap to set',
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight:
+                    value != null ? FontWeight.w600 : FontWeight.normal,
+                color: value != null
+                    ? AppColors.textPrimary
+                    : AppColors.textSecondary,
+              ),
+            ),
+            const SizedBox(width: 8),
+            const Icon(Icons.access_time_rounded,
+                size: 15, color: AppColors.textSecondary),
+          ],
+        ),
       ),
+    );
+  }
+}
+
+class _SlotPreviewCard extends StatelessWidget {
+  const _SlotPreviewCard({required this.slots});
+  final List<String> slots;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: AppColors.background,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: slots.isEmpty
+          ? Text(
+              'Configure start time, end time, and interval above to preview slots.',
+              style: TextStyle(
+                fontSize: 12,
+                color: AppColors.textSecondary,
+                height: 1.5,
+              ),
+            )
+          : Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '${slots.length} slot${slots.length == 1 ? '' : 's'} will be generated',
+                  style: const TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 6,
+                  runSpacing: 6,
+                  children: slots
+                      .map((s) => Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 10, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: AppColors.primary
+                                  .withValues(alpha: 0.08),
+                              borderRadius: BorderRadius.circular(20),
+                              border: Border.all(
+                                  color: AppColors.primary
+                                      .withValues(alpha: 0.25)),
+                            ),
+                            child: Text(
+                              s,
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                color: AppColors.primary,
+                              ),
+                            ),
+                          ))
+                      .toList(),
+                ),
+              ],
+            ),
     );
   }
 }

@@ -14,6 +14,10 @@ class Coupon {
   final DateTime? createdAt;
   final DateTime? updatedAt;
 
+  // Applicability
+  final String applicabilityType;       // 'all' | 'categories' | 'services'
+  final List<String> applicableNodeIds; // catalog_node IDs
+
   const Coupon({
     required this.id,
     required this.code,
@@ -29,6 +33,8 @@ class Coupon {
     required this.isActive,
     this.createdAt,
     this.updatedAt,
+    this.applicabilityType = 'all',
+    this.applicableNodeIds = const [],
   });
 
   bool get isExpired {
@@ -65,6 +71,11 @@ class Coupon {
       updatedAt: map['updated_at'] != null
           ? DateTime.tryParse(map['updated_at'] as String)
           : null,
+      applicabilityType: map['applicability_type'] as String? ?? 'all',
+      applicableNodeIds: (map['applicable_node_ids'] as List<dynamic>?)
+              ?.map((e) => e as String)
+              .toList() ??
+          const [],
     );
   }
 
@@ -80,6 +91,8 @@ class Coupon {
     DateTime? validFrom,
     DateTime? validTo,
     bool? isActive,
+    String? applicabilityType,
+    List<String>? applicableNodeIds,
   }) {
     return Coupon(
       id: id,
@@ -96,6 +109,8 @@ class Coupon {
       isActive: isActive ?? this.isActive,
       createdAt: createdAt,
       updatedAt: updatedAt,
+      applicabilityType: applicabilityType ?? this.applicabilityType,
+      applicableNodeIds: applicableNodeIds ?? this.applicableNodeIds,
     );
   }
 }

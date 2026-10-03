@@ -97,6 +97,50 @@ class AmcPlansRepository {
 
   // ── Node-plan linking ──────────────────────────────────────────────────────
 
+  /// Returns the full AmcPlan objects for plans linked to [nodeId], ordered
+  /// by sort_order. Used by the service-specific dialog.
+  Future<List<AmcPlan>> fetchForNode(String nodeId) async {
+    final data = await _supabase
+        .from('catalog_node_amc_plans')
+        .select('sort_order, amc_plans(*)')
+        .eq('node_id', nodeId)
+        .order('sort_order', ascending: true);
+    return (data as List<dynamic>).map((r) {
+      final row = r as Map<String, dynamic>;
+      return AmcPlan.fromMap(row['amc_plans'] as Map<String, dynamic>);
+    }).toList();
+  }
+
+  /// Inserts a single link row for [planId] → [nodeId].
+  Future<void> linkPlan(String nodeId, String planId) async {
+    final existing = await _supabase
+        .from('catalog_node_amc_plans')
+        .select('id')
+        .eq('node_id', nodeId);
+    await _supabase.from('catalog_node_amc_plans').insert({
+      'node_id': nodeId,
+      'amc_plan_id': planId,
+      'sort_order': (existing as List).length,
+    });
+  }
+
+  /// Removes the link between [planId] and [nodeId]. If the plan has no
+  /// remaining node links, deletes the plan row entirely.
+  Future<void> unlinkAndMaybeDelete(String nodeId, String planId) async {
+    await _supabase
+        .from('catalog_node_amc_plans')
+        .delete()
+        .eq('node_id', nodeId)
+        .eq('amc_plan_id', planId);
+    final remaining = await _supabase
+        .from('catalog_node_amc_plans')
+        .select('id')
+        .eq('amc_plan_id', planId);
+    if ((remaining as List).isEmpty) {
+      await _supabase.from('amc_plans').delete().eq('id', planId);
+    }
+  }
+
   /// Returns IDs of all plans currently linked to [nodeId].
   Future<List<String>> fetchLinkedPlanIds(String nodeId) async {
     final data = await _supabase

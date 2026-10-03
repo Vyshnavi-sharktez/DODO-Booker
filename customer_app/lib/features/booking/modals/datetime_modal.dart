@@ -107,64 +107,29 @@ class _SlotsGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tt = Theme.of(context).textTheme;
-    final grouped = {
-      SlotPeriod.morning:
-          slots.where((s) => s.period == SlotPeriod.morning).toList(),
-      SlotPeriod.afternoon:
-          slots.where((s) => s.period == SlotPeriod.afternoon).toList(),
-      SlotPeriod.evening:
-          slots.where((s) => s.period == SlotPeriod.evening).toList(),
-    };
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: grouped.entries.map((entry) {
-        final period = entry.key;
-        final periodSlots = entry.value;
-        if (periodSlots.isEmpty) return const SizedBox.shrink();
-        return Padding(
-          padding: const EdgeInsets.only(bottom: 12),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Icon(_periodIcon(period), size: 14, color: AppColors.textSecondary),
-                  const SizedBox(width: 6),
-                  Text(
-                    period.label,
-                    style: tt.labelSmall?.copyWith(
-                      color: AppColors.textSecondary,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: periodSlots
-                    .map((slot) => TimeSlotCard(
-                          slot: slot,
-                          isSelected: selected?.id == slot.id,
-                          onTap: slot.isAvailable ? () => onSelect(slot) : null,
-                        ))
-                    .toList(),
-              ),
-            ],
+    if (slots.isEmpty) return const SizedBox.shrink();
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final cols = constraints.maxWidth >= 460 ? 4 : constraints.maxWidth >= 300 ? 3 : 2;
+        return GridView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: cols,
+            crossAxisSpacing: 8,
+            mainAxisSpacing: 8,
+            childAspectRatio: (constraints.maxWidth - (cols - 1) * 8) / cols / 44,
+          ),
+          itemCount: slots.length,
+          itemBuilder: (_, i) => TimeSlotCard(
+            slot: slots[i],
+            isSelected: selected?.id == slots[i].id,
+            onTap: slots[i].isAvailable ? () => onSelect(slots[i]) : null,
           ),
         );
-      }).toList(),
+      },
     );
   }
-
-  IconData _periodIcon(SlotPeriod p) => switch (p) {
-        SlotPeriod.morning => Icons.wb_sunny_outlined,
-        SlotPeriod.afternoon => Icons.wb_cloudy_outlined,
-        SlotPeriod.evening => Icons.nights_stay_outlined,
-      };
 }
 
 class _SlotSkeleton extends StatelessWidget {

@@ -6,7 +6,11 @@ class ServiceSchedulingConfig {
   final bool useGlobalSchedule;
   final List<int> workingDays;      // 0=Sun … 6=Sat
   final int maxBookingsPerSlot;
-  final List<String> slots;         // e.g. ["09:00 AM", "11:30 AM", "02:00 PM"]
+  final List<String> slots;         // generated output, e.g. ["09:00 AM", "10:00 AM"]
+  final String? slotStartTime;      // generator input, e.g. "09:00 AM"
+  final String? slotEndTime;        // generator input, e.g. "06:00 PM"
+  final int slotIntervalHours;      // generator input
+  final int slotIntervalMinutes;    // generator input
 
   const ServiceSchedulingConfig({
     required this.serviceId,
@@ -15,6 +19,10 @@ class ServiceSchedulingConfig {
     required this.workingDays,
     required this.maxBookingsPerSlot,
     required this.slots,
+    this.slotStartTime,
+    this.slotEndTime,
+    this.slotIntervalHours = 0,
+    this.slotIntervalMinutes = 30,
   });
 
   factory ServiceSchedulingConfig.defaults(String serviceId) =>
@@ -25,6 +33,8 @@ class ServiceSchedulingConfig {
         workingDays: [1, 2, 3, 4, 5],
         maxBookingsPerSlot: 5,
         slots: [],
+        slotIntervalHours: 0,
+        slotIntervalMinutes: 30,
       );
 
   factory ServiceSchedulingConfig.fromMap(Map<String, dynamic> m) =>
@@ -36,6 +46,10 @@ class ServiceSchedulingConfig {
             ((m['working_days'] as List?)?.cast<int>()) ?? [1, 2, 3, 4, 5],
         maxBookingsPerSlot: (m['max_bookings_per_slot'] as int?) ?? 5,
         slots: ((m['slots'] as List?)?.cast<String>()) ?? [],
+        slotStartTime: m['slot_start_time'] as String?,
+        slotEndTime: m['slot_end_time'] as String?,
+        slotIntervalHours: (m['slot_interval_hours'] as int?) ?? 0,
+        slotIntervalMinutes: (m['slot_interval_minutes'] as int?) ?? 30,
       );
 
   Map<String, dynamic> toUpsertMap() => {
@@ -45,6 +59,10 @@ class ServiceSchedulingConfig {
         'working_days': workingDays,
         'max_bookings_per_slot': maxBookingsPerSlot,
         'slots': slots,
+        'slot_start_time': slotStartTime,
+        'slot_end_time': slotEndTime,
+        'slot_interval_hours': slotIntervalHours,
+        'slot_interval_minutes': slotIntervalMinutes,
         'updated_at': DateTime.now().toUtc().toIso8601String(),
       };
 }

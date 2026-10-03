@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../features/catalog/models/catalog_node_model.dart';
+import '../../../features/catalog/utils/catalog_launcher.dart';
 import '../../../routes/app_router.dart';
 import '../../booking/services/coupon_providers.dart';
 import '../models/landing_page_section.dart';
@@ -108,7 +109,7 @@ class _SubServicesRenderer extends ConsumerWidget {
     return SubServicesSection(
       asyncServices: services,
       title: section.config['title'] as String? ?? 'Sub Services',
-      onServiceTap: (n) => _openExplorer(context, n),
+      onServiceTap: (n) => openCatalogNode(context, n),
     );
   }
 }
@@ -182,7 +183,7 @@ class _PopularNearYouRenderer extends ConsumerWidget {
     return TrendingServicesSection(
       asyncServices: services,
       title: section.config['title'] as String? ?? 'Popular Near You',
-      onServiceTap: (n) => _openExplorer(context, n),
+      onServiceTap: (n) => openCatalogNode(context, n),
     );
   }
 }

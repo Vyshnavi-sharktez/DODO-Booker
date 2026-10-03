@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/widgets/clickable.dart';
 import '../services/profile_providers.dart';
@@ -287,14 +289,71 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
   }
 }
 
-// ── Avatar picker placeholder ──────────────────────────────────────────────────
+// ── Avatar picker ─────────────────────────────────────────────────────────────
 
-class _AvatarPicker extends StatelessWidget {
+class _AvatarPicker extends ConsumerStatefulWidget {
   final ProfileModel profile;
   const _AvatarPicker({required this.profile});
 
   @override
+  ConsumerState<_AvatarPicker> createState() => _AvatarPickerState();
+}
+
+class _AvatarPickerState extends ConsumerState<_AvatarPicker> {
+  bool _uploading = false;
+
+  static const _bucket = 'avatars';
+  static const _pathPrefix = 'customers/';
+
+  Future<void> _pick() async {
+    final picker = ImagePicker();
+    final picked = await picker.pickImage(
+      source: ImageSource.gallery,
+      maxWidth: 800,
+      maxHeight: 800,
+      imageQuality: 85,
+    );
+    if (picked == null) return;
+
+    final bytes = await picked.readAsBytes();
+    final ext = picked.path.split('.').last.toLowerCase();
+    final mime = ext == 'png' ? 'image/png' : 'image/jpeg';
+    final path =
+        '$_pathPrefix${DateTime.now().millisecondsSinceEpoch}.$ext';
+
+    setState(() => _uploading = true);
+    try {
+      await Supabase.instance.client.storage
+          .from(_bucket)
+          .uploadBinary(path, bytes,
+              fileOptions: FileOptions(contentType: mime, upsert: true));
+      final url = Supabase.instance.client.storage
+          .from(_bucket)
+          .getPublicUrl(path);
+
+      await ref.read(profileServiceProvider).updateProfile(
+            fullName: widget.profile.fullName,
+            email: widget.profile.email,
+            imageUrl: url,
+          );
+      ref.invalidate(profileProvider);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Upload failed: $e'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _uploading = false);
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final imageUrl = widget.profile.imageUrl;
     return Stack(
       alignment: Alignment.bottomRight,
       children: [
@@ -304,40 +363,57 @@ class _AvatarPicker extends StatelessWidget {
           decoration: BoxDecoration(
             shape: BoxShape.circle,
             color: AppColors.primaryLight,
-            border: Border.all(color: AppColors.primary.withAlpha(60), width: 2.5),
+            border:
+                Border.all(color: AppColors.primary.withAlpha(60), width: 2.5),
           ),
-          child: Center(
-            child: Text(
-              profile.initials,
-              style: const TextStyle(
-                fontSize: 36,
-                fontWeight: FontWeight.w700,
-                color: AppColors.primary,
-              ),
-            ),
+          child: ClipOval(
+            child: imageUrl != null && imageUrl.isNotEmpty
+                ? Image.network(
+                    imageUrl,
+                    fit: BoxFit.cover,
+                    errorBuilder: (context, err, stack) => Center(
+                      child: Text(
+                        widget.profile.initials,
+                        style: const TextStyle(
+                          fontSize: 36,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.primary,
+                        ),
+                      ),
+                    ),
+                  )
+                : Center(
+                    child: Text(
+                      widget.profile.initials,
+                      style: const TextStyle(
+                        fontSize: 36,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.primary,
+                      ),
+                    ),
+                  ),
           ),
         ),
         Clickable(
-          onTap: () {
-            // TODO: image picker
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('Image upload coming soon'),
-                behavior: SnackBarBehavior.floating,
-              ),
-            );
-          },
+          onTap: _uploading ? null : _pick,
           child: Container(
             padding: const EdgeInsets.all(7),
             decoration: const BoxDecoration(
               color: AppColors.primary,
               shape: BoxShape.circle,
             ),
-            child: const Icon(
-              Icons.camera_alt_rounded,
-              size: 16,
-              color: Colors.white,
-            ),
+            child: _uploading
+                ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(
+                        strokeWidth: 2, color: Colors.white),
+                  )
+                : const Icon(
+                    Icons.camera_alt_rounded,
+                    size: 16,
+                    color: Colors.white,
+                  ),
           ),
         ),
       ],

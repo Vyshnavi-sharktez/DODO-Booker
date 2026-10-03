@@ -10,10 +10,15 @@ class AvailableCouponsSheet extends ConsumerStatefulWidget {
   final double subtotal;
   final CouponModel? selectedCoupon;
 
+  /// Union of serviceId + parentNodeId + rootCategoryId for all cart items.
+  /// Used for client-side applicability pre-check before showing the sheet.
+  final List<String> cartNodeIds;
+
   const AvailableCouponsSheet({
     super.key,
     required this.subtotal,
     this.selectedCoupon,
+    this.cartNodeIds = const [],
   });
 
   @override
@@ -67,7 +72,10 @@ class _AvailableCouponsSheetState
     final matches =
         all.where((c) => c.code.toLowerCase() == code.toLowerCase());
     final match = matches.isEmpty ? null : matches.first;
-    if (match == null || match.validate(widget.subtotal) != null) {
+    if (match == null ||
+        match.validate(widget.subtotal,
+                cartNodeIds: widget.cartNodeIds) !=
+            null) {
       setState(() => _codeError = 'Invalid coupon code');
       return;
     }
@@ -275,6 +283,7 @@ class _AvailableCouponsSheetState
                       return _CouponCard(
                         coupon: c,
                         subtotal: widget.subtotal,
+                        cartNodeIds: widget.cartNodeIds,
                         isSelected: widget.selectedCoupon?.id == c.id,
                         onApply: () {
                           debugPrint(
@@ -299,12 +308,14 @@ class _AvailableCouponsSheetState
 class _CouponCard extends StatelessWidget {
   final CouponModel coupon;
   final double subtotal;
+  final List<String> cartNodeIds;
   final bool isSelected;
   final VoidCallback onApply;
 
   const _CouponCard({
     required this.coupon,
     required this.subtotal,
+    required this.cartNodeIds,
     required this.isSelected,
     required this.onApply,
   });
@@ -320,9 +331,29 @@ class _CouponCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final tt = Theme.of(context).textTheme;
-    final validationError = coupon.validate(subtotal);
+    final validationError =
+        coupon.validate(subtotal, cartNodeIds: cartNodeIds);
     final isApplicable = validationError == null;
     final discount = coupon.calculateDiscount(subtotal);
+
+    // Contextual applicability — evaluated against the current cart.
+    final isCartOk = coupon.isCartApplicable(cartNodeIds);
+    final applicabilityText =
+        coupon.contextualApplicabilityLabel(cartNodeIds);
+
+    // Icon and colour reflect cart match state.
+    final IconData applicabilityIcon;
+    final Color applicabilityColor;
+    if (coupon.applicabilityType == 'all' || cartNodeIds.isEmpty) {
+      applicabilityIcon = Icons.check_circle_outline_rounded;
+      applicabilityColor = AppColors.primary.withValues(alpha: 0.7);
+    } else if (isCartOk) {
+      applicabilityIcon = Icons.check_circle_outline_rounded;
+      applicabilityColor = AppColors.success;
+    } else {
+      applicabilityIcon = Icons.cancel_outlined;
+      applicabilityColor = AppColors.error;
+    }
 
     return AnimatedContainer(
       duration: const Duration(milliseconds: 200),
@@ -343,48 +374,67 @@ class _CouponCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // ── Top row: code + discount label + apply/applied ─────────────
+            // ── Top row: code badge + discount badge + apply/applied ───────
+            // Badges are wrapped in Flexible so long codes/discount strings
+            // yield space to the Apply button on narrow screens.
             Row(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                // Code badge
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 10, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: isSelected
-                        ? AppColors.primary
-                        : AppColors.primaryLight,
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                  child: Text(
-                    coupon.code,
-                    style: tt.labelMedium?.copyWith(
-                      color: isSelected ? Colors.white : AppColors.primary,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: 0.5,
-                    ),
+                Flexible(
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      // Code badge
+                      Flexible(
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 10, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: isSelected
+                                ? AppColors.primary
+                                : AppColors.primaryLight,
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Text(
+                            coupon.code,
+                            style: tt.labelMedium?.copyWith(
+                              color: isSelected
+                                  ? Colors.white
+                                  : AppColors.primary,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: 0.5,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      // Discount label
+                      Flexible(
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: AppColors.success.withAlpha(25),
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Text(
+                            coupon.discountLabel,
+                            style: tt.labelSmall?.copyWith(
+                              color: AppColors.success,
+                              fontWeight: FontWeight.w600,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
                 const SizedBox(width: 8),
-                // Discount label
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 8, vertical: 3),
-                  decoration: BoxDecoration(
-                    color: AppColors.success.withAlpha(25),
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Text(
-                    coupon.discountLabel,
-                    style: tt.labelSmall?.copyWith(
-                      color: AppColors.success,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
-                const Spacer(),
-                // Apply / Applied indicator
+                // Apply / Applied indicator — fixed size, never flexes
                 if (isSelected)
                   Row(
                     mainAxisSize: MainAxisSize.min,
@@ -408,8 +458,7 @@ class _CouponCard extends StatelessWidget {
                       onPressed: isApplicable ? onApply : null,
                       style: FilledButton.styleFrom(
                         backgroundColor: AppColors.primary,
-                        disabledBackgroundColor:
-                            AppColors.border,
+                        disabledBackgroundColor: AppColors.border,
                         padding:
                             const EdgeInsets.symmetric(horizontal: 14),
                         minimumSize: Size.zero,
@@ -422,10 +471,32 @@ class _CouponCard extends StatelessWidget {
               ],
             ),
 
+            // ── Applicability label ──────────────────────────────────────
+            // Shows a concise cart-aware message instead of a full service
+            // name list, keeping the card compact on narrow screens.
+            const SizedBox(height: 6),
+            Row(
+              children: [
+                Icon(applicabilityIcon, size: 12, color: applicabilityColor),
+                const SizedBox(width: 4),
+                Expanded(
+                  child: Text(
+                    applicabilityText,
+                    style: tt.labelSmall?.copyWith(
+                      color: applicabilityColor,
+                      fontWeight: FontWeight.w500,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
+            ),
+
             // ── Description ───────────────────────────────────────────────
             if (coupon.description != null &&
                 coupon.description!.isNotEmpty) ...[
-              const SizedBox(height: 6),
+              const SizedBox(height: 4),
               Text(
                 coupon.description!,
                 style: tt.bodySmall
@@ -458,7 +529,10 @@ class _CouponCard extends StatelessWidget {
                   label: coupon.expiryLabel,
                   color: _expiryColor(),
                 ),
-                if (!isApplicable)
+                // Show validation errors only when the cause is NOT a cart
+                // applicability mismatch — that is already shown in the label
+                // row above, so repeating it here would be redundant and long.
+                if (!isApplicable && isCartOk)
                   _MetaItem(
                     icon: Icons.info_outline_rounded,
                     label: validationError,
@@ -493,12 +567,16 @@ class _MetaItem extends StatelessWidget {
       children: [
         Icon(icon, size: 12, color: color),
         const SizedBox(width: 3),
-        Text(
-          label,
-          style: Theme.of(context)
-              .textTheme
-              .labelSmall
-              ?.copyWith(color: color),
+        Flexible(
+          child: Text(
+            label,
+            style: Theme.of(context)
+                .textTheme
+                .labelSmall
+                ?.copyWith(color: color),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
         ),
       ],
     );

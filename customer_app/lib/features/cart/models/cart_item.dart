@@ -48,6 +48,10 @@ class CartItem {
   // Non-null when the service base had a discount at add-to-cart time (for cart display only).
   final double? originalUnitPrice;
 
+  /// Root catalog node ID for this service, used to enforce single-category carts.
+  /// Null for legacy items and vendor custom services (exempt from enforcement).
+  final String? rootCategoryId;
+
   /// Set when this item is a vendor custom service (vendor_service_requests).
   /// customServiceId = vendor_service_requests.id written to booking_items.custom_service_id.
   /// vendorId = the owning vendor, used for direct booking assignment at checkout.
@@ -66,6 +70,7 @@ class CartItem {
     this.minimumOrderAmount,
     this.parentNodeId,
     this.originalUnitPrice,
+    this.rootCategoryId,
     this.customServiceId,
     this.vendorId,
     this.isAmc = false,
@@ -95,6 +100,7 @@ class CartItem {
     double? originalUnitPrice,
     List<SelectedAddon>? addons,
     String? parentNodeId,
+    String? rootCategoryId,
     String? customServiceId,
     String? vendorId,
     bool? isAmc,
@@ -127,6 +133,7 @@ class CartItem {
         minimumOrderAmount: minimumOrderAmount,
         originalUnitPrice: originalUnitPrice ?? this.originalUnitPrice,
         parentNodeId: parentNodeId ?? this.parentNodeId,
+        rootCategoryId: rootCategoryId ?? this.rootCategoryId,
         customServiceId: customServiceId ?? this.customServiceId,
         vendorId: vendorId ?? this.vendorId,
         isAmc: isAmc ?? this.isAmc,
@@ -164,6 +171,7 @@ class CartItem {
           'minimumOrderAmount': minimumOrderAmount,
         if (originalUnitPrice != null) 'originalUnitPrice': originalUnitPrice,
         if (parentNodeId != null) 'parentNodeId': parentNodeId,
+        if (rootCategoryId != null) 'rootCategoryId': rootCategoryId,
         if (customServiceId != null) 'customServiceId': customServiceId,
         if (vendorId != null) 'vendorId': vendorId,
         if (isAmc) 'isAmc': true,
@@ -201,6 +209,7 @@ class CartItem {
         minimumOrderAmount: (json['minimumOrderAmount'] as num?)?.toDouble(),
         originalUnitPrice: (json['originalUnitPrice'] as num?)?.toDouble(),
         parentNodeId: json['parentNodeId'] as String?,
+        rootCategoryId: json['rootCategoryId'] as String?,
         customServiceId: json['customServiceId'] as String?,
         vendorId: json['vendorId'] as String?,
         isAmc: json['isAmc'] as bool? ?? false,

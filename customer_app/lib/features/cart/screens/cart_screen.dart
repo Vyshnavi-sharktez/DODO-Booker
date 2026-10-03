@@ -3,15 +3,83 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/constants/app_colors.dart';
+import '../../../core/utils/service_image_registry.dart';
 import '../../../core/widgets/clickable.dart';
 import '../../../core/widgets/page_sheet.dart';
 import '../models/cart_item.dart';
 import '../providers/cart_provider.dart';
 import '../widgets/service_unavailable_dialog.dart';
 import '../../auth/utils/auth_modal_gate.dart';
+import '../../catalog/models/catalog_node_model.dart';
+import '../../catalog/providers/catalog_providers.dart';
+import '../../catalog/utils/catalog_launcher.dart';
+import '../../home/services/home_providers.dart';
 import '../../tax/models/tax_settings_model.dart';
 import '../../tax/providers/tax_provider.dart';
 import 'checkout_screen.dart';
+
+// ── Cart-page recommendation provider ─────────────────────────────────────────
+//
+// Derives up to 8 suggestions from the same parent categories as the current
+// cart items. Falls back to global popular services when no parent context is
+// available or too few siblings survive the filters. Always excludes items
+// already in the cart, inactive, non-leaf-bookable, and unavailable/hidden nodes.
+final _cartRecommendationsProvider =
+    FutureProvider.autoDispose<List<CatalogNodeModel>>((ref) async {
+  final cartItems = ref.watch(cartProvider);
+  if (cartItems.isEmpty) return [];
+
+  final parentIds = cartItems
+      .where((i) => i.parentNodeId != null)
+      .map((i) => i.parentNodeId!)
+      .toSet()
+      .toList();
+
+  final cartIds = cartItems.map((i) => i.serviceId).toSet();
+  final candidates = <CatalogNodeModel>[];
+
+  if (parentIds.isNotEmpty) {
+    final batches = await Future.wait(
+      parentIds.map(
+        (id) => ref
+            .read(catalogNodeChildrenProvider(id).future)
+            .catchError((Object _) => <CatalogNodeModel>[]),
+      ),
+    );
+    for (final batch in batches) {
+      candidates.addAll(batch);
+    }
+  }
+
+  // Supplement with popular services when siblings are too few
+  if (candidates.length < 3) {
+    try {
+      final popular = await ref.read(popularServicesProvider.future);
+      candidates.addAll(popular);
+    } catch (_) {
+      // ignore — popular services are a best-effort supplement
+    }
+  }
+
+  // Deduplicate, filter, sort by sort_order then rating, limit to 8
+  final seen = <String>{};
+  final filtered = candidates
+      .where((n) => seen.add(n.id))
+      .where((n) =>
+          !cartIds.contains(n.id) &&
+          n.isActive &&
+          n.isLeafBookable &&
+          n.availabilityStatus == 'active' &&
+          n.relAvailabilityStatus == 'active')
+      .toList();
+
+  filtered.sort((a, b) {
+    final s = a.sortOrder.compareTo(b.sortOrder);
+    return s != 0 ? s : b.rating.compareTo(a.rating);
+  });
+
+  return filtered.take(8).toList();
+});
 
 class CartScreen extends ConsumerStatefulWidget {
   /// When [true], renders without a [Scaffold] / [AppBar] so it can be hosted
@@ -68,6 +136,7 @@ class _CartScreenState extends ConsumerState<CartScreen> {
                     )),
                 const SizedBox(height: 8),
                 _CartSummaryCard(items: items, subtotal: subtotal),
+                const _CartRecommendations(),
                 // Padding so the sticky bar doesn't overlap the last row
                 const SizedBox(height: 84),
               ],
@@ -128,6 +197,7 @@ class _ModalBody extends ConsumerWidget {
                         )),
                     const SizedBox(height: 8),
                     _CartSummaryCard(items: items, subtotal: subtotal),
+                    const _CartRecommendations(),
                   ],
                 ),
         ),
@@ -1238,6 +1308,279 @@ class _MinOrderCard extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// "You might also want" — recommendation strip
+// ══════════════════════════════════════════════════════════════════════════════
+
+class _CartRecommendations extends ConsumerWidget {
+  const _CartRecommendations();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final nodes = ref.watch(_cartRecommendationsProvider).valueOrNull;
+    if (nodes == null || nodes.isEmpty) return const SizedBox.shrink();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SizedBox(height: 24),
+        Text(
+          'You might also want',
+          style: Theme.of(context)
+              .textTheme
+              .titleSmall
+              ?.copyWith(fontWeight: FontWeight.w700),
+        ),
+        const SizedBox(height: 12),
+        SizedBox(
+          height: 248,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.only(right: 4),
+            itemCount: nodes.length,
+            separatorBuilder: (_, _) => const SizedBox(width: 12),
+            itemBuilder: (ctx, i) => _RecommendationCard(node: nodes[i]),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _RecommendationCard extends StatelessWidget {
+  const _RecommendationCard({required this.node});
+  final CatalogNodeModel node;
+
+  @override
+  Widget build(BuildContext context) {
+    final imageUrl = ServiceImageRegistry.resolveMobile(
+      node.mobileImageUrl,
+      node.imageUrl,
+      node.name,
+    );
+    final price = node.finalPrice ?? node.basePrice;
+
+    return SizedBox(
+      width: 162,
+      child: GestureDetector(
+        onTap: () => openCatalogNode(context, node, parentId: node.parentId),
+        child: Container(
+          decoration: BoxDecoration(
+            color: AppColors.surface,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: AppColors.border, width: 0.8),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withAlpha(10),
+                blurRadius: 8,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(13),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // ── Hero image ───────────────────────────────────────────
+                SizedBox(
+                  height: 96,
+                  width: double.infinity,
+                  child: Image.network(
+                    imageUrl,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, _, _) => Container(
+                      color: AppColors.primaryLight,
+                      alignment: Alignment.center,
+                      child: const Icon(
+                        Icons.home_repair_service_rounded,
+                        size: 34,
+                        color: AppColors.primary,
+                      ),
+                    ),
+                  ),
+                ),
+
+                // ── Content ──────────────────────────────────────────────
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Name
+                        Text(
+                          node.name,
+                          style: const TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.textPrimary,
+                            height: 1.3,
+                          ),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+
+                        const SizedBox(height: 4),
+
+                        // Price
+                        if (price != null)
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.baseline,
+                            textBaseline: TextBaseline.alphabetic,
+                            children: [
+                              Text(
+                                '₹${price.toInt()}',
+                                style: const TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w800,
+                                  color: AppColors.textPrimary,
+                                ),
+                              ),
+                              if (node.hasDiscount && node.basePrice != null) ...[
+                                const SizedBox(width: 4),
+                                Text(
+                                  '₹${node.basePrice!.toInt()}',
+                                  style: const TextStyle(
+                                    fontSize: 10,
+                                    color: AppColors.textHint,
+                                    decoration: TextDecoration.lineThrough,
+                                    decorationColor: AppColors.textHint,
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+
+                        // Rating
+                        if (node.rating > 0 && node.reviewCount > 0) ...[
+                          const SizedBox(height: 3),
+                          Row(
+                            children: [
+                              const Icon(
+                                Icons.star_rounded,
+                                size: 12,
+                                color: AppColors.gold,
+                              ),
+                              const SizedBox(width: 2),
+                              Text(
+                                node.rating.toStringAsFixed(1),
+                                style: const TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w500,
+                                  color: AppColors.textSecondary,
+                                ),
+                              ),
+                              const SizedBox(width: 3),
+                              Text(
+                                '(${node.reviewCount})',
+                                style: const TextStyle(
+                                  fontSize: 10,
+                                  color: AppColors.textHint,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+
+                        const Spacer(),
+
+                        // Action buttons
+                        Row(
+                          children: [
+                            Expanded(
+                              child: _RecButton(
+                                label: 'View',
+                                filled: false,
+                                onTap: () => openCatalogNode(
+                                  context,
+                                  node,
+                                  parentId: node.parentId,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                            Expanded(
+                              child: _RecButton(
+                                label: 'Add',
+                                filled: true,
+                                onTap: () => openCatalogNode(
+                                  context,
+                                  node,
+                                  parentId: node.parentId,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _RecButton extends StatelessWidget {
+  const _RecButton({
+    required this.label,
+    required this.filled,
+    required this.onTap,
+  });
+  final String label;
+  final bool filled;
+  final VoidCallback onTap;
+
+  static const _shape = RoundedRectangleBorder(
+    borderRadius: BorderRadius.all(Radius.circular(8)),
+  );
+  static const _textStyle =
+      TextStyle(fontSize: 11, fontWeight: FontWeight.w600);
+
+  @override
+  Widget build(BuildContext context) {
+    if (filled) {
+      return SizedBox(
+        height: 28,
+        child: FilledButton(
+          onPressed: onTap,
+          style: FilledButton.styleFrom(
+            backgroundColor: AppColors.primary,
+            foregroundColor: Colors.white,
+            padding: EdgeInsets.zero,
+            minimumSize: const Size(0, 28),
+            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            textStyle: _textStyle,
+            shape: _shape,
+          ),
+          child: Text(label),
+        ),
+      );
+    }
+    return SizedBox(
+      height: 28,
+      child: OutlinedButton(
+        onPressed: onTap,
+        style: OutlinedButton.styleFrom(
+          foregroundColor: AppColors.textPrimary,
+          side: const BorderSide(color: AppColors.border, width: 0.8),
+          padding: EdgeInsets.zero,
+          minimumSize: const Size(0, 28),
+          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          textStyle: _textStyle,
+          shape: _shape,
+        ),
+        child: Text(label),
       ),
     );
   }

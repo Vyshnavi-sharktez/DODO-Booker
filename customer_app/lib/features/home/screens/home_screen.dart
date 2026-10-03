@@ -74,6 +74,7 @@ class HomeScreen extends ConsumerWidget {
           .toList();
 
       return CustomScrollView(
+        key: const PageStorageKey<String>('home_mobile'),
         physics: const AlwaysScrollableScrollPhysics(),
         slivers: [
           const SliverToBoxAdapter(child: _MobileHomeGreeting()),
@@ -101,6 +102,7 @@ class HomeScreen extends ConsumerWidget {
     }
 
     return CustomScrollView(
+      key: const PageStorageKey<String>('home_web'),
       physics: const AlwaysScrollableScrollPhysics(),
       slivers: [
         if (sections == null)

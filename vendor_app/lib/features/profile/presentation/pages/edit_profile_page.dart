@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:geolocator/geolocator.dart';
 import '../../../../core/constants/app_colors.dart';
-import '../../../../core/widgets/vendor_scaffold.dart';
 import '../../../../core/widgets/clickable.dart';
 import '../../../../core/screens/map_picker_screen.dart';
 import '../../../../core/services/nominatim_service.dart';
@@ -238,9 +237,13 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
     final isSaving =
         ref.watch(editProfileProvider).isLoading || _savingAreas;
 
-    return VendorScaffold(
-      title: 'Edit Profile',
-      child: AbsorbPointer(
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Edit Profile'),
+        backgroundColor: AppColors.primary,
+        foregroundColor: Colors.white,
+      ),
+      body: AbsorbPointer(
         absorbing: isSaving,
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(16),

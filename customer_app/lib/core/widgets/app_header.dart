@@ -16,8 +16,8 @@ import '../../features/auth/utils/auth_modal_gate.dart';
 import '../../features/loyalty/providers/loyalty_providers.dart';
 import '../../features/catalog/providers/catalog_providers.dart';
 import '../../features/catalog/models/catalog_node_model.dart';
-import '../../features/catalog/utils/catalog_launcher.dart';
 import '../../features/service_areas/providers/service_areas_providers.dart';
+import '../../routes/app_router.dart';
 import '../../features/wishlist/screens/wishlist_screen.dart';
 import 'nav_search.dart';
 import 'page_sheet.dart';
@@ -503,7 +503,8 @@ class _ServicesDropdownPanel extends ConsumerWidget {
                                 node: n,
                                 onTap: () {
                                   close();
-                                  openCatalogNode(context, n);
+                                  context.push(AppRoutes.categoryExplorer,
+                                      extra: <String, dynamic>{'node': n});
                                 },
                               ),
                             ))
@@ -902,7 +903,8 @@ class _MobileNavSheet extends ConsumerWidget {
                                 node: n,
                                 onTap: () {
                                   Navigator.pop(context);
-                                  openCatalogNode(parentContext, n);
+                                  parentContext.push(AppRoutes.categoryExplorer,
+                                      extra: <String, dynamic>{'node': n});
                                 },
                               ))
                           .toList(),

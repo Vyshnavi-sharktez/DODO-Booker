@@ -104,7 +104,7 @@ class _CustomersPageState extends ConsumerState<CustomersPage> {
   }
 
   void _openDetails(Customer c) {
-    context.go('/dashboard/customers/${c.id}');
+    context.push('/dashboard/customers/${c.id}');
   }
 
   void _openEdit(Customer c) {
@@ -669,6 +669,7 @@ class _CustomersTable extends StatelessWidget {
                           const Divider(height: 1),
                           Expanded(
                             child: ListView.separated(
+                              key: const PageStorageKey<String>('customers_list'),
                               itemCount: customers.length,
                               separatorBuilder: (ctx, i) =>
                                   const Divider(height: 1),

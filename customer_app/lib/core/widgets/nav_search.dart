@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import '../constants/app_colors.dart';
 import '../../features/catalog/models/catalog_node_model.dart';
 import '../../features/catalog/providers/catalog_providers.dart';
@@ -9,6 +10,7 @@ import '../../features/catalog/utils/catalog_launcher.dart';
 import '../../features/home/services/home_providers.dart';
 import '../../features/vendor_custom_service/models/vendor_custom_service_model.dart';
 import '../../features/vendor_custom_service/widgets/vendor_custom_service_sheet.dart';
+import '../../routes/app_router.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Public API
@@ -122,7 +124,12 @@ class _NavSearchCoreState extends State<_NavSearchCore> {
     _focus.unfocus();
     _close();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) openCatalogNode(context, node);
+      if (!mounted) return;
+      if (node.isLeafBookable) {
+        openCatalogNode(context, node);
+      } else {
+        context.push(AppRoutes.categoryExplorer, extra: {'node': node});
+      }
     });
   }
 
@@ -1044,9 +1051,13 @@ class _MobileSearchModalState extends State<_MobileSearchModal> {
   void _onNodeTap(CatalogNodeModel node) {
     final parentCtx = widget.parentContext;
     Navigator.pop(context);
-    // Open in next frame so the dialog pop is committed before pushing the modal.
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (parentCtx.mounted) openCatalogNode(parentCtx, node);
+      if (!parentCtx.mounted) return;
+      if (node.isLeafBookable) {
+        openCatalogNode(parentCtx, node);
+      } else {
+        parentCtx.push(AppRoutes.categoryExplorer, extra: {'node': node});
+      }
     });
   }
 

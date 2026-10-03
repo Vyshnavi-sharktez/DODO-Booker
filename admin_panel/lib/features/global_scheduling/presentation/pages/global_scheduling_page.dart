@@ -22,7 +22,12 @@ class _GlobalSchedulingPageState extends State<GlobalSchedulingPage> {
   bool _isEnabled = false;
   late List<bool> _days; // index 0=Sun … 6=Sat
   late TextEditingController _maxBookings;
-  late List<String> _slots;
+
+  // Slot generator inputs
+  String? _startTime;
+  String? _endTime;
+  late TextEditingController _intervalHours;
+  late TextEditingController _intervalMinutes;
 
   static const _dayLabels = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
@@ -31,13 +36,18 @@ class _GlobalSchedulingPageState extends State<GlobalSchedulingPage> {
     super.initState();
     _days = List.filled(7, false);
     _maxBookings = TextEditingController();
-    _slots = [];
+    _intervalHours = TextEditingController();
+    _intervalMinutes = TextEditingController();
+    _intervalHours.addListener(() => setState(() {}));
+    _intervalMinutes.addListener(() => setState(() {}));
     _load();
   }
 
   @override
   void dispose() {
     _maxBookings.dispose();
+    _intervalHours.dispose();
+    _intervalMinutes.dispose();
     super.dispose();
   }
 
@@ -57,10 +67,13 @@ class _GlobalSchedulingPageState extends State<GlobalSchedulingPage> {
     _isEnabled = cfg.isEnabled;
     _days = List.generate(7, (i) => cfg.workingDays.contains(i));
     _maxBookings.text = cfg.maxBookingsPerSlot.toString();
-    _slots = List<String>.from(cfg.slots)..sort(_slotComparator);
+    _startTime = cfg.slotStartTime;
+    _endTime = cfg.slotEndTime;
+    _intervalHours.text = cfg.slotIntervalHours.toString();
+    _intervalMinutes.text = cfg.slotIntervalMinutes.toString();
   }
 
-  // ── Slot helpers ─────────────────────────────────────────────────────────────
+  // ── Time helpers ──────────────────────────────────────────────────────────────
 
   int _toMinutes(String label) {
     final parts = label.split(' ');
@@ -73,8 +86,14 @@ class _GlobalSchedulingPageState extends State<GlobalSchedulingPage> {
     return hour * 60 + minute;
   }
 
-  int _slotComparator(String a, String b) =>
-      _toMinutes(a).compareTo(_toMinutes(b));
+  String _minutesToLabel(int totalMinutes) {
+    final hour24 = totalMinutes ~/ 60;
+    final minute = totalMinutes % 60;
+    final isPm = hour24 >= 12;
+    var hour12 = hour24 % 12;
+    if (hour12 == 0) hour12 = 12;
+    return '${hour12.toString().padLeft(2, '0')}:${minute.toString().padLeft(2, '0')} ${isPm ? 'PM' : 'AM'}';
+  }
 
   String _formatTimeOfDay(TimeOfDay t) {
     final hour = t.hourOfPeriod == 0 ? 12 : t.hourOfPeriod;
@@ -93,56 +112,57 @@ class _GlobalSchedulingPageState extends State<GlobalSchedulingPage> {
     return TimeOfDay(hour: hour, minute: minute);
   }
 
-  // ── Slot actions ─────────────────────────────────────────────────────────────
+  // ── Slot generation ───────────────────────────────────────────────────────────
 
-  Future<void> _addSlot() async {
+  List<String> get _generatedSlots {
+    if (_startTime == null || _endTime == null) return [];
+    final iH = int.tryParse(_intervalHours.text.trim()) ?? 0;
+    final iM = int.tryParse(_intervalMinutes.text.trim()) ?? 0;
+    return _generateSlots(_startTime!, _endTime!, iH, iM);
+  }
+
+  List<String> _generateSlots(
+    String start,
+    String end,
+    int hours,
+    int minutes,
+  ) {
+    final startMin = _toMinutes(start);
+    final endMin = _toMinutes(end);
+    final interval = hours * 60 + minutes;
+    if (interval <= 0 || startMin >= endMin) return [];
+    final slots = <String>[];
+    var current = startMin;
+    while (current < endMin) {
+      slots.add(_minutesToLabel(current));
+      current += interval;
+    }
+    return slots;
+  }
+
+  // ── Time picker ───────────────────────────────────────────────────────────────
+
+  Future<void> _pickTime({required bool isStart}) async {
+    final current = isStart ? _startTime : _endTime;
+    final initial =
+        current != null ? _parseLabel(current) : TimeOfDay.now();
     final picked = await showTimePicker(
       context: context,
-      initialTime: TimeOfDay.now(),
-      helpText: 'Add time slot',
+      initialTime: initial,
+      helpText: isStart ? 'Select start time' : 'Select end time',
       builder: (ctx, child) => MediaQuery(
         data: MediaQuery.of(ctx).copyWith(alwaysUse24HourFormat: false),
         child: child!,
       ),
     );
     if (picked == null || !mounted) return;
-    final label = _formatTimeOfDay(picked);
-    if (_slots.contains(label)) {
-      setState(() => _error = '"$label" is already in the list.');
-      return;
-    }
     setState(() {
-      _error = null;
-      _slots = [..._slots, label]..sort(_slotComparator);
-    });
-  }
-
-  Future<void> _editSlot(int index) async {
-    final picked = await showTimePicker(
-      context: context,
-      initialTime: _parseLabel(_slots[index]),
-      helpText: 'Edit time slot',
-      builder: (ctx, child) => MediaQuery(
-        data: MediaQuery.of(ctx).copyWith(alwaysUse24HourFormat: false),
-        child: child!,
-      ),
-    );
-    if (picked == null || !mounted) return;
-    final label = _formatTimeOfDay(picked);
-    final otherSlots = List<String>.from(_slots)..removeAt(index);
-    if (otherSlots.contains(label)) {
-      setState(() => _error = '"$label" is already in the list.');
-      return;
-    }
-    setState(() {
-      _error = null;
-      _slots = [...otherSlots, label]..sort(_slotComparator);
-    });
-  }
-
-  void _deleteSlot(int index) {
-    setState(() {
-      _slots = List<String>.from(_slots)..removeAt(index);
+      final label = _formatTimeOfDay(picked);
+      if (isStart) {
+        _startTime = label;
+      } else {
+        _endTime = label;
+      }
       _error = null;
     });
   }
@@ -160,8 +180,19 @@ class _GlobalSchedulingPageState extends State<GlobalSchedulingPage> {
         setState(() => _error = 'Select at least one working day.');
         return;
       }
-      if (_slots.isEmpty) {
-        setState(() => _error = 'Add at least one time slot.');
+      if (_startTime == null || _endTime == null) {
+        setState(() => _error = 'Set a start time and end time.');
+        return;
+      }
+      final iH = int.tryParse(_intervalHours.text.trim()) ?? 0;
+      final iM = int.tryParse(_intervalMinutes.text.trim()) ?? 0;
+      if (iH * 60 + iM <= 0) {
+        setState(() => _error = 'Interval must be at least 1 minute.');
+        return;
+      }
+      if (_generatedSlots.isEmpty) {
+        setState(
+            () => _error = 'End time must be after start time to generate slots.');
         return;
       }
     }
@@ -171,12 +202,22 @@ class _GlobalSchedulingPageState extends State<GlobalSchedulingPage> {
       _error = null;
     });
     try {
+      final iH = int.tryParse(_intervalHours.text.trim()) ?? 0;
+      final iM = int.tryParse(_intervalMinutes.text.trim()) ?? 0;
+      final generatedSlots = (_startTime != null && _endTime != null)
+          ? _generateSlots(_startTime!, _endTime!, iH, iM)
+          : <String>[];
+
       final updated = GlobalSchedulingConfig(
         id: _current?.id,
         isEnabled: _isEnabled,
         workingDays: [for (int i = 0; i < 7; i++) if (_days[i]) i],
         maxBookingsPerSlot: maxVal,
-        slots: _slots,
+        slots: generatedSlots,
+        slotStartTime: _startTime,
+        slotEndTime: _endTime,
+        slotIntervalHours: iH,
+        slotIntervalMinutes: iM,
       );
       final saved = await _repo.save(updated);
       if (mounted) {
@@ -296,7 +337,7 @@ class _GlobalSchedulingPageState extends State<GlobalSchedulingPage> {
                     Switch(
                       value: _isEnabled,
                       onChanged: (v) => setState(() => _isEnabled = v),
-                      activeColor: AppColors.success,
+                      activeThumbColor: AppColors.success,
                     ),
                   ],
                 ),
@@ -340,50 +381,151 @@ class _GlobalSchedulingPageState extends State<GlobalSchedulingPage> {
               ),
               const SizedBox(height: 16),
 
-              // ── Time Slots ───────────────────────────────────────────────────
+              // ── Slot Generator ───────────────────────────────────────────────
               _Card(
-                title: 'Time Slots',
-                headerAction: TextButton.icon(
-                  onPressed: _addSlot,
-                  icon: const Icon(Icons.add_rounded, size: 16),
-                  label: const Text('Add Slot'),
-                  style: TextButton.styleFrom(
-                    foregroundColor: AppColors.primary,
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 12, vertical: 6),
-                  ),
-                ),
-                child: _slots.isEmpty
-                    ? Center(
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 8),
-                          child: Text(
-                            'No slots configured yet.\nTap "Add Slot" to add a time.',
+                title: 'Slot Generator',
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _TimeRow(
+                      label: 'Start Time',
+                      value: _startTime,
+                      onTap: () => _pickTime(isStart: true),
+                    ),
+                    const Divider(height: 20, color: AppColors.border),
+                    _TimeRow(
+                      label: 'End Time',
+                      value: _endTime,
+                      onTap: () => _pickTime(isStart: false),
+                    ),
+                    const Divider(height: 20, color: AppColors.border),
+                    Row(
+                      children: [
+                        const Text(
+                          'Interval',
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: AppColors.textSecondary,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                        const Spacer(),
+                        SizedBox(
+                          width: 64,
+                          child: TextField(
+                            controller: _intervalHours,
                             textAlign: TextAlign.center,
-                            style: TextStyle(
-                              fontSize: 13,
-                              color: AppColors.textSecondary,
-                              height: 1.5,
+                            keyboardType: TextInputType.number,
+                            inputFormatters: [
+                              FilteringTextInputFormatter.digitsOnly
+                            ],
+                            style: const TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                            ),
+                            decoration: InputDecoration(
+                              isDense: true,
+                              contentPadding: const EdgeInsets.symmetric(
+                                  horizontal: 8, vertical: 10),
+                              border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(8)),
+                              hintText: '0',
                             ),
                           ),
                         ),
+                        const SizedBox(width: 6),
+                        const Text('hr',
+                            style: TextStyle(
+                                fontSize: 12,
+                                color: AppColors.textSecondary)),
+                        const SizedBox(width: 10),
+                        SizedBox(
+                          width: 64,
+                          child: TextField(
+                            controller: _intervalMinutes,
+                            textAlign: TextAlign.center,
+                            keyboardType: TextInputType.number,
+                            inputFormatters: [
+                              FilteringTextInputFormatter.digitsOnly
+                            ],
+                            style: const TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                            ),
+                            decoration: InputDecoration(
+                              isDense: true,
+                              contentPadding: const EdgeInsets.symmetric(
+                                  horizontal: 8, vertical: 10),
+                              border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(8)),
+                              hintText: '30',
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        const Text('min',
+                            style: TextStyle(
+                                fontSize: 12,
+                                color: AppColors.textSecondary)),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+
+              // ── Generated slots preview ──────────────────────────────────────
+              _Card(
+                title: 'Generated Slots',
+                child: _generatedSlots.isEmpty
+                    ? Text(
+                        'Configure start time, end time, and interval above to preview slots.',
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: AppColors.textSecondary,
+                          height: 1.5,
+                        ),
                       )
                     : Column(
-                        children: List.generate(_slots.length, (i) {
-                          final isLast = i == _slots.length - 1;
-                          return Column(
-                            children: [
-                              _SlotRow(
-                                label: _slots[i],
-                                onEdit: () => _editSlot(i),
-                                onDelete: () => _deleteSlot(i),
-                              ),
-                              if (!isLast)
-                                const Divider(
-                                    height: 1, color: AppColors.border),
-                            ],
-                          );
-                        }),
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            '${_generatedSlots.length} slot${_generatedSlots.length == 1 ? '' : 's'} will be generated',
+                            style: const TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: AppColors.textSecondary,
+                            ),
+                          ),
+                          const SizedBox(height: 10),
+                          Wrap(
+                            spacing: 6,
+                            runSpacing: 6,
+                            children: _generatedSlots
+                                .map((s) => Container(
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 12, vertical: 5),
+                                      decoration: BoxDecoration(
+                                        color: AppColors.primary
+                                            .withValues(alpha: 0.08),
+                                        borderRadius:
+                                            BorderRadius.circular(20),
+                                        border: Border.all(
+                                            color: AppColors.primary
+                                                .withValues(alpha: 0.25)),
+                                      ),
+                                      child: Text(
+                                        s,
+                                        style: TextStyle(
+                                          fontSize: 13,
+                                          fontWeight: FontWeight.w600,
+                                          color: AppColors.primary,
+                                        ),
+                                      ),
+                                    ))
+                                .toList(),
+                          ),
+                        ],
                       ),
               ),
 
@@ -430,9 +572,8 @@ class _GlobalSchedulingPageState extends State<GlobalSchedulingPage> {
 class _Card extends StatelessWidget {
   final String title;
   final Widget child;
-  final Widget? headerAction;
 
-  const _Card({required this.title, required this.child, this.headerAction});
+  const _Card({required this.title, required this.child});
 
   @override
   Widget build(BuildContext context) {
@@ -447,21 +588,14 @@ class _Card extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  title,
-                  style: const TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.textSecondary,
-                    letterSpacing: 0.3,
-                  ),
-                ),
-              ),
-              if (headerAction != null) headerAction!,
-            ],
+          Text(
+            title,
+            style: const TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
+              color: AppColors.textSecondary,
+              letterSpacing: 0.3,
+            ),
           ),
           const SizedBox(height: 14),
           child,
@@ -571,50 +705,50 @@ class _DayChip extends StatelessWidget {
   }
 }
 
-class _SlotRow extends StatelessWidget {
-  const _SlotRow(
-      {required this.label, required this.onEdit, required this.onDelete});
+class _TimeRow extends StatelessWidget {
+  const _TimeRow({
+    required this.label,
+    required this.value,
+    required this.onTap,
+  });
   final String label;
-  final VoidCallback onEdit;
-  final VoidCallback onDelete;
+  final String? value;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 5),
-      child: Row(
-        children: [
-          const Icon(Icons.access_time_rounded,
-              size: 15, color: AppColors.textSecondary),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(6),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 2),
+        child: Row(
+          children: [
+            Text(
               label,
               style: const TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w600,
-                color: AppColors.textPrimary,
+                fontSize: 13,
+                color: AppColors.textSecondary,
+                fontWeight: FontWeight.w500,
               ),
             ),
-          ),
-          IconButton(
-            onPressed: onEdit,
-            icon: const Icon(Icons.edit_outlined, size: 15),
-            tooltip: 'Edit',
-            color: AppColors.textSecondary,
-            visualDensity: VisualDensity.compact,
-            padding: EdgeInsets.zero,
-          ),
-          const SizedBox(width: 4),
-          IconButton(
-            onPressed: onDelete,
-            icon: const Icon(Icons.delete_outline, size: 15),
-            tooltip: 'Remove',
-            color: AppColors.error,
-            visualDensity: VisualDensity.compact,
-            padding: EdgeInsets.zero,
-          ),
-        ],
+            const Spacer(),
+            Text(
+              value ?? 'Tap to set',
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight:
+                    value != null ? FontWeight.w600 : FontWeight.normal,
+                color: value != null
+                    ? AppColors.textPrimary
+                    : AppColors.textSecondary,
+              ),
+            ),
+            const SizedBox(width: 8),
+            const Icon(Icons.access_time_rounded,
+                size: 15, color: AppColors.textSecondary),
+          ],
+        ),
       ),
     );
   }

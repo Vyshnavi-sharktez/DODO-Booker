@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import '../../../../core/theme/app_theme.dart';
+import '../../../catalog_v2/application/providers/catalog_node_providers.dart';
+import '../../../catalog_v2/domain/models/catalog_node.dart';
 import '../../domain/models/coupon.dart';
 
 const _discountTypeOptions = [
@@ -11,7 +14,7 @@ const _discountTypeOptions = [
 
 final _dateFmt = DateFormat('dd MMM yyyy');
 
-class CouponFormDialog extends StatefulWidget {
+class CouponFormDialog extends ConsumerStatefulWidget {
   final Coupon? existing;
   final Future<void> Function({
     required String code,
@@ -24,15 +27,17 @@ class CouponFormDialog extends StatefulWidget {
     DateTime? validFrom,
     DateTime? validTo,
     required bool isActive,
+    required String applicabilityType,
+    required List<String> applicableNodeIds,
   }) onSave;
 
   const CouponFormDialog({super.key, this.existing, required this.onSave});
 
   @override
-  State<CouponFormDialog> createState() => _CouponFormDialogState();
+  ConsumerState<CouponFormDialog> createState() => _CouponFormDialogState();
 }
 
-class _CouponFormDialogState extends State<CouponFormDialog> {
+class _CouponFormDialogState extends ConsumerState<CouponFormDialog> {
   final _formKey = GlobalKey<FormState>();
   late final TextEditingController _code;
   late final TextEditingController _description;
@@ -44,6 +49,8 @@ class _CouponFormDialogState extends State<CouponFormDialog> {
   late DateTime? _validFrom;
   late DateTime? _validTo;
   late bool _isActive;
+  late String _applicabilityType;
+  late List<String> _applicableNodeIds;
   bool _saving = false;
 
   @override
@@ -72,6 +79,8 @@ class _CouponFormDialogState extends State<CouponFormDialog> {
     _validFrom = e?.validFrom ?? DateTime.now();
     _validTo = e?.validTo;
     _isActive = e?.isActive ?? true;
+    _applicabilityType = e?.applicabilityType ?? 'all';
+    _applicableNodeIds = List<String>.from(e?.applicableNodeIds ?? []);
   }
 
   @override
@@ -131,6 +140,8 @@ class _CouponFormDialogState extends State<CouponFormDialog> {
         validFrom: _validFrom,
         validTo: _validTo,
         isActive: _isActive,
+        applicabilityType: _applicabilityType,
+        applicableNodeIds: _applicabilityType == 'all' ? [] : _applicableNodeIds,
       );
       if (mounted) Navigator.of(context).pop();
     } catch (e) {
@@ -147,15 +158,46 @@ class _CouponFormDialogState extends State<CouponFormDialog> {
     }
   }
 
+  Future<void> _openNodePicker(List<CatalogNode> nodes) async {
+    final result = await showDialog<List<String>>(
+      context: context,
+      builder: (_) => _NodePickerDialog(
+        nodes: nodes,
+        selectedIds: _applicableNodeIds,
+      ),
+    );
+    if (result != null) setState(() => _applicableNodeIds = result);
+  }
+
   @override
   Widget build(BuildContext context) {
     final isEdit = widget.existing != null;
+    final allNodes = ref.watch(catalogNodeNotifierProvider).valueOrNull ?? [];
+
+    // Categories = nodes that have children (non-leaf); services = bookable leaves
+    final categoryNodes = allNodes.where((n) => n.childrenCount > 0).toList()
+      ..sort((a, b) => a.name.compareTo(b.name));
+    final serviceNodes = allNodes.where((n) => n.isBookable).toList()
+      ..sort((a, b) => a.name.compareTo(b.name));
+
+    final pickerNodes = _applicabilityType == 'categories'
+        ? categoryNodes
+        : _applicabilityType == 'services'
+            ? serviceNodes
+            : <CatalogNode>[];
+
+    // Names of currently selected nodes for display
+    final selectedNames = allNodes
+        .where((n) => _applicableNodeIds.contains(n.id))
+        .map((n) => n.name)
+        .toList()
+      ..sort();
 
     return Dialog(
       insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 600),
+        constraints: const BoxConstraints(maxWidth: 620),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -189,8 +231,7 @@ class _CouponFormDialogState extends State<CouponFormDialog> {
                   const Spacer(),
                   IconButton(
                     onPressed: () => Navigator.of(context).pop(),
-                    icon: const Icon(Icons.close_rounded,
-                        color: Colors.white70),
+                    icon: const Icon(Icons.close_rounded, color: Colors.white70),
                     visualDensity: VisualDensity.compact,
                   ),
                 ],
@@ -216,11 +257,9 @@ class _CouponFormDialogState extends State<CouponFormDialog> {
                               decoration: const InputDecoration(
                                 labelText: 'Coupon Code *',
                                 hintText: 'Coupon Code',
-                                prefixIcon:
-                                    Icon(Icons.local_offer_rounded),
+                                prefixIcon: Icon(Icons.local_offer_rounded),
                               ),
-                              textCapitalization:
-                                  TextCapitalization.characters,
+                              textCapitalization: TextCapitalization.characters,
                               inputFormatters: [
                                 FilteringTextInputFormatter.allow(
                                     RegExp(r'[A-Za-z0-9_\-]')),
@@ -289,9 +328,8 @@ class _CouponFormDialogState extends State<CouponFormDialog> {
                                       : Icons.currency_rupee_rounded,
                                 ),
                               ),
-                              keyboardType:
-                                  const TextInputType.numberWithOptions(
-                                      decimal: true),
+                              keyboardType: const TextInputType.numberWithOptions(
+                                  decimal: true),
                               inputFormatters: [
                                 FilteringTextInputFormatter.allow(
                                     RegExp(r'^\d*\.?\d{0,2}')),
@@ -301,9 +339,7 @@ class _CouponFormDialogState extends State<CouponFormDialog> {
                                   return 'Required';
                                 }
                                 final n = double.tryParse(v.trim());
-                                if (n == null || n <= 0) {
-                                  return 'Must be > 0';
-                                }
+                                if (n == null || n <= 0) return 'Must be > 0';
                                 if (_discountType == 'percentage' && n > 100) {
                                   return 'Max 100%';
                                 }
@@ -318,21 +354,17 @@ class _CouponFormDialogState extends State<CouponFormDialog> {
                               decoration: const InputDecoration(
                                 labelText: 'Min Order Amount',
                                 hintText: 'Min Order Amount',
-                                prefixIcon:
-                                    Icon(Icons.shopping_cart_rounded),
+                                prefixIcon: Icon(Icons.shopping_cart_rounded),
                                 helperText: 'Optional',
                               ),
-                              keyboardType:
-                                  const TextInputType.numberWithOptions(
-                                      decimal: true),
+                              keyboardType: const TextInputType.numberWithOptions(
+                                  decimal: true),
                               inputFormatters: [
                                 FilteringTextInputFormatter.allow(
                                     RegExp(r'^\d*\.?\d{0,2}')),
                               ],
                               validator: (v) {
-                                if (v == null || v.trim().isEmpty) {
-                                  return null;
-                                }
+                                if (v == null || v.trim().isEmpty) return null;
                                 if (double.tryParse(v.trim()) == null) {
                                   return 'Invalid amount';
                                 }
@@ -344,7 +376,7 @@ class _CouponFormDialogState extends State<CouponFormDialog> {
                       ),
                       const SizedBox(height: 16),
 
-                      // Min Discount Amount + Usage Limit
+                      // Max Discount Amount + Usage Limit
                       Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
@@ -354,21 +386,17 @@ class _CouponFormDialogState extends State<CouponFormDialog> {
                               decoration: const InputDecoration(
                                 labelText: 'Max Discount Amount',
                                 hintText: 'Max Discount Amount',
-                                prefixIcon:
-                                    Icon(Icons.price_check_rounded),
+                                prefixIcon: Icon(Icons.currency_rupee_rounded),
                                 helperText: 'Optional',
                               ),
-                              keyboardType:
-                                  const TextInputType.numberWithOptions(
-                                      decimal: true),
+                              keyboardType: const TextInputType.numberWithOptions(
+                                  decimal: true),
                               inputFormatters: [
                                 FilteringTextInputFormatter.allow(
                                     RegExp(r'^\d*\.?\d{0,2}')),
                               ],
                               validator: (v) {
-                                if (v == null || v.trim().isEmpty) {
-                                  return null;
-                                }
+                                if (v == null || v.trim().isEmpty) return null;
                                 if (double.tryParse(v.trim()) == null) {
                                   return 'Invalid amount';
                                 }
@@ -391,13 +419,9 @@ class _CouponFormDialogState extends State<CouponFormDialog> {
                                 FilteringTextInputFormatter.digitsOnly,
                               ],
                               validator: (v) {
-                                if (v == null || v.trim().isEmpty) {
-                                  return null;
-                                }
+                                if (v == null || v.trim().isEmpty) return null;
                                 final n = int.tryParse(v.trim());
-                                if (n == null || n < 0) {
-                                  return 'Must be ≥ 0';
-                                }
+                                if (n == null || n < 0) return 'Must be ≥ 0';
                                 return null;
                               },
                             ),
@@ -453,6 +477,142 @@ class _CouponFormDialogState extends State<CouponFormDialog> {
                         onChanged: (v) => setState(() => _isActive = v),
                         dense: true,
                       ),
+
+                      const SizedBox(height: 8),
+                      const Divider(),
+                      const SizedBox(height: 12),
+
+                      // ── Applicability section ──────────────────────────────
+                      Row(
+                        children: [
+                          const Icon(Icons.filter_alt_outlined, size: 18),
+                          const SizedBox(width: 8),
+                          Text(
+                            'Applicability',
+                            style: Theme.of(context)
+                                .textTheme
+                                .titleSmall
+                                ?.copyWith(fontWeight: FontWeight.w700),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Define which services or categories this coupon applies to.',
+                        style: Theme.of(context)
+                            .textTheme
+                            .bodySmall
+                            ?.copyWith(color: AppColors.textSecondary),
+                      ),
+                      const SizedBox(height: 12),
+
+                      RadioGroup<String>(
+                        groupValue: _applicabilityType,
+                        onChanged: (v) {
+                          if (v != null) {
+                            setState(() {
+                              _applicabilityType = v;
+                              _applicableNodeIds = [];
+                            });
+                          }
+                        },
+                        child: Column(
+                          children: [
+                            _ApplicabilityRadio(
+                              value: 'all',
+                              label: 'All Services / Products',
+                              subtitle: 'Applies to any cart item.',
+                            ),
+                            _ApplicabilityRadio(
+                              value: 'categories',
+                              label: 'Specific Categories',
+                              subtitle:
+                                  'Applies when cart has a service under the selected categories.',
+                            ),
+                            _ApplicabilityRadio(
+                              value: 'services',
+                              label: 'Specific Services / Products',
+                              subtitle:
+                                  'Applies only when the exact service is in the cart.',
+                            ),
+                          ],
+                        ),
+                      ),
+
+                      // ── Node selector (shown when not 'all') ───────────────
+                      if (_applicabilityType != 'all') ...[
+                        const SizedBox(height: 12),
+                        InkWell(
+                          onTap: pickerNodes.isEmpty
+                              ? null
+                              : () => _openNodePicker(pickerNodes),
+                          borderRadius: BorderRadius.circular(8),
+                          child: InputDecorator(
+                            decoration: InputDecoration(
+                              labelText: _applicabilityType == 'categories'
+                                  ? 'Select Categories *'
+                                  : 'Select Services / Products *',
+                              prefixIcon: Icon(
+                                _applicabilityType == 'categories'
+                                    ? Icons.folder_outlined
+                                    : Icons.miscellaneous_services_outlined,
+                              ),
+                              suffixIcon: const Icon(Icons.arrow_drop_down_rounded),
+                              errorText: _saving &&
+                                      _applicabilityType != 'all' &&
+                                      _applicableNodeIds.isEmpty
+                                  ? 'Select at least one'
+                                  : null,
+                            ),
+                            child: pickerNodes.isEmpty
+                                ? Text(
+                                    'Loading…',
+                                    style: TextStyle(
+                                        color: AppColors.textSecondary,
+                                        fontSize: 14),
+                                  )
+                                : selectedNames.isEmpty
+                                    ? Text(
+                                        _applicabilityType == 'categories'
+                                            ? 'Tap to select categories'
+                                            : 'Tap to select services',
+                                        style: TextStyle(
+                                            color: AppColors.textSecondary
+                                                .withValues(alpha: 0.6),
+                                            fontSize: 14),
+                                      )
+                                    : Wrap(
+                                        spacing: 6,
+                                        runSpacing: 4,
+                                        children: selectedNames
+                                            .map((name) => Chip(
+                                                  label: Text(name,
+                                                      style: const TextStyle(
+                                                          fontSize: 12)),
+                                                  materialTapTargetSize:
+                                                      MaterialTapTargetSize
+                                                          .shrinkWrap,
+                                                  padding: EdgeInsets.zero,
+                                                  visualDensity:
+                                                      VisualDensity.compact,
+                                                  deleteIcon: const Icon(
+                                                      Icons.close_rounded,
+                                                      size: 14),
+                                                  onDeleted: () {
+                                                    final nodeId = allNodes
+                                                        .firstWhere((n) =>
+                                                            n.name == name)
+                                                        .id;
+                                                    setState(() =>
+                                                        _applicableNodeIds
+                                                            .remove(nodeId));
+                                                  },
+                                                ))
+                                            .toList(),
+                                      ),
+                          ),
+                        ),
+                      ],
                     ],
                   ),
                 ),
@@ -495,6 +655,192 @@ class _CouponFormDialogState extends State<CouponFormDialog> {
                             ),
                           )
                         : Text(isEdit ? 'Save Changes' : 'Create Coupon'),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ── Applicability radio tile ───────────────────────────────────────────────────
+
+class _ApplicabilityRadio extends StatelessWidget {
+  final String value;
+  final String label;
+  final String subtitle;
+
+  const _ApplicabilityRadio({
+    required this.value,
+    required this.label,
+    required this.subtitle,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return RadioListTile<String>(
+      value: value,
+      contentPadding: EdgeInsets.zero,
+      dense: true,
+      visualDensity: VisualDensity.compact,
+      title: Text(label,
+          style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w500)),
+      subtitle: Text(subtitle,
+          style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+    );
+  }
+}
+
+// ── Node picker dialog ─────────────────────────────────────────────────────────
+
+class _NodePickerDialog extends StatefulWidget {
+  final List<CatalogNode> nodes;
+  final List<String> selectedIds;
+
+  const _NodePickerDialog({required this.nodes, required this.selectedIds});
+
+  @override
+  State<_NodePickerDialog> createState() => _NodePickerDialogState();
+}
+
+class _NodePickerDialogState extends State<_NodePickerDialog> {
+  late final Set<String> _selected;
+  String _search = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _selected = Set<String>.from(widget.selectedIds);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final filtered = _search.isEmpty
+        ? widget.nodes
+        : widget.nodes
+            .where((n) =>
+                n.name.toLowerCase().contains(_search.toLowerCase()))
+            .toList();
+
+    return Dialog(
+      insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 480, maxHeight: 560),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // Header
+            Container(
+              padding: const EdgeInsets.fromLTRB(20, 16, 12, 16),
+              decoration: const BoxDecoration(
+                color: AppColors.primary,
+                borderRadius:
+                    BorderRadius.vertical(top: Radius.circular(12)),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.checklist_rounded,
+                      color: Colors.white, size: 18),
+                  const SizedBox(width: 8),
+                  const Expanded(
+                    child: Text(
+                      'Select Items',
+                      style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 15,
+                          fontWeight: FontWeight.w700),
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close_rounded,
+                        color: Colors.white70, size: 18),
+                    onPressed: () => Navigator.of(context).pop(),
+                    visualDensity: VisualDensity.compact,
+                  ),
+                ],
+              ),
+            ),
+
+            // Search
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 12, 12, 4),
+              child: TextField(
+                decoration: InputDecoration(
+                  hintText: 'Search…',
+                  isDense: true,
+                  prefixIcon: const Icon(Icons.search_rounded, size: 18),
+                  border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8)),
+                  contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 12, vertical: 8),
+                ),
+                onChanged: (v) => setState(() => _search = v),
+              ),
+            ),
+
+            // List
+            Expanded(
+              child: filtered.isEmpty
+                  ? const Center(
+                      child: Text('No items found.',
+                          style: TextStyle(color: AppColors.textSecondary)))
+                  : ListView.builder(
+                      padding: const EdgeInsets.symmetric(vertical: 4),
+                      itemCount: filtered.length,
+                      itemBuilder: (_, i) {
+                        final node = filtered[i];
+                        return CheckboxListTile(
+                          value: _selected.contains(node.id),
+                          onChanged: (checked) {
+                            setState(() {
+                              if (checked == true) {
+                                _selected.add(node.id);
+                              } else {
+                                _selected.remove(node.id);
+                              }
+                            });
+                          },
+                          title: Text(node.name,
+                              style: const TextStyle(fontSize: 13.5)),
+                          subtitle: node.parentName != null
+                              ? Text(node.parentName!,
+                                  style: const TextStyle(fontSize: 11))
+                              : null,
+                          dense: true,
+                          controlAffinity: ListTileControlAffinity.leading,
+                          contentPadding:
+                              const EdgeInsets.symmetric(horizontal: 12),
+                        );
+                      },
+                    ),
+            ),
+
+            // Footer
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+              child: Row(
+                children: [
+                  Text(
+                    '${_selected.length} selected',
+                    style: const TextStyle(
+                        fontSize: 12, color: AppColors.textSecondary),
+                  ),
+                  const Spacer(),
+                  TextButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    child: const Text('Cancel'),
+                  ),
+                  const SizedBox(width: 8),
+                  FilledButton(
+                    onPressed: () =>
+                        Navigator.of(context).pop(_selected.toList()),
+                    style: FilledButton.styleFrom(
+                        backgroundColor: AppColors.primary),
+                    child: const Text('Confirm'),
                   ),
                 ],
               ),

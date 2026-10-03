@@ -27,6 +27,8 @@ class CouponsRepository {
     DateTime? validFrom,
     DateTime? validTo,
     required bool isActive,
+    required String applicabilityType,
+    required List<String> applicableNodeIds,
   }) async {
     final data = await _supabase
         .from('coupons')
@@ -41,6 +43,8 @@ class CouponsRepository {
           'valid_from': validFrom?.toIso8601String().split('T').first,
           'valid_to': validTo?.toIso8601String().split('T').first,
           'is_active': isActive,
+          'applicability_type': applicabilityType,
+          'applicable_node_ids': applicableNodeIds,
         })
         .select()
         .single();
@@ -59,6 +63,8 @@ class CouponsRepository {
     DateTime? validFrom,
     DateTime? validTo,
     required bool isActive,
+    required String applicabilityType,
+    required List<String> applicableNodeIds,
   }) async {
     final data = await _supabase
         .from('coupons')
@@ -73,6 +79,8 @@ class CouponsRepository {
           'valid_from': validFrom?.toIso8601String().split('T').first,
           'valid_to': validTo?.toIso8601String().split('T').first,
           'is_active': isActive,
+          'applicability_type': applicabilityType,
+          'applicable_node_ids': applicableNodeIds,
         })
         .eq('id', id)
         .select()

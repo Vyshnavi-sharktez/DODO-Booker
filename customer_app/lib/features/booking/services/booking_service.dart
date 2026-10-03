@@ -186,6 +186,35 @@ class BookingService {
       return [];
     }
 
+    // ── Availability block check ─────────────────────────────────────────────
+    // A full-day block returns [] immediately.
+    // A partial-day block populates blockedSlots for filtering below.
+    var blockedSlots = <String>[];
+    if (serviceId.isNotEmpty) {
+      try {
+        final blockResult = await _client.rpc('check_availability_block', params: {
+          'p_service_id': serviceId,
+          'p_vendor_id': vendorId,
+          'p_date': dateStr,
+        });
+        if (blockResult is List && blockResult.isNotEmpty) {
+          final row = blockResult.first as Map<String, dynamic>;
+          final isFullDayBlocked = row['is_full_day_blocked'] as bool? ?? false;
+          if (isFullDayBlocked) {
+            debugPrint('[DODO][Slots] → returning [] (full-day availability block on $dateStr)');
+            return [];
+          }
+          final rawSlots = row['blocked_slots'];
+          if (rawSlots is List && rawSlots.isNotEmpty) {
+            blockedSlots = rawSlots.cast<String>();
+            debugPrint('[DODO][Slots] Partial-day block: filtering slots $blockedSlots');
+          }
+        }
+      } catch (e) {
+        debugPrint('[DODO][Slots] Warning: availability block check failed (non-fatal): $e');
+      }
+    }
+
     // ── Read slot list and max bookings ──────────────────────────────────────
     // Trim each label to handle slots stored with surrounding spaces
     // (e.g. when admin enters "09:00 AM, 10:00 AM" and split(',') is used).
@@ -277,6 +306,10 @@ class BookingService {
       if (vendorBusyUntilMin > 0 && slotMin < vendorBusyUntilMin) {
         debugPrint(
             '[DODO][Slots]   "$label" ($slotMin min) — FILTERED (vendor busy until $vendorBusyUntilMin)');
+        continue;
+      }
+      if (blockedSlots.contains(label)) {
+        debugPrint('[DODO][Slots]   "$label" — FILTERED (availability block)');
         continue;
       }
       final bookedCount = capacityMap[label] ?? 0;
