@@ -69,9 +69,14 @@ class HomeScreen extends ConsumerWidget {
 
     // ── Mobile: custom mobile layout, no footer ───────────────────────────────
     if (showMobileHeader && isMobile) {
-      final mobileSections = effectiveSections
-          .where((s) => s.sectionType != 'hero' && s.sectionType != 'footer')
-          .toList();
+      final mobileSections = _reorderMobileSections(
+        effectiveSections
+            .where((s) =>
+                s.sectionType != 'hero' &&
+                s.sectionType != 'footer' &&
+                s.sectionType != 'mobile_promo_banner')
+            .toList(),
+      );
 
       return CustomScrollView(
         key: const PageStorageKey<String>('home_mobile'),
@@ -125,6 +130,21 @@ class HomeScreen extends ConsumerWidget {
         ),
       ],
     );
+  }
+
+  // Ensures special_offers always appears right after service_grid on mobile.
+  static List<LandingPageSection> _reorderMobileSections(
+      List<LandingPageSection> sections) {
+    final offersIdx = sections.indexWhere((s) => s.sectionType == 'special_offers');
+    final gridIdx = sections.indexWhere((s) => s.sectionType == 'service_grid');
+    if (offersIdx == -1 || gridIdx == -1 || offersIdx == gridIdx + 1) {
+      return sections;
+    }
+    final result = List<LandingPageSection>.from(sections);
+    final offers = result.removeAt(offersIdx);
+    final insertAfter = gridIdx > offersIdx ? gridIdx - 1 : gridIdx;
+    result.insert(insertAfter + 1, offers);
+    return result;
   }
 
   // Shared spacing applied above every section (including future CMS types).
