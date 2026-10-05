@@ -669,7 +669,6 @@ class _CategoryGridItem extends StatelessWidget {
       onTap: onTap,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
-        mainAxisAlignment: MainAxisAlignment.start,
         children: [
           Expanded(
             child: Container(
@@ -691,17 +690,20 @@ class _CategoryGridItem extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 6),
-          Text(
-            node.name,
-            style: GoogleFonts.inter(
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-              color: AppColors.textPrimary,
-              height: 1.2,
+          SizedBox(
+            height: 34,
+            child: Text(
+              node.name,
+              style: GoogleFonts.inter(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: AppColors.textPrimary,
+                height: 1.2,
+              ),
+              textAlign: TextAlign.center,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
             ),
-            textAlign: TextAlign.center,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
           ),
         ],
       ),
@@ -740,7 +742,6 @@ class _MoreGridItem extends StatelessWidget {
       onTap: onTap,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
-        mainAxisAlignment: MainAxisAlignment.start,
         children: [
           Expanded(
             child: Container(
@@ -757,15 +758,18 @@ class _MoreGridItem extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 6),
-          Text(
-            'More',
-            style: GoogleFonts.inter(
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-              color: AppColors.textPrimary,
-              height: 1.2,
+          SizedBox(
+            height: 34,
+            child: Text(
+              'More',
+              style: GoogleFonts.inter(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: AppColors.textPrimary,
+                height: 1.2,
+              ),
+              textAlign: TextAlign.center,
             ),
-            textAlign: TextAlign.center,
           ),
         ],
       ),

@@ -2,8 +2,40 @@ import 'dart:async';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:go_router/go_router.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../models/coupon_model.dart';
+import '../../../routes/app_router.dart';
+
+// ── CTA navigation ───────────────────────────────────────────────────────────────
+// Resolves the page a coupon CTA should navigate to based on structured
+// applicability data. Never inspects title/description text.
+//
+//   'all'        → category explorer (all categories)
+//   'categories' → category explorer seeded with the one applicable node ID,
+//                  or top-level when multiple categories are scoped
+//   'services'   → catalog node detail screen for the one applicable service,
+//                  or category explorer when multiple services are scoped
+
+VoidCallback _couponNavCallback(BuildContext ctx, CouponModel coupon) {
+  final type = coupon.applicabilityType;
+  final ids = coupon.applicableNodeIds;
+
+  if (type == 'categories' && ids.length == 1) {
+    return () => ctx.push(
+          AppRoutes.categoryExplorer,
+          extra: {'categoryId': ids.first},
+        );
+  }
+
+  if (type == 'services' && ids.length == 1) {
+    final nodeId = ids.first;
+    return () => ctx.push('/catalog/$nodeId');
+  }
+
+  // 'all', multiple categories, multiple services → top-level browse
+  return () => ctx.push(AppRoutes.categoryExplorer);
+}
 
 // ── Layout constants ─────────────────────────────────────────────────────────────
 
@@ -608,7 +640,11 @@ class _TextPanel extends StatelessWidget {
 
                 // ── Coupon code CTA ────────────────────────────────────
                 SizedBox(height: isMobile ? 12 : 16),
-                _CodeButton(code: coupon.code, hovered: hovered),
+                _CodeButton(
+                  code: coupon.code,
+                  hovered: hovered,
+                  onNavigate: _couponNavCallback(context, coupon),
+                ),
               ],
             ),
           );
@@ -714,13 +750,18 @@ class _BenefitChip extends StatelessWidget {
   }
 }
 
-// ── Code CTA button — copies coupon code to clipboard on tap ─────────────────────
+// ── Code CTA button — copies coupon code then navigates to applicable page ────────
 
 class _CodeButton extends StatelessWidget {
   final String code;
   final bool hovered;
+  final VoidCallback? onNavigate;
 
-  const _CodeButton({required this.code, this.hovered = false});
+  const _CodeButton({
+    required this.code,
+    this.hovered = false,
+    this.onNavigate,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -734,6 +775,7 @@ class _CodeButton extends StatelessWidget {
             behavior: SnackBarBehavior.floating,
           ),
         );
+        onNavigate?.call();
       },
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
