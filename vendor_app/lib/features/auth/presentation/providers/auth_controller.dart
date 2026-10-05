@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/network/supabase_client_provider.dart';
+import '../../../../core/services/fcm_service.dart';
 import '../../data/datasources/auth_remote_datasource.dart';
 import '../../data/repositories/auth_repository_impl.dart';
 import '../../domain/entities/vendor_user.dart';
@@ -26,12 +27,21 @@ class AuthController extends StateNotifier<AuthState> {
     state = const AuthLoading();
     try {
       final user = await _repository.getCurrentUser();
-      state = user != null
-          ? AuthAuthenticated(user: user)
-          : const AuthUnauthenticated();
+      if (user != null) {
+        state = AuthAuthenticated(user: user);
+        _initFcm(user);
+      } else {
+        state = const AuthUnauthenticated();
+      }
     } catch (_) {
       state = const AuthUnauthenticated();
     }
+  }
+
+  void _initFcm(VendorUser user) {
+    // Only register FCM for actual vendors (not dodo_team members)
+    if (user.userType != 'vendor') return;
+    VendorFcmService.initialize(user.id, user.phone).catchError((_) {});
   }
 
   Future<void> sendOtp(String phone) async {
@@ -53,13 +63,21 @@ class AuthController extends StateNotifier<AuthState> {
     try {
       final user = await _repository.verifyOtp(phone: phone, token: token);
       state = AuthAuthenticated(user: user);
+      _initFcm(user);
     } catch (e) {
       state = AuthError(message: e.toString());
     }
   }
 
   Future<void> signOut() async {
+    final currentUser =
+        state is AuthAuthenticated ? (state as AuthAuthenticated).user : null;
     state = const AuthLoading();
+    if (currentUser != null && currentUser.userType == 'vendor') {
+      try {
+        await VendorFcmService.clearToken(currentUser.id, currentUser.phone);
+      } catch (_) {}
+    }
     try {
       await _repository.signOut();
       state = const AuthUnauthenticated();

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/config/supabase_config.dart';
@@ -318,6 +320,76 @@ class HomeService {
       debugPrint('[DODO][HomeService] fetchPublicReviews error: $e');
       return [];
     }
+  }
+
+  // ── Realtime streams ─────────────────────────────────────────────────────────
+
+  /// Live stream of root catalog nodes for the home category carousel.
+  /// Requires Realtime enabled on catalog_nodes.
+  Stream<List<CatalogNodeModel>> watchFeaturedCatalogNodes() =>
+      _watchCatalogNodes(
+        tag: 'home_featured_cats',
+        fetch: fetchFeaturedCatalogNodes,
+      );
+
+  /// Live stream of the top featured bookable services.
+  /// Requires Realtime enabled on catalog_nodes.
+  Stream<List<CatalogNodeModel>> watchFeaturedServices() =>
+      _watchCatalogNodes(
+        tag: 'home_featured_svcs',
+        fetch: fetchFeaturedServices,
+      );
+
+  /// Live stream of recently added bookable services.
+  /// Requires Realtime enabled on catalog_nodes.
+  Stream<List<CatalogNodeModel>> watchNewServices() =>
+      _watchCatalogNodes(
+        tag: 'home_new_svcs',
+        fetch: fetchNewServices,
+      );
+
+  // Shared stream factory: watches catalog_nodes and re-fetches via [fetch] on
+  // any INSERT / UPDATE / DELETE. Emits the initial result immediately.
+  Stream<List<CatalogNodeModel>> _watchCatalogNodes({
+    required String tag,
+    required Future<List<CatalogNodeModel>> Function() fetch,
+  }) {
+    final controller = StreamController<List<CatalogNodeModel>>();
+
+    Future<void> reload() async {
+      if (controller.isClosed) return;
+      try {
+        final data = await fetch();
+        if (!controller.isClosed) controller.add(data);
+      } catch (e, st) {
+        if (!controller.isClosed) controller.addError(e, st);
+      }
+    }
+
+    reload();
+
+    if (!_ready) {
+      controller.onCancel = () {
+        if (!controller.isClosed) controller.close();
+      };
+      return controller.stream;
+    }
+
+    final channel = _db.channel('home_${tag}_watch')
+      ..onPostgresChanges(
+        event: PostgresChangeEvent.all,
+        schema: 'public',
+        table: 'catalog_nodes',
+        callback: (_) => reload(),
+      )
+      ..subscribe();
+
+    controller.onCancel = () async {
+      await _db.removeChannel(channel);
+      if (!controller.isClosed) controller.close();
+    };
+
+    return controller.stream;
   }
 
   // Private fallback: active bookable nodes in display order

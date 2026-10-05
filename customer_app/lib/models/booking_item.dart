@@ -22,7 +22,9 @@ class BookingItem {
   });
 
   factory BookingItem.fromJson(Map<String, dynamic> json) {
-    // catalog_nodes join for DODO services; vendor_service_requests for custom services.
+    // Prefer the snapshotted name written at booking time (never goes blank).
+    // Fall back to joined tables for rows created before the snapshot column existed.
+    final snapshotName = json['service_name'] as String?;
     final catalogNode =
         (json['catalog_nodes'] ?? json['services']) as Map<String, dynamic>?;
     final vsr =
@@ -30,7 +32,8 @@ class BookingItem {
     return BookingItem(
       serviceId: (json['service_id'] as String?) ?? '',
       customServiceId: json['custom_service_id'] as String?,
-      serviceName: (catalogNode?['name'] as String?) ??
+      serviceName: (snapshotName?.isNotEmpty == true ? snapshotName : null) ??
+          (catalogNode?['name'] as String?) ??
           (vsr?['service_name'] as String?) ??
           '',
       categoryName: null,

@@ -158,6 +158,43 @@ class CartItem {
             amcPreviousContractId ?? this.amcPreviousContractId,
       );
 
+  /// Returns a copy of this item with [minimumOrderAmount] replaced.
+  /// Unlike [copyWith], this method can explicitly set the field to null
+  /// (meaning "no minimum"), which is required for live Realtime updates.
+  CartItem withMinimumOrderAmount(double? amount) => CartItem(
+        bookingId: bookingId,
+        serviceId: serviceId,
+        serviceName: serviceName,
+        imageUrl: imageUrl,
+        unitPrice: unitPrice,
+        quantity: quantity,
+        minimumOrderAmount: amount,
+        originalUnitPrice: originalUnitPrice,
+        parentNodeId: parentNodeId,
+        rootCategoryId: rootCategoryId,
+        customServiceId: customServiceId,
+        vendorId: vendorId,
+        isAmc: isAmc,
+        amcPlanName: amcPlanName,
+        amcRecurrenceInterval: amcRecurrenceInterval,
+        amcPlanId: amcPlanId,
+        amcPricePerVisit: amcPricePerVisit,
+        amcNumVisits: amcNumVisits,
+        amcOriginalTotal: amcOriginalTotal,
+        amcDiscountType: amcDiscountType,
+        amcDiscountValue: amcDiscountValue,
+        amcDiscountAmount: amcDiscountAmount,
+        amcFinalPrice: amcFinalPrice,
+        amcPackageDuration: amcPackageDuration,
+        amcPackageDurationValue: amcPackageDurationValue,
+        amcServiceInterval: amcServiceInterval,
+        amcServiceIntervalValue: amcServiceIntervalValue,
+        amcQuantity: amcQuantity,
+        amcIsRenewal: amcIsRenewal,
+        amcPreviousContractId: amcPreviousContractId,
+        addons: addons,
+      );
+
   double get totalPrice => unitPrice * quantity;
 
   Map<String, dynamic> toJson() => {

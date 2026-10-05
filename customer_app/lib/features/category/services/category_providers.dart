@@ -38,20 +38,23 @@ final servicesBySubcategoryProvider =
 
 /// Addons directly assigned to a specific bookable service node.
 /// No inheritance — only addons explicitly assigned to [nodeId] are returned.
+/// StreamProvider: updates in real time when catalog_node_addons or addons changes.
 final nodeAddonsProvider =
-    FutureProvider.family<List<AddOnModel>, String>((ref, nodeId) {
+    StreamProvider.autoDispose.family<List<AddOnModel>, String>((ref, nodeId) {
   debugPrint('[DODO][Provider] nodeAddonsProvider(nodeId=$nodeId)');
-  return ref.read(categoryServiceProvider).fetchAddonsForNode(nodeId);
+  return ref.read(categoryServiceProvider).watchAddonsForNode(nodeId);
 });
 
+/// StreamProvider: updates in real time when service_attributes or
+/// service_attribute_options changes.
 final serviceAttributesProvider =
-    FutureProvider.family<List<ServiceAttributeModel>, String>(
+    StreamProvider.autoDispose.family<List<ServiceAttributeModel>, String>(
   (ref, serviceId) {
     debugPrint(
         '[DODO][Provider] serviceAttributesProvider(serviceId=$serviceId)');
     return ref
         .read(categoryServiceProvider)
-        .fetchServiceAttributes(serviceId);
+        .watchServiceAttributes(serviceId);
   },
 );
 

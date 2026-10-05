@@ -719,8 +719,10 @@ class _SupportChatDialog extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final size = MediaQuery.of(context).size;
+    final keyboardH = MediaQuery.of(context).viewInsets.bottom;
+    final availH = size.height - keyboardH;
     final w = (size.width * 0.9).clamp(340.0, 680.0);
-    final h = (size.height * 0.85).clamp(500.0, size.height * 0.92);
+    final h = (availH * 0.85).clamp(500.0, availH * 0.92);
 
     return Focus(
       autofocus: true,
@@ -744,29 +746,32 @@ class _SupportChatDialog extends StatelessWidget {
               ),
             ),
           ),
-          Center(
-            child: SizedBox(
-              width: w,
-              height: h,
-              child: Material(
-                color: AppColors.surface,
-                borderRadius: BorderRadius.circular(24),
-                clipBehavior: Clip.antiAlias,
-                elevation: 24,
-                shadowColor: Colors.black38,
-                child: Column(
-                  children: [
-                    const _DialogHeader(),
-                    Expanded(
-                      child: Builder(
-                        builder: (ctx) => MediaQuery.removePadding(
-                          context: ctx,
-                          removeTop: true,
-                          child: const SupportChatScreen(inModal: true),
+          Padding(
+            padding: EdgeInsets.only(bottom: keyboardH),
+            child: Center(
+              child: SizedBox(
+                width: w,
+                height: h,
+                child: Material(
+                  color: AppColors.surface,
+                  borderRadius: BorderRadius.circular(24),
+                  clipBehavior: Clip.antiAlias,
+                  elevation: 24,
+                  shadowColor: Colors.black38,
+                  child: Column(
+                    children: [
+                      const _DialogHeader(),
+                      Expanded(
+                        child: Builder(
+                          builder: (ctx) => MediaQuery.removePadding(
+                            context: ctx,
+                            removeTop: true,
+                            child: const SupportChatScreen(inModal: true),
+                          ),
                         ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
             ),

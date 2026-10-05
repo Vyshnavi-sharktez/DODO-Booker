@@ -8,6 +8,7 @@ import '../../../core/widgets/clickable.dart';
 import '../../../core/widgets/page_sheet.dart';
 import '../models/cart_item.dart';
 import '../providers/cart_provider.dart';
+import '../widgets/min_order_card.dart';
 import '../widgets/service_unavailable_dialog.dart';
 import '../../auth/utils/auth_modal_gate.dart';
 import '../../catalog/models/catalog_node_model.dart';
@@ -997,13 +998,20 @@ class _CheckoutBar extends ConsumerWidget {
     }
     final grandTotal = subtotal + totalTax;
 
-    final itemsWithMin = items
-        .where((i) => i.minimumOrderAmount != null && i.minimumOrderAmount! > 0)
-        .toList();
-    final failingItem = itemsWithMin
-        .where((i) => subtotal < i.minimumOrderAmount!)
-        .firstOrNull;
-    final hasMinimum = itemsWithMin.isNotEmpty;
+    final globalMin = ref.watch(globalMinOrderAmountProvider).valueOrNull ?? 100.0;
+    final checkItems = items.where((i) => !i.isAmc && !i.isCustomService).toList();
+    CartItem? failingItem;
+    double? effectiveFailingMin;
+    for (final item in checkItems) {
+      final effectiveMin = item.minimumOrderAmount ?? globalMin;
+      if (effectiveMin > 0 && subtotal < effectiveMin) {
+        failingItem = item;
+        effectiveFailingMin = effectiveMin;
+        break;
+      }
+    }
+    final hasMinimum = failingItem != null ||
+        checkItems.any((i) => (i.minimumOrderAmount ?? 0) > 0);
     final canCheckout = failingItem == null;
 
     return Container(
@@ -1027,7 +1035,7 @@ class _CheckoutBar extends ConsumerWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           if (hasMinimum) ...[
-            _MinOrderCard(failingItem: failingItem, currentTotal: subtotal),
+            MinOrderCard(effectiveMinimum: effectiveFailingMin, currentTotal: subtotal),
             const SizedBox(height: 10),
           ],
           Row(
@@ -1106,13 +1114,20 @@ class _ModalCheckoutBar extends ConsumerWidget {
     }
     final grandTotal = subtotal + totalTax;
 
-    final itemsWithMin = items
-        .where((i) => i.minimumOrderAmount != null && i.minimumOrderAmount! > 0)
-        .toList();
-    final failingItem = itemsWithMin
-        .where((i) => subtotal < i.minimumOrderAmount!)
-        .firstOrNull;
-    final hasMinimum = itemsWithMin.isNotEmpty;
+    final globalMin = ref.watch(globalMinOrderAmountProvider).valueOrNull ?? 100.0;
+    final checkItems = items.where((i) => !i.isAmc && !i.isCustomService).toList();
+    CartItem? failingItem;
+    double? effectiveFailingMin;
+    for (final item in checkItems) {
+      final effectiveMin = item.minimumOrderAmount ?? globalMin;
+      if (effectiveMin > 0 && subtotal < effectiveMin) {
+        failingItem = item;
+        effectiveFailingMin = effectiveMin;
+        break;
+      }
+    }
+    final hasMinimum = failingItem != null ||
+        checkItems.any((i) => (i.minimumOrderAmount ?? 0) > 0);
     final canCheckout = failingItem == null;
 
     return Container(
@@ -1125,7 +1140,7 @@ class _ModalCheckoutBar extends ConsumerWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           if (hasMinimum) ...[
-            _MinOrderCard(failingItem: failingItem, currentTotal: subtotal),
+            MinOrderCard(effectiveMinimum: effectiveFailingMin, currentTotal: subtotal),
             const SizedBox(height: 10),
           ],
           Row(
@@ -1181,131 +1196,6 @@ class _ModalCheckoutBar extends ConsumerWidget {
                 ),
               ),
             ],
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ── Inline minimum-order status card ─────────────────────────────────────────
-
-class _MinOrderCard extends StatelessWidget {
-  /// The first cart item whose minimum order amount hasn't been reached.
-  /// When null, all items with a minimum have been met — render the success state.
-  /// [currentTotal] is the live cart subtotal (pre-tax), used for both comparison
-  /// and display so the card always matches the Price Summary card.
-  const _MinOrderCard({required this.failingItem, required this.currentTotal});
-  final CartItem? failingItem;
-  final double currentTotal;
-
-  @override
-  Widget build(BuildContext context) {
-    const cardDecoration = BoxDecoration(
-      color: Color(0xFF1C1C1E),
-      borderRadius: BorderRadius.all(Radius.circular(12)),
-    );
-
-    if (failingItem == null) {
-      return Container(
-        padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
-        decoration: cardDecoration,
-        child: const Row(
-          children: [
-            Icon(
-              Icons.check_circle_outline_rounded,
-              size: 15,
-              color: Color(0xFF66BB6A),
-            ),
-            SizedBox(width: 9),
-            Expanded(
-              child: Text(
-                'Minimum order reached. You\'re ready to checkout.',
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  color: Color(0xFF66BB6A),
-                  height: 1.3,
-                ),
-              ),
-            ),
-          ],
-        ),
-      );
-    }
-
-    final minAmt = failingItem!.minimumOrderAmount!;
-    final shortfall = (minAmt - currentTotal).ceil();
-
-    return Container(
-      padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
-      decoration: cardDecoration,
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Padding(
-            padding: EdgeInsets.only(top: 1),
-            child: Icon(
-              Icons.info_outline_rounded,
-              size: 15,
-              color: Color(0xFFFFA726),
-            ),
-          ),
-          const SizedBox(width: 9),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    const Text(
-                      'Minimum order',
-                      style: TextStyle(
-                          fontSize: 11,
-                          color: Color(0xFF9E9E9E),
-                          height: 1.4),
-                    ),
-                    Text(
-                      '₹${minAmt.toInt()}',
-                      style: const TextStyle(
-                          fontSize: 11,
-                          color: Color(0xFF9E9E9E),
-                          height: 1.4),
-                    ),
-                  ],
-                ),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    const Text(
-                      'Current total',
-                      style: TextStyle(
-                          fontSize: 11,
-                          color: Color(0xFF9E9E9E),
-                          height: 1.4),
-                    ),
-                    Text(
-                      '₹${currentTotal.toInt()}',
-                      style: const TextStyle(
-                          fontSize: 11,
-                          color: Color(0xFF9E9E9E),
-                          height: 1.4),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 5),
-                Text(
-                  'Add ₹$shortfall more to continue.',
-                  style: const TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: Color(0xFFFFA726),
-                    height: 1.3,
-                  ),
-                ),
-              ],
-            ),
           ),
         ],
       ),

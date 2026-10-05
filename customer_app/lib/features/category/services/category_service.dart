@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/config/supabase_config.dart';
@@ -193,6 +195,104 @@ class CategoryService {
     return (data as List)
         .map((e) => ServiceAttributeModel.fromJson(e as Map<String, dynamic>))
         .toList();
+  }
+
+  // ── Realtime streams ─────────────────────────────────────────────────────────
+
+  /// Live stream of addons for [nodeId].
+  /// Re-emits on any change to catalog_node_addons or addons.
+  /// Requires Realtime enabled on both tables.
+  Stream<List<AddOnModel>> watchAddonsForNode(String nodeId) {
+    final controller = StreamController<List<AddOnModel>>();
+
+    Future<void> reload() async {
+      if (controller.isClosed) return;
+      try {
+        final data = await fetchAddonsForNode(nodeId);
+        if (!controller.isClosed) controller.add(data);
+      } catch (e, st) {
+        if (!controller.isClosed) controller.addError(e, st);
+      }
+    }
+
+    reload();
+
+    if (!_ready) {
+      controller.onCancel = () {
+        if (!controller.isClosed) controller.close();
+      };
+      return controller.stream;
+    }
+
+    final channel = _db.channel('node_addons_${nodeId.hashCode}')
+      ..onPostgresChanges(
+        event: PostgresChangeEvent.all,
+        schema: 'public',
+        table: 'catalog_node_addons',
+        callback: (_) => reload(),
+      )
+      ..onPostgresChanges(
+        event: PostgresChangeEvent.all,
+        schema: 'public',
+        table: 'addons',
+        callback: (_) => reload(),
+      )
+      ..subscribe();
+
+    controller.onCancel = () async {
+      await _db.removeChannel(channel);
+      if (!controller.isClosed) controller.close();
+    };
+
+    return controller.stream;
+  }
+
+  /// Live stream of service attributes (variants + price options) for [serviceId].
+  /// Re-emits on any change to service_attributes or service_attribute_options.
+  /// Requires Realtime enabled on both tables.
+  Stream<List<ServiceAttributeModel>> watchServiceAttributes(String serviceId) {
+    final controller = StreamController<List<ServiceAttributeModel>>();
+
+    Future<void> reload() async {
+      if (controller.isClosed) return;
+      try {
+        final data = await fetchServiceAttributes(serviceId);
+        if (!controller.isClosed) controller.add(data);
+      } catch (e, st) {
+        if (!controller.isClosed) controller.addError(e, st);
+      }
+    }
+
+    reload();
+
+    if (!_ready) {
+      controller.onCancel = () {
+        if (!controller.isClosed) controller.close();
+      };
+      return controller.stream;
+    }
+
+    final channel = _db.channel('svc_attrs_${serviceId.hashCode}')
+      ..onPostgresChanges(
+        event: PostgresChangeEvent.all,
+        schema: 'public',
+        table: 'service_attributes',
+        callback: (_) => reload(),
+      )
+      ..onPostgresChanges(
+        event: PostgresChangeEvent.all,
+        schema: 'public',
+        table: 'service_attribute_options',
+        callback: (_) => reload(),
+      )
+      ..subscribe();
+
+    controller.onCancel = () async {
+      await _db.removeChannel(channel);
+      if (!controller.isClosed) controller.close();
+    };
+
+    return controller.stream;
   }
 }
 

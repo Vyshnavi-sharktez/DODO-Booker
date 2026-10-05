@@ -562,6 +562,7 @@ class BookingService {
       await _client.from('booking_items').insert({
         'booking_id': bookingId,
         'service_id': service.id,
+        'service_name': service.name,
         'quantity': 1,
         'unit_price': subtotal,
         'total_price': subtotal,

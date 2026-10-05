@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../customers/application/providers/customers_providers.dart';
@@ -335,6 +336,20 @@ class _BookingDetailsDialogState extends ConsumerState<BookingDetailsDialog> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    // ── Customer Information ───────────────────────────────
+                    _SectionLabel('Customer Information'),
+                    const SizedBox(height: 12),
+                    _CustomerInfoSection(
+                      customer: bookingCustomer,
+                      customerId: booking.customerId,
+                      onViewProfile: () {
+                        Navigator.of(context).pop();
+                        context.push(
+                            '/dashboard/customers/${booking.customerId}');
+                      },
+                    ),
+                    const SizedBox(height: 20),
+
                     _SectionLabel('Booking Info'),
                     const SizedBox(height: 12),
                     _InfoRow('Booking Number', booking.bookingNumber),
@@ -346,11 +361,6 @@ class _BookingDetailsDialogState extends ConsumerState<BookingDetailsDialog> {
                       if (booking.reworkIssueDescription != null)
                         _InfoRow('Reported Issue', booking.reworkIssueDescription!),
                     ],
-                    _InfoRow(
-                      'Customer ID',
-                      _truncateId(booking.customerId),
-                      tooltip: booking.customerId,
-                    ),
                     _InfoRow('Assignment Type', booking.assignmentType),
                     _InfoRow('Assigned To', assignedToLabel),
                     if (booking.assignmentType == 'External Vendor' &&
@@ -1168,6 +1178,87 @@ class _InfoRow extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+// ── Customer information section ──────────────────────────────────────────────
+
+class _CustomerInfoSection extends StatelessWidget {
+  final Customer? customer;
+  final String customerId;
+  final VoidCallback onViewProfile;
+
+  const _CustomerInfoSection({
+    required this.customer,
+    required this.customerId,
+    required this.onViewProfile,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (customer == null) {
+      // Customers list may still be loading; fall back to truncated ID.
+      return _InfoRow(
+        'Customer ID',
+        _truncateId(customerId),
+        tooltip: customerId,
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Clickable name row
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 5),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              SizedBox(
+                width: 130,
+                child: Text(
+                  'Name',
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: AppColors.textSecondary,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+              Expanded(
+                child: GestureDetector(
+                  onTap: onViewProfile,
+                  child: MouseRegion(
+                    cursor: SystemMouseCursors.click,
+                    child: Text(
+                      customer!.fullName.isNotEmpty ? customer!.fullName : '—',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: AppColors.primary,
+                        fontWeight: FontWeight.w600,
+                        decoration: TextDecoration.underline,
+                        decorationColor: AppColors.primary,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        _InfoRow(
+          'Phone',
+          customer!.phone.isNotEmpty ? customer!.phone : '—',
+        ),
+        if (customer!.email.isNotEmpty)
+          _InfoRow('Email', customer!.email),
+        _InfoRow(
+          'Customer ID',
+          _truncateId(customerId),
+          tooltip: customerId,
+        ),
+      ],
     );
   }
 }
