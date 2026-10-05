@@ -1,29 +1,24 @@
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../../core/services/fcm_service.dart';
 
 class AuthService {
   static const _phoneKey = 'dodo_auth_phone';
+  static const _customerIdKey = 'dodo_customer_id';
   final SupabaseClient _client = Supabase.instance.client;
 
   // ── Phone check ────────────────────────────────────────────────────────────
 
   /// Checks that [phone] exists in dev_auth. Throws if not registered.
   Future<void> checkPhone(String phone) async {
-    debugPrint('[DODO][Auth] Phone entered: $phone');
-    debugPrint('[DODO][Auth] Table: dev_auth');
-    debugPrint('[DODO][Auth] Column queried: phone');
-
     final row = await _client
         .from('dev_auth')
         .select('phone')
         .eq('phone', phone)
         .maybeSingle();
 
-    debugPrint('[DODO][Auth] Query result: $row');
-
     if (row == null) {
-      debugPrint('[DODO][Auth] Phone not found — no row matched phone=$phone in dev_auth');
       throw Exception('This number is not registered.');
     }
   }
@@ -48,29 +43,30 @@ class AuthService {
     await prefs.setString(_phoneKey, phone);
     debugPrint('[DODO][Auth] Login Success');
 
-    // Ensure customer record exists — non-fatal if it fails (auth itself succeeded).
+    // Ensure customer record exists, then register FCM token.
     try {
-      await _ensureCustomerExists(phone);
+      final customerId = await _ensureCustomerExists(phone);
+      await prefs.setString(_customerIdKey, customerId);
+      await CustomerFcmService.initialize(customerId, phone);
     } catch (e) {
-      debugPrint('[DODO][Customer] Warning: could not sync customer record after login: $e');
+      debugPrint('[DODO][Customer] Warning: could not sync customer record after login');
     }
   }
 
   // ── Customer record ────────────────────────────────────────────────────────
 
   /// Checks if a customer exists for [phone]; inserts a placeholder row if not.
-  Future<void> _ensureCustomerExists(String phone) async {
-    debugPrint('[DODO][Customer] Checking customers table for phone=$phone');
-
+  /// Returns the customer UUID in both cases.
+  Future<String> _ensureCustomerExists(String phone) async {
     final existing = await _client
         .from('customers')
-        .select('id, phone, full_name')
+        .select('id')
         .eq('phone', phone)
         .maybeSingle();
 
     if (existing != null) {
       debugPrint('[DODO][Customer] Customer found: id=${existing['id']}');
-      return;
+      return existing['id'] as String;
     }
 
     debugPrint('[DODO][Customer] Creating customer');
@@ -82,9 +78,10 @@ class AuthService {
           'email': '',
           'is_active': true,
         })
-        .select('id, phone')
+        .select('id')
         .single();
     debugPrint('[DODO][Customer] Customer created successfully: id=${created['id']}');
+    return created['id'] as String;
   }
 
   /// Updates the customers row for [phone] with name + email.
@@ -212,11 +209,33 @@ class AuthService {
     }
   }
 
+  // ── Session restore ────────────────────────────────────────────────────────
+
+  /// Called on app startup to re-register the FCM token for an existing session.
+  /// No-ops when no session exists or customerId is absent (legacy sessions).
+  Future<void> initFcmIfSessionExists() async {
+    final prefs = await SharedPreferences.getInstance();
+    final phone = prefs.getString(_phoneKey);
+    final customerId = prefs.getString(_customerIdKey);
+    if (phone == null || customerId == null) return;
+    try {
+      await CustomerFcmService.initialize(customerId, phone);
+    } catch (_) {}
+  }
+
   // ── Sign out ───────────────────────────────────────────────────────────────
 
   /// Clears the local session.
   Future<void> signOut() async {
     final prefs = await SharedPreferences.getInstance();
+    final phone = prefs.getString(_phoneKey);
+    final customerId = prefs.getString(_customerIdKey);
+    if (phone != null && customerId != null) {
+      try {
+        await CustomerFcmService.clearToken(customerId, phone);
+      } catch (_) {}
+    }
     await prefs.remove(_phoneKey);
+    await prefs.remove(_customerIdKey);
   }
 }

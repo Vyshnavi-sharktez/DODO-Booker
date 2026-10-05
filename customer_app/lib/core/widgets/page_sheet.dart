@@ -51,9 +51,11 @@ class PageSheet extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final size = MediaQuery.of(context).size;
+    final keyboardH = MediaQuery.of(context).viewInsets.bottom;
+    final availH = size.height - keyboardH;
     // Fixed dimensions shared by every dialog — never grow or shrink with content.
     final modalW = (size.width * 0.9).clamp(320.0, 900.0);
-    final modalH = (size.height * 0.88).clamp(400.0, size.height * 0.95);
+    final modalH = (availH * 0.88).clamp(400.0, availH * 0.95);
 
     final cardColor = isDark ? const Color(0xFF0F0F0F) : AppColors.surface;
 
@@ -81,39 +83,42 @@ class PageSheet extends StatelessWidget {
             ),
           ),
 
-          // Modal card
-          Center(
-            child: SizedBox(
-              width: modalW,
-              height: modalH,
-              child: Material(
-                color: cardColor,
-                borderRadius: BorderRadius.circular(24),
-                clipBehavior: Clip.antiAlias,
-                elevation: 24,
-                shadowColor: Colors.black38,
-                child: ScrollConfiguration(
-                  // Enable mouse-wheel and trackpad scrolling for all
-                  // scrollables hosted inside this sheet on web / desktop.
-                  behavior: ScrollConfiguration.of(context).copyWith(
-                    dragDevices: {
-                      PointerDeviceKind.touch,
-                      PointerDeviceKind.mouse,
-                      PointerDeviceKind.trackpad,
-                      PointerDeviceKind.stylus,
-                    },
-                  ),
-                  child: Column(
-                    children: [
-                      _SheetHeader(title: title, isDark: isDark),
-                      Expanded(
-                        child: MediaQuery.removePadding(
-                          context: context,
-                          removeTop: true,
-                          child: child,
+          // Modal card — Padding pushes it above the keyboard.
+          Padding(
+            padding: EdgeInsets.only(bottom: keyboardH),
+            child: Center(
+              child: SizedBox(
+                width: modalW,
+                height: modalH,
+                child: Material(
+                  color: cardColor,
+                  borderRadius: BorderRadius.circular(24),
+                  clipBehavior: Clip.antiAlias,
+                  elevation: 24,
+                  shadowColor: Colors.black38,
+                  child: ScrollConfiguration(
+                    // Enable mouse-wheel and trackpad scrolling for all
+                    // scrollables hosted inside this sheet on web / desktop.
+                    behavior: ScrollConfiguration.of(context).copyWith(
+                      dragDevices: {
+                        PointerDeviceKind.touch,
+                        PointerDeviceKind.mouse,
+                        PointerDeviceKind.trackpad,
+                        PointerDeviceKind.stylus,
+                      },
+                    ),
+                    child: Column(
+                      children: [
+                        _SheetHeader(title: title, isDark: isDark),
+                        Expanded(
+                          child: MediaQuery.removePadding(
+                            context: context,
+                            removeTop: true,
+                            child: child,
+                          ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
               ),

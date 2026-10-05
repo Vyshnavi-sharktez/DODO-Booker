@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../../core/config/app_url_config.dart';
+import '../../../../core/services/fcm_service.dart';
 import '../../data/auth_repository.dart';
 import '../../domain/models/admin_user.dart';
 
@@ -87,8 +88,9 @@ final isAuthenticatedProvider = Provider<bool>((ref) {
 
 class AuthNotifier extends StateNotifier<AsyncValue<void>> {
   final AuthRepository _repo;
+  final Ref _ref;
 
-  AuthNotifier(this._repo) : super(const AsyncValue.data(null));
+  AuthNotifier(this._repo, this._ref) : super(const AsyncValue.data(null));
 
   Future<void> login({required String email, required String password}) async {
     state = const AsyncValue.loading();
@@ -104,6 +106,13 @@ class AuthNotifier extends StateNotifier<AsyncValue<void>> {
 
   Future<void> logout() async {
     state = const AsyncValue.loading();
+    // Deactivate FCM token before destroying the Supabase session (RPC needs auth.uid())
+    final adminUser = _ref.read(currentAdminUserProvider);
+    if (adminUser != null) {
+      try {
+        await AdminFcmService.clearToken(adminUser.id);
+      } catch (_) {}
+    }
     try {
       await _repo.signOut();
       state = const AsyncValue.data(null);
@@ -121,7 +130,7 @@ class AuthNotifier extends StateNotifier<AsyncValue<void>> {
 
 final authNotifierProvider =
     StateNotifierProvider<AuthNotifier, AsyncValue<void>>((ref) {
-  return AuthNotifier(ref.watch(authRepositoryProvider));
+  return AuthNotifier(ref.watch(authRepositoryProvider), ref);
 });
 
 // ── One-shot success message shown on the login page after a password reset ────

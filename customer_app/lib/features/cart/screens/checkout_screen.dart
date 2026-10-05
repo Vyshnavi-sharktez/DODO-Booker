@@ -22,6 +22,7 @@ import '../../../models/addon_model.dart';
 import '../models/cart_item.dart';
 import '../providers/cart_provider.dart';
 import '../services/checkout_service.dart';
+import '../widgets/min_order_card.dart';
 import '../widgets/payment_selection_sheet.dart';
 import '../widgets/service_unavailable_dialog.dart';
 import '../../bookings/services/bookings_providers.dart';
@@ -194,20 +195,6 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     if (_selectedSlot == null) {
       _showError('Please select a time slot.');
       return;
-    }
-
-    // ── Minimum order amount (AMC items are exempt) ──────────────────────────
-    for (final item in items) {
-      if (item.isAmc) continue;
-      final minAmt = item.minimumOrderAmount;
-      if (minAmt != null && item.totalPrice < minAmt) {
-        _showError(
-          '"${item.serviceName}" requires a minimum order of '
-          '₹${minAmt.toInt()}. '
-          'Current total for this item: ₹${item.totalPrice.toInt()}.',
-        );
-        return;
-      }
     }
 
     // ── Active-status pre-check (catalog + custom services) ─────────────────
@@ -1006,11 +993,31 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       ),
     ];
 
+    // Resolve minimum-order state (same logic as _CheckoutBar in cart_screen.dart).
+    final globalMin =
+        ref.watch(globalMinOrderAmountProvider).valueOrNull ?? 100.0;
+    final checkItems =
+        items.where((i) => !i.isAmc && !i.isCustomService).toList();
+    double? effectiveFailingMin;
+    for (final item in checkItems) {
+      final effectiveMin = item.minimumOrderAmount ?? globalMin;
+      if (effectiveMin > 0 && _subtotal < effectiveMin) {
+        effectiveFailingMin = effectiveMin;
+        break;
+      }
+    }
+    final hasMinimumCard = effectiveFailingMin != null ||
+        checkItems.any((i) => (i.minimumOrderAmount ?? 0) > 0);
+    final minOrderMet = effectiveFailingMin == null;
+
     final placeBar = _PlaceBookingBar(
       grandTotal: _grandTotal,
       loading: _placing,
-      enabled: !_placing && items.isNotEmpty,
+      enabled: !_placing && items.isNotEmpty && minOrderMet,
       onPressed: _placeBooking,
+      showMinOrderCard: hasMinimumCard,
+      effectiveFailingMin: effectiveFailingMin,
+      subtotal: _subtotal,
     );
 
     // ── Modal layout: Column with bounded Expanded + sticky footer ───────────
@@ -2182,12 +2189,18 @@ class _PlaceBookingBar extends StatelessWidget {
   final bool loading;
   final bool enabled;
   final VoidCallback onPressed;
+  final bool showMinOrderCard;
+  final double? effectiveFailingMin;
+  final double subtotal;
 
   const _PlaceBookingBar({
     required this.grandTotal,
     required this.loading,
     required this.enabled,
     required this.onPressed,
+    this.showMinOrderCard = false,
+    this.effectiveFailingMin,
+    this.subtotal = 0,
   });
 
   @override
@@ -2210,47 +2223,61 @@ class _PlaceBookingBar extends StatelessWidget {
           ),
         ],
       ),
-      child: Row(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
+          if (showMinOrderCard) ...[
+            MinOrderCard(
+              effectiveMinimum: effectiveFailingMin,
+              currentTotal: subtotal,
+            ),
+            const SizedBox(height: 10),
+          ],
+          Row(
             children: [
-              Text(
-                '₹${grandTotal.toInt()}',
-                style: tt.headlineSmall?.copyWith(
-                  color: AppColors.primary,
-                  fontWeight: FontWeight.w800,
+              Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '₹${grandTotal.toInt()}',
+                    style: tt.headlineSmall?.copyWith(
+                      color: AppColors.primary,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  Text(
+                    'incl. taxes',
+                    style: tt.labelSmall?.copyWith(color: AppColors.textHint),
+                  ),
+                ],
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: FilledButton(
+                  onPressed: enabled ? onPressed : null,
+                  style: FilledButton.styleFrom(
+                    minimumSize: const Size.fromHeight(48),
+                  ),
+                  child: loading
+                      ? const SizedBox(
+                          height: 20,
+                          width: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
+                      : Text(
+                          effectiveFailingMin != null
+                              ? 'Minimum Order Not Met'
+                              : 'Place Booking',
+                          style: const TextStyle(
+                              fontSize: 16, fontWeight: FontWeight.w700),
+                        ),
                 ),
               ),
-              Text(
-                'incl. taxes',
-                style: tt.labelSmall?.copyWith(color: AppColors.textHint),
-              ),
             ],
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: FilledButton(
-              onPressed: enabled ? onPressed : null,
-              style: FilledButton.styleFrom(
-                minimumSize: const Size.fromHeight(48),
-              ),
-              child: loading
-                  ? const SizedBox(
-                      height: 20,
-                      width: 20,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: Colors.white,
-                      ),
-                    )
-                  : const Text(
-                      'Place Booking',
-                      style: TextStyle(
-                          fontSize: 16, fontWeight: FontWeight.w700),
-                    ),
-            ),
           ),
         ],
       ),

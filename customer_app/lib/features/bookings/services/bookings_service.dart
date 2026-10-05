@@ -26,6 +26,7 @@ class BookingsService {
     booking_items(
       service_id,
       custom_service_id,
+      service_name,
       quantity,
       unit_price,
       total_price,

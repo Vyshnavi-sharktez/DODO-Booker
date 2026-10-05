@@ -1,4 +1,6 @@
-﻿import 'package:flutter/foundation.dart';
+﻿import 'dart:async';
+
+import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:uuid/uuid.dart';
 
@@ -345,6 +347,102 @@ class CatalogService {
       debugPrint('[CatalogService] checkAvailability($nodeId) error: $e');
       return (status: 'active', message: null);
     }
+  }
+
+  // ── Realtime streams ─────────────────────────────────────────────────────────
+
+  /// Live stream of all active top-level catalog nodes.
+  /// Emits the current list immediately, then re-emits whenever catalog_nodes
+  /// changes in Supabase so prices/availability update without any navigation.
+  ///
+  /// Requires Realtime enabled on the catalog_nodes table in Supabase.
+  Stream<List<CatalogNodeModel>> watchRootNodes() {
+    final controller = StreamController<List<CatalogNodeModel>>();
+
+    Future<void> reload() async {
+      if (controller.isClosed) return;
+      try {
+        final data = await fetchRootNodes();
+        if (!controller.isClosed) controller.add(data);
+      } catch (e, st) {
+        if (!controller.isClosed) controller.addError(e, st);
+      }
+    }
+
+    reload();
+
+    if (!_ready) {
+      controller.onCancel = () {
+        if (!controller.isClosed) controller.close();
+      };
+      return controller.stream;
+    }
+
+    final channel = _db.channel('catalog_root_nodes_watch')
+      ..onPostgresChanges(
+        event: PostgresChangeEvent.all,
+        schema: 'public',
+        table: 'catalog_nodes',
+        callback: (_) => reload(),
+      )
+      ..subscribe();
+
+    controller.onCancel = () async {
+      await _db.removeChannel(channel);
+      if (!controller.isClosed) controller.close();
+    };
+
+    return controller.stream;
+  }
+
+  /// Live stream of active direct children of [parentId].
+  /// Re-emits on any catalog_nodes or catalog_node_relationships change so
+  /// child service prices update in real time.
+  ///
+  /// Requires Realtime enabled on catalog_nodes and catalog_node_relationships.
+  Stream<List<CatalogNodeModel>> watchChildren(String parentId) {
+    final controller = StreamController<List<CatalogNodeModel>>();
+
+    Future<void> reload() async {
+      if (controller.isClosed) return;
+      try {
+        final data = await fetchChildren(parentId);
+        if (!controller.isClosed) controller.add(data);
+      } catch (e, st) {
+        if (!controller.isClosed) controller.addError(e, st);
+      }
+    }
+
+    reload();
+
+    if (!_ready) {
+      controller.onCancel = () {
+        if (!controller.isClosed) controller.close();
+      };
+      return controller.stream;
+    }
+
+    final channel = _db.channel('catalog_children_${parentId.hashCode}')
+      ..onPostgresChanges(
+        event: PostgresChangeEvent.all,
+        schema: 'public',
+        table: 'catalog_nodes',
+        callback: (_) => reload(),
+      )
+      ..onPostgresChanges(
+        event: PostgresChangeEvent.all,
+        schema: 'public',
+        table: 'catalog_node_relationships',
+        callback: (_) => reload(),
+      )
+      ..subscribe();
+
+    controller.onCancel = () async {
+      await _db.removeChannel(channel);
+      if (!controller.isClosed) controller.close();
+    };
+
+    return controller.stream;
   }
 
   /// Full-text search across all active catalog items.

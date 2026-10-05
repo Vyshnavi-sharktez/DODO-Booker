@@ -180,6 +180,26 @@ class CheckoutService {
       }
     }
 
+    // ── Minimum order amount enforcement ─────────────────────────────────────────
+    // Backend is authoritative: validates per-service override ?? global minimum.
+    final catalogServiceIds = items
+        .where((i) => !i.isAmc && !i.isCustomService)
+        .map((i) => i.serviceId)
+        .toSet()
+        .toList();
+    if (catalogServiceIds.isNotEmpty) {
+      final result = await _client.rpc('validate_cart_minimum_order', params: {
+        'p_service_ids': catalogServiceIds,
+        'p_subtotal': subtotal,
+      });
+      if (result is Map && result['passed'] == false) {
+        throw Exception(
+          result['message'] as String? ??
+              'Minimum order amount not met. Please add more services to continue.',
+        );
+      }
+    }
+
     // ── AMC contract: reuse existing active contract or create a new one ────
     // Reusing ensures every visit belongs to the same contract lifecycle.
     final amcItem = items.cast<CartItem?>().firstWhere(
@@ -403,6 +423,7 @@ class CheckoutService {
                 'custom_service_id': item.customServiceId
               else
                 'service_id': item.serviceId,
+              'service_name': item.serviceName,
               'quantity': item.quantity,
               'unit_price': item.unitPrice,
               'total_price': item.totalPrice,

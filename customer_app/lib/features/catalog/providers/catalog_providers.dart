@@ -10,9 +10,10 @@ final catalogServiceProvider =
     Provider<CatalogService>((ref) => CatalogService());
 
 /// All active top-level catalog items (no parent category).
+/// StreamProvider: updates in real time when catalog_nodes changes in Supabase.
 final rootCatalogNodesProvider =
-    FutureProvider<List<CatalogNodeModel>>((ref) {
-  return ref.read(catalogServiceProvider).fetchRootNodes();
+    StreamProvider<List<CatalogNodeModel>>((ref) {
+  return ref.read(catalogServiceProvider).watchRootNodes();
 });
 
 /// A single catalog node by ID (used for deep-link recovery).
@@ -22,9 +23,12 @@ final catalogNodeProvider =
 });
 
 /// Active direct children of a catalog node.
+/// StreamProvider: updates in real time when catalog_nodes or
+/// catalog_node_relationships change in Supabase.
 final catalogNodeChildrenProvider =
-    FutureProvider.family<List<CatalogNodeModel>, String>((ref, parentId) {
-  return ref.read(catalogServiceProvider).fetchChildren(parentId);
+    StreamProvider.autoDispose.family<List<CatalogNodeModel>, String>(
+        (ref, parentId) {
+  return ref.read(catalogServiceProvider).watchChildren(parentId);
 });
 
 /// FAQs for a catalog node scoped to a parent context.

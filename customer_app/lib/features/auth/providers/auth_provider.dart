@@ -13,6 +13,9 @@ class AuthNotifier extends StateNotifier<bool> {
 
   Future<void> _init() async {
     state = await _service.isAuthenticated();
+    if (state) {
+      _service.initFcmIfSessionExists().catchError((_) {});
+    }
   }
 
   void setAuthenticated(bool value) => state = value;

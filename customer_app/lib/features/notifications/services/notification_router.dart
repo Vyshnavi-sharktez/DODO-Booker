@@ -18,25 +18,62 @@ import '../models/notification_model.dart';
 /// Add one case here when a new feature needs notification routing — no widget
 /// files need to change.
 abstract final class CustomerNotificationRouter {
+  /// Called from in-app notification tiles.
+  /// Pops the notification panel first, then navigates.
   static Future<void> handle(
     BuildContext context,
     WidgetRef ref,
     NotificationModel n,
   ) async {
     if (n.entityId == null) return;
+    Navigator.of(context).pop();
+    await _routeByEntity(context, ref, n);
+  }
 
+  /// Called from FCM tap events (cold start / background / foreground local tap).
+  /// Does NOT call Navigator.pop() — there is no overlay to dismiss.
+  static Future<void> handleFromPush(
+    BuildContext context,
+    WidgetRef ref,
+    Map<String, dynamic> data,
+  ) async {
+    final n = _modelFromFcmData(data);
+    if (n.entityId == null) return;
+    await _routeByEntity(context, ref, n);
+  }
+
+  static NotificationModel _modelFromFcmData(Map<String, dynamic> data) {
+    String? nonEmpty(String? v) =>
+        (v != null && v.isNotEmpty) ? v : null;
+    return NotificationModel(
+      id: data['notification_id'] as String? ?? '',
+      userId: null,
+      userType: 'customer',
+      title: '',
+      message: '',
+      notificationType: data['notification_type'] as String?,
+      isRead: false,
+      createdAt: DateTime.now(),
+      entityType: nonEmpty(data['entity_type'] as String?),
+      entityId: nonEmpty(data['entity_id'] as String?),
+      parentNodeId: nonEmpty(data['parent_node_id'] as String?),
+      customerQuestionId: nonEmpty(data['customer_question_id'] as String?),
+    );
+  }
+
+  static Future<void> _routeByEntity(
+    BuildContext context,
+    WidgetRef ref,
+    NotificationModel n,
+  ) async {
     if (n.entityType == 'booking') {
       final isDesktop = MediaQuery.of(context).size.width >= 768;
       if (isDesktop) {
-        // On desktop, show booking details as a floating modal directly over
-        // the current page — no intermediate route needed.
-        final targetContext = Navigator.of(context).context;
-        Navigator.of(context).pop();
         final booking =
             await ref.read(bookingByIdProvider(n.entityId!).future);
-        if (booking != null && targetContext.mounted) {
+        if (booking != null && context.mounted) {
           PageSheet.show(
-            targetContext,
+            context,
             title: 'Booking Details',
             child: BookingDetailsScreen(booking: booking, inModal: true),
           );
@@ -44,62 +81,48 @@ abstract final class CustomerNotificationRouter {
       } else {
         final route =
             AppRoutes.notificationBooking.replaceFirst(':id', n.entityId!);
-        Navigator.of(context).pop();
-        GoRouter.of(context).push(route);
+        if (context.mounted) GoRouter.of(context).push(route);
       }
     } else if (n.entityType == 'custom_service_question') {
-      // Vendor answered a question on a custom service → open service sheet.
       final customServiceId = n.entityId!;
-      final targetContext = Navigator.of(context).context;
-      Navigator.of(context).pop();
-      if (targetContext.mounted) {
-        await openCustomServiceQA(targetContext, customServiceId);
+      if (context.mounted) {
+        await openCustomServiceQA(context, customServiceId);
       }
     } else if (n.entityType == 'service_faq' ||
         n.entityType == 'customer_question' ||
         n.notificationType == 'question_answered') {
-      // Admin answered a question on a catalog service → open catalog node.
       final serviceId = n.entityId!;
-      final targetContext = Navigator.of(context).context;
-      Navigator.of(context).pop();
       final node =
           await ref.read(catalogServiceProvider).fetchNode(serviceId);
-      if (node != null && targetContext.mounted) {
-        openCatalogNode(targetContext, node, parentId: n.parentNodeId);
+      if (node != null && context.mounted) {
+        openCatalogNode(context, node, parentId: n.parentNodeId);
       }
     } else if (n.entityType == 'service_warranty') {
-      // Admin approved or rejected a warranty claim → open warranty details.
       final warrantyId = n.entityId!;
-      final targetContext = Navigator.of(context).context;
-      Navigator.of(context).pop();
       final warranty =
           await ref.read(warrantyByIdProvider(warrantyId).future);
-      if (warranty != null && targetContext.mounted) {
+      if (warranty != null && context.mounted) {
         final booking =
             await ref.read(bookingByIdProvider(warranty.bookingId).future);
-        if (booking != null && targetContext.mounted) {
+        if (booking != null && context.mounted) {
           WarrantyDetailsScreen.showAsModal(
-            targetContext,
+            context,
             booking: booking,
             warranty: warranty,
           );
         }
       }
     } else if (n.entityType == 'refund_request') {
-      final targetContext = Navigator.of(context).context;
-      Navigator.of(context).pop();
-      if (targetContext.mounted) {
+      if (context.mounted) {
         PageSheet.show(
-          targetContext,
+          context,
           title: 'Refund Queries',
           child: RefundQueriesFlow(initialRequestId: n.entityId!),
         );
       }
     } else if (n.entityType == 'support_conversation') {
-      final targetContext = Navigator.of(context).context;
-      Navigator.of(context).pop();
-      if (targetContext.mounted) {
-        Navigator.of(targetContext).push(
+      if (context.mounted) {
+        Navigator.of(context).push(
           MaterialPageRoute(builder: (_) => const SupportChatScreen()),
         );
       }

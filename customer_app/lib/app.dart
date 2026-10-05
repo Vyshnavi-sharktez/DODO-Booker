@@ -1,8 +1,11 @@
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'core/services/local_notification_service.dart';
 import 'core/services/realtime_sync.dart';
 import 'core/theme/app_theme.dart';
 import 'core/theme/theme_provider.dart';
+import 'features/notifications/services/notification_router.dart';
 import 'routes/app_router.dart';
 
 class App extends ConsumerStatefulWidget {
@@ -19,9 +22,31 @@ class _AppState extends ConsumerState<App> with WidgetsBindingObserver {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    // Initialise the Realtime subscription. Not autoDispose — lives for the
-    // ProviderScope lifetime. ref.onDispose inside the provider closes the channel.
     ref.read(realtimeSyncProvider);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _setupFcmTapListeners());
+  }
+
+  void _setupFcmTapListeners() {
+    // Cold start: app was fully closed when notification was tapped
+    FirebaseMessaging.instance.getInitialMessage().then((message) {
+      if (message != null && mounted) {
+        CustomerNotificationRouter.handleFromPush(context, ref, message.data);
+      }
+    });
+
+    // Background → foreground: app was in background when notification was tapped
+    FirebaseMessaging.onMessageOpenedApp.listen((message) {
+      if (mounted) {
+        CustomerNotificationRouter.handleFromPush(context, ref, message.data);
+      }
+    });
+
+    // Foreground: user tapped local notification shown while app was open
+    LocalNotificationService.tapStream.listen((data) {
+      if (mounted) {
+        CustomerNotificationRouter.handleFromPush(context, ref, data);
+      }
+    });
   }
 
   @override
@@ -37,7 +62,6 @@ class _AppState extends ConsumerState<App> with WidgetsBindingObserver {
     } else if (state == AppLifecycleState.resumed) {
       final paused = _pausedAt;
       _pausedAt = null;
-      // After a long background gap Realtime may have missed events — full refetch.
       if (paused != null &&
           DateTime.now().difference(paused) > const Duration(minutes: 5)) {
         ref.read(realtimeSyncProvider).refetchAll();

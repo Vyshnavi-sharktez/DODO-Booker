@@ -55,9 +55,58 @@ class CartNotifier extends StateNotifier<List<CartItem>> {
   static const _storageKey = 'dodo_cart_v1';
 
   final _sync = CartSyncService();
+  RealtimeChannel? _catalogChannel;
 
   CartNotifier() : super([]) {
     _load();
+    _subscribeCatalogNodes();
+  }
+
+  // ── Realtime: catalog_nodes.minimum_order_amount ──────────────────────────
+
+  void _subscribeCatalogNodes() {
+    try {
+      _catalogChannel =
+          Supabase.instance.client.channel('cart_catalog_min_order')
+            ..onPostgresChanges(
+              event: PostgresChangeEvent.update,
+              schema: 'public',
+              table: 'catalog_nodes',
+              callback: _onCatalogNodeUpdated,
+            )
+            ..subscribe();
+    } catch (e) {
+      debugPrint('[DODO][Cart] _subscribeCatalogNodes failed: $e');
+    }
+  }
+
+  void _onCatalogNodeUpdated(PostgresChangePayload payload) {
+    final nodeId = payload.newRecord['id'] as String?;
+    if (nodeId == null) return;
+    final matches = state
+        .where((i) => i.serviceId == nodeId && !i.isAmc && !i.isCustomService)
+        .toList();
+    if (matches.isEmpty) return;
+    final newMin =
+        (payload.newRecord['minimum_order_amount'] as num?)?.toDouble();
+    if (matches.every((i) => i.minimumOrderAmount == newMin)) return;
+    state = [
+      for (final item in state)
+        if (item.serviceId == nodeId && !item.isAmc && !item.isCustomService)
+          item.withMinimumOrderAmount(newMin)
+        else
+          item,
+    ];
+    _save();
+  }
+
+  @override
+  void dispose() {
+    final ch = _catalogChannel;
+    if (ch != null) {
+      Supabase.instance.client.removeChannel(ch);
+    }
+    super.dispose();
   }
 
   // ── Persistence ───────────────────────────────────────────────────────────
@@ -476,4 +525,47 @@ final cartItemCountProvider = Provider<int>((ref) {
 
 final cartSubtotalProvider = Provider<double>((ref) {
   return ref.watch(cartProvider).fold(0.0, (sum, item) => sum + item.totalPrice);
+});
+
+/// Platform-wide minimum order amount, live-updated via Supabase Realtime.
+/// Subscribes to UPDATE events on the settings table so the cart/checkout UI
+/// reflects admin changes without navigation or app restart.
+final globalMinOrderAmountProvider =
+    StreamProvider.autoDispose<double>((ref) {
+  final controller = StreamController<double>();
+  final client = Supabase.instance.client;
+
+  Future<void> reload() async {
+    if (controller.isClosed) return;
+    try {
+      final row = await client
+          .from('settings')
+          .select('setting_value')
+          .eq('setting_key', 'min_booking_amount')
+          .maybeSingle();
+      final value =
+          double.tryParse(row?['setting_value'] as String? ?? '') ?? 100.0;
+      if (!controller.isClosed) controller.add(value);
+    } catch (_) {
+      if (!controller.isClosed) controller.add(100.0);
+    }
+  }
+
+  reload();
+
+  final channel = client.channel('customer_global_min_order')
+    ..onPostgresChanges(
+      event: PostgresChangeEvent.update,
+      schema: 'public',
+      table: 'settings',
+      callback: (_) => reload(),
+    )
+    ..subscribe();
+
+  ref.onDispose(() async {
+    await client.removeChannel(channel);
+    if (!controller.isClosed) controller.close();
+  });
+
+  return controller.stream;
 });

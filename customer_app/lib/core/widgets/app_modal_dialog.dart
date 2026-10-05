@@ -66,67 +66,73 @@ class AppModalDialog extends StatelessWidget {
             ),
           ),
         ),
-        // Modal card — capped at 88 % of screen height so tall content scrolls
-        // instead of growing off-screen.
-        SafeArea(
-          child: Center(
-            child: ConstrainedBox(
-              constraints: BoxConstraints(
-                maxWidth: maxWidth,
-                maxHeight: MediaQuery.of(context).size.height * 0.88,
-              ),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
-                child: Material(
-                  color: Colors.transparent,
-                  child: Container(
-                    decoration: BoxDecoration(
-                      color: AppColors.surface,
-                      borderRadius: BorderRadius.circular(20),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withAlpha(55),
-                          blurRadius: 48,
-                          offset: const Offset(0, 12),
-                        ),
-                      ],
-                    ),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        _ModalHeader(
-                          title: title,
-                          subtitle: subtitle,
-                          showClose: showClose,
-                        ),
-                        Flexible(
-                          child: scrollable
-                              ? ScrollConfiguration(
-                                  behavior: ScrollConfiguration.of(context)
-                                      .copyWith(
-                                    dragDevices: {
-                                      PointerDeviceKind.touch,
-                                      PointerDeviceKind.mouse,
-                                      PointerDeviceKind.trackpad,
-                                      PointerDeviceKind.stylus,
-                                    },
-                                  ),
-                                  child: Scrollbar(
-                                    thumbVisibility: true,
-                                    child: SingleChildScrollView(
-                                      padding: contentPadding,
-                                      primary: true,
-                                      child: child,
+        // Modal card — pushed up by keyboard inset so focused fields stay visible.
+        Padding(
+          padding: EdgeInsets.only(
+            bottom: MediaQuery.of(context).viewInsets.bottom,
+          ),
+          child: SafeArea(
+            child: Center(
+              child: ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxWidth: maxWidth,
+                  maxHeight: (MediaQuery.of(context).size.height -
+                          MediaQuery.of(context).viewInsets.bottom) *
+                      0.88,
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
+                  child: Material(
+                    color: Colors.transparent,
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: AppColors.surface,
+                        borderRadius: BorderRadius.circular(20),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withAlpha(55),
+                            blurRadius: 48,
+                            offset: const Offset(0, 12),
+                          ),
+                        ],
+                      ),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          _ModalHeader(
+                            title: title,
+                            subtitle: subtitle,
+                            showClose: showClose,
+                          ),
+                          Flexible(
+                            child: scrollable
+                                ? ScrollConfiguration(
+                                    behavior: ScrollConfiguration.of(context)
+                                        .copyWith(
+                                      dragDevices: {
+                                        PointerDeviceKind.touch,
+                                        PointerDeviceKind.mouse,
+                                        PointerDeviceKind.trackpad,
+                                        PointerDeviceKind.stylus,
+                                      },
                                     ),
+                                    child: Scrollbar(
+                                      thumbVisibility: true,
+                                      child: SingleChildScrollView(
+                                        padding: contentPadding,
+                                        primary: true,
+                                        child: child,
+                                      ),
+                                    ),
+                                  )
+                                : Padding(
+                                    padding: contentPadding,
+                                    child: child,
                                   ),
-                                )
-                              : Padding(
-                                  padding: contentPadding,
-                                  child: child,
-                                ),
-                        ),
-                      ],
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ),
