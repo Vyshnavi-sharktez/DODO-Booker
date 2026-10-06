@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/routes/route_names.dart';
-import '../../../../core/widgets/vendor_scaffold.dart';
+
 import '../../../auth/presentation/providers/auth_controller.dart';
 
 class SettingsPage extends ConsumerWidget {
@@ -38,9 +38,7 @@ class SettingsPage extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    return VendorScaffold(
-      title: 'Settings',
-      child: ListView(
+    return ListView(
         children: [
           const SizedBox(height: 8),
           const _SectionHeader('Account'),
@@ -57,7 +55,6 @@ class SettingsPage extends ConsumerWidget {
           ),
           const Divider(height: 1),
         ],
-      ),
     );
   }
 }

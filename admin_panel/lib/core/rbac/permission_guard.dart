@@ -47,6 +47,7 @@ const Map<String, String> routePermissions = {
   '/seo': 'settings.manage',
   '/landing-page': 'settings.manage',
   '/payment-config': 'settings.manage',
+  '/push-config': 'settings.manage',
   '/vendor-subscriptions': 'vendor.view',
   '/vendor-tiers': 'vendor.view',
   '/amc-plans': 'category.view',

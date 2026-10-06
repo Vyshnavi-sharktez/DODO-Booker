@@ -4,7 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/routes/route_names.dart';
-import '../../../../core/widgets/vendor_scaffold.dart';
+
 import '../../data/subscription_repository.dart';
 import '../../domain/models/subscription_plan.dart';
 import '../../domain/models/vendor_subscription.dart';
@@ -24,9 +24,7 @@ class SubscriptionPage extends ConsumerWidget {
         'subscription_enabled=${settingsAsync.valueOrNull?['subscription_enabled']}  '
         'enabled=$enabled');
 
-    return VendorScaffold(
-      title: 'My Subscription',
-      child: RefreshIndicator(
+    return RefreshIndicator(
         onRefresh: () async {
           ref.invalidate(mySubscriptionProvider);
           ref.invalidate(myCatalogSubscriptionsProvider);
@@ -95,8 +93,7 @@ class SubscriptionPage extends ConsumerWidget {
             ],
           ),
         ),
-      ),
-    );
+      );
   }
 
   void _browsePlans(BuildContext context) {

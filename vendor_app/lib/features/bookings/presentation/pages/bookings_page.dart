@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/widgets/empty_state_view.dart';
 import '../../../../core/widgets/error_view.dart';
-import '../../../../core/widgets/vendor_scaffold.dart';
+
 import '../../domain/models/booking.dart';
 import '../../../auth/presentation/providers/auth_controller.dart';
 import '../providers/bookings_provider.dart';
@@ -66,9 +66,7 @@ class _BookingsPageState extends ConsumerState<BookingsPage>
     ref.listen(activeBookingTrackerObserver, (_, __) {});
     final bookingsAsync = ref.watch(vendorBookingsProvider);
 
-    return VendorScaffold(
-      title: 'Bookings',
-      child: Column(
+    return Column(
         children: [
           Material(
             color: Theme.of(context).colorScheme.surface,
@@ -112,8 +110,7 @@ class _BookingsPageState extends ConsumerState<BookingsPage>
             ),
           ),
         ],
-      ),
-    );
+      );
   }
 
   Widget _buildBookingsList(List<Booking> bookings, String status,

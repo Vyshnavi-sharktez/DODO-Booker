@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/routes/route_names.dart';
-import '../../../../core/widgets/vendor_scaffold.dart';
+
 import '../../../auth/presentation/providers/auth_controller.dart';
 import '../../domain/models/subscription_plan.dart';
 import '../../domain/subscription_feature_registry.dart';
@@ -57,9 +57,7 @@ class _PlanConfirmationPageState
 
   @override
   Widget build(BuildContext context) {
-    return VendorScaffold(
-      title: 'Confirm Plan',
-      child: SingleChildScrollView(
+    return SingleChildScrollView(
         padding: const EdgeInsets.fromLTRB(16, 24, 16, 40),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -150,8 +148,7 @@ class _PlanConfirmationPageState
             ),
           ],
         ),
-      ),
-    );
+      );
   }
 }
 

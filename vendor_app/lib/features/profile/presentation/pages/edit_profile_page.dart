@@ -237,21 +237,15 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
     final isSaving =
         ref.watch(editProfileProvider).isLoading || _savingAreas;
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Edit Profile'),
-        backgroundColor: AppColors.primary,
-        foregroundColor: Colors.white,
-      ),
-      body: AbsorbPointer(
-        absorbing: isSaving,
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(16),
-          child: Form(
-            key: _formKey,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
+    return AbsorbPointer(
+      absorbing: isSaving,
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(16),
+        child: Form(
+          key: _formKey,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
                 _buildField(
                   controller: _businessNameCtrl,
                   label: 'Business Name',
@@ -409,8 +403,7 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
             ),
           ),
         ),
-      ),
-    );
+      );
   }
 
   Widget _buildField({

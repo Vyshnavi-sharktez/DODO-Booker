@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'route_names.dart';
+import '../widgets/vendor_scaffold.dart';
 import '../../features/auth/presentation/pages/login_page.dart';
 import '../../features/auth/presentation/pages/otp_page.dart';
 import '../../features/auth/presentation/pages/splash_page.dart';
@@ -67,6 +68,7 @@ final routerProvider = Provider<GoRouter>((ref) {
       };
     },
     routes: [
+      // ── Pre-auth / unauthenticated pages (no shell) ──────────────────────
       GoRoute(
         path: RoutePaths.splash,
         name: RouteNames.splash,
@@ -82,101 +84,108 @@ final routerProvider = Provider<GoRouter>((ref) {
         name: RouteNames.otp,
         builder: (context, state) => const OtpPage(),
       ),
-      GoRoute(
-        path: RoutePaths.dashboard,
-        name: RouteNames.dashboard,
-        builder: (context, state) => const DashboardPage(),
-      ),
-      GoRoute(
-        path: RoutePaths.bookings,
-        name: RouteNames.bookings,
-        builder: (context, state) {
-          final tab =
-              int.tryParse(state.uri.queryParameters['tab'] ?? '') ?? 0;
-          return BookingsPage(initialTabIndex: tab);
-        },
-      ),
-      GoRoute(
-        path: RoutePaths.bookingDetail,
-        name: RouteNames.bookingDetail,
-        builder: (context, state) => BookingDetailPage(
-          bookingId: state.pathParameters['id']!,
-        ),
-      ),
-      GoRoute(
-        path: RoutePaths.wallet,
-        name: RouteNames.wallet,
-        builder: (context, state) => const WalletPage(),
-      ),
-      GoRoute(
-        path: RoutePaths.services,
-        name: RouteNames.services,
-        builder: (context, state) {
-          final tab =
-              int.tryParse(state.uri.queryParameters['tab'] ?? '') ?? 0;
-          final subTab =
-              int.tryParse(state.uri.queryParameters['subTab'] ?? '') ?? 0;
-          return ServicesPage(initialTab: tab, initialSubTab: subTab);
-        },
-      ),
+      // ── Secondary edit pages (no shell — full-screen, own AppBar) ────────
       GoRoute(
         path: RoutePaths.addService,
         name: RouteNames.addService,
         builder: (context, state) => const AddServicePage(),
       ),
-      GoRoute(
-        path: RoutePaths.notifications,
-        name: RouteNames.notifications,
-        builder: (context, state) => const NotificationsPage(),
-      ),
-      GoRoute(
-        path: RoutePaths.profile,
-        name: RouteNames.profile,
-        builder: (context, state) => const ProfilePage(),
-      ),
-      GoRoute(
-        path: RoutePaths.editProfile,
-        name: RouteNames.editProfile,
-        builder: (context, state) {
-          final profile = state.extra as VendorProfile;
-          return EditProfilePage(profile: profile);
-        },
-      ),
-      GoRoute(
-        path: RoutePaths.documents,
-        name: RouteNames.documents,
-        builder: (context, state) => const DocumentsPage(),
-      ),
-      GoRoute(
-        path: RoutePaths.settings,
-        name: RouteNames.settings,
-        builder: (context, state) => const SettingsPage(),
-      ),
-      GoRoute(
-        path: RoutePaths.subscription,
-        name: RouteNames.subscription,
-        builder: (context, state) => const SubscriptionPage(),
-      ),
-      GoRoute(
-        path: RoutePaths.browsePlans,
-        name: RouteNames.browsePlans,
-        builder: (context, state) => const BrowsePlansPage(),
-      ),
-      GoRoute(
-        path: RoutePaths.planConfirmation,
-        name: RouteNames.planConfirmation,
-        builder: (context, state) {
-          final plan = state.extra as SubscriptionPlan;
-          return PlanConfirmationPage(plan: plan);
-        },
-      ),
-      GoRoute(
-        path: RoutePaths.payment,
-        name: RouteNames.payment,
-        builder: (context, state) {
-          final info = state.extra as PendingPaymentInfo;
-          return PaymentPage(info: info);
-        },
+      // ── Authenticated pages — wrapped in VendorScaffold shell ─────────────
+      ShellRoute(
+        builder: (context, state, child) => VendorScaffold(child: child),
+        routes: [
+          GoRoute(
+            path: RoutePaths.dashboard,
+            name: RouteNames.dashboard,
+            builder: (context, state) => const DashboardPage(),
+          ),
+          GoRoute(
+            path: RoutePaths.bookings,
+            name: RouteNames.bookings,
+            builder: (context, state) {
+              final tab =
+                  int.tryParse(state.uri.queryParameters['tab'] ?? '') ?? 0;
+              return BookingsPage(initialTabIndex: tab);
+            },
+          ),
+          GoRoute(
+            path: RoutePaths.bookingDetail,
+            name: RouteNames.bookingDetail,
+            builder: (context, state) => BookingDetailPage(
+              bookingId: state.pathParameters['id']!,
+            ),
+          ),
+          GoRoute(
+            path: RoutePaths.wallet,
+            name: RouteNames.wallet,
+            builder: (context, state) => const WalletPage(),
+          ),
+          GoRoute(
+            path: RoutePaths.services,
+            name: RouteNames.services,
+            builder: (context, state) {
+              final tab =
+                  int.tryParse(state.uri.queryParameters['tab'] ?? '') ?? 0;
+              final subTab =
+                  int.tryParse(state.uri.queryParameters['subTab'] ?? '') ?? 0;
+              return ServicesPage(initialTab: tab, initialSubTab: subTab);
+            },
+          ),
+          GoRoute(
+            path: RoutePaths.notifications,
+            name: RouteNames.notifications,
+            builder: (context, state) => const NotificationsPage(),
+          ),
+          GoRoute(
+            path: RoutePaths.profile,
+            name: RouteNames.profile,
+            builder: (context, state) => const ProfilePage(),
+          ),
+          GoRoute(
+            path: RoutePaths.editProfile,
+            name: RouteNames.editProfile,
+            builder: (context, state) {
+              final profile = state.extra as VendorProfile;
+              return EditProfilePage(profile: profile);
+            },
+          ),
+          GoRoute(
+            path: RoutePaths.documents,
+            name: RouteNames.documents,
+            builder: (context, state) => const DocumentsPage(),
+          ),
+          GoRoute(
+            path: RoutePaths.settings,
+            name: RouteNames.settings,
+            builder: (context, state) => const SettingsPage(),
+          ),
+          GoRoute(
+            path: RoutePaths.subscription,
+            name: RouteNames.subscription,
+            builder: (context, state) => const SubscriptionPage(),
+          ),
+          GoRoute(
+            path: RoutePaths.browsePlans,
+            name: RouteNames.browsePlans,
+            builder: (context, state) => const BrowsePlansPage(),
+          ),
+          GoRoute(
+            path: RoutePaths.planConfirmation,
+            name: RouteNames.planConfirmation,
+            builder: (context, state) {
+              final plan = state.extra as SubscriptionPlan;
+              return PlanConfirmationPage(plan: plan);
+            },
+          ),
+          GoRoute(
+            path: RoutePaths.payment,
+            name: RouteNames.payment,
+            builder: (context, state) {
+              final info = state.extra as PendingPaymentInfo;
+              return PaymentPage(info: info);
+            },
+          ),
+        ],
       ),
     ],
   );
