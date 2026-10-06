@@ -51,7 +51,8 @@ class _MyBookingsScreenState extends ConsumerState<MyBookingsScreen>
         title: const Text('My Bookings'),
         bottom: TabBar(
           controller: _tabController,
-          isScrollable: false,
+          isScrollable: true,
+          tabAlignment: TabAlignment.start,
           labelStyle: const TextStyle(
             fontSize: 13,
             fontWeight: FontWeight.w700,

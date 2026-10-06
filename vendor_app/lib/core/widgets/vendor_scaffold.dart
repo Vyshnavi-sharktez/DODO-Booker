@@ -117,9 +117,12 @@ class VendorScaffold extends ConsumerWidget {
     final unreadCount = ref.watch(vendorUnreadCountProvider);
     final isPanelOpen = ref.watch(vendorProfilePanelProvider);
 
-    // True only when on one of the five primary tab pages.
-    final isTabPage = _tabs.any((t) => t.path == location);
     final isRootTab = location == RoutePaths.dashboard;
+
+    final isTabPage = location == RoutePaths.dashboard ||
+        location == RoutePaths.bookings ||
+        location == RoutePaths.services ||
+        location == RoutePaths.settings;
 
     void openPanel() =>
         ref.read(vendorProfilePanelProvider.notifier).state = true;
@@ -152,15 +155,15 @@ class VendorScaffold extends ConsumerWidget {
         }
 
         return PopScope(
-          canPop: !isTabPage || isRootTab,
+          canPop: context.canPop() || isRootTab,
           onPopInvokedWithResult: (didPop, _) {
             if (!didPop) context.go(RoutePaths.dashboard);
           },
           child: isWide
               ? _buildWideLayout(context, location, title, actions, unreadCount,
-                  isPanelOpen, openProfilePanel, closePanel)
+                  isPanelOpen, openProfilePanel, closePanel, isTabPage)
               : _buildNarrowLayout(context, location, title, actions,
-                  currentIndex, unreadCount, openProfilePanel),
+                  currentIndex, unreadCount, openProfilePanel, isTabPage),
         );
       },
     );
@@ -177,6 +180,7 @@ class VendorScaffold extends ConsumerWidget {
     bool isPanelOpen,
     VoidCallback openProfilePanel,
     VoidCallback closePanel,
+    bool isTabPage,
   ) {
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -198,6 +202,15 @@ class VendorScaffold extends ConsumerWidget {
                       title: title,
                       actions: actions,
                       unreadCount: unreadCount,
+                      onBack: isTabPage
+                          ? null
+                          : () {
+                              if (context.canPop()) {
+                                context.pop();
+                              } else {
+                                context.go(RoutePaths.dashboard);
+                              }
+                            },
                       onNotifTap: () => showDialog(
                         context: context,
                         barrierColor: Colors.black12,
@@ -245,9 +258,24 @@ class VendorScaffold extends ConsumerWidget {
     int currentIndex,
     int unreadCount,
     VoidCallback openProfilePanel,
+    bool isTabPage,
   ) {
+    final canGoBack = !isTabPage;
     return Scaffold(
       appBar: AppBar(
+        automaticallyImplyLeading: false,
+        leading: canGoBack
+            ? IconButton(
+                icon: const Icon(Icons.arrow_back_ios_new_rounded),
+                onPressed: () {
+                  if (context.canPop()) {
+                    context.pop();
+                  } else {
+                    context.go(RoutePaths.dashboard);
+                  }
+                },
+              )
+            : null,
         title: Text(title),
         actions: [
           ...?actions,
@@ -492,12 +520,14 @@ class _VendorTopHeader extends StatelessWidget {
     required this.actions,
     required this.unreadCount,
     required this.onNotifTap,
+    this.onBack,
   });
 
   final String title;
   final List<Widget>? actions;
   final int unreadCount;
   final VoidCallback onNotifTap;
+  final VoidCallback? onBack;
 
   @override
   Widget build(BuildContext context) {
@@ -510,6 +540,15 @@ class _VendorTopHeader extends StatelessWidget {
       ),
       child: Row(
         children: [
+          if (onBack != null) ...[
+            IconButton(
+              icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 18),
+              onPressed: onBack,
+              color: AppColors.textPrimary,
+              tooltip: 'Back',
+            ),
+            const SizedBox(width: 4),
+          ],
           Expanded(
             child: Text(
               title,

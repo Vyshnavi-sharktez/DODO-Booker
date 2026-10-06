@@ -85,7 +85,7 @@ class DashboardPage extends ConsumerWidget {
                             value: '${stats.assignedCount}',
                             icon: Icons.assignment_ind_outlined,
                             color: AppColors.statusAssigned,
-                            onTap: () => context.goNamed(
+                            onTap: () => context.pushNamed(
                               RouteNames.bookings,
                               queryParameters: {'tab': '0'},
                             ),
@@ -95,7 +95,7 @@ class DashboardPage extends ConsumerWidget {
                             value: '${stats.inProgressCount}',
                             icon: Icons.pending_actions_outlined,
                             color: AppColors.statusInProgress,
-                            onTap: () => context.goNamed(
+                            onTap: () => context.pushNamed(
                               RouteNames.bookings,
                               queryParameters: {'tab': '1'},
                             ),
@@ -105,7 +105,7 @@ class DashboardPage extends ConsumerWidget {
                             value: '${stats.completedCount}',
                             icon: Icons.check_circle_outline_rounded,
                             color: AppColors.statusCompleted,
-                            onTap: () => context.goNamed(
+                            onTap: () => context.pushNamed(
                               RouteNames.bookings,
                               queryParameters: {'tab': '2'},
                             ),
@@ -115,7 +115,7 @@ class DashboardPage extends ConsumerWidget {
                             value: '${stats.rejectedCount}',
                             icon: Icons.cancel_outlined,
                             color: AppColors.error,
-                            onTap: () => context.goNamed(
+                            onTap: () => context.pushNamed(
                               RouteNames.bookings,
                               queryParameters: {'tab': '3'},
                             ),
@@ -125,14 +125,14 @@ class DashboardPage extends ConsumerWidget {
                             value: FormatUtils.compact(stats.totalEarnings),
                             icon: Icons.account_balance_wallet_outlined,
                             color: AppColors.success,
-                            onTap: () => context.go(RoutePaths.wallet),
+                            onTap: () => context.push(RoutePaths.wallet),
                           ),
                           StatsCard(
                             label: "Today's Bookings",
                             value: '${stats.todayCount}',
                             icon: Icons.today_outlined,
                             color: const Color(0xFFDD6B20),
-                            onTap: () => context.goNamed(
+                            onTap: () => context.pushNamed(
                               RouteNames.bookings,
                               queryParameters: {'tab': '5'},
                             ),
@@ -148,7 +148,7 @@ class DashboardPage extends ConsumerWidget {
                         today: stats.todayEarnings,
                         weekly: stats.weeklyEarnings,
                         monthly: stats.monthlyEarnings,
-                        onTap: () => context.go(RoutePaths.wallet),
+                        onTap: () => context.push(RoutePaths.wallet),
                       ),
                       const SizedBox(height: 28),
 
@@ -159,7 +159,7 @@ class DashboardPage extends ConsumerWidget {
                         crossAxisCount: 3,
                         crossAxisSpacing: 12,
                         mainAxisSpacing: 12,
-                        childAspectRatio: 1.1,
+                        childAspectRatio: constraints.maxWidth < 370 ? 0.82 : 0.95,
                         shrinkWrap: true,
                         physics: const NeverScrollableScrollPhysics(),
                         children: [
@@ -169,7 +169,7 @@ class DashboardPage extends ConsumerWidget {
                                 '${stats.completionRate.toStringAsFixed(1)}%',
                             icon: Icons.check_circle_outline_rounded,
                             color: AppColors.success,
-                            onTap: () => context.goNamed(
+                            onTap: () => context.pushNamed(
                               RouteNames.bookings,
                               queryParameters: {'tab': '2'},
                             ),
@@ -180,7 +180,7 @@ class DashboardPage extends ConsumerWidget {
                                 '${stats.rejectionRate.toStringAsFixed(1)}%',
                             icon: Icons.cancel_outlined,
                             color: AppColors.error,
-                            onTap: () => context.goNamed(
+                            onTap: () => context.pushNamed(
                               RouteNames.bookings,
                               queryParameters: {'tab': '3'},
                             ),
@@ -228,17 +228,17 @@ class DashboardPage extends ConsumerWidget {
                           _QuickAction(
                             label: 'Manage Services',
                             icon: Icons.home_repair_service_outlined,
-                            onTap: () => context.go(RoutePaths.services),
+                            onTap: () => context.push(RoutePaths.services),
                           ),
                           _QuickAction(
                             label: 'View Bookings',
                             icon: Icons.book_online_outlined,
-                            onTap: () => context.go(RoutePaths.bookings),
+                            onTap: () => context.push(RoutePaths.bookings),
                           ),
                           _QuickAction(
                             label: 'Edit Profile',
                             icon: Icons.person_outline_rounded,
-                            onTap: () => context.go(RoutePaths.profile),
+                            onTap: () => context.push(RoutePaths.profile),
                           ),
                           _QuickAction(
                             label: 'Notifications',
