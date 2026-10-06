@@ -2259,27 +2259,30 @@ class _MyServicesSubTabBar extends StatelessWidget {
         color: Colors.white,
         border: Border(bottom: BorderSide(color: AppColors.border)),
       ),
-      child: Row(
-        children: [
-          _SubTab(
-            label: 'DODO Services',
-            count: dodoCount,
-            isSelected: selected == 0,
-            onTap: () => onSelect(0),
-          ),
-          _SubTab(
-            label: 'Custom Services',
-            count: customCount,
-            isSelected: selected == 1,
-            onTap: () => onSelect(1),
-          ),
-          _SubTab(
-            label: 'Questions',
-            count: questionsCount,
-            isSelected: selected == 2,
-            onTap: () => onSelect(2),
-          ),
-        ],
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          children: [
+            _SubTab(
+              label: 'DODO Services',
+              count: dodoCount,
+              isSelected: selected == 0,
+              onTap: () => onSelect(0),
+            ),
+            _SubTab(
+              label: 'Custom Services',
+              count: customCount,
+              isSelected: selected == 1,
+              onTap: () => onSelect(1),
+            ),
+            _SubTab(
+              label: 'Questions',
+              count: questionsCount,
+              isSelected: selected == 2,
+              onTap: () => onSelect(2),
+            ),
+          ],
+        ),
       ),
     );
   }
