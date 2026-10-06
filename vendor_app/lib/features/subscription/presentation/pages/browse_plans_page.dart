@@ -4,7 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/routes/route_names.dart';
-import '../../../../core/widgets/vendor_scaffold.dart';
+
 import '../../data/subscription_repository.dart';
 import '../../domain/models/subscription_plan.dart';
 import '../../domain/models/vendor_subscription.dart';
@@ -58,9 +58,7 @@ class BrowsePlansPage extends ConsumerWidget {
         .where((s) => s.catalogNodeId == plan.catalogNodeId)
         .firstOrNull;
 
-    return VendorScaffold(
-      title: 'Browse Plans',
-      child: RefreshIndicator(
+    return RefreshIndicator(
         onRefresh: () async {
           ref.invalidate(activePlansProvider);
           ref.invalidate(catalogSubscriptionOfferingsProvider);
@@ -167,7 +165,6 @@ class BrowsePlansPage extends ConsumerWidget {
                           ],
                         ],
                       ),
-      ),
     );
   }
 }

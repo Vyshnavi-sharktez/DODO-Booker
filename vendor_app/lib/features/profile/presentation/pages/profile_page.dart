@@ -4,45 +4,27 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/routes/route_names.dart';
-import '../../../../core/widgets/vendor_scaffold.dart';
+
 import '../../../subscription/presentation/providers/subscription_provider.dart';
 import '../../domain/models/vendor_profile.dart';
 import '../providers/profile_provider.dart';
 import '../widgets/profile_header.dart';
-import 'edit_profile_page.dart';
-
 class ProfilePage extends ConsumerWidget {
   const ProfilePage({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final asyncProfile = ref.watch(vendorProfileProvider);
-    final profile = asyncProfile.valueOrNull;
 
-    return VendorScaffold(
-      title: 'My Profile',
-      actions: [
-        if (profile != null)
-          IconButton(
-            icon: const Icon(Icons.edit_outlined),
-            tooltip: 'Edit Profile',
-            onPressed: () => Navigator.of(context).push(
-              MaterialPageRoute(
-                builder: (_) => EditProfilePage(profile: profile),
-              ),
-            ),
-          ),
-      ],
-      child: asyncProfile.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (err, _) => _ErrorView(
-          message: err.toString(),
-          onRetry: () => ref.refresh(vendorProfileProvider),
-        ),
-        data: (profile) => profile == null
-            ? const _EmptyView()
-            : _ProfileBody(profile: profile),
+    return asyncProfile.when(
+      loading: () => const Center(child: CircularProgressIndicator()),
+      error: (err, _) => _ErrorView(
+        message: err.toString(),
+        onRetry: () => ref.refresh(vendorProfileProvider),
       ),
+      data: (profile) => profile == null
+          ? const _EmptyView()
+          : _ProfileBody(profile: profile),
     );
   }
 }
@@ -131,7 +113,18 @@ class _ProfileBody extends StatelessWidget {
       padding: const EdgeInsets.symmetric(vertical: 16),
       children: [
         ProfileHeader(profile: profile),
-        const SizedBox(height: 16),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+          child: Align(
+            alignment: Alignment.centerRight,
+            child: OutlinedButton.icon(
+              onPressed: () => context.push(RoutePaths.editProfile, extra: profile),
+              icon: const Icon(Icons.edit_outlined, size: 16),
+              label: const Text('Edit Profile'),
+            ),
+          ),
+        ),
+        const SizedBox(height: 8),
         _InfoSection(
           title: 'Contact',
           items: [

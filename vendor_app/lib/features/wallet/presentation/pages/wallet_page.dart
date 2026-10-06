@@ -16,21 +16,7 @@ class WalletPage extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final asyncProfile = ref.watch(vendorProfileProvider);
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text(
-          'Wallet & Earnings',
-          style: TextStyle(
-            fontSize: 18,
-            fontWeight: FontWeight.w600,
-            color: AppColors.textPrimary,
-          ),
-        ),
-        backgroundColor: AppColors.surface,
-        elevation: 0,
-        centerTitle: false,
-      ),
-      body: asyncProfile.when(
+    return asyncProfile.when(
         data: (profile) {
           if (profile == null || profile.id.isEmpty) {
             return EmptyStateView(
@@ -129,7 +115,6 @@ class WalletPage extends ConsumerWidget {
           message: 'Failed to load profile: $error',
           onRetry: () => ref.refresh(vendorProfileProvider),
         ),
-      ),
-    );
+      );
   }
 }

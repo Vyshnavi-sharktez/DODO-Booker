@@ -35,6 +35,7 @@ import '../../features/surge_fees/presentation/pages/surge_fee_settings_page.dar
 import '../../features/seo/presentation/pages/seo_management_page.dart';
 import '../../features/landing_page_cms/presentation/pages/landing_page_cms_page.dart';
 import '../../features/payment_config/presentation/pages/payment_config_page.dart';
+import '../../features/push_config/presentation/pages/push_config_page.dart';
 import '../../features/vendor_subscriptions/presentation/pages/vendor_subscriptions_page.dart';
 import '../../features/vendor_tiers/presentation/pages/vendor_tiers_page.dart';
 import '../../features/amc_plans/presentation/pages/amc_plans_page.dart';
@@ -416,6 +417,13 @@ final routerProvider = Provider<GoRouter>((ref) {
             name: 'paymentConfig',
             pageBuilder: (context, state) => const NoTransitionPage(
               child: PaymentConfigPage(),
+            ),
+          ),
+          GoRoute(
+            path: '/dashboard/push-config',
+            name: 'pushConfig',
+            pageBuilder: (context, state) => const NoTransitionPage(
+              child: PushConfigPage(),
             ),
           ),
           GoRoute(

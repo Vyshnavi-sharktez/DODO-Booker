@@ -7,7 +7,7 @@ import '../../../../core/constants/app_colors.dart';
 import '../../../../core/routes/route_names.dart';
 import '../../../../core/widgets/empty_state_view.dart';
 import '../../../../core/widgets/error_view.dart';
-import '../../../../core/widgets/vendor_scaffold.dart';
+
 import '../../../../core/widgets/confirmation_dialog.dart';
 import '../../../auth/presentation/providers/auth_controller.dart';
 import '../../../customer_questions/domain/models/customer_question_model.dart';
@@ -139,9 +139,7 @@ class _ServicesPageState extends ConsumerState<ServicesPage> {
     // catalogAsync also resolves, so an empty map during loading is fine.
     final parentOf = ref.watch(catalogParentMapProvider).valueOrNull ?? const {};
 
-    return VendorScaffold(
-      title: 'Services',
-      child: Column(
+    return Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           _WideToolbar(
@@ -207,46 +205,50 @@ class _ServicesPageState extends ConsumerState<ServicesPage> {
             ),
           ),
         ],
-      ),
-    );
+      );
   }
 
   Widget _buildNarrow() {
     final requestsAsync = ref.watch(myServiceRequestsProvider);
-    return VendorScaffold(
-      title: 'Services',
-      actions: [
-        if (_tab != 2)
-          VendorSearchButton(
-            mode: _tab == 0
-                ? VendorSearchMode.myServices
-                : VendorSearchMode.allServices,
-          ),
-        if (_tab == 0)
-          IconButton(
-            icon: const Icon(Icons.add_rounded),
-            tooltip: 'Add Service',
-            onPressed: () => _navigateToAdd(context),
-          ),
-      ],
-      child: Column(
-        children: [
-          _NarrowTabSwitcher(
-              selected: _tab, onSelect: (i) => setState(() => _tab = i)),
-          Expanded(
-            child: IndexedStack(
-              index: _tab,
+    return Column(
+      children: [
+        // Action buttons row (search / add) inline since AppBar is the shell's.
+        if (_tab != 2 || _tab == 0)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(8, 4, 4, 0),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.end,
               children: [
-                _MyServicesNarrow(
-                    onSwitchToAllServices: () => setState(() => _tab = 1),
-                    initialSubTab: widget.initialSubTab),
-                _AllServicesNarrow(addingIds: _addingIds, onAdd: _addService),
-                _MyRequestsNarrow(requestsAsync: requestsAsync),
+                if (_tab != 2)
+                  VendorSearchButton(
+                    mode: _tab == 0
+                        ? VendorSearchMode.myServices
+                        : VendorSearchMode.allServices,
+                  ),
+                if (_tab == 0)
+                  IconButton(
+                    icon: const Icon(Icons.add_rounded),
+                    tooltip: 'Add Service',
+                    onPressed: () => _navigateToAdd(context),
+                  ),
               ],
             ),
           ),
-        ],
-      ),
+        _NarrowTabSwitcher(
+            selected: _tab, onSelect: (i) => setState(() => _tab = i)),
+        Expanded(
+          child: IndexedStack(
+            index: _tab,
+            children: [
+              _MyServicesNarrow(
+                  onSwitchToAllServices: () => setState(() => _tab = 1),
+                  initialSubTab: widget.initialSubTab),
+              _AllServicesNarrow(addingIds: _addingIds, onAdd: _addService),
+              _MyRequestsNarrow(requestsAsync: requestsAsync),
+            ],
+          ),
+        ),
+      ],
     );
   }
 

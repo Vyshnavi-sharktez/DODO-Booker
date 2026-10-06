@@ -81,7 +81,7 @@ abstract final class CustomerNotificationRouter {
       } else {
         final route =
             AppRoutes.notificationBooking.replaceFirst(':id', n.entityId!);
-        if (context.mounted) GoRouter.of(context).push(route);
+        if (context.mounted) appRouter.push(route);
       }
     } else if (n.entityType == 'custom_service_question') {
       final customServiceId = n.entityId!;

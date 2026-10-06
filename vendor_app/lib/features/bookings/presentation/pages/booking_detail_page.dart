@@ -16,9 +16,7 @@ class BookingDetailPage extends ConsumerWidget {
     debugPrint('[NOTIF][Vendor] destination reached — bookingId=$bookingId');
     final asyncBooking = ref.watch(bookingDetailProvider(bookingId));
 
-    return Scaffold(
-      appBar: AppBar(title: const Text('Booking Detail')),
-      body: asyncBooking.when(
+    return asyncBooking.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) {
           debugPrint('[NOTIF][Vendor] booking load ERROR — $e');
@@ -36,8 +34,7 @@ class BookingDetailPage extends ConsumerWidget {
             child: BookingCard(booking: booking),
           );
         },
-      ),
-    );
+      );
   }
 }
 

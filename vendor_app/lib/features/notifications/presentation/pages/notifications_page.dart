@@ -118,9 +118,7 @@ class _NotificationsPageState extends ConsumerState<NotificationsPage> {
   Widget build(BuildContext context) {
     final notificationsAsync = ref.watch(vendorNotificationsProvider);
 
-    return VendorScaffold(
-      title: 'Notifications',
-      child: notificationsAsync.when(
+    return notificationsAsync.when(
         loading: () =>
             const Center(child: CircularProgressIndicator()),
         error: (e, _) => _ErrorState(
@@ -185,7 +183,6 @@ class _NotificationsPageState extends ConsumerState<NotificationsPage> {
             ),
           );
         },
-      ),
     );
   }
 }

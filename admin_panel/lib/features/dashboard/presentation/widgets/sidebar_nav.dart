@@ -275,6 +275,12 @@ const _kNavGroups = <_NavGroup>[
         requiredPermission: 'settings.manage',
       ),
       _NavItem(
+        label: 'Push Notifications',
+        icon: Icons.notifications_active_rounded,
+        route: '/dashboard/push-config',
+        requiredPermission: 'settings.manage',
+      ),
+      _NavItem(
         label: 'SEO',
         icon: Icons.travel_explore_rounded,
         route: '/dashboard/seo',

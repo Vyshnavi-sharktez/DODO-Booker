@@ -6,7 +6,7 @@ import '../../../../core/constants/app_colors.dart';
 import '../../../../core/routes/route_names.dart';
 import '../../../../core/utils/format_utils.dart';
 import '../../../../core/widgets/clickable.dart';
-import '../../../../core/widgets/vendor_scaffold.dart';
+
 import '../../../auth/presentation/providers/auth_controller.dart';
 import '../../../bookings/presentation/widgets/booking_status_badge.dart';
 import '../../../notifications/presentation/providers/notifications_provider.dart';
@@ -38,9 +38,7 @@ class DashboardPage extends ConsumerWidget {
           '${d == null ? "null" : "loaded (assigned=${d.assignedCount})"}'),
     );
 
-    return VendorScaffold(
-      title: 'Dashboard',
-      child: statsAsync.when(
+    return statsAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => _ErrorState(
           message: e.toString(),
@@ -58,6 +56,7 @@ class DashboardPage extends ConsumerWidget {
                 final hPad = isWide ? 24.0 : 16.0;
 
                 return SingleChildScrollView(
+                  key: const PageStorageKey('dashboard-scroll'),
                   physics: const AlwaysScrollableScrollPhysics(),
                   padding: EdgeInsets.fromLTRB(hPad, 24, hPad, 48),
                   child: Column(
@@ -256,7 +255,6 @@ class DashboardPage extends ConsumerWidget {
             ),
           );
         },
-      ),
     );
   }
 

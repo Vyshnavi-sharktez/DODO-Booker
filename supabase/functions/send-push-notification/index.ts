@@ -170,13 +170,30 @@ Deno.serve(async (req: Request) => {
     return new Response("Method not allowed", { status: 405 });
   }
 
-  // ── 1. Authenticate request using PUSH_FUNCTION_SECRET (timing-safe) ────────
-  const pushSecret = Deno.env.get("PUSH_FUNCTION_SECRET");
+  // ── 1. Create Supabase admin client ──────────────────────────────────────────
+  // Created before auth so vault secrets can be read for authentication.
+  const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+  const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+  const supabase = createClient(supabaseUrl, serviceRoleKey, {
+    auth: { persistSession: false },
+  });
+
+  // ── 2. Load push secret — vault preferred, env var fallback ──────────────────
+  // Vault is the source of truth when configured via the Admin Panel.
+  // The env var (PUSH_FUNCTION_SECRET) remains supported as a fallback so that
+  // existing deployments continue to work without any re-configuration.
+  let pushSecret = "";
+  const { data: vaultPushSecret } = await supabase.rpc("get_fcm_vault_secret_value", {
+    p_name: "push_function_secret",
+  });
+  pushSecret = (vaultPushSecret as string | null ?? Deno.env.get("PUSH_FUNCTION_SECRET")) ?? "";
+
   if (!pushSecret) {
-    console.error("PUSH_FUNCTION_SECRET not configured");
+    console.error("push_function_secret not configured in vault or PUSH_FUNCTION_SECRET env var");
     return new Response("Unauthorized", { status: 401 });
   }
 
+  // ── 3. Authenticate request (timing-safe) ────────────────────────────────────
   const authHeader = req.headers.get("Authorization") ?? "";
   const incomingSecret = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : "";
 
@@ -184,7 +201,7 @@ Deno.serve(async (req: Request) => {
     return new Response("Unauthorized", { status: 401 });
   }
 
-  // ── 2. Parse payload ─────────────────────────────────────────────────────────
+  // ── 4. Parse payload ─────────────────────────────────────────────────────────
   let payload: PushPayload;
   try {
     payload = await req.json() as PushPayload;
@@ -197,14 +214,7 @@ Deno.serve(async (req: Request) => {
     return new Response("Missing required fields", { status: 400 });
   }
 
-  // ── 3. Create Supabase admin client ──────────────────────────────────────────
-  const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-  const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-  const supabase = createClient(supabaseUrl, serviceRoleKey, {
-    auth: { persistSession: false },
-  });
-
-  // ── 4. Idempotency check — claim this notification_id ────────────────────────
+  // ── 5. Idempotency check — claim this notification_id ────────────────────────
   const { data: claimed, error: claimErr } = await supabase
     .from("push_deliveries")
     .insert({ notification_id })
@@ -221,10 +231,19 @@ Deno.serve(async (req: Request) => {
     return new Response("Internal error", { status: 500 });
   }
 
-  // ── 5. Load FCM service account from environment ─────────────────────────────
-  const serviceAccountB64 = Deno.env.get("FCM_SERVICE_ACCOUNT_JSON_B64");
+  // ── 6. Load FCM service account — env var preferred, vault fallback ──────────
+  // The env var (FCM_SERVICE_ACCOUNT_JSON_B64) continues to work unchanged.
+  // If absent, the vault secret set via the Admin Panel is used instead.
+  let serviceAccountB64 = Deno.env.get("FCM_SERVICE_ACCOUNT_JSON_B64");
   if (!serviceAccountB64) {
-    console.error("FCM_SERVICE_ACCOUNT_JSON_B64 not configured");
+    const { data: vaultSa } = await supabase.rpc("get_fcm_vault_secret_value", {
+      p_name: "fcm_service_account_b64",
+    });
+    serviceAccountB64 = (vaultSa as string | null) ?? undefined;
+  }
+
+  if (!serviceAccountB64) {
+    console.error("FCM service account not configured in vault or FCM_SERVICE_ACCOUNT_JSON_B64 env var");
     await supabase
       .from("push_deliveries")
       .update({ tokens_sent: 0, tokens_failed: 0 })
@@ -240,11 +259,11 @@ Deno.serve(async (req: Request) => {
     );
     serviceAccount = JSON.parse(decoded) as ServiceAccount;
   } catch {
-    console.error("FCM_SERVICE_ACCOUNT_JSON_B64 could not be decoded or parsed");
+    console.error("FCM service account could not be decoded or parsed");
     return new Response("Internal error", { status: 500 });
   }
 
-  // ── 6. Get FCM access token ───────────────────────────────────────────────────
+  // ── 7. Get FCM access token ───────────────────────────────────────────────────
   let accessToken: string;
   try {
     accessToken = await getFcmAccessToken(serviceAccount);
@@ -253,7 +272,7 @@ Deno.serve(async (req: Request) => {
     return new Response("Internal error", { status: 500 });
   }
 
-  // ── 7. Query device tokens ────────────────────────────────────────────────────
+  // ── 8. Query device tokens ────────────────────────────────────────────────────
   let tokenQuery = supabase
     .from("device_tokens")
     .select("id, token, platform")
@@ -280,7 +299,7 @@ Deno.serve(async (req: Request) => {
     return new Response(JSON.stringify({ sent: 0, failed: 0 }), { status: 200 });
   }
 
-  // ── 8. Send FCM messages and collect stale token IDs ─────────────────────────
+  // ── 9. Send FCM messages and collect stale token IDs ─────────────────────────
   const staleIds: string[] = [];
   let sent = 0;
   let failed = 0;
@@ -306,7 +325,7 @@ Deno.serve(async (req: Request) => {
     }),
   );
 
-  // ── 9. Deactivate stale tokens by ID (never log the token string) ─────────────
+  // ── 10. Deactivate stale tokens by ID (never log the token string) ─────────────
   if (staleIds.length > 0) {
     const { error: deactivateErr } = await supabase
       .from("device_tokens")
@@ -319,7 +338,7 @@ Deno.serve(async (req: Request) => {
     }
   }
 
-  // ── 10. Record final counts ──────────────────────────────────────────────────
+  // ── 11. Record final counts ──────────────────────────────────────────────────
   await supabase
     .from("push_deliveries")
     .update({ tokens_sent: sent, tokens_failed: failed })

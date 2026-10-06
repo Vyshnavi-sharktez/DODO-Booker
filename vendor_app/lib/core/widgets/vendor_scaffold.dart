@@ -13,6 +13,7 @@ import '../../features/profile/domain/models/vendor_profile.dart';
 import '../../features/profile/presentation/providers/profile_provider.dart';
 
 final vendorProfilePanelProvider = StateProvider<bool>((ref) => false);
+final vendorShellActionsProvider = StateProvider<List<Widget>?>((ref) => null);
 const _kProfilePanelWidth = 340.0;
 
 /// Shared scaffold for all authenticated pages.
@@ -20,16 +21,27 @@ const _kProfilePanelWidth = 340.0;
 /// Narrow (< 720 px): AppBar + body + BottomNavigationBar — unchanged mobile UX.
 /// Wide  (≥ 720 px): Fixed 220 px left sidebar + top header strip + body.
 class VendorScaffold extends ConsumerWidget {
-  const VendorScaffold({
-    super.key,
-    required this.title,
-    required this.child,
-    this.actions,
-  });
+  const VendorScaffold({super.key, required this.child});
 
-  final String title;
   final Widget child;
-  final List<Widget>? actions;
+
+  static String _pageTitle(String location) {
+    if (location == RoutePaths.dashboard)        return 'Dashboard';
+    if (location == RoutePaths.bookings)         return 'Bookings';
+    if (location.startsWith('/bookings/'))       return 'Booking Detail';
+    if (location == RoutePaths.wallet)           return 'Wallet & Earnings';
+    if (location == RoutePaths.services)         return 'Services';
+    if (location == RoutePaths.notifications)    return 'Notifications';
+    if (location == RoutePaths.profile)          return 'My Profile';
+    if (location == RoutePaths.documents)        return 'My Documents';
+    if (location == RoutePaths.settings)         return 'Settings';
+    if (location == RoutePaths.subscription)     return 'My Subscription';
+    if (location == RoutePaths.browsePlans)      return 'Browse Plans';
+    if (location == RoutePaths.planConfirmation) return 'Confirm Plan';
+    if (location == RoutePaths.payment)          return 'Payment';
+    if (location == RoutePaths.editProfile)      return 'Edit Profile';
+    return '';
+  }
 
   // Width at which the sidebar replaces the bottom nav.
   static const double _sidebarBreakpoint = 720;
@@ -95,8 +107,13 @@ class VendorScaffold extends ConsumerWidget {
     );
 
     final location = GoRouterState.of(context).matchedLocation;
-    final currentIndex =
-        _tabs.indexWhere((t) => t.path == location).clamp(0, _tabs.length - 1);
+    final title = _pageTitle(location);
+    final actions = ref.watch(vendorShellActionsProvider);
+    final currentIndex = _tabs.indexWhere((t) {
+      if (t.path == RoutePaths.dashboard) return location == t.path;
+      if (t.path == RoutePaths.profile) return false;
+      return location.startsWith(t.path);
+    }).clamp(0, _tabs.length - 1);
     final unreadCount = ref.watch(vendorUnreadCountProvider);
     final isPanelOpen = ref.watch(vendorProfilePanelProvider);
 
@@ -140,10 +157,10 @@ class VendorScaffold extends ConsumerWidget {
             if (!didPop) context.go(RoutePaths.dashboard);
           },
           child: isWide
-              ? _buildWideLayout(context, location, unreadCount, isPanelOpen,
-                  openProfilePanel, closePanel)
-              : _buildNarrowLayout(context, location, currentIndex, unreadCount,
-                  openProfilePanel),
+              ? _buildWideLayout(context, location, title, actions, unreadCount,
+                  isPanelOpen, openProfilePanel, closePanel)
+              : _buildNarrowLayout(context, location, title, actions,
+                  currentIndex, unreadCount, openProfilePanel),
         );
       },
     );
@@ -154,6 +171,8 @@ class VendorScaffold extends ConsumerWidget {
   Widget _buildWideLayout(
     BuildContext context,
     String location,
+    String title,
+    List<Widget>? actions,
     int unreadCount,
     bool isPanelOpen,
     VoidCallback openProfilePanel,
@@ -221,6 +240,8 @@ class VendorScaffold extends ConsumerWidget {
   Widget _buildNarrowLayout(
     BuildContext context,
     String location,
+    String title,
+    List<Widget>? actions,
     int currentIndex,
     int unreadCount,
     VoidCallback openProfilePanel,

@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/routes/route_names.dart';
-import '../../../../core/widgets/vendor_scaffold.dart';
+
 import '../../data/subscription_repository.dart';
 import '../providers/subscription_provider.dart';
 
@@ -87,9 +87,7 @@ class _PaymentPageState extends ConsumerState<PaymentPage> {
 
   @override
   Widget build(BuildContext context) {
-    return VendorScaffold(
-      title: 'Payment',
-      child: switch (_status) {
+    return switch (_status) {
         _PaymentStatus.idle => _IdleView(
             info: info,
             onSimulateSuccess: () => _onPaymentSuccess('SIMULATE_OK'),
@@ -106,8 +104,7 @@ class _PaymentPageState extends ConsumerState<PaymentPage> {
             onRetry: _retry,
             onCancel: _done,
           ),
-      },
-    );
+      };
   }
 }
 
