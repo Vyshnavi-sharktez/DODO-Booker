@@ -131,11 +131,11 @@ class _PermissionsViewState extends State<_PermissionsView> {
                 ),
               ),
               const Spacer(),
-              Icon(Icons.lock_outline_rounded,
+              Icon(Icons.info_outline_rounded,
                   size: 16, color: AppColors.textSecondary),
               const SizedBox(width: 6),
               Text(
-                'Read-only — managed via schema',
+                'Assign permissions to roles in the Roles tab',
                 style: TextStyle(
                   color: AppColors.textSecondary,
                   fontSize: 12,

@@ -5,6 +5,8 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../features/auth/application/providers/auth_provider.dart';
 import '../../features/bookings/application/providers/bookings_providers.dart';
 import '../../features/bookings/application/providers/dispatch_providers.dart';
+import '../../features/broadcast_notifications/application/providers/broadcast_notifications_providers.dart';
+import '../../features/coupons/application/providers/coupons_providers.dart';
 import '../../features/customer_questions/application/providers/customer_questions_providers.dart';
 import '../../features/customers/application/providers/customers_providers.dart';
 import '../../features/notifications/application/providers/notifications_providers.dart';
@@ -13,6 +15,7 @@ import '../../features/support/application/support_providers.dart';
 import '../../features/vendor_settlement/application/providers/vendor_settlement_providers.dart';
 import '../../features/vendors/application/providers/vendors_providers.dart';
 import '../../features/warranties/application/warranties_providers.dart';
+import '../../features/global_scheduling/application/scheduling_providers.dart';
 
 /// Manages Supabase Realtime subscriptions for the admin panel.
 ///
@@ -40,6 +43,9 @@ import '../../features/warranties/application/warranties_providers.dart';
 ///                                + per-vendor FutureProviders
 ///   service_warranties    → adminWarrantiesProvider
 ///   customers             → customersNotifierProvider.refresh()
+///   broadcast_notifications INSERT → broadcastNotificationsNotifierProvider.applyRealtimeInsert
+///   broadcast_notifications UPDATE → broadcastNotificationsNotifierProvider.applyRealtimeUpdate
+///   broadcast_notifications DELETE → broadcastNotificationsNotifierProvider.applyRealtimeDelete
 class AdminRealtimeSync {
   final Ref _ref;
   final SupabaseClient _client;
@@ -83,10 +89,19 @@ class AdminRealtimeSync {
         // reload. A full reload races against in-flight is_read UPDATEs and
         // can fetch stale is_read=false, making a just-read notification
         // appear unread again.
+        //
+        // user_type = 'admin' filter is required: Supabase Realtime v2.9+
+        // silently drops events from an unfiltered subscription on an
+        // RLS-enabled table (same issue fixed for the customer app).
         .onPostgresChanges(
           event: PostgresChangeEvent.insert,
           schema: 'public',
           table: 'notifications',
+          filter: PostgresChangeFilter(
+            type: PostgresChangeFilterType.eq,
+            column: 'user_type',
+            value: 'admin',
+          ),
           callback: (p) {
             final record = p.newRecord;
             if (record.isNotEmpty) {
@@ -102,6 +117,11 @@ class AdminRealtimeSync {
           event: PostgresChangeEvent.update,
           schema: 'public',
           table: 'notifications',
+          filter: PostgresChangeFilter(
+            type: PostgresChangeFilterType.eq,
+            column: 'user_type',
+            value: 'admin',
+          ),
           callback: (p) {
             final record = p.newRecord;
             if (record.isNotEmpty) {
@@ -117,6 +137,11 @@ class AdminRealtimeSync {
           event: PostgresChangeEvent.delete,
           schema: 'public',
           table: 'notifications',
+          filter: PostgresChangeFilter(
+            type: PostgresChangeFilterType.eq,
+            column: 'user_type',
+            value: 'admin',
+          ),
           callback: (p) {
             final id = p.oldRecord['id'] as String?;
             if (id != null) {
@@ -191,12 +216,78 @@ class AdminRealtimeSync {
           table: 'service_warranties',
           callback: (_) => _refreshWarranties(),
         )
+        // ── Coupons (create / update / delete from coupons page) ─────────────
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'coupons',
+          callback: (_) => _refreshCoupons(),
+        )
         // ── Customer profile changes ──────────────────────────────────────────
         .onPostgresChanges(
           event: PostgresChangeEvent.update,
           schema: 'public',
           table: 'customers',
           callback: (_) => _refreshCustomers(),
+        )
+        // ── Broadcast notifications (status changes from pg_cron / send RPC) ─
+        .onPostgresChanges(
+          event: PostgresChangeEvent.insert,
+          schema: 'public',
+          table: 'broadcast_notifications',
+          callback: (p) {
+            final record = p.newRecord;
+            if (record.isNotEmpty) {
+              _ref
+                  .read(broadcastNotificationsNotifierProvider.notifier)
+                  .applyRealtimeInsert(record);
+            }
+          },
+        )
+        .onPostgresChanges(
+          event: PostgresChangeEvent.update,
+          schema: 'public',
+          table: 'broadcast_notifications',
+          callback: (p) {
+            final record = p.newRecord;
+            if (record.isNotEmpty) {
+              _ref
+                  .read(broadcastNotificationsNotifierProvider.notifier)
+                  .applyRealtimeUpdate(record);
+            }
+          },
+        )
+        .onPostgresChanges(
+          event: PostgresChangeEvent.delete,
+          schema: 'public',
+          table: 'broadcast_notifications',
+          callback: (p) {
+            final id = p.oldRecord['id'] as String?;
+            if (id != null) {
+              _ref
+                  .read(broadcastNotificationsNotifierProvider.notifier)
+                  .applyRealtimeDelete(id);
+            }
+          },
+        )
+        // ── Scheduling tables ─────────────────────────────────────────────────
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'calendar_schedules',
+          callback: (_) => _refreshScheduling(),
+        )
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'global_scheduling',
+          callback: (_) => _refreshScheduling(),
+        )
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'service_scheduling',
+          callback: (_) => _refreshScheduling(),
         )
         .subscribe((status, error) {
           debugPrint('[DODO][AdminSync] channel status=$status error=$error');
@@ -283,9 +374,19 @@ class AdminRealtimeSync {
     _ref.invalidate(adminAnalyticsWarrantiesProvider);
   }
 
+  void _refreshCoupons() {
+    debugPrint('[DODO][AdminSync] coupons event → refresh');
+    _ref.read(couponsNotifierProvider.notifier).refresh();
+  }
+
   void _refreshCustomers() {
     debugPrint('[DODO][AdminSync] customers UPDATE → refresh');
     _ref.read(customersNotifierProvider.notifier).refresh();
+  }
+
+  void _refreshScheduling() {
+    debugPrint('[DODO][AdminSync] scheduling change → bump schedulingRefreshProvider');
+    _ref.read(schedulingRefreshProvider.notifier).state++;
   }
 
   /// Called by the lifecycle observer on admin panel resume after a long pause.

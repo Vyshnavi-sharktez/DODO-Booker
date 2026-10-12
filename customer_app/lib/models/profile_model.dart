@@ -4,6 +4,7 @@ class ProfileModel {
   final String mobileNumber;
   final String? email;
   final String? imageUrl;
+  final bool isActive;
   final int totalBookings;
   final int completedBookings;
   final double savedAmount;
@@ -15,6 +16,7 @@ class ProfileModel {
     required this.mobileNumber,
     this.email,
     this.imageUrl,
+    this.isActive = true,
     this.totalBookings = 0,
     this.completedBookings = 0,
     this.savedAmount = 0,
@@ -36,6 +38,7 @@ class ProfileModel {
       mobileNumber: (json['mobile_number'] ?? json['phone'] as String?) ?? '',
       email: json['email'] as String?,
       imageUrl: json['profile_image_url'] as String?,
+      isActive: (json['is_active'] as bool?) ?? true,
       totalBookings: (json['total_bookings'] as int?) ?? 0,
       completedBookings: (json['completed_bookings'] as int?) ?? 0,
       savedAmount: ((json['saved_amount'] as num?) ?? 0).toDouble(),

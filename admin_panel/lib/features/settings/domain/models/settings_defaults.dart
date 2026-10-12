@@ -32,6 +32,7 @@ const Map<String, String> kSettingDefaults = {
   'enable_email_notifications': 'true',
   'enable_push_notifications': 'true',
   'enable_sms_notifications': 'false',
+  'notification_retention_days': '7',
 
   // Vendor
   'vendor_approval_required': 'true',

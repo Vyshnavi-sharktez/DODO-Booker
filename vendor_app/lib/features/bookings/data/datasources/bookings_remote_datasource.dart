@@ -16,6 +16,7 @@ class BookingsRemoteDatasource {
     cod_cash_collected, cod_not_collected_reason, cod_confirmed_at,
     is_amc, amc_plan_name, amc_recurrence_interval, amc_contract_id,
     dispatch_status, current_dispatch_tier_priority, dispatch_started_at, last_dispatch_attempt_at,
+    customers(full_name),
     booking_items(
       service_id,
       quantity,
@@ -149,23 +150,28 @@ class BookingsRemoteDatasource {
     await _client.from('bookings').update(payload).eq('id', bookingId);
   }
 
-  // Returns true and sets status=completed when OTP matches; false otherwise.
+  // Verifies the completion OTP.
+  // Non-COD: sets status=completed + otp_verified_at on match.
+  // COD:     sets otp_verified_at only — status changes after the cash
+  //          confirmation dialog via completeCodBookingAfterOtp().
   Future<bool> verifyCompletionOtp(String bookingId, String otp) async {
     debugPrint('[OTP][DS] ══════════ verifyCompletionOtp() START ══════════');
     debugPrint('[OTP][DS] bookingId : $bookingId');
     debugPrint('[OTP][DS] otp passed: "$otp"  len=${otp.length}  codeUnits=${otp.codeUnits}');
 
-    // ── Step 1: Fetch stored OTP and current status ───────────────────────────
-    debugPrint('[OTP][DS] Step 1 → SELECT completion_otp, status FROM bookings WHERE id=?');
+    // ── Step 1: Fetch stored OTP, current status, and payment method ──────────
+    debugPrint('[OTP][DS] Step 1 → SELECT completion_otp, status, payment_method FROM bookings WHERE id=?');
     final row = await _client
         .from('bookings')
-        .select('completion_otp, status')
+        .select('completion_otp, status, payment_method')
         .eq('id', bookingId)
         .single();
 
     final stored = row['completion_otp'] as String?;
     final currentStatus = row['status'] as String?;
-    debugPrint('[OTP][DS] Step 1 result: completion_otp="$stored"  status="$currentStatus"');
+    final paymentMethod = (row['payment_method'] as String? ?? '').toLowerCase();
+    final isCod = paymentMethod == 'cash' || paymentMethod == 'cod';
+    debugPrint('[OTP][DS] Step 1 result: completion_otp="$stored"  status="$currentStatus"  isCod=$isCod');
     if (stored != null) {
       debugPrint('[OTP][DS]   stored codeUnits: ${stored.codeUnits}');
       debugPrint('[OTP][DS]   stored.trim()   : "${stored.trim()}"');
@@ -191,13 +197,22 @@ class BookingsRemoteDatasource {
     // ── Step 3: UPDATE + select to detect RLS-silenced 0-row updates ─────────
     // Without .select(), a blocked UPDATE returns HTTP 200 with [] — no error.
     // Adding .select() lets us check whether a row was actually modified.
-    debugPrint('[OTP][DS] Step 3 → UPDATE bookings SET status=completed, otp_verified_at=now() WHERE id=?');
+    //
+    // COD bookings: only stamp otp_verified_at. The status transition to
+    // 'completed' is deferred until the vendor confirms cash collection via
+    // completeCodBookingAfterOtp(), so the booking stays in its current state
+    // while the cash confirmation dialog is open.
+    final Map<String, dynamic> updatePayload = isCod
+        ? {'otp_verified_at': DateTime.now().toUtc().toIso8601String()}
+        : {
+            'status': 'completed',
+            'otp_verified_at': DateTime.now().toUtc().toIso8601String(),
+          };
+
+    debugPrint('[OTP][DS] Step 3 → UPDATE bookings SET ${updatePayload.keys.join(', ')} WHERE id=?');
     final updated = await _client
         .from('bookings')
-        .update({
-          'status': 'completed',
-          'otp_verified_at': DateTime.now().toUtc().toIso8601String(),
-        })
+        .update(updatePayload)
         .eq('id', bookingId)
         .select('id, status, otp_verified_at');
 
@@ -233,6 +248,29 @@ class BookingsRemoteDatasource {
 
     debugPrint('[OTP][DS] ══════════ verifyCompletionOtp() DONE → true ══════════');
     return true;
+  }
+
+  // Called after the COD cash confirmation dialog in the OTP completion flow.
+  // Sets status=completed and records the cash result atomically.
+  //
+  // cashCollected=true  → cod_confirmed_at is set (collection is final).
+  // cashCollected=false → cod_confirmed_at is left null so the booking
+  //   remains in "COD Cash Collection Pending" state and the vendor/admin
+  //   can confirm collection later via the Confirm Cash Collection button.
+  Future<void> completeCodBookingAfterOtp({
+    required String bookingId,
+    required bool cashCollected,
+    String? notCollectedReason,
+  }) async {
+    final payload = <String, dynamic>{
+      'status': 'completed',
+      'cod_cash_collected': cashCollected,
+      'cod_not_collected_reason': cashCollected ? null : notCollectedReason,
+    };
+    if (cashCollected) {
+      payload['cod_confirmed_at'] = DateTime.now().toUtc().toIso8601String();
+    }
+    await _client.from('bookings').update(payload).eq('id', bookingId);
   }
 
   Future<void> createAdminNotification({

@@ -14,6 +14,7 @@ import '../widgets/customer_create_dialog.dart';
 import '../widgets/customer_edit_dialog.dart';
 import '../../../bulk_upload/data/modules/customer_bulk_module.dart';
 import '../../../bulk_upload/presentation/bulk_upload_dialog.dart';
+import '../../../../core/rbac/permission_guard.dart';
 
 final _dateFmtShort = DateFormat('dd MMM yyyy');
 
@@ -325,14 +326,18 @@ class _CustomersPageState extends ConsumerState<CustomersPage> {
                 label: const Text('Bulk Upload'),
               ),
               const SizedBox(width: 10),
-              FilledButton.icon(
-                onPressed: _openCreate,
-                icon: const Icon(Icons.person_add_rounded, size: 16),
-                label: const Text('New Customer'),
-                style: FilledButton.styleFrom(
-                  backgroundColor: AppColors.primary,
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 16, vertical: 10),
+              PermissionGuard(
+                permission: 'customer.create',
+                fallback: const SizedBox.shrink(),
+                child: FilledButton.icon(
+                  onPressed: _openCreate,
+                  icon: const Icon(Icons.person_add_rounded, size: 16),
+                  label: const Text('New Customer'),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 16, vertical: 10),
+                  ),
                 ),
               ),
             ],
@@ -675,6 +680,7 @@ class _CustomersTable extends StatelessWidget {
                                   const Divider(height: 1),
                               itemBuilder: (ctx, i) {
                                 return _CustomerRow(
+                                  key: ValueKey(customers[i].id),
                                   customer: customers[i],
                                   searchQuery: searchQuery,
                                   onViewDetails: () =>
@@ -748,6 +754,7 @@ class _CustomerRow extends StatelessWidget {
   final VoidCallback onDelete;
 
   const _CustomerRow({
+    super.key,
     required this.customer,
     required this.searchQuery,
     required this.onViewDetails,
@@ -853,48 +860,55 @@ class _CustomerRow extends StatelessWidget {
           // Actions
           Expanded(
             flex: 2,
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                IconButton(
-                  onPressed: onViewDetails,
-                  icon: const Icon(Icons.visibility_rounded, size: 16),
-                  tooltip: 'View Details',
-                  color: AppColors.textSecondary,
-                  visualDensity: VisualDensity.compact,
-                ),
-                IconButton(
-                  onPressed: onEdit,
-                  icon: const Icon(Icons.edit_rounded, size: 16),
-                  tooltip: 'Edit',
-                  color: AppColors.accent,
-                  visualDensity: VisualDensity.compact,
-                ),
-                Tooltip(
-                  message:
-                      c.isActive ? 'Deactivate' : 'Activate',
-                  child: IconButton(
-                    onPressed: onToggleActive,
-                    icon: Icon(
-                      c.isActive
-                          ? Icons.toggle_on_rounded
-                          : Icons.toggle_off_rounded,
-                      size: 20,
-                      color: c.isActive
-                          ? AppColors.success
-                          : AppColors.textSecondary,
+            child: Consumer(
+              builder: (context, ref, _) {
+                final canEdit =
+                    ref.watch(hasPermissionProvider('customer.update'));
+                final canDelete =
+                    ref.watch(hasPermissionProvider('customer.delete'));
+                return Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    IconButton(
+                      onPressed: onViewDetails,
+                      icon: const Icon(Icons.visibility_rounded, size: 16),
+                      tooltip: 'View Details',
+                      color: AppColors.textSecondary,
+                      visualDensity: VisualDensity.compact,
                     ),
-                    visualDensity: VisualDensity.compact,
-                  ),
-                ),
-                IconButton(
-                  onPressed: onDelete,
-                  icon: const Icon(Icons.delete_outline_rounded, size: 16),
-                  tooltip: 'Delete',
-                  color: AppColors.error,
-                  visualDensity: VisualDensity.compact,
-                ),
-              ],
+                    if (canEdit)
+                      IconButton(
+                        onPressed: onEdit,
+                        icon: const Icon(Icons.edit_rounded, size: 16),
+                        tooltip: 'Edit',
+                        color: AppColors.accent,
+                        visualDensity: VisualDensity.compact,
+                      ),
+                    IconButton(
+                      onPressed: onToggleActive,
+                      tooltip: c.isActive ? 'Deactivate' : 'Activate',
+                      icon: Icon(
+                        c.isActive
+                            ? Icons.toggle_on_rounded
+                            : Icons.toggle_off_rounded,
+                        size: 20,
+                        color: c.isActive
+                            ? AppColors.success
+                            : AppColors.textSecondary,
+                      ),
+                      visualDensity: VisualDensity.compact,
+                    ),
+                    if (canDelete)
+                      IconButton(
+                        onPressed: onDelete,
+                        icon: const Icon(Icons.delete_outline_rounded, size: 16),
+                        tooltip: 'Delete',
+                        color: AppColors.error,
+                        visualDensity: VisualDensity.compact,
+                      ),
+                  ],
+                );
+              },
             ),
           ),
         ],

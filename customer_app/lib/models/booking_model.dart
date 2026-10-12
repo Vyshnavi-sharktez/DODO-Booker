@@ -1,5 +1,6 @@
 class BookingModel {
   final String id;
+  final String? bookingNumber;
   final String serviceId;
   final String serviceName;
   final String addressId;
@@ -17,6 +18,7 @@ class BookingModel {
 
   const BookingModel({
     required this.id,
+    this.bookingNumber,
     required this.serviceId,
     required this.serviceName,
     required this.addressId,
@@ -33,11 +35,22 @@ class BookingModel {
     this.amcRecurrenceInterval,
   });
 
+  String get displayBookingNumber {
+    if (bookingNumber != null && bookingNumber!.isNotEmpty) {
+      return bookingNumber!;
+    }
+    if (id.length > 8) {
+      return 'DODO${id.substring(0, 8).toUpperCase()}';
+    }
+    return id;
+  }
+
   factory BookingModel.fromJson(Map<String, dynamic> json) {
     // DB columns: id, booking_number, customer_id, vendor_id, service_date,
     //             status, subtotal, discount_amount, total_amount, address, notes
     return BookingModel(
       id: json['id'] as String,
+      bookingNumber: json['booking_number'] as String?,
       // DB has no service_id; fall back to booking_number or id
       serviceId: (json['service_id'] as String?) ?? (json['booking_number'] as String?) ?? json['id'] as String,
       // DB has no service_name; fall back to notes or empty

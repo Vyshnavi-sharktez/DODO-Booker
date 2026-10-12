@@ -8,6 +8,8 @@ import '../../../vendor_subscriptions/domain/models/subscription_plan.dart'
     show kBillingCycles;
 import '../../data/catalog_node_configs_repository.dart';
 import '../../domain/models/catalog_node_config_model.dart';
+import '../../../global_scheduling/data/calendar_schedule_repository.dart';
+import '../../../global_scheduling/application/scheduling_providers.dart';
 import '../../../vendor_subscriptions/domain/subscription_feature_registry.dart';
 import '../../../catalog_v2/application/providers/catalog_node_providers.dart';
 import '../../../service_attributes/domain/models/service_attribute.dart';
@@ -20,15 +22,59 @@ import '../../../service_attributes/presentation/widgets/attribute_form_dialog.d
 // (Tax, Loyalty, Scheduling, Commission) for a catalog node.
 //
 // Two scopes (admin must choose explicitly):
-//   "This path only"        â€” relationship-scoped; affects this node ONLY when
+//   "This path only"        - relationship-scoped; affects this node ONLY when
 //                             accessed via the specific parent shown in the title.
 //                             Never leaks to the same node under another parent.
-//   "All occurrences"       â€” node-scoped; affects this node regardless of the
+//   "All occurrences"       - node-scoped; affects this node regardless of the
 //                             path the customer used to navigate to it.
 //
 // parentNodeId and parentNodeName are null when the tile has no parent context
 // (root-level tiles), in which case only node-scoped config is available.
 // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+
+class _CalendarEntryDraft {
+  String? id;
+  final DateTime date;
+  String? startTime;
+  String? endTime;
+  bool isEnabled;
+  final TextEditingController maxBookings;
+  final TextEditingController intervalHours;
+  final TextEditingController intervalMinutes;
+  bool isSaving = false;
+  String? error;
+
+  _CalendarEntryDraft({
+    this.id,
+    required this.date,
+    this.startTime,
+    this.endTime,
+    this.isEnabled = true,
+    int maxBookingsValue = 5,
+    int intervalHoursValue = 0,
+    int intervalMinutesValue = 30,
+  })  : maxBookings = TextEditingController(text: maxBookingsValue.toString()),
+        intervalHours = TextEditingController(text: intervalHoursValue.toString()),
+        intervalMinutes = TextEditingController(text: intervalMinutesValue.toString());
+
+  factory _CalendarEntryDraft.fromEntry(CalendarScheduleEntry e) =>
+      _CalendarEntryDraft(
+        id: e.id,
+        date: e.scheduleDate,
+        startTime: e.slotStartTime,
+        endTime: e.slotEndTime,
+        isEnabled: e.isEnabled,
+        maxBookingsValue: e.maxBookingsPerSlot,
+        intervalHoursValue: e.slotIntervalHours,
+        intervalMinutesValue: e.slotIntervalMinutes,
+      );
+
+  void dispose() {
+    maxBookings.dispose();
+    intervalHours.dispose();
+    intervalMinutes.dispose();
+  }
+}
 
 class CatalogNodeConfigDialog extends ConsumerStatefulWidget {
   final String nodeId;
@@ -73,7 +119,7 @@ class _CatalogNodeConfigDialogState extends ConsumerState<CatalogNodeConfigDialo
   // Defaults to relationship-scoped when a parent context exists.
   final Map<String, bool> _useRelScope = {};
 
-  // Scope as it was when _loadData() last ran â€” used to detect conversions in _save().
+  // Scope as it was when _loadData() last ran - used to detect conversions in _save().
   final Map<String, bool> _savedScope = {};
 
   // Effective resolved config per module when no direct override exists.
@@ -100,12 +146,16 @@ class _CatalogNodeConfigDialogState extends ConsumerState<CatalogNodeConfigDialo
 
   // Scheduling
   bool _schedEnabled = true;
-  final List<bool> _schedDays = List.filled(7, true); // Sunâ€”Sat
+  final List<bool> _schedDays = List.filled(7, true); // Sun-Sat
   final _schedMaxCtrl = TextEditingController(text: '5');
   String? _schedStartTime;
   String? _schedEndTime;
   final _schedIntervalHours = TextEditingController(text: '0');
   final _schedIntervalMinutes = TextEditingController(text: '30');
+
+  // Calendar overrides
+  final _calRepo = CalendarScheduleRepository(Supabase.instance.client);
+  List<_CalendarEntryDraft> _calEntries = [];
 
   // Commission
   final _commValueCtrl = TextEditingController();
@@ -140,7 +190,7 @@ class _CatalogNodeConfigDialogState extends ConsumerState<CatalogNodeConfigDialo
   String? _newBeforeUrl;
   String? _newAfterUrl;
 
-  // Vendor Subscription â€” plan config embedded in catalog_node_configs JSONB
+  // Vendor Subscription - plan config embedded in catalog_node_configs JSONB
   bool _vsEnabled = false;
   final _vsNameCtrl = TextEditingController();
   final _vsDescCtrl = TextEditingController();
@@ -209,6 +259,9 @@ class _CatalogNodeConfigDialogState extends ConsumerState<CatalogNodeConfigDialo
     _refundPeriodCtrl.dispose();
     _newIncludedCtrl.dispose();
     _newExcludedCtrl.dispose();
+    for (final e in _calEntries) {
+      e.dispose();
+    }
     super.dispose();
   }
 
@@ -333,6 +386,13 @@ class _CatalogNodeConfigDialogState extends ConsumerState<CatalogNodeConfigDialo
             [];
       }
 
+      // Load calendar overrides for this node
+      final calEntries = await _calRepo.fetchForService(widget.nodeId);
+      for (final e in _calEntries) {
+        e.dispose();
+      }
+      _calEntries = calEntries.map(_CalendarEntryDraft.fromEntry).toList();
+
       // Kick off attribute load for the Attributes tab
       ref.read(catalogNodeAttributesNotifierProvider.notifier)
           .loadForNode(widget.nodeId);
@@ -347,7 +407,7 @@ class _CatalogNodeConfigDialogState extends ConsumerState<CatalogNodeConfigDialo
   }
 
   /// Reloads configs and repopulates form fields after save/delete.
-  /// Does NOT touch [_useRelScope] â€” the admin's scope choice is preserved.
+  /// Does NOT touch [_useRelScope] - the admin's scope choice is preserved.
   Future<void> _refreshConfigs() async {
     List<CatalogNodeConfigModel> relCfgs = [];
     List<CatalogNodeConfigModel> nodeCfgs = [];
@@ -421,7 +481,7 @@ class _CatalogNodeConfigDialogState extends ConsumerState<CatalogNodeConfigDialo
               .toSet() ??
           {};
       debugPrint('[DODO][SchedCfg] days parsed=$days');
-      // Always apply working_days from DB â€” removing the old `if (days.isNotEmpty)` guard
+      // Always apply working_days from DB - removing the old `if (days.isNotEmpty)` guard
       // that caused the loop to be skipped when working_days is [] or null, leaving
       // _schedDays at its previous value instead of reflecting the saved state.
       for (int i = 0; i < 7; i++) {
@@ -480,7 +540,7 @@ class _CatalogNodeConfigDialogState extends ConsumerState<CatalogNodeConfigDialo
             e['id'] as String: (e['fee'] as num?)?.toDouble() ?? 0.0,
         };
       } else {
-        // Old format: vendor_ids â€” seed fees from global vendor data
+        // Old format: vendor_ids - seed fees from global vendor data
         _pvSelectedIds = (cfg.config['vendor_ids'] as List<dynamic>?)
                 ?.map((e) => e.toString())
                 .toSet() ??
@@ -527,14 +587,14 @@ class _CatalogNodeConfigDialogState extends ConsumerState<CatalogNodeConfigDialo
       return;
     }
 
-    // â”€â”€ All confirmations happen HERE, before any database write â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // -- All confirmations happen HERE, before any database write --------------
     String? bulkMode; // null = normal save, otherwise 'subtree_only' | 'shared_everywhere'
 
     if (applyToChildren) {
       if (!mounted) return;
       final tabLabel = _tabLabels[_modules.indexOf(module)];
 
-      // Step 1: first warning â€” confirm intent to override child items.
+      // Step 1: first warning - confirm intent to override child items.
       final firstOk = await showDialog<bool>(
         context: context,
         builder: (ctx) => AlertDialog(
@@ -563,7 +623,7 @@ class _CatalogNodeConfigDialogState extends ConsumerState<CatalogNodeConfigDialo
       if (!mounted) return;
 
       if (sharedCount > 0) {
-        // Step 3: mode-choice dialog â€” only shown when shared descendants exist.
+        // Step 3: mode-choice dialog - only shown when shared descendants exist.
         final chosen = await _showSharedModeDialog(sharedCount, tabLabel);
         // Cancel at step 3: do nothing.
         if (chosen == null || !mounted) return;
@@ -572,7 +632,22 @@ class _CatalogNodeConfigDialogState extends ConsumerState<CatalogNodeConfigDialo
         bulkMode = 'subtree_only';
       }
     }
-    // â”€â”€ All confirmations complete. Now write. â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // -- All confirmations complete. Now write. --------------------------------
+
+    // Scheduling-specific validation: require non-empty generated slots when
+    // scheduling is enabled, same gate as GlobalSchedulingPage / ServiceSchedulingDialog.
+    if (module == 'scheduling' && _schedEnabled) {
+      final iH = int.tryParse(_schedIntervalHours.text.trim()) ?? 0;
+      final iM = int.tryParse(_schedIntervalMinutes.text.trim()) ?? 0;
+      if (_schedStartTime == null || _schedEndTime == null || iH * 60 + iM <= 0) {
+        setState(() => _error = 'Set start time, end time, and interval.');
+        return;
+      }
+      if (_schedGeneratedSlots.isEmpty) {
+        setState(() => _error = 'End time must be after start time.');
+        return;
+      }
+    }
 
     setState(() {
       _saving = true;
@@ -594,7 +669,7 @@ class _CatalogNodeConfigDialogState extends ConsumerState<CatalogNodeConfigDialo
       await _repo.upsert(model);
 
       // Scope conversion: delete the old-scope config when the admin switched.
-      // Only runs after a successful upsert â€” never deletes if the save failed.
+      // Only runs after a successful upsert - never deletes if the save failed.
       final wasUseRel = _savedScope[module] ?? useRel;
       if (useRel != wasUseRel) {
         final oldConfig = wasUseRel ? _relConfigs[module] : _nodeConfigs[module];
@@ -721,7 +796,7 @@ class _CatalogNodeConfigDialogState extends ConsumerState<CatalogNodeConfigDialo
       _creatingOverride[module] = false;
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('${_tabLabels[_modules.indexOf(module)]} settings removed â€” default settings will apply.')),
+          SnackBar(content: Text('${_tabLabels[_modules.indexOf(module)]} settings removed - default settings will apply.')),
         );
       }
     } catch (e) {
@@ -837,9 +912,12 @@ class _CatalogNodeConfigDialogState extends ConsumerState<CatalogNodeConfigDialo
 
   @override
   Widget build(BuildContext context) {
+    ref.listen<int>(schedulingRefreshProvider, (_, __) {
+      if (mounted) _loadData();
+    });
     final hasParent = widget.parentNodeId != null;
     final pathLabel = hasParent
-        ? '${widget.parentNodeName ?? 'Parent'} â†’ ${widget.nodeName}'
+        ? '${widget.parentNodeName ?? 'Parent'} → ${widget.nodeName}'
         : widget.nodeName;
 
     return Dialog(
@@ -849,7 +927,7 @@ class _CatalogNodeConfigDialogState extends ConsumerState<CatalogNodeConfigDialo
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            // â”€â”€ Header â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+            // -- Header -----------------------------------------------------
             Container(
               padding: const EdgeInsets.fromLTRB(20, 16, 12, 12),
               decoration: const BoxDecoration(
@@ -894,7 +972,7 @@ class _CatalogNodeConfigDialogState extends ConsumerState<CatalogNodeConfigDialo
               const Expanded(
                   child: Center(child: CircularProgressIndicator()))
             else ...[
-              // â”€â”€ Tabs â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+              // -- Tabs ---------------------------------------------------
               TabBar(
                 controller: _tabController,
                 isScrollable: true,
@@ -966,7 +1044,7 @@ class _CatalogNodeConfigDialogState extends ConsumerState<CatalogNodeConfigDialo
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // â”€â”€ Global disabled banner â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+          // -- Global disabled banner ------------------------------------
           if (!globallyEnabled) ...[
             Container(
               width: double.infinity,
@@ -1009,7 +1087,7 @@ class _CatalogNodeConfigDialogState extends ConsumerState<CatalogNodeConfigDialo
             const SizedBox(height: 16),
           ],
 
-          // â”€â”€ Scope selector â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+          // -- Scope selector --------------------------------------------
           if (module == 'vendor_subscription') ...[
             Container(
               padding: const EdgeInsets.all(10),
@@ -1024,7 +1102,7 @@ class _CatalogNodeConfigDialogState extends ConsumerState<CatalogNodeConfigDialo
                   SizedBox(width: 6),
                   Expanded(
                     child: Text(
-                      'Vendor Subscription config is always node-scoped â€” it applies only to this catalog node.',
+                      'Vendor Subscription config is always node-scoped - it applies only to this catalog node.',
                       style: TextStyle(
                           fontSize: 11, color: AppColors.textSecondary),
                     ),
@@ -1109,7 +1187,7 @@ class _CatalogNodeConfigDialogState extends ConsumerState<CatalogNodeConfigDialo
                   const SizedBox(width: 6),
                   Expanded(
                     child: Text(
-                      'No category selected â€” this setting applies to '
+                      'No category selected - this setting applies to '
                       '${widget.nodeName} everywhere in the catalog.',
                       style: const TextStyle(
                           fontSize: 11, color: AppColors.textSecondary),
@@ -1121,7 +1199,7 @@ class _CatalogNodeConfigDialogState extends ConsumerState<CatalogNodeConfigDialo
             const SizedBox(height: 16),
           ],
 
-          // â”€â”€ Inherited config card (read-only) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+          // -- Inherited config card (read-only) -------------------------
           // Only shown when no direct override exists AND an ancestor has a config.
           if (!showForm) ...[
             _buildInheritedCard(module, inherited),
@@ -1136,7 +1214,7 @@ class _CatalogNodeConfigDialogState extends ConsumerState<CatalogNodeConfigDialo
             ),
           ],
 
-          // â”€â”€ Edit form (direct override or creating new) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+          // -- Edit form (direct override or creating new) ----------------
           if (showForm) ...[
             _buildModuleFields(module),
 
@@ -1191,7 +1269,7 @@ class _CatalogNodeConfigDialogState extends ConsumerState<CatalogNodeConfigDialo
               Padding(
                 padding: const EdgeInsets.only(top: 8),
                 child: Text(
-                  'No custom settings â€” default ${_tabLabels[_modules.indexOf(module)]} settings will apply.',
+                  'No custom settings - default ${_tabLabels[_modules.indexOf(module)]} settings will apply.',
                   style: const TextStyle(
                       fontSize: 11, color: AppColors.textSecondary),
                 ),
@@ -1223,7 +1301,7 @@ class _CatalogNodeConfigDialogState extends ConsumerState<CatalogNodeConfigDialo
     }
   }
 
-  // â”€â”€ Inherited config helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // -- Inherited config helpers ------------------------------------------------
 
   Widget _buildInheritedCard(String module, Map<String, dynamic>? cfg) {
     if (cfg == null) return const SizedBox.shrink();
@@ -1278,9 +1356,9 @@ class _CatalogNodeConfigDialogState extends ConsumerState<CatalogNodeConfigDialo
         final value = cfg['tax_value'] as num? ?? 0;
         return [
           'Tax name: $name',
-          'Type: ${type == 'percentage' ? 'Percentage (%)' : 'Fixed (â‚¹)'}',
+          'Type: ${type == 'percentage' ? 'Percentage (%)' : 'Fixed (₹)'}',
           '${type == 'percentage' ? 'Rate' : 'Amount'}: $value'
-              '${type == 'percentage' ? '%' : ' â‚¹'}',
+              '${type == 'percentage' ? '%' : ' ₹'}',
         ];
       case 'loyalty':
         final enabled = cfg['earn_enabled'] as bool? ?? true;
@@ -1290,13 +1368,13 @@ class _CatalogNodeConfigDialogState extends ConsumerState<CatalogNodeConfigDialo
           final pts = cfg['fixed_points'];
           return [
             'Earn rule: Fixed points',
-            'Points per booking: ${pts ?? 'â€”'}',
+            'Points per booking: ${pts ?? '-'}',
           ];
         } else if (rule == 'percentage') {
           final per = cfg['earn_per_100'];
           return [
-            'Earn rule: Points per â‚¹100 spent',
-            'Points per â‚¹100: ${per ?? 'â€”'}',
+            'Earn rule: Points per ₹100 spent',
+            'Points per ₹100: ${per ?? '-'}',
           ];
         }
         return ['Earn rule: Global rate'];
@@ -1311,7 +1389,7 @@ class _CatalogNodeConfigDialogState extends ConsumerState<CatalogNodeConfigDialo
         final max = cfg['max_bookings_per_slot'] as num? ?? 5;
         final slots =
             (cfg['slots'] as List<dynamic>?)?.cast<String>().join(', ') ??
-                'â€”';
+                '-';
         return [
           if (days.isNotEmpty) 'Working days: $days',
           'Max bookings per slot: $max',
@@ -1321,9 +1399,9 @@ class _CatalogNodeConfigDialogState extends ConsumerState<CatalogNodeConfigDialo
         final type = cfg['commission_type'] as String? ?? 'percentage';
         final value = cfg['commission_value'] as num? ?? 0;
         return [
-          'Type: ${type == 'percentage' ? 'Percentage (%)' : 'Fixed (â‚¹)'}',
+          'Type: ${type == 'percentage' ? 'Percentage (%)' : 'Fixed (₹)'}',
           '${type == 'percentage' ? 'Rate' : 'Amount'}: $value'
-              '${type == 'percentage' ? '%' : ' â‚¹'}',
+              '${type == 'percentage' ? '%' : ' ₹'}',
         ];
       case 'surge':
         final sName = cfg['surge_name'] as String? ?? 'Surge Fee';
@@ -1331,9 +1409,9 @@ class _CatalogNodeConfigDialogState extends ConsumerState<CatalogNodeConfigDialo
         final sValue = cfg['surge_value'] as num? ?? 0;
         return [
           'Charge name: $sName',
-          'Type: ${sType == 'percentage' ? 'Percentage (%)' : 'Fixed (â‚¹)'}',
+          'Type: ${sType == 'percentage' ? 'Percentage (%)' : 'Fixed (₹)'}',
           '${sType == 'percentage' ? 'Rate' : 'Amount'}: $sValue'
-              '${sType == 'percentage' ? '%' : ' â‚¹'}',
+              '${sType == 'percentage' ? '%' : ' ₹'}',
         ];
       case 'preferred_vendors':
         final pvEnabled = cfg['is_enabled'] as bool? ?? false;
@@ -1358,7 +1436,7 @@ class _CatalogNodeConfigDialogState extends ConsumerState<CatalogNodeConfigDialo
           'Vendor Subscription: Enabled',
           if (vsName.isNotEmpty) 'Plan name: $vsName',
           'Billing cycle: $vsCycle ($vsDur days)',
-          if (vsSubFee != null) 'Subscription fee: â‚¹$vsSubFee',
+          if (vsSubFee != null) 'Subscription fee: ₹$vsSubFee',
           'Status: ${vsActive ? 'Active' : 'Inactive'}',
         ];
       case 'refund':
@@ -1507,14 +1585,14 @@ class _CatalogNodeConfigDialogState extends ConsumerState<CatalogNodeConfigDialo
         SegmentedButton<String>(
           segments: const [
             ButtonSegment(value: 'percentage', label: Text('Percentage (%)')),
-            ButtonSegment(value: 'fixed', label: Text('Fixed (â‚¹)')),
+            ButtonSegment(value: 'fixed', label: Text('Fixed (₹)')),
           ],
           selected: {_taxType},
           onSelectionChanged: (s) =>
               setState(() => _taxType = s.first),
         ),
         const SizedBox(height: 12),
-        _label(_taxType == 'percentage' ? 'Tax Rate (%)' : 'Fixed Amount (â‚¹)'),
+        _label(_taxType == 'percentage' ? 'Tax Rate (%)' : 'Fixed Amount (₹)'),
         const SizedBox(height: 4),
         TextField(
           controller: _taxValueCtrl,
@@ -1552,7 +1630,7 @@ class _CatalogNodeConfigDialogState extends ConsumerState<CatalogNodeConfigDialo
             DropdownMenuItem(value: 'global', child: Text('Global rate')),
             DropdownMenuItem(value: 'fixed', child: Text('Fixed points')),
             DropdownMenuItem(
-                value: 'percentage', child: Text('Points per â‚¹100')),
+                value: 'percentage', child: Text('Points per ₹100')),
           ],
           onChanged: (v) => setState(() => _loyaltyRule = v ?? 'global'),
         ),
@@ -1568,7 +1646,7 @@ class _CatalogNodeConfigDialogState extends ConsumerState<CatalogNodeConfigDialo
           ),
         ] else if (_loyaltyRule == 'percentage') ...[
           const SizedBox(height: 12),
-          _label('Points per â‚¹100 spent'),
+          _label('Points per ₹100 spent'),
           const SizedBox(height: 4),
           TextField(
             controller: _loyaltyPercentCtrl,
@@ -1684,6 +1762,458 @@ class _CatalogNodeConfigDialogState extends ConsumerState<CatalogNodeConfigDialo
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  // ── Calendar override helpers ─────────────────────────────────────────────────
+
+  String _calFormatDate(DateTime date) {
+    const months = [
+      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+    ];
+    const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    return '${days[date.weekday % 7]}, ${months[date.month - 1]} ${date.day}, ${date.year}';
+  }
+
+  Future<void> _addCalEntry() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: DateTime.now(),
+      firstDate: DateTime.now().subtract(const Duration(days: 1)),
+      lastDate: DateTime.now().add(const Duration(days: 365 * 2)),
+    );
+    if (picked == null || !mounted) return;
+    final dateStr = picked.toIso8601String().split('T').first;
+    final exists = _calEntries
+        .any((e) => e.date.toIso8601String().split('T').first == dateStr);
+    if (exists) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('An override for this date already exists.'),
+        backgroundColor: Colors.red,
+        behavior: SnackBarBehavior.floating,
+      ));
+      return;
+    }
+    setState(() {
+      _calEntries.add(_CalendarEntryDraft(date: picked));
+      _calEntries.sort((a, b) => a.date.compareTo(b.date));
+    });
+  }
+
+  Future<void> _pickTimeForEntry(
+      _CalendarEntryDraft draft, {required bool isStart}) async {
+    final current = isStart ? draft.startTime : draft.endTime;
+    final initial = current != null
+        ? _parseSchedTime(current)
+        : TimeOfDay.now();
+    final picked = await showTimePicker(
+      context: context,
+      initialTime: initial,
+      helpText: isStart ? 'Select start time' : 'Select end time',
+      builder: (ctx, child) => MediaQuery(
+        data: MediaQuery.of(ctx).copyWith(alwaysUse24HourFormat: false),
+        child: child!,
+      ),
+    );
+    if (picked == null || !mounted) return;
+    setState(() {
+      final label = _formatSchedTime(picked);
+      if (isStart) {
+        draft.startTime = label;
+      } else {
+        draft.endTime = label;
+      }
+    });
+  }
+
+  List<String> _generateSlotsForDraft(_CalendarEntryDraft draft) {
+    if (draft.startTime == null || draft.endTime == null) return [];
+    final iH = int.tryParse(draft.intervalHours.text.trim()) ?? 0;
+    final iM = int.tryParse(draft.intervalMinutes.text.trim()) ?? 0;
+    return _generateSlots(draft.startTime!, draft.endTime!, iH, iM);
+  }
+
+  Future<void> _saveCalEntry(_CalendarEntryDraft draft) async {
+    final maxVal = int.tryParse(draft.maxBookings.text.trim());
+    if (maxVal == null || maxVal < 1) {
+      setState(() => draft.error = 'Max bookings must be at least 1.');
+      return;
+    }
+    final iH = int.tryParse(draft.intervalHours.text.trim()) ?? 0;
+    final iM = int.tryParse(draft.intervalMinutes.text.trim()) ?? 0;
+    if (draft.startTime == null || draft.endTime == null || iH * 60 + iM <= 0) {
+      setState(() => draft.error = 'Set start time, end time, and interval.');
+      return;
+    }
+    final slots = _generateSlots(draft.startTime!, draft.endTime!, iH, iM);
+    if (slots.isEmpty) {
+      setState(() => draft.error = 'End time must be after start time.');
+      return;
+    }
+    setState(() {
+      draft.isSaving = true;
+      draft.error = null;
+    });
+    try {
+      final entry = CalendarScheduleEntry(
+        id: draft.id,
+        serviceId: widget.nodeId,
+        scheduleDate: draft.date,
+        slots: slots,
+        maxBookingsPerSlot: maxVal,
+        isEnabled: draft.isEnabled,
+        slotStartTime: draft.startTime,
+        slotEndTime: draft.endTime,
+        slotIntervalHours: iH,
+        slotIntervalMinutes: iM,
+      );
+      final saved = await _calRepo.save(entry);
+      if (mounted) {
+        setState(() => draft.id = saved.id);
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Calendar entry saved.'),
+          behavior: SnackBarBehavior.floating,
+        ));
+      }
+    } catch (e) {
+      if (mounted) setState(() => draft.error = 'Save failed: $e');
+    } finally {
+      if (mounted) setState(() => draft.isSaving = false);
+    }
+  }
+
+  Future<void> _deleteCalEntry(_CalendarEntryDraft draft) async {
+    if (draft.id == null) {
+      draft.dispose();
+      setState(() => _calEntries.remove(draft));
+      return;
+    }
+    try {
+      await _calRepo.delete(draft.id!);
+      draft.dispose();
+      if (mounted) setState(() => _calEntries.remove(draft));
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('Delete failed: $e'),
+          backgroundColor: Colors.red,
+          behavior: SnackBarBehavior.floating,
+        ));
+      }
+    }
+  }
+
+  Widget _buildCalendarOverridesSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          padding: const EdgeInsets.all(10),
+          decoration: BoxDecoration(
+            color: AppColors.primary.withValues(alpha: 0.06),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: AppColors.primary.withValues(alpha: 0.25)),
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(Icons.event_note_rounded,
+                  color: AppColors.primary, size: 14),
+              const SizedBox(width: 8),
+              const Expanded(
+                child: Text(
+                  'Define specific slots for a date, overriding the normal weekly schedule for that date.',
+                  style: TextStyle(
+                      fontSize: 11,
+                      color: AppColors.textSecondary,
+                      height: 1.4),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 12),
+        if (_calEntries.isEmpty)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            child: Center(
+              child: Column(
+                children: [
+                  Icon(Icons.calendar_today_outlined,
+                      size: 28, color: AppColors.textSecondary),
+                  const SizedBox(height: 8),
+                  const Text(
+                    'No calendar overrides yet.',
+                    style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                  ),
+                ],
+              ),
+            ),
+          )
+        else
+          for (final draft in _calEntries) _buildCalCard(draft),
+        const SizedBox(height: 8),
+        OutlinedButton.icon(
+          onPressed: _addCalEntry,
+          icon: const Icon(Icons.add, size: 15),
+          label: const Text('Add Date Override', style: TextStyle(fontSize: 12)),
+          style: OutlinedButton.styleFrom(
+            foregroundColor: AppColors.primary,
+            side: BorderSide(color: AppColors.primary),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+            minimumSize: Size.zero,
+            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildCalCard(_CalendarEntryDraft draft) {
+    final generatedSlots = _generateSlotsForDraft(draft);
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppColors.background,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Date + enabled
+          Row(
+            children: [
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: AppColors.primary.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(5),
+                ),
+                child: Text(
+                  _calFormatDate(draft.date),
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.primary,
+                  ),
+                ),
+              ),
+              const Spacer(),
+              Switch(
+                value: draft.isEnabled,
+                onChanged: (v) => setState(() => draft.isEnabled = v),
+                activeThumbColor: AppColors.success,
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+
+          // Slot generator
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: AppColors.surface,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: AppColors.border),
+            ),
+            child: Column(
+              children: [
+                _schedTimeRow(
+                  value: draft.startTime,
+                  onTap: () => _pickTimeForEntry(draft, isStart: true),
+                ),
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 4),
+                  child: Divider(height: 1, color: AppColors.border),
+                ),
+                _schedTimeRow(
+                  value: draft.endTime,
+                  onTap: () => _pickTimeForEntry(draft, isStart: false),
+                ),
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 4),
+                  child: Divider(height: 1, color: AppColors.border),
+                ),
+                Row(
+                  children: [
+                    const Text('Interval',
+                        style: TextStyle(
+                            fontSize: 12, color: AppColors.textSecondary)),
+                    const Spacer(),
+                    SizedBox(
+                      width: 56,
+                      child: TextField(
+                        controller: draft.intervalHours,
+                        textAlign: TextAlign.center,
+                        keyboardType: TextInputType.number,
+                        inputFormatters: [
+                          FilteringTextInputFormatter.digitsOnly
+                        ],
+                        style: const TextStyle(
+                            fontSize: 13, fontWeight: FontWeight.w600),
+                        onChanged: (_) => setState(() {}),
+                        decoration: InputDecoration(
+                          isDense: true,
+                          contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 6, vertical: 7),
+                          border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(6)),
+                          hintText: '0',
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    const Text('hr',
+                        style: TextStyle(
+                            fontSize: 11, color: AppColors.textSecondary)),
+                    const SizedBox(width: 8),
+                    SizedBox(
+                      width: 56,
+                      child: TextField(
+                        controller: draft.intervalMinutes,
+                        textAlign: TextAlign.center,
+                        keyboardType: TextInputType.number,
+                        inputFormatters: [
+                          FilteringTextInputFormatter.digitsOnly
+                        ],
+                        style: const TextStyle(
+                            fontSize: 13, fontWeight: FontWeight.w600),
+                        onChanged: (_) => setState(() {}),
+                        decoration: InputDecoration(
+                          isDense: true,
+                          contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 6, vertical: 7),
+                          border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(6)),
+                          hintText: '30',
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    const Text('min',
+                        style: TextStyle(
+                            fontSize: 11, color: AppColors.textSecondary)),
+                  ],
+                ),
+              ],
+            ),
+          ),
+
+          // Generated slots preview
+          if (generatedSlots.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Text(
+              '${generatedSlots.length} slot${generatedSlots.length == 1 ? '' : 's'}',
+              style: const TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.textSecondary),
+            ),
+            const SizedBox(height: 4),
+            Wrap(
+              spacing: 4,
+              runSpacing: 4,
+              children: generatedSlots
+                  .map((s) => Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: AppColors.primary.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: Text(s,
+                            style: const TextStyle(
+                                fontSize: 11, color: AppColors.primary)),
+                      ))
+                  .toList(),
+            ),
+          ],
+          const SizedBox(height: 8),
+
+          // Capacity row
+          Row(
+            children: [
+              const Text('Max / slot',
+                  style: TextStyle(
+                      fontSize: 12, color: AppColors.textSecondary)),
+              const Spacer(),
+              SizedBox(
+                width: 68,
+                child: TextField(
+                  controller: draft.maxBookings,
+                  textAlign: TextAlign.center,
+                  keyboardType: TextInputType.number,
+                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                  style: const TextStyle(
+                      fontSize: 13, fontWeight: FontWeight.w600),
+                  decoration: InputDecoration(
+                    isDense: true,
+                    contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 6, vertical: 7),
+                    border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(6)),
+                    hintText: '5',
+                  ),
+                ),
+              ),
+            ],
+          ),
+
+          if (draft.error != null) ...[
+            const SizedBox(height: 6),
+            Text(draft.error!,
+                style: const TextStyle(
+                    fontSize: 11, color: AppColors.error)),
+          ],
+
+          const SizedBox(height: 8),
+
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              if (draft.id != null)
+                TextButton(
+                  onPressed:
+                      draft.isSaving ? null : () => _deleteCalEntry(draft),
+                  style: TextButton.styleFrom(
+                    foregroundColor: AppColors.error,
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 10, vertical: 5),
+                    minimumSize: Size.zero,
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  ),
+                  child: const Text('Delete',
+                      style: TextStyle(fontSize: 11)),
+                ),
+              const SizedBox(width: 6),
+              FilledButton(
+                onPressed:
+                    draft.isSaving ? null : () => _saveCalEntry(draft),
+                style: FilledButton.styleFrom(
+                  backgroundColor: AppColors.primary,
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 14, vertical: 7),
+                  minimumSize: Size.zero,
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+                child: draft.isSaving
+                    ? const SizedBox(
+                        width: 12,
+                        height: 12,
+                        child: CircularProgressIndicator(
+                            strokeWidth: 2, color: Colors.white),
+                      )
+                    : const Text('Save',
+                        style: TextStyle(fontSize: 11)),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }
@@ -1847,6 +2377,22 @@ class _CatalogNodeConfigDialogState extends ConsumerState<CatalogNodeConfigDialo
             ),
           ),
         ],
+
+        // ── Calendar Overrides ──────────────────────────────────────────────
+        const SizedBox(height: 24),
+        const Divider(color: AppColors.border),
+        const SizedBox(height: 12),
+        const Text(
+          'CALENDAR OVERRIDES',
+          style: TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.w700,
+            color: AppColors.textSecondary,
+            letterSpacing: 0.5,
+          ),
+        ),
+        const SizedBox(height: 10),
+        _buildCalendarOverridesSection(),
       ],
     );
   }
@@ -1860,7 +2406,7 @@ class _CatalogNodeConfigDialogState extends ConsumerState<CatalogNodeConfigDialo
         SegmentedButton<String>(
           segments: const [
             ButtonSegment(value: 'percentage', label: Text('Percentage (%)')),
-            ButtonSegment(value: 'fixed', label: Text('Fixed (â‚¹)')),
+            ButtonSegment(value: 'fixed', label: Text('Fixed (₹)')),
           ],
           selected: {_commType},
           onSelectionChanged: (s) =>
@@ -1868,7 +2414,7 @@ class _CatalogNodeConfigDialogState extends ConsumerState<CatalogNodeConfigDialo
         ),
         const SizedBox(height: 12),
         _label(
-            _commType == 'percentage' ? 'Platform Commission Rate (%)' : 'Fixed Amount (â‚¹)'),
+            _commType == 'percentage' ? 'Platform Commission Rate (%)' : 'Fixed Amount (₹)'),
         const SizedBox(height: 4),
         TextField(
           controller: _commValueCtrl,
@@ -1941,14 +2487,14 @@ class _CatalogNodeConfigDialogState extends ConsumerState<CatalogNodeConfigDialo
         SegmentedButton<String>(
           segments: const [
             ButtonSegment(value: 'percentage', label: Text('Percentage (%)')),
-            ButtonSegment(value: 'fixed', label: Text('Fixed (â‚¹)')),
+            ButtonSegment(value: 'fixed', label: Text('Fixed (₹)')),
           ],
           selected: {_surgeType},
           onSelectionChanged: (s) =>
               setState(() => _surgeType = s.first),
         ),
         const SizedBox(height: 12),
-        _label(_surgeType == 'percentage' ? 'Surge Rate (%)' : 'Fixed Amount (â‚¹)'),
+        _label(_surgeType == 'percentage' ? 'Surge Rate (%)' : 'Fixed Amount (₹)'),
         const SizedBox(height: 4),
         TextField(
           controller: _surgeValueCtrl,
@@ -2032,10 +2578,10 @@ class _CatalogNodeConfigDialogState extends ConsumerState<CatalogNodeConfigDialo
               }).toList(),
             ),
 
-          // â”€â”€ Per-vendor fee inputs â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+          // -- Per-vendor fee inputs -------------------------------------
           if (_pvSelectedIds.isNotEmpty) ...[
             const SizedBox(height: 16),
-            _label('Additional Fee per Vendor (â‚¹)'),
+            _label('Additional Fee per Vendor (₹)'),
             const SizedBox(height: 8),
             ..._pvVendors
                 .where((v) => _pvSelectedIds.contains(v['id'] as String))
@@ -2059,7 +2605,7 @@ class _CatalogNodeConfigDialogState extends ConsumerState<CatalogNodeConfigDialo
                       child: TextField(
                         controller: ctrl,
                         decoration: _inputDeco('e.g. 200')
-                            .copyWith(prefixText: 'â‚¹ '),
+                            .copyWith(prefixText: '₹ '),
                         keyboardType: const TextInputType.numberWithOptions(
                             decimal: true),
                         inputFormatters: [
@@ -3038,9 +3584,9 @@ class _CatalogNodeConfigDialogState extends ConsumerState<CatalogNodeConfigDialo
       );
 }
 
-// â”€â”€ AMC plan entry with per-plan TextEditingControllers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// -- AMC plan entry with per-plan TextEditingControllers ----------------------
 
-// â”€â”€ Shared-mode option card used inside the mode-choice dialog â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// -- Shared-mode option card used inside the mode-choice dialog -----------------
 
 class _SharedModeOption extends StatelessWidget {
   const _SharedModeOption({

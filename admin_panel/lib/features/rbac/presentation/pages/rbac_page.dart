@@ -32,7 +32,7 @@ class _RbacPageState extends ConsumerState<RbacPage>
   @override
   Widget build(BuildContext context) {
     return PermissionGuard(
-      permission: 'rbac.manage',
+      permission: 'rbac.read',
       child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [

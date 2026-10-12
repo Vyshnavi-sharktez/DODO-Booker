@@ -15,9 +15,13 @@ String _generateOtp() => (100000 + Random().nextInt(900000)).toString();
 const _reviewSelect = '''
   *,
   vendors(id, business_name),
+  customers!customer_id(full_name, phone),
   customer_reviews!booking_id(id, rating, review_text, created_at),
   booking_items(
     service_id,
+    service_name,
+    item_name,
+    category_name,
     quantity,
     unit_price,
     total_price,
@@ -184,6 +188,120 @@ class BookingsRepository {
     }
   }
 
+  Future<Booking> updateBookingAddress(
+    String id,
+    String address, {
+    double? latitude,
+    double? longitude,
+  }) async {
+    final payload = <String, dynamic>{
+      'address': address.trim().isNotEmpty ? address.trim() : null,
+      'updated_at': DateTime.now().toUtc().toIso8601String(),
+    };
+    if (latitude != null) payload['latitude'] = latitude;
+    if (longitude != null) payload['longitude'] = longitude;
+
+    final data = await _supabase
+        .from('bookings')
+        .update(payload)
+        .eq('id', id)
+        .select(_reviewSelect)
+        .single();
+    return Booking.fromMap(data);
+  }
+
+  Future<Booking> updateBookingStatus(String id, String newStatus) async {
+    final current = await _supabase
+        .from('bookings')
+        .select('customer_id, booking_number, status, payment_method, vendor_id')
+        .eq('id', id)
+        .single();
+
+    final oldStatus = current['status'] as String?;
+    final customerId = current['customer_id'] as String?;
+    final bookingNumber = current['booking_number'] as String? ?? '';
+    final existingVendorId = current['vendor_id'] as String?;
+
+    final Map<String, dynamic> payload = {
+      'status': newStatus,
+      'updated_at': DateTime.now().toUtc().toIso8601String(),
+    };
+
+    final isReactivating = oldStatus == 'cancelled' &&
+        (newStatus == 'pending' || newStatus == 'assigned');
+
+    if (isReactivating) {
+      payload['cancelled_by'] = null;
+      payload['cancelled_at'] = null;
+      payload['cancellation_reason'] = null;
+      payload['payment_method'] = 'cash';
+      payload['payment_status'] = 'pending';
+      payload['cod_cash_collected'] = null;
+      payload['cod_confirmed_at'] = null;
+      payload['cod_not_collected_reason'] = null;
+
+      if (newStatus == 'pending') {
+        payload['assignment_type'] = kAssignmentTypeUnassigned;
+        payload['vendor_id'] = null;
+        payload['dodo_team_id'] = null;
+        payload['dispatch_status'] = 'idle';
+      } else if (newStatus == 'assigned') {
+        if (existingVendorId != null && existingVendorId.isNotEmpty) {
+          payload['assignment_type'] = kAssignmentTypeVendor;
+          payload['dispatch_status'] = 'assigned';
+        } else {
+          payload['assignment_type'] = kAssignmentTypeUnassigned;
+          payload['dispatch_status'] = 'idle';
+        }
+      }
+    } else if (newStatus == 'cancelled') {
+      payload['cancelled_by'] = 'admin';
+      payload['cancelled_at'] = DateTime.now().toUtc().toIso8601String();
+    } else if (newStatus == 'pending') {
+      payload['assignment_type'] = kAssignmentTypeUnassigned;
+      payload['vendor_id'] = null;
+      payload['dodo_team_id'] = null;
+      payload['dispatch_status'] = 'idle';
+    }
+
+    final data = await _supabase
+        .from('bookings')
+        .update(payload)
+        .eq('id', id)
+        .select(_reviewSelect)
+        .single();
+
+    if (customerId != null && customerId.isNotEmpty) {
+      try {
+        final statusLabel = switch (newStatus) {
+          'pending' => 'Pending',
+          'assigned' => 'Assigned',
+          'accepted' => 'Accepted',
+          'in_progress' => 'In Progress',
+          'completed' => 'Completed',
+          'cancelled' => 'Cancelled',
+          _ => newStatus,
+        };
+        await _supabase.from('notifications').insert({
+          'user_type': 'customer',
+          'user_id': customerId,
+          'title': 'Booking Status Updated',
+          'message':
+              'Your booking #$bookingNumber status has been updated to $statusLabel.',
+          'notification_type': 'booking_status',
+          'is_read': false,
+          'entity_type': 'booking',
+          'entity_id': id,
+        });
+      } catch (e) {
+        debugPrint(
+            '[DODO][Bookings] Warning: Failed to send customer notification: $e');
+      }
+    }
+
+    return Booking.fromMap(data);
+  }
+
   Future<Booking> cancelBooking(String id, {String? reason}) async {
     final updateData = <String, dynamic>{
       'status': 'cancelled',
@@ -206,13 +324,58 @@ class BookingsRepository {
     required DateTime serviceDate,
     required String address,
     String? notes,
-    required List<({String serviceId, int quantity, double unitPrice})> items,
+    String? scheduledTime,
+    double? latitude,
+    double? longitude,
+    required List<({String serviceId, String? customName, String? customCategoryName, int quantity, double unitPrice})> items,
     List<({String addonId, String addonName, double addonPrice})> addons =
         const [],
+    double discountAmount = 0.0,
+    double taxAmount = 0.0,
+    String? couponCode,
   }) async {
     final serviceTotal =
         items.fold(0.0, (sum, e) => sum + e.unitPrice * e.quantity);
     final addonsTotal = addons.fold(0.0, (sum, a) => sum + a.addonPrice);
+    final subtotal = serviceTotal + addonsTotal;
+    final total = (subtotal - discountAmount + taxAmount).clamp(0.0, double.infinity);
+
+    // ── Validate catalog services and snapshot names ──────────────────────────
+    // Done before inserting the booking to avoid orphaned booking rows.
+    final catalogServiceIds = items
+        .where((e) => e.serviceId.isNotEmpty)
+        .map((e) => e.serviceId)
+        .toSet()
+        .toList();
+    final serviceNameMap = <String, String>{};
+    if (catalogServiceIds.isNotEmpty) {
+      final rows = await _supabase
+          .from('catalog_nodes')
+          .select('id, name, is_active, is_bookable, availability_status, unavailability_message')
+          .inFilter('id', catalogServiceIds);
+      final fetched = <String>{};
+      for (final row in rows as List<dynamic>) {
+        final m = row as Map<String, dynamic>;
+        final id = m['id'] as String;
+        fetched.add(id);
+        final isActive = m['is_active'] as bool? ?? false;
+        final isBookable = m['is_bookable'] as bool? ?? false;
+        final availabilityStatus = m['availability_status'] as String? ?? 'active';
+        if (!isActive || !isBookable || availabilityStatus != 'active') {
+          final hint = m['unavailability_message'] as String?;
+          final name = m['name'] as String? ?? id;
+          throw Exception(
+            hint?.isNotEmpty == true ? hint : 'Service "$name" is currently unavailable',
+          );
+        }
+        serviceNameMap[id] = m['name'] as String? ?? '';
+      }
+      for (final id in catalogServiceIds) {
+        if (!fetched.contains(id)) {
+          throw Exception('Service (id=$id) no longer exists and cannot be booked');
+        }
+      }
+    }
 
     final bookingData = await _supabase
         .from('bookings')
@@ -222,9 +385,15 @@ class BookingsRepository {
           'service_date': serviceDate.toIso8601String().split('T').first,
           'address': address.isNotEmpty ? address : null,
           'notes': notes,
-          'subtotal': serviceTotal,
-          'discount_amount': 0.0,
-          'total_amount': serviceTotal + addonsTotal,
+          'subtotal': subtotal,
+          'discount_amount': discountAmount,
+          'tax_amount': taxAmount,
+          'total_amount': total,
+          'is_admin_booking': true,
+          if (latitude != null) 'latitude': latitude,
+          if (longitude != null) 'longitude': longitude,
+          if (scheduledTime != null) 'scheduled_time': scheduledTime,
+          if (couponCode != null) 'coupon_code': couponCode,
           'completion_otp': _generateOtp(),
         })
         .select('id')
@@ -237,7 +406,15 @@ class BookingsRepository {
         items
             .map((e) => {
                   'booking_id': bookingId,
-                  'service_id': e.serviceId,
+                  if (e.serviceId.isNotEmpty) 'service_id': e.serviceId,
+                  // Catalog items: snapshot the validated catalog name for history.
+                  if (e.serviceId.isNotEmpty && serviceNameMap.containsKey(e.serviceId))
+                    'service_name': serviceNameMap[e.serviceId],
+                  // Custom items (no serviceId): write admin-entered labels.
+                  if (e.serviceId.isEmpty && e.customName != null && e.customName!.isNotEmpty)
+                    'item_name': e.customName,
+                  if (e.serviceId.isEmpty && e.customCategoryName != null && e.customCategoryName!.isNotEmpty)
+                    'category_name': e.customCategoryName,
                   'quantity': e.quantity,
                   'unit_price': e.unitPrice,
                   'total_price': e.unitPrice * e.quantity,
@@ -278,6 +455,138 @@ class BookingsRepository {
         .eq('id', bookingId)
         .single();
     return Booking.fromMap(data).copyWith(addons: insertedAddons);
+  }
+
+  Future<Booking> updateBookingFull({
+    required String id,
+    required DateTime serviceDate,
+    required String address,
+    required String status,
+    String? notes,
+    String? scheduledTime,
+    double? latitude,
+    double? longitude,
+    required List<({String serviceId, String? customName, String? customCategoryName, int quantity, double unitPrice})> items,
+    List<({String addonId, String addonName, double addonPrice})> addons = const [],
+    double discountAmount = 0.0,
+    double taxAmount = 0.0,
+    String? couponCode,
+  }) async {
+    final serviceTotal =
+        items.fold(0.0, (sum, e) => sum + e.unitPrice * e.quantity);
+    final addonsTotal = addons.fold(0.0, (sum, a) => sum + a.addonPrice);
+    final subtotal = serviceTotal + addonsTotal;
+    final total =
+        (subtotal - discountAmount + taxAmount).clamp(0.0, double.infinity);
+
+    // Snapshot service names for booking_items.service_name.
+    // Unlike createBooking, availability (isBookable / isActive) is NOT
+    // re-validated here: the admin is editing an existing booking and must
+    // be able to preserve services that were made unavailable after the fact.
+    final catalogServiceIds = items
+        .where((e) => e.serviceId.isNotEmpty)
+        .map((e) => e.serviceId)
+        .toSet()
+        .toList();
+    final serviceNameMap = <String, String>{};
+    if (catalogServiceIds.isNotEmpty) {
+      final rows = await _supabase
+          .from('catalog_nodes')
+          .select('id, name')
+          .inFilter('id', catalogServiceIds);
+      for (final row in rows as List<dynamic>) {
+        final m = row as Map<String, dynamic>;
+        serviceNameMap[m['id'] as String] = m['name'] as String? ?? '';
+      }
+    }
+
+    // Mark as admin booking before touching items so the category-enforcement
+    // trigger sees is_admin_booking = true when the new rows are inserted.
+    await _supabase
+        .from('bookings')
+        .update({'is_admin_booking': true})
+        .eq('id', id);
+
+    // Replace booking_items FIRST so they are already in their final state
+    // when the bookings UPDATE below fires the realtime event to the customer app.
+    await _supabase.from('booking_items').delete().eq('booking_id', id);
+    if (items.isNotEmpty) {
+      await _supabase.from('booking_items').insert(
+        items
+            .map((e) => {
+                  'booking_id': id,
+                  if (e.serviceId.isNotEmpty) 'service_id': e.serviceId,
+                  if (e.serviceId.isNotEmpty &&
+                      serviceNameMap.containsKey(e.serviceId))
+                    'service_name': serviceNameMap[e.serviceId],
+                  if (e.serviceId.isEmpty &&
+                      e.customName != null &&
+                      e.customName!.isNotEmpty)
+                    'item_name': e.customName,
+                  if (e.serviceId.isEmpty &&
+                      e.customCategoryName != null &&
+                      e.customCategoryName!.isNotEmpty)
+                    'category_name': e.customCategoryName,
+                  'quantity': e.quantity,
+                  'unit_price': e.unitPrice,
+                  'total_price': e.unitPrice * e.quantity,
+                })
+            .toList(),
+      );
+    }
+
+    // Replace booking_addons FIRST (non-fatal)
+    List<BookingAddon> updatedAddons = [];
+    try {
+      await _supabase.from('booking_addons').delete().eq('booking_id', id);
+      if (addons.isNotEmpty) {
+        await _supabase.from('booking_addons').insert(
+          addons
+              .map((a) => {
+                    'booking_id': id,
+                    'addon_id': a.addonId,
+                    'addon_name': a.addonName,
+                    'addon_price': a.addonPrice,
+                  })
+              .toList(),
+        );
+        updatedAddons = addons
+            .map((a) => BookingAddon(
+                  addonId: a.addonId,
+                  name: a.addonName,
+                  price: a.addonPrice,
+                ))
+            .toList();
+      }
+    } catch (e) {
+      debugPrint(
+          '[DODO][Bookings] Warning: booking_addons update failed: $e');
+    }
+
+    // Update booking record LAST — fires the realtime event to the customer app
+    // after items and addons are already committed.
+    await _supabase.from('bookings').update({
+      'service_date': serviceDate.toIso8601String().split('T').first,
+      'address': address.isNotEmpty ? address : null,
+      'status': status,
+      'notes': notes,
+      'subtotal': subtotal,
+      'discount_amount': discountAmount,
+      'tax_amount': taxAmount,
+      'total_amount': total,
+      'scheduled_time': scheduledTime,
+      'is_admin_booking': true,
+      if (latitude != null) 'latitude': latitude,
+      if (longitude != null) 'longitude': longitude,
+      if (couponCode != null) 'coupon_code': couponCode,
+    }).eq('id', id);
+
+    final data = await _supabase
+        .from('bookings')
+        .select(_reviewSelect)
+        .eq('id', id)
+        .single();
+    return Booking.fromMap(data).copyWith(addons: updatedAddons);
   }
 
   Future<Booking> startDodoTeamService(String id) async {

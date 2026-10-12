@@ -13,6 +13,7 @@ class SupportConversation {
   final String? customerName;
   final String? customerPhone;
   final String? customerEmail;
+  final bool? customerIsActive;
   // Set when the customer started a new episode after a prior closed one.
   final DateTime? currentEpisodeStartedAt;
   // True for synthetic "Prior Episode" entries shown in the Closed tab.
@@ -31,6 +32,7 @@ class SupportConversation {
     this.customerName,
     this.customerPhone,
     this.customerEmail,
+    this.customerIsActive,
     this.currentEpisodeStartedAt,
     this.viewAsHistory = false,
   });
@@ -55,6 +57,7 @@ class SupportConversation {
       customerName: customer?['full_name'] as String?,
       customerPhone: customer?['phone'] as String?,
       customerEmail: customer?['email'] as String?,
+      customerIsActive: customer?['is_active'] as bool?,
       currentEpisodeStartedAt: m['current_episode_started_at'] != null
           ? DateTime.parse(m['current_episode_started_at'] as String)
           : null,

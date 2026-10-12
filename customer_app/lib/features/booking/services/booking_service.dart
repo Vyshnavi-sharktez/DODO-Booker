@@ -1,4 +1,4 @@
-﻿import 'dart:math';
+import 'dart:math';
 
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -28,9 +28,14 @@ class BookingService {
     debugPrint('[DODO][Booking] Looking up customer_id for phone=$phone');
     final row = await _client
         .from('customers')
-        .select('id')
+        .select('id, is_active')
         .eq('phone', phone)
         .single();
+    if (!(row['is_active'] as bool? ?? true)) {
+      throw Exception(
+          'Your account is currently unable to place new bookings. '
+          'Please contact our support team for assistance.');
+    }
     return row['id'] as String;
   }
 
@@ -44,6 +49,57 @@ class BookingService {
   }) async {
     debugPrint('[DODO][Slots] ══════════ fetchAvailableSlots ══════════');
     debugPrint('[DODO][Slots] date=$dateStr  serviceId="$serviceId"  parentNodeId=$parentNodeId');
+
+    // ── -1. Check calendar schedule overrides (highest priority) ────────────
+    // A calendar override for this specific date bypasses the normal weekly
+    // schedule entirely. Service-level override takes priority over global.
+    if (serviceId.isNotEmpty) {
+      try {
+        final calRows = await _client
+            .from('calendar_schedules')
+            .select()
+            .eq('service_id', serviceId)
+            .eq('schedule_date', dateStr);
+        if (calRows.isNotEmpty) {
+          final calCfg = Map<String, dynamic>.from(calRows.first as Map);
+          debugPrint('[DODO][Slots] CONFIG SOURCE: service calendar override for $dateStr');
+          final calEnabled = (calCfg['is_enabled'] as bool?) ?? true;
+          if (!calEnabled) {
+            debugPrint('[DODO][Slots] → returning [] (service calendar override disabled)');
+            return [];
+          }
+          return await _buildSlots(dateStr, serviceId, calCfg,
+              configSource: 'service-calendar',
+              vendorId: vendorId,
+              skipWorkingDaysCheck: true);
+        }
+      } catch (e) {
+        debugPrint('[DODO][Slots] Warning: service calendar check failed (non-fatal): $e');
+      }
+    }
+    // Global calendar override
+    try {
+      final globalCalRows = await _client
+          .from('calendar_schedules')
+          .select()
+          .isFilter('service_id', null)
+          .eq('schedule_date', dateStr);
+      if (globalCalRows.isNotEmpty) {
+        final calCfg = Map<String, dynamic>.from(globalCalRows.first as Map);
+        debugPrint('[DODO][Slots] CONFIG SOURCE: global calendar override for $dateStr');
+        final calEnabled = (calCfg['is_enabled'] as bool?) ?? true;
+        if (!calEnabled) {
+          debugPrint('[DODO][Slots] → returning [] (global calendar override disabled)');
+          return [];
+        }
+        return await _buildSlots(dateStr, serviceId, calCfg,
+            configSource: 'global-calendar',
+            vendorId: vendorId,
+            skipWorkingDaysCheck: true);
+      }
+    } catch (e) {
+      debugPrint('[DODO][Slots] Warning: global calendar check failed (non-fatal): $e');
+    }
 
     // ── 0. Try relationship/node-scoped scheduling config ───────────────────
     // Call the RPC even when parentNodeId is null: the function handles null
@@ -166,24 +222,32 @@ class BookingService {
   }
 
   /// Shared slot-generation logic used by both scoped and fallback paths.
+  /// Set [skipWorkingDaysCheck] = true for calendar overrides, which apply to
+  /// a specific date regardless of the configured working days.
   Future<List<TimeSlotModel>> _buildSlots(
       String dateStr, String serviceId, Map<String, dynamic> cfg,
-      {String configSource = 'unknown', String? vendorId}) async {
+      {String configSource = 'unknown',
+      String? vendorId,
+      bool skipWorkingDaysCheck = false}) async {
     debugPrint('[DODO][Slots] ── _buildSlots: configSource=$configSource');
 
     // ── Check working day ────────────────────────────────────────────────────
-    final date = DateTime.parse(dateStr);
-    final dayOfWeek = date.weekday == 7 ? 0 : date.weekday;
-    final workingDays = (cfg['working_days'] as List?)
-            ?.map((e) => (e as num).toInt())
-            .toList() ??
-        [1, 2, 3, 4, 5];
-    debugPrint('[DODO][Slots] STAGE working-day: date=$dateStr  '
-        'dart.weekday=${date.weekday}  mapped=$dayOfWeek  '
-        'working_days=$workingDays  → pass=${workingDays.contains(dayOfWeek)}');
-    if (!workingDays.contains(dayOfWeek)) {
-      debugPrint('[DODO][Slots] → returning [] ($dateStr is not a working day)');
-      return [];
+    if (!skipWorkingDaysCheck) {
+      final date = DateTime.parse(dateStr);
+      final dayOfWeek = date.weekday == 7 ? 0 : date.weekday;
+      final workingDays = (cfg['working_days'] as List?)
+              ?.map((e) => (e as num).toInt())
+              .toList() ??
+          [1, 2, 3, 4, 5];
+      debugPrint('[DODO][Slots] STAGE working-day: date=$dateStr  '
+          'dart.weekday=${date.weekday}  mapped=$dayOfWeek  '
+          'working_days=$workingDays  → pass=${workingDays.contains(dayOfWeek)}');
+      if (!workingDays.contains(dayOfWeek)) {
+        debugPrint('[DODO][Slots] → returning [] ($dateStr is not a working day)');
+        return [];
+      }
+    } else {
+      debugPrint('[DODO][Slots] STAGE working-day: skipped (calendar override)');
     }
 
     // ── Availability block check ─────────────────────────────────────────────
@@ -354,6 +418,7 @@ class BookingService {
     required DateTime date,
     required TimeSlotModel slot,
     String? couponId,
+    String? couponCode,
     double discountAmount = 0.0,
     double priceAdjustment = 0.0,
     List<SelectedAddon> selectedAddons = const [],
@@ -369,6 +434,12 @@ class BookingService {
     debugPrint('[DODO][Booking] Date: ${date.toIso8601String().substring(0, 10)}');
     debugPrint('[DODO][Booking] Slot: ${slot.label}');
     if (amcPlan != null) debugPrint('[DODO][Booking] AMC plan: ${amcPlan.name} (${amcPlan.recurrenceInterval}) ₹${amcPlan.pricePerVisit}/visit');
+
+    // ── Validate service is currently bookable ───────────────────────────────
+    if (!service.isCurrentlyAvailable) {
+      debugPrint('[DODO][Booking] Blocked: service not bookable — isActive=${service.isActive} isBookable=${service.isBookable} availability=${service.availabilityStatus}');
+      throw Exception(service.unavailabilityReason);
+    }
 
     final customerId = await _getCustomerId();
     debugPrint('[DODO][Booking] customer_id=$customerId');
@@ -507,6 +578,7 @@ class BookingService {
         // Auto-assign: when customer picks a preferred vendor, write vendor_id
         // immediately so admin dispatch is bypassed for this booking.
         'vendor_id': ?preferredVendorId,
+        if (couponCode != null) 'coupon_code': couponCode,
         if (amcPlan != null) ...{
           'is_amc': true,
           'amc_plan_name': amcPlan.name,
@@ -625,6 +697,7 @@ class BookingService {
 
     return BookingModel(
       id: bookingId,
+      bookingNumber: bookingData['booking_number']?.toString(),
       serviceId: service.id,
       serviceName: service.name,
       addressId: address.id,

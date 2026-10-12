@@ -155,6 +155,13 @@ class RazorpayService {
       debugPrint('[DODO][Razorpay] Payment success — paymentId=${r.paymentId}  orderId=${r.orderId}');
       razorpay.clear();
       if (!completer.isCompleted) {
+        // Validate order ID to guard against stale callbacks from a previous
+        // Razorpay session reaching this listener (Razorpay SDK is a singleton).
+        if (r.orderId != orderId) {
+          debugPrint('[DODO][Razorpay] ⚠ orderId mismatch — expected $orderId, got ${r.orderId} — treating as failure');
+          completer.complete(RazorpayCallbackData.webFailure('Order ID mismatch — stale callback from a previous payment session.'));
+          return;
+        }
         completer.complete(RazorpayCallbackData.success(r));
       }
     });

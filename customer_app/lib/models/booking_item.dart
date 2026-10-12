@@ -25,6 +25,7 @@ class BookingItem {
     // Prefer the snapshotted name written at booking time (never goes blank).
     // Fall back to joined tables for rows created before the snapshot column existed.
     final snapshotName = json['service_name'] as String?;
+    final itemName = json['item_name'] as String?;
     final catalogNode =
         (json['catalog_nodes'] ?? json['services']) as Map<String, dynamic>?;
     final vsr =
@@ -33,6 +34,7 @@ class BookingItem {
       serviceId: (json['service_id'] as String?) ?? '',
       customServiceId: json['custom_service_id'] as String?,
       serviceName: (snapshotName?.isNotEmpty == true ? snapshotName : null) ??
+          (itemName?.isNotEmpty == true ? itemName : null) ??
           (catalogNode?['name'] as String?) ??
           (vsr?['service_name'] as String?) ??
           '',

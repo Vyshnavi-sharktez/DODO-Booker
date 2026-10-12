@@ -39,6 +39,7 @@ import '../../service_availability/services/serviceability_service.dart';
 import '../../service_availability/widgets/service_area_unavailable_dialog.dart';
 import '../../../features/booking/services/razorpay_service.dart';
 import '../../../features/booking/widgets/payment_failed_dialog.dart';
+import '../../../features/booking/widgets/booking_restricted_dialog.dart';
 
 class CheckoutScreen extends ConsumerStatefulWidget {
   final bool inModal;
@@ -401,6 +402,8 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
           }
           return;
         }
+        // Customer notification for online payment — fire-and-forget; must not block success path.
+        CheckoutService().sendBookingConfirmedNotification(booking.id);
         if (!mounted) return;
       }
 
@@ -468,7 +471,11 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         debugPrint('[DODO][Checkout] ✗ unmounted in catch — cannot show error');
         return;
       }
-      _showError('Booking failed: $e');
+      if (isBookingRestrictionError(e)) {
+        await showBookingRestrictedDialog(context);
+      } else {
+        _showError('Booking failed: $e');
+      }
     } finally {
       debugPrint('[DODO][Checkout] finally — mounted=$mounted');
       if (mounted) setState(() => _placing = false);

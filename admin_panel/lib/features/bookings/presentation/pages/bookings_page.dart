@@ -19,20 +19,28 @@ import '../../domain/models/booking_item.dart';
 import '../../../amc_plans/presentation/widgets/amc_contract_details_dialog.dart';
 import '../widgets/booking_details_dialog.dart';
 import '../widgets/booking_assignment_dialog.dart';
+import '../widgets/booking_edit_dialog.dart';
 import '../widgets/create_booking_dialog.dart';
+import '../../../../core/rbac/permission_guard.dart';
 
 // ── Column widths ─────────────────────────────────────────────────────────────
+// Fixed columns sum to 970px. The Actions column uses Expanded (no fixed width)
+// so it takes all remaining space. _tableMinWidth reserves 240px for Actions
+// (worst-case 6 icons × 40px compact) plus 32px row h-padding (16 each side).
 
-const double _wId = 130;
-const double _wAssigned = 160;
-const double _wService = 190;
-const double _wDate = 110;
-const double _wStatus = 130;
-const double _wTotal = 140;
-const double _wRating = 120;
-const double _wActions = 200;
+const double _wId = 100;
+const double _wCustomer = 140;
+const double _wAssigned = 110;
+const double _wService = 140;
+const double _wDate = 95;
+const double _wSlotTime = 110;
+const double _wStatus = 110;
+const double _wTotal = 90;
+const double _wRating = 95; // 20px left-padding + 5×14px stars = 90px minimum; 95 gives buffer
+// Actions column is Expanded — no fixed _wActions constant.
 const double _tableMinWidth =
-    _wId + _wAssigned + _wService + _wDate + _wStatus + _wTotal + _wRating + _wActions;
+    _wId + _wCustomer + _wAssigned + _wService + _wDate + _wSlotTime +
+    _wStatus + _wTotal + _wRating + 240 + 32; // 240 min for actions, +32 row padding
 
 // ── Status display config ─────────────────────────────────────────────────────
 
@@ -199,6 +207,7 @@ class _AmcContractAggregate {
 
 final _currency = NumberFormat.currency(symbol: '₹', decimalDigits: 0);
 final _dateFmt = DateFormat('dd MMM yyyy');
+final _weekdayFmt = DateFormat('EEE');
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 
@@ -237,7 +246,10 @@ class _BookingsPageState extends ConsumerState<BookingsPage> {
     if (_searchQuery.isNotEmpty) {
       final q = _searchQuery.toLowerCase();
       result = result
-          .where((b) => b.bookingNumber.toLowerCase().contains(q))
+          .where((b) =>
+              b.bookingNumber.toLowerCase().contains(q) ||
+              (b.customerName?.toLowerCase().contains(q) ?? false) ||
+              (b.customerPhone?.toLowerCase().contains(q) ?? false))
           .toList();
     }
     if (_statusFilter != null) {
@@ -371,21 +383,32 @@ class _BookingsPageState extends ConsumerState<BookingsPage> {
           required serviceDate,
           required address,
           notes,
+          scheduledTime,
+          latitude,
+          longitude,
           required items,
           required addons,
+          discountAmount = 0.0,
+          taxAmount = 0.0,
+          couponCode,
         }) async {
           await ref.read(bookingsNotifierProvider.notifier).createBooking(
                 customerId: customerId,
                 serviceDate: serviceDate,
                 address: address,
                 notes: notes,
+                scheduledTime: scheduledTime,
+                latitude: latitude,
+                longitude: longitude,
                 items: items,
                 addons: addons,
+                discountAmount: discountAmount,
+                taxAmount: taxAmount,
+                couponCode: couponCode,
               );
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                  content: Text('Booking created successfully')),
+              const SnackBar(content: Text('Booking created successfully')),
             );
           }
         },
@@ -399,16 +422,20 @@ class _BookingsPageState extends ConsumerState<BookingsPage> {
       builder: (_) => BookingDetailsDialog(
         booking: booking,
         onAssign: _assignableStatuses.contains(booking.status)
-            ? () {
-                Navigator.of(context).pop();
-                _openAssignDialog(booking);
-              }
+            ? () => _openAssignDialog(booking)
             : null,
-        onCancel: _cancellableStatuses.contains(booking.status) && !booking.isWarrantyRework
-            ? () {
-                Navigator.of(context).pop();
-                _confirmCancel(booking);
-              }
+      ),
+    );
+  }
+
+  void _openEditDialog(Booking booking) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => BookingEditDialog(
+        booking: booking,
+        onAssignRequested: _assignableStatuses.contains(booking.status)
+            ? () => _openAssignDialog(booking)
             : null,
       ),
     );
@@ -1007,14 +1034,18 @@ class _BookingsPageState extends ConsumerState<BookingsPage> {
                         label: const Text('Refresh'),
                       ),
                       const SizedBox(width: 10),
-                      FilledButton.icon(
-                        onPressed: _openCreate,
-                        icon: const Icon(Icons.add_rounded, size: 16),
-                        label: const Text('New Booking'),
-                        style: FilledButton.styleFrom(
-                          backgroundColor: AppColors.primary,
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 18, vertical: 12),
+                      PermissionGuard(
+                        permission: 'booking.create',
+                        fallback: const SizedBox.shrink(),
+                        child: FilledButton.icon(
+                          onPressed: _openCreate,
+                          icon: const Icon(Icons.add_rounded, size: 16),
+                          label: const Text('New Booking'),
+                          style: FilledButton.styleFrom(
+                            backgroundColor: AppColors.primary,
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 18, vertical: 12),
+                          ),
                         ),
                       ),
                     ],
@@ -1064,8 +1095,8 @@ class _BookingsPageState extends ConsumerState<BookingsPage> {
             children: [
               // Search
               AdminSearchBar(
-                hintText: 'Search booking ID…',
-                width: 240,
+                hintText: 'Search by booking ID, customer name or phone…',
+                width: 300,
                 onChanged: (q) => setState(() => _searchQuery = q),
               ),
 
@@ -1270,6 +1301,7 @@ class _BookingsPageState extends ConsumerState<BookingsPage> {
                     totalCount: regular.length,
                     vendors: vendors,
                     onView: _openDetails,
+                    onEdit: _openEditDialog,
                     onAssign: _openAssignDialog,
                     onHistory: _openHistoryDialog,
                     onStartDodoService: _startDodoService,
@@ -1346,6 +1378,7 @@ class _BookingsPageState extends ConsumerState<BookingsPage> {
                     totalCount: reworks.length,
                     vendors: vendors,
                     onView: _openDetails,
+                    onEdit: _openEditDialog,
                     onAssign: _openAssignDialog,
                     onHistory: _openHistoryDialog,
                     onStartDodoService: _startDodoService,
@@ -1370,6 +1403,7 @@ class _BookingsTable extends StatelessWidget {
   final int totalCount;
   final List<Vendor> vendors;
   final void Function(Booking) onView;
+  final void Function(Booking) onEdit;
   final void Function(Booking) onAssign;
   final void Function(Booking) onHistory;
   final void Function(Booking) onStartDodoService;
@@ -1382,6 +1416,7 @@ class _BookingsTable extends StatelessWidget {
     required this.totalCount,
     required this.vendors,
     required this.onView,
+    required this.onEdit,
     required this.onAssign,
     required this.onHistory,
     required this.onStartDodoService,
@@ -1428,9 +1463,11 @@ class _BookingsTable extends StatelessWidget {
                               itemBuilder: (ctx, i) {
                                 final b = bookings[i];
                                 return _BookingRow(
+                                  key: ValueKey(b.id),
                                   booking: b,
                                   vendors: vendors,
                                   onView: () => onView(b),
+                                  onEdit: () => onEdit(b),
                                   onAssign: () => onAssign(b),
                                   onHistory: () => onHistory(b),
                                   onStartDodoService: () => onStartDodoService(b),
@@ -1478,14 +1515,28 @@ class _TableHeader extends StatelessWidget {
       child: Row(
         children: [
           _Cell('Booking ID', width: _wId, header: true),
+          _Cell('Customer', width: _wCustomer, header: true),
           _Cell('Assigned To', width: _wAssigned, header: true),
           _Cell('Service', width: _wService, header: true),
           _Cell('Service Date', width: _wDate, header: true),
+          _Cell('Slot Time', width: _wSlotTime, header: true),
           _Cell('Status', width: _wStatus, header: true),
           _Cell('Total', width: _wTotal, header: true, align: TextAlign.right),
           _Cell('Rating', width: _wRating, header: true,
               padding: const EdgeInsets.only(left: 20)),
-          _Cell('Actions', width: _wActions, header: true, align: TextAlign.center),
+          Expanded(
+            child: Text(
+              'ACTIONS',
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+                color: AppColors.textSecondary,
+                letterSpacing: 0.5,
+              ),
+              textAlign: TextAlign.center,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
         ],
       ),
     );
@@ -1496,6 +1547,7 @@ class _BookingRow extends StatelessWidget {
   final Booking booking;
   final List<Vendor> vendors;
   final VoidCallback onView;
+  final VoidCallback onEdit;
   final VoidCallback onAssign;
   final VoidCallback onHistory;
   final VoidCallback onStartDodoService;
@@ -1504,9 +1556,11 @@ class _BookingRow extends StatelessWidget {
   final String searchQuery;
 
   const _BookingRow({
+    super.key,
     required this.booking,
     required this.vendors,
     required this.onView,
+    required this.onEdit,
     required this.onAssign,
     required this.onHistory,
     required this.onStartDodoService,
@@ -1582,6 +1636,41 @@ class _BookingRow extends StatelessWidget {
             ),
           ),
 
+          // Customer
+          SizedBox(
+            width: _wCustomer,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Tooltip(
+                  message: booking.customerName ?? '',
+                  child: HighlightedText(
+                    text: booking.customerName ?? '—',
+                    query: searchQuery,
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w500,
+                      color: booking.customerName != null
+                          ? AppColors.textPrimary
+                          : AppColors.textSecondary,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                if (booking.customerPhone != null) ...[
+                  const SizedBox(height: 2),
+                  HighlightedText(
+                    text: booking.customerPhone!,
+                    query: searchQuery,
+                    style: TextStyle(fontSize: 11, color: AppColors.textSecondary),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ],
+            ),
+          ),
+
           // Assigned To
           SizedBox(
             width: _wAssigned,
@@ -1624,16 +1713,48 @@ class _BookingRow extends StatelessWidget {
                       ),
                     ],
                   )
-                : Text(
-                    serviceDateStr,
-                    style: TextStyle(
-                      fontSize: 13,
-                      color: booking.serviceDate != null
-                          ? AppColors.textPrimary
-                          : AppColors.textSecondary,
-                    ),
-                    overflow: TextOverflow.ellipsis,
-                  ),
+                : booking.serviceDate != null
+                    ? Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            serviceDateStr,
+                            style: const TextStyle(
+                                fontSize: 13, color: AppColors.textPrimary),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          Text(
+                            _weekdayFmt.format(booking.serviceDate!),
+                            style: const TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w600,
+                              color: Color(0xFF718096),
+                            ),
+                          ),
+                        ],
+                      )
+                    : Text(
+                        '—',
+                        style: TextStyle(
+                            fontSize: 13, color: AppColors.textSecondary),
+                      ),
+          ),
+
+          // Slot Time
+          SizedBox(
+            width: _wSlotTime,
+            child: Text(
+              booking.scheduledTime ?? '—',
+              style: TextStyle(
+                fontSize: 12,
+                color: booking.scheduledTime != null
+                    ? AppColors.textPrimary
+                    : AppColors.textSecondary,
+              ),
+              overflow: TextOverflow.ellipsis,
+              maxLines: 2,
+            ),
           ),
 
           // Status
@@ -1680,7 +1801,14 @@ class _BookingRow extends StatelessWidget {
             child: Padding(
               padding: const EdgeInsets.only(left: 20),
               child: booking.review != null
-                  ? _StarRating(rating: booking.review!.rating)
+                  ? Tooltip(
+                      message: '${booking.review!.rating}/5 stars',
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        alignment: Alignment.centerLeft,
+                        child: _StarRating(rating: booking.review!.rating),
+                      ),
+                    )
                   : Text(
                       '—',
                       style: TextStyle(
@@ -1690,9 +1818,9 @@ class _BookingRow extends StatelessWidget {
             ),
           ),
 
-          // Actions
-          SizedBox(
-            width: _wActions,
+          // Actions — Expanded so it takes remaining row space; no fixed width
+          // prevents RenderFlex overflow regardless of how many buttons are shown.
+          Expanded(
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
@@ -1703,6 +1831,14 @@ class _BookingRow extends StatelessWidget {
                   tooltip: 'View details',
                   visualDensity: VisualDensity.compact,
                 ),
+                if (booking.status != 'cancelled')
+                  IconButton(
+                    onPressed: onEdit,
+                    icon: Icon(Icons.edit_outlined,
+                        size: 16, color: AppColors.textSecondary),
+                    tooltip: 'Edit booking',
+                    visualDensity: VisualDensity.compact,
+                  ),
                 if (_assignableStatuses.contains(booking.status))
                   IconButton(
                     onPressed: onAssign,
@@ -1778,16 +1914,18 @@ class _AssignedToCell extends StatelessWidget {
   Widget build(BuildContext context) {
     if (assignmentType == 'DODO Team') {
       return Row(
-        mainAxisSize: MainAxisSize.min,
         children: [
           Icon(Icons.groups_rounded, size: 13, color: AppColors.accent),
           const SizedBox(width: 5),
-          const Text(
-            'DODO Team',
-            style: TextStyle(
-              fontSize: 13,
-              color: AppColors.accent,
-              fontWeight: FontWeight.w500,
+          Flexible(
+            child: Text(
+              'DODO Team',
+              style: const TextStyle(
+                fontSize: 13,
+                color: AppColors.accent,
+                fontWeight: FontWeight.w500,
+              ),
+              overflow: TextOverflow.ellipsis,
             ),
           ),
         ],
@@ -1796,7 +1934,6 @@ class _AssignedToCell extends StatelessWidget {
 
     if (assignmentType == 'Unassigned' || (vendorId.isEmpty && vendorName.isEmpty)) {
       return Row(
-        mainAxisSize: MainAxisSize.min,
         children: [
           Container(
             width: 6,
@@ -1807,12 +1944,15 @@ class _AssignedToCell extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 6),
-          const Text(
-            'Unassigned',
-            style: TextStyle(
-              fontSize: 13,
-              color: Color(0xFFDD6B20),
-              fontWeight: FontWeight.w500,
+          Flexible(
+            child: Text(
+              'Unassigned',
+              style: const TextStyle(
+                fontSize: 13,
+                color: Color(0xFFDD6B20),
+                fontWeight: FontWeight.w500,
+              ),
+              overflow: TextOverflow.ellipsis,
             ),
           ),
         ],
@@ -1839,14 +1979,17 @@ class _AssignedToCell extends StatelessWidget {
         ),
         const SizedBox(width: 6),
         Expanded(
-          child: Text(
-            resolvedName,
-            style: const TextStyle(
-              fontSize: 13,
-              color: AppColors.textPrimary,
-              fontWeight: FontWeight.w500,
+          child: Tooltip(
+            message: resolvedName,
+            child: Text(
+              resolvedName,
+              style: const TextStyle(
+                fontSize: 13,
+                color: AppColors.textPrimary,
+                fontWeight: FontWeight.w500,
+              ),
+              overflow: TextOverflow.ellipsis,
             ),
-            overflow: TextOverflow.ellipsis,
           ),
         ),
       ],
@@ -1873,7 +2016,7 @@ class _ServiceCell extends StatelessWidget {
   Widget build(BuildContext context) {
     if (items.isEmpty) {
       final fallback = _nameFromNotes(notes);
-      return Text(
+      final text = Text(
         fallback.isNotEmpty ? fallback : '—',
         style: TextStyle(
             fontSize: 13,
@@ -1883,6 +2026,9 @@ class _ServiceCell extends StatelessWidget {
         overflow: TextOverflow.ellipsis,
         maxLines: 1,
       );
+      return fallback.isNotEmpty
+          ? Tooltip(message: fallback, child: text)
+          : text;
     }
     final first = items.first;
     final extra = items.length - 1;
@@ -1890,12 +2036,15 @@ class _ServiceCell extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: [
-        Text(
-          first.serviceName.isNotEmpty ? first.serviceName : '—',
-          style: const TextStyle(
-              fontSize: 13, color: AppColors.textPrimary),
-          overflow: TextOverflow.ellipsis,
-          maxLines: 1,
+        Tooltip(
+          message: first.serviceName.isNotEmpty ? first.serviceName : '—',
+          child: Text(
+            first.serviceName.isNotEmpty ? first.serviceName : '—',
+            style: const TextStyle(
+                fontSize: 13, color: AppColors.textPrimary),
+            overflow: TextOverflow.ellipsis,
+            maxLines: 1,
+          ),
         ),
         if (extra > 0)
           Padding(

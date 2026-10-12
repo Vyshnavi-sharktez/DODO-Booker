@@ -51,6 +51,7 @@ import '../../features/vendor_catalog/presentation/pages/vendor_catalog_page.dar
 import '../../features/refunds/presentation/pages/refund_requests_page.dart';
 import '../../features/support/presentation/pages/support_inbox_page.dart';
 import '../../features/availability_blocks/presentation/pages/availability_blocks_page.dart';
+import '../../features/broadcast_notifications/presentation/pages/broadcast_notifications_page.dart';
 import '../../shared/pages/unauthorized_page.dart';
 import '../rbac/permission_guard.dart';
 
@@ -487,6 +488,13 @@ final routerProvider = Provider<GoRouter>((ref) {
             name: 'availabilityBlocks',
             pageBuilder: (context, state) => const NoTransitionPage(
               child: AvailabilityBlocksPage(),
+            ),
+          ),
+          GoRoute(
+            path: '/dashboard/notifications',
+            name: 'broadcastNotifications',
+            pageBuilder: (context, state) => const NoTransitionPage(
+              child: BroadcastNotificationsPage(),
             ),
           ),
         ],

@@ -62,7 +62,7 @@ class AdminCallSession {
       return bookingNumber!;
     }
     if (bookingId.length >= 8) {
-      return 'BK-${bookingId.substring(0, 8).toUpperCase()}';
+      return 'DODO${bookingId.substring(0, 8).toUpperCase()}';
     }
     return bookingId;
   }

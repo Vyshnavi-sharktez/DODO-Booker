@@ -72,6 +72,18 @@ class BookingsRepositoryImpl implements IBookingsRepository {
       _datasource.verifyCompletionOtp(bookingId, otp);
 
   @override
+  Future<void> completeCodBookingAfterOtp({
+    required String bookingId,
+    required bool cashCollected,
+    String? notCollectedReason,
+  }) =>
+      _datasource.completeCodBookingAfterOtp(
+        bookingId: bookingId,
+        cashCollected: cashCollected,
+        notCollectedReason: notCollectedReason,
+      );
+
+  @override
   Future<void> createAdminNotification({
     required String title,
     required String message,

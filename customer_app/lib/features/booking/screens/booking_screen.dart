@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../features/catalog/models/catalog_node_model.dart';
+import '../../../features/profile/services/profile_providers.dart';
+import '../widgets/booking_restricted_dialog.dart';
 import '../../../models/address_model.dart';
 import '../../../models/time_slot_model.dart';
 import '../../../models/booking_model.dart';
@@ -30,6 +32,8 @@ class _BookingScreenState extends ConsumerState<BookingScreen> {
   BookingModel? _booking;
   bool _isCreating = false;
   String? _errorMessage;
+  // Prevents showing the restriction dialog multiple times on initial load.
+  bool _restrictionDialogShown = false;
 
   bool get _canContinue {
     if (_step == 0) return _address != null;
@@ -39,12 +43,25 @@ class _BookingScreenState extends ConsumerState<BookingScreen> {
 
   String get _buttonLabel => _step == 2 ? 'Confirm Booking' : 'Continue';
 
+  void _showBookingRestrictedDialog() {
+    if (!mounted) return;
+    showBookingRestrictedDialog(context);
+  }
+
   Future<void> _onNext() async {
     if (_step < 2) {
       setState(() => _step++);
       return;
     }
-    // Step 2: confirm booking
+
+    // Proactive check — avoids the network round-trip if we already know
+    // the account is inactive from the cached profile.
+    final profile = ref.read(profileProvider).valueOrNull;
+    if (profile != null && !profile.isActive) {
+      _showBookingRestrictedDialog();
+      return;
+    }
+
     setState(() {
       _isCreating = true;
       _errorMessage = null;
@@ -64,10 +81,13 @@ class _BookingScreenState extends ConsumerState<BookingScreen> {
       });
     } catch (e) {
       if (!mounted) return;
-      setState(() {
-        _isCreating = false;
-        _errorMessage = 'Failed to confirm booking. Please try again.';
-      });
+      setState(() => _isCreating = false);
+      if (isBookingRestrictionError(e)) {
+        _showBookingRestrictedDialog();
+      } else {
+        setState(() =>
+            _errorMessage = 'Failed to confirm booking. Please try again.');
+      }
     }
   }
 
@@ -111,13 +131,24 @@ class _BookingScreenState extends ConsumerState<BookingScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // Success screen takes over the entire scaffold
+    // Success screen takes over the entire scaffold.
     if (_step == 3 && _booking != null) {
       return BookingSuccessScreen(
         booking: _booking!,
         onViewBookings: () => context.go('/'),
         onBackToHome: () => context.go('/'),
       );
+    }
+
+    // Proactive restriction check: as soon as the profile resolves and we
+    // know the customer is inactive, show the dialog once so they don't need
+    // to reach the summary step to find out.
+    final profile = ref.watch(profileProvider).valueOrNull;
+    if (profile != null && !profile.isActive && !_restrictionDialogShown) {
+      _restrictionDialogShown = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _showBookingRestrictedDialog();
+      });
     }
 
     return Scaffold(
@@ -139,20 +170,23 @@ class _BookingScreenState extends ConsumerState<BookingScreen> {
           // Step content
           Expanded(child: _buildStepContent()),
 
-          // Error banner
+          // Error banner (non-restriction errors only)
           if (_errorMessage != null)
             Container(
               width: double.infinity,
               color: AppColors.error.withAlpha(15),
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
               child: Row(
                 children: [
-                  const Icon(Icons.error_outline_rounded, size: 16, color: AppColors.error),
+                  const Icon(Icons.error_outline_rounded,
+                      size: 16, color: AppColors.error),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
                       _errorMessage!,
-                      style: const TextStyle(fontSize: 13, color: AppColors.error),
+                      style: const TextStyle(
+                          fontSize: 13, color: AppColors.error),
                     ),
                   ),
                 ],
@@ -218,9 +252,11 @@ class _BottomBar extends StatelessWidget {
               )
             : Text(
                 label,
-                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+                style: const TextStyle(
+                    fontSize: 16, fontWeight: FontWeight.w700),
               ),
       ),
     );
   }
 }
+
