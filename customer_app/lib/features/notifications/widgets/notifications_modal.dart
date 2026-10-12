@@ -48,7 +48,7 @@ class _NotificationsModalState extends ConsumerState<NotificationsModal> {
     });
     try {
       await ref.read(notificationServiceProvider).markAsRead(n.id);
-      ref.invalidate(notificationsProvider);
+      ref.read(notificationsProvider.notifier).refresh();
     } catch (_) {
       // Non-fatal — optimistic state already applied.
     }
@@ -71,7 +71,7 @@ class _NotificationsModalState extends ConsumerState<NotificationsModal> {
       } else {
         await ref.read(notificationServiceProvider).markAsRead(n.id);
       }
-      ref.invalidate(notificationsProvider);
+      ref.read(notificationsProvider.notifier).refresh();
     } catch (_) {}
   }
 
@@ -79,7 +79,7 @@ class _NotificationsModalState extends ConsumerState<NotificationsModal> {
     setState(() => _locallyDeleted.add(n.id));
     try {
       await ref.read(notificationServiceProvider).deleteNotification(n.id);
-      ref.invalidate(notificationsProvider);
+      ref.read(notificationsProvider.notifier).refresh();
     } catch (_) {}
   }
 

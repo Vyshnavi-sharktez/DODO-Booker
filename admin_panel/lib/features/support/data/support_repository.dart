@@ -13,7 +13,7 @@ class SupportRepository {
   static const _kConvSelect =
       'id, customer_id, status, last_message_at, last_message_preview, '
       'unread_admin_count, unread_customer_count, created_at, updated_at, '
-      'current_episode_started_at, customers(full_name, phone, email)';
+      'current_episode_started_at, customers(full_name, phone, email, is_active)';
 
   Future<List<SupportConversation>> fetchConversations({
     String? statusFilter,

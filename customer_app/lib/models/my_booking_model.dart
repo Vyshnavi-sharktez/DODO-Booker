@@ -1,4 +1,4 @@
-﻿import 'package:flutter/foundation.dart';
+import 'package:flutter/foundation.dart';
 
 import 'address_model.dart';
 import 'booking_item.dart';
@@ -178,7 +178,7 @@ class MyBookingModel {
 
   String get displayBookingNumber {
     if (bookingNumber != null && bookingNumber!.isNotEmpty) return bookingNumber!;
-    if (id.length > 8) return 'BK-${id.substring(0, 8).toUpperCase()}';
+    if (id.length > 8) return 'DODO${id.substring(0, 8).toUpperCase()}';
     return id;
   }
 
@@ -269,18 +269,19 @@ class MyBookingModel {
         json['id'] as String;
 
     // For multi-item bookings: "AC Service + 2 more"
+    const _unavailable = 'Service details unavailable';
     final String serviceName;
     if (bookingItems.isEmpty) {
-      serviceName = _serviceNameFromNotes(notes) ?? '';
+      serviceName = _serviceNameFromNotes(notes) ?? _unavailable;
     } else if (bookingItems.length == 1) {
       serviceName = bookingItems.first.serviceName.isNotEmpty
           ? bookingItems.first.serviceName
-          : (_serviceNameFromNotes(notes) ?? '');
+          : (_serviceNameFromNotes(notes) ?? _unavailable);
     } else {
       final first = bookingItems.first.serviceName;
       serviceName = first.isNotEmpty
           ? '$first + ${bookingItems.length - 1} more'
-          : '${bookingItems.length} services';
+          : _unavailable;
     }
 
     // ── Time slot from notes: "Service Name - 10:00 AM" or just the slot ─

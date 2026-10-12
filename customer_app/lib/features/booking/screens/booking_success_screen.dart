@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../models/booking_model.dart';
 
@@ -146,7 +146,7 @@ class _BookingSuccessScreenState extends State<BookingSuccessScreen>
                                     const SizedBox(width: 12),
                                     Flexible(
                                       child: Text(
-                                        widget.booking.id,
+                                        widget.booking.displayBookingNumber,
                                         style: tt.titleSmall?.copyWith(
                                           fontWeight: FontWeight.w800,
                                           color: AppColors.primary,
@@ -202,7 +202,7 @@ class _BookingSuccessScreenState extends State<BookingSuccessScreen>
                                     const SizedBox(width: 12),
                                     Flexible(
                                       child: Text(
-                                        '₹${widget.booking.totalAmount.toStringAsFixed(2)}',
+                                        '?${widget.booking.totalAmount.toStringAsFixed(2)}',
                                         style: tt.labelMedium?.copyWith(
                                           fontWeight: FontWeight.w700,
                                           color: AppColors.success,

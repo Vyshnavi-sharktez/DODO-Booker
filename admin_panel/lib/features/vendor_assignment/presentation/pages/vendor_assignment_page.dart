@@ -200,9 +200,7 @@ class _VendorAssignmentPageState
                     entityType: 'booking',
                     entityId: booking.id,
                   );
-            } catch (_) {
-              // Non-fatal.
-            }
+            } catch (_) {}
           }
 
           ref

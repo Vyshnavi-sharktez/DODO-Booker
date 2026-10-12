@@ -451,10 +451,14 @@ class CheckoutService {
 
     // ── Admin notification ────────────────────────────────────────────────────
     // The DB trigger fn_notify_admin_new_booking fires on INSERT with status='pending'
-    // and creates a richer notification (customer name, booking #, amount).
-    // Only send the Dart notification for non-pending bookings (e.g. preferred-vendor
-    // bookings inserted as 'assigned') where the trigger does not fire.
-    if (bookingData['status'] != 'pending') {
+    // for non-online payments. For online payments the trigger is intentionally
+    // skipped at INSERT time; trg_notify_admin_online_payment_confirmed fires instead
+    // when payment_status is updated to 'success' by verify-razorpay-payment.
+    //
+    // For non-pending bookings (e.g. preferred-vendor bookings inserted as 'assigned')
+    // using non-online payment, the trigger does not fire — send it from Dart.
+    // Online preferred-vendor bookings are also deferred to post-payment.
+    if (bookingData['status'] != 'pending' && paymentMethod != 'online') {
       try {
         await _client.from('notifications').insert({
           'user_type': 'admin',
@@ -471,20 +475,24 @@ class CheckoutService {
       }
     }
 
-    // ── Customer notification ─────────────────────────────────────────────────
-    try {
-      await _client.from('notifications').insert({
-        'user_type': 'customer',
-        'user_id': customerId,
-        'title': 'Booking Confirmed',
-        'message': 'Your booking has been placed successfully.',
-        'notification_type': 'booking_created',
-        'is_read': false,
-        'entity_type': 'booking',
-        'entity_id': bookingId,
-      });
-    } catch (e) {
-      debugPrint('[DODO][Checkout] Warning: customer notification failed (non-fatal): $e');
+    // ── Customer notification (non-online payments) ───────────────────────────
+    // Online payments are confirmed later, after Razorpay verifyPayment succeeds.
+    // That path calls sendBookingConfirmedNotification() from checkout_screen.dart.
+    if (paymentMethod != 'online') {
+      try {
+        await _client.from('notifications').insert({
+          'user_type': 'customer',
+          'user_id': customerId,
+          'title': 'Booking Confirmed',
+          'message': 'Your booking has been placed successfully.',
+          'notification_type': 'booking_created',
+          'is_read': false,
+          'entity_type': 'booking',
+          'entity_id': bookingId,
+        });
+      } catch (e) {
+        debugPrint('[DODO][Checkout] Warning: customer booking_confirmed notification failed (non-fatal): $e');
+      }
     }
 
     // ── Preferred Vendor assignment notifications ──────────────────────────────
@@ -535,6 +543,7 @@ class CheckoutService {
 
     return BookingModel(
       id: bookingId,
+      bookingNumber: bookingData['booking_number']?.toString(),
       serviceId: items.first.serviceId,
       serviceName: serviceName,
       addressId: address.id,
@@ -703,5 +712,31 @@ class CheckoutService {
         .update({'status': 'cancelled_by_customer'})
         .eq('id', requestId)
         .eq('status', 'pending');
+  }
+
+  /// Sends the "Booking Confirmed" customer notification for online-payment
+  /// bookings, called fire-and-forget from checkout_screen.dart after
+  /// Razorpay verifyPayment succeeds.
+  Future<void> sendBookingConfirmedNotification(String bookingId) async {
+    try {
+      final row = await _client
+          .from('bookings')
+          .select('customer_id')
+          .eq('id', bookingId)
+          .single();
+      final customerId = row['customer_id'] as String;
+      await _client.from('notifications').insert({
+        'user_type': 'customer',
+        'user_id': customerId,
+        'title': 'Booking Confirmed',
+        'message': 'Your booking has been placed successfully.',
+        'notification_type': 'booking_created',
+        'is_read': false,
+        'entity_type': 'booking',
+        'entity_id': bookingId,
+      });
+    } catch (e) {
+      debugPrint('[DODO][Checkout] Warning: customer online booking_confirmed notification failed (non-fatal): $e');
+    }
   }
 }

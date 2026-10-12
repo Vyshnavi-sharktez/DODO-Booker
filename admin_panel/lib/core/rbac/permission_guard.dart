@@ -23,52 +23,53 @@ final hasAnyPermissionProvider =
 // Dynamic routes like /vendors/:id are handled separately in resolveRoutePermission.
 
 const Map<String, String> routePermissions = {
-  '/rbac': 'rbac.manage',
-  '/catalog': 'category.view',
-  '/categories': 'category.view',
-  '/sub-categories': 'category.view',
-  '/services': 'service.view',
-  '/service-attributes': 'service.view',
-  '/vendors': 'vendor.view',
-  '/dodo-teams': 'dodo_team.view',
-  '/bookings': 'booking.view',
-  '/customers': 'customer.view',
-  '/abandoned-carts': 'customer.view',
-  '/coupons': 'coupon.view',
-  '/vendor-settlement': 'vendor.view',
-  '/settings': 'settings.manage',
-  '/loyalty': 'settings.manage',
-  '/tax-settings': 'settings.manage',
-  '/global-scheduling': 'settings.manage',
-  '/commission': 'settings.manage',
-  '/vendor-serving-areas': 'vendor.view',
-  '/service-availability-areas': 'settings.manage',
-  '/surge-fees': 'settings.manage',
-  '/seo': 'settings.manage',
-  '/landing-page': 'settings.manage',
-  '/payment-config': 'settings.manage',
-  '/push-config': 'settings.manage',
-  '/vendor-subscriptions': 'vendor.view',
-  '/vendor-tiers': 'vendor.view',
-  '/amc-plans': 'category.view',
-  '/amc-scheduling-requests': 'booking.view',
-  '/warranty-claims': 'booking.view',
-  '/warranty-analytics': 'booking.view',
-  '/call-sessions': 'booking.view',
-  '/dispatch-analytics': 'booking.view',
-  '/gps-audit': 'booking.view',
-  '/gps-analytics': 'booking.view',
-  '/vendor-service-requests': 'vendor.view',
-  '/vendor-catalog': 'vendor.view',
+  '/rbac': 'rbac.read',
+  '/catalog': 'catalog.read',
+  '/categories': 'catalog.read',
+  '/sub-categories': 'catalog.read',
+  '/services': 'catalog.read',
+  '/service-attributes': 'catalog.read',
+  '/vendors': 'vendor.read',
+  '/dodo-teams': 'dodo_team.read',
+  '/bookings': 'booking.read',
+  '/customers': 'customer.read',
+  '/abandoned-carts': 'customer.read',
+  '/coupons': 'coupon.read',
+  '/vendor-settlement': 'vendor.read',
+  '/settings': 'settings.read',
+  '/loyalty': 'settings.read',
+  '/tax-settings': 'settings.read',
+  '/global-scheduling': 'scheduling.read',
+  '/commission': 'settings.read',
+  '/vendor-serving-areas': 'vendor.read',
+  '/service-availability-areas': 'settings.read',
+  '/surge-fees': 'settings.read',
+  '/seo': 'settings.read',
+  '/landing-page': 'settings.read',
+  '/payment-config': 'settings.read',
+  '/push-config': 'settings.read',
+  '/vendor-subscriptions': 'vendor.read',
+  '/vendor-tiers': 'vendor.read',
+  '/amc-plans': 'catalog.read',
+  '/amc-scheduling-requests': 'booking.read',
+  '/warranty-claims': 'booking.read',
+  '/warranty-analytics': 'booking.read',
+  '/call-sessions': 'booking.read',
+  '/dispatch-analytics': 'booking.read',
+  '/gps-audit': 'booking.read',
+  '/gps-analytics': 'booking.read',
+  '/vendor-service-requests': 'vendor.read',
+  '/vendor-catalog': 'vendor.read',
   '/refunds': 'refund.view',
-  '/support': 'booking.view',
+  '/support': 'support.read',
+  '/notifications': 'notification.read',
 };
 
 // Dynamic route patterns: a prefix match maps to its module permission.
 // Checked only when no exact entry is found in routePermissions.
 const Map<String, String> _dynamicRoutePermissions = {
-  '/vendors/': 'vendor.view',
-  '/customers/': 'customer.view',
+  '/vendors/': 'vendor.read',
+  '/customers/': 'customer.read',
 };
 
 /// Returns the required permission for [strippedPath], or null if the route
@@ -98,11 +99,20 @@ class PermissionGuard extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final allowed = ref.watch(hasPermissionProvider(permission));
-    if (allowed) return child;
+    final adminAsync = ref.watch(adminUserProvider);
+
+    // Still fetching — don't redirect. The stream will emit and rebuild.
+    if (!adminAsync.hasValue) return const SizedBox.shrink();
+
+    final user = adminAsync.value;
+    // Null value means logged out / deactivated; router handles /login redirect.
+    if (user == null) return const SizedBox.shrink();
+
+    if (user.hasPermission(permission)) return child;
+
     if (fallback != null) return fallback!;
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.go('/unauthorized');
+      if (context.mounted) context.go('/unauthorized');
     });
     return const SizedBox.shrink();
   }
@@ -124,11 +134,18 @@ class AnyPermissionGuard extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final allowed = ref.watch(hasAnyPermissionProvider(permissions));
-    if (allowed) return child;
+    final adminAsync = ref.watch(adminUserProvider);
+
+    if (!adminAsync.hasValue) return const SizedBox.shrink();
+
+    final user = adminAsync.value;
+    if (user == null) return const SizedBox.shrink();
+
+    if (user.hasAnyPermission(permissions)) return child;
+
     if (fallback != null) return fallback!;
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.go('/unauthorized');
+      if (context.mounted) context.go('/unauthorized');
     });
     return const SizedBox.shrink();
   }

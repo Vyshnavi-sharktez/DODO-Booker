@@ -64,7 +64,7 @@ void main() {
       final b = BookingForRefundModel.fromMap(m);
       expect(b.bookingNumber, isNull);
       expect(b.displayBookingNumber,
-          startsWith('BK-${b.id.substring(0, 8).toUpperCase()}'));
+          startsWith('DODO${b.id.substring(0, 8).toUpperCase()}'));
     });
 
     test('total_amount zero is allowed', () {
@@ -237,25 +237,22 @@ void main() {
 
   group('displayBookingNumber — canonical reference format', () {
     const uuid = 'c86b1c92-aaaa-bbbb-cccc-000000000000';
-    const expectedRef = 'BK-C86B1C92';
+    const expectedRef = 'DODOC86B1C92';
 
-    test('null booking_number falls back to BK-{first8ofId}', () {
+    test('null booking_number falls back to DODO{first8ofId}', () {
       final m = _base(id: uuid)..['booking_number'] = null;
       final b = BookingForRefundModel.fromMap(m);
       expect(b.displayBookingNumber, expectedRef);
     });
 
     test('stored booking_number takes precedence over UUID fallback', () {
-      final m = _base(id: uuid, bookingNumber: 'BK-CUSTOM01');
+      final m = _base(id: uuid, bookingNumber: 'DODO100001');
       final b = BookingForRefundModel.fromMap(m);
-      expect(b.displayBookingNumber, 'BK-CUSTOM01');
+      expect(b.displayBookingNumber, 'DODO100001');
     });
 
     test('after backfill — stored value matches previously-generated fallback', () {
-      // Migration 20260923000007 writes 'BK-' + UPPER(LEFT(id,8)) into booking_number.
-      // After backfill, displayBookingNumber must return the same value as before
-      // the migration (when it was computed client-side from the UUID).
-      final backfilledRef = 'BK-${uuid.substring(0, 8).toUpperCase()}';
+      final backfilledRef = 'DODO${uuid.substring(0, 8).toUpperCase()}';
       expect(backfilledRef, expectedRef);
 
       final m = _base(id: uuid, bookingNumber: backfilledRef);
@@ -267,17 +264,13 @@ void main() {
       final m = _base(id: uuid)..['booking_number'] = null;
       final b = BookingForRefundModel.fromMap(m);
       expect(b.displayBookingNumber, isNot(equals(uuid)));
-      expect(b.displayBookingNumber, startsWith('BK-'));
+      expect(b.displayBookingNumber, startsWith('DODO'));
     });
 
     test('last 5 chars of UUID portion are found in raw UUID — admin search works', () {
-      // Admin searches by the last 5 chars the customer reads off their screen.
-      // The BK- reference suffix is the first 8 chars of the UUID in upper case.
-      // Last 5 of those 8 chars must appear in the raw UUID string (case-insensitive)
-      // so the admin panel's id::text ILIKE '%query%' filter finds the booking.
       final m = _base(id: uuid)..['booking_number'] = null;
       final b = BookingForRefundModel.fromMap(m);
-      final refSuffix = b.displayBookingNumber.substring(3); // 'C86B1C92'
+      final refSuffix = b.displayBookingNumber.substring(4); // 'C86B1C92'
       final last5 = refSuffix.substring(refSuffix.length - 5); // 'B1C92'
       expect(uuid.toUpperCase().contains(last5), isTrue);
     });

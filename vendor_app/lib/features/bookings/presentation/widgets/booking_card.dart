@@ -329,13 +329,102 @@ class _BookingCardState extends ConsumerState<BookingCard> {
       return;
     }
 
-    debugPrint('[OTP][DIALOG] ✓ Verified — applying completed status');
-    _applyStatusUpdate('completed');
-
+    // COD bookings: datasource only stamped otp_verified_at.
+    // Show the cash confirmation dialog before completing the booking.
     if (_booking.isCod && !_booking.isWarrantyRework) {
-      Future.microtask(() { if (mounted) _showCodCashConfirmationDialog(); });
+      debugPrint('[OTP][DIALOG] ✓ OTP verified (COD) — showing cash confirmation');
+      await _handleCodCashConfirmationAfterOtp();
+      return;
     }
 
+    // Non-COD / warranty rework: datasource already set status=completed.
+    debugPrint('[OTP][DIALOG] ✓ Verified — applying completed status');
+    _applyStatusUpdate('completed');
+    _sendCompletionNotifications();
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Booking $_bookingRef completed successfully.'),
+          backgroundColor: AppColors.success,
+        ),
+      );
+    }
+  }
+
+  // Called immediately after OTP verification for COD bookings.
+  // Shows the cash confirmation dialog, then completes the booking based on
+  // the vendor's response. Cancel leaves the booking in awaiting_verification.
+  Future<void> _handleCodCashConfirmationAfterOtp() async {
+    if (!mounted) return;
+    final result = await showDialog<Map<String, dynamic>>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => CodCashConfirmationDialog(
+        bookingNumber: _booking.bookingNumber,
+        totalAmount: _booking.totalAmount,
+      ),
+    );
+
+    if (result == null || !mounted) {
+      debugPrint('[COD][OTP] Cash dialog cancelled — booking stays in awaiting_verification');
+      return;
+    }
+
+    final cashCollected = result['cashCollected'] as bool;
+    final reason = result['reason'] as String?;
+
+    setState(() => _updating = true);
+    try {
+      await ref.read(bookingsRepositoryProvider).completeCodBookingAfterOtp(
+            bookingId: _booking.id,
+            cashCollected: cashCollected,
+            notCollectedReason: reason,
+          );
+
+      _applyStatusUpdate('completed');
+
+      if (mounted) {
+        setState(() {
+          _localBooking = _booking.copyWith(
+            codCashCollected: cashCollected,
+            codNotCollectedReason: reason,
+            // cashCollected=true → confirmed, cashCollected=false → pending
+            codConfirmedAt: cashCollected ? DateTime.now() : null,
+          );
+        });
+      }
+
+      _sendCompletionNotifications();
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              cashCollected
+                  ? 'Booking $_bookingRef completed and COD cash collection recorded.'
+                  : 'Booking $_bookingRef completed. COD cash collection pending.',
+            ),
+            backgroundColor: AppColors.success,
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint('[COD][OTP] completeCodBookingAfterOtp ERROR: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to complete booking: $e'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _updating = false);
+    }
+  }
+
+  void _sendCompletionNotifications() {
     final completedBy =
         _isDodoBooking ? 'DODO Team ($_vendorName)' : 'Vendor $_vendorName';
     final titleAdmin = _booking.isWarrantyRework
@@ -364,15 +453,6 @@ class _BookingCardState extends ConsumerState<BookingCard> {
       notificationType: 'booking_completed',
       entityId: _booking.id,
     ).ignore();
-
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Booking $_bookingRef completed successfully.'),
-          backgroundColor: AppColors.success,
-        ),
-      );
-    }
   }
 
   Future<void> _showCodCashConfirmationDialog() async {
@@ -691,6 +771,13 @@ class _BookingCardState extends ConsumerState<BookingCard> {
               ),
             ],
             const SizedBox(height: 12),
+
+            if (_booking.customerName != null &&
+                _booking.customerName!.isNotEmpty)
+              _InfoRow(
+                icon: Icons.person_outline_rounded,
+                label: 'Customer: ${_booking.customerName}',
+              ),
 
             if (_booking.items.isNotEmpty)
               _ServicesBlock(items: _booking.items)

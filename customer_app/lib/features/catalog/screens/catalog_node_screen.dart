@@ -3150,6 +3150,22 @@ class _WebScaffold extends ConsumerWidget {
                         ],
                       ),
                     ),
+                    if (node.isLeafBookable)
+                      Positioned(
+                        top: 12,
+                        right: 54,
+                        child: Container(
+                          width: 34,
+                          height: 34,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF2EFE9),
+                            borderRadius: BorderRadius.circular(100),
+                          ),
+                          child: Center(
+                            child: HeartButton(serviceId: node.id, mini: true),
+                          ),
+                        ),
+                      ),
                     Positioned(
                       top: 12,
                       right: 12,

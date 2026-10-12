@@ -5,7 +5,7 @@ import 'package:customer_app/models/my_booking_model.dart';
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 const _uuid = 'c86b1c92-aaaa-bbbb-cccc-000000000000';
-const _expectedRef = 'BK-C86B1C92';
+const _expectedRef = 'DODOC86B1C92';
 
 Map<String, dynamic> _refundBookingMap({String? bookingNumber}) => {
       'id': _uuid,
@@ -65,12 +65,12 @@ Map<String, dynamic> _myBookingMap({String? bookingNumber}) => {
 
 void main() {
   group('Booking reference — cross-model consistency', () {
-    test('BookingForRefundModel: null booking_number → BK-{first8ofId}', () {
+    test('BookingForRefundModel: null booking_number → DODO{first8ofId}', () {
       final b = BookingForRefundModel.fromMap(_refundBookingMap());
       expect(b.displayBookingNumber, _expectedRef);
     });
 
-    test('MyBookingModel: null booking_number → BK-{first8ofId}', () {
+    test('MyBookingModel: null booking_number → DODO{first8ofId}', () {
       final b = MyBookingModel.fromJson(_myBookingMap());
       expect(b.displayBookingNumber, _expectedRef);
     });
@@ -82,7 +82,7 @@ void main() {
     });
 
     test('stored booking_number used by both models when present', () {
-      const stored = 'BK-CUSTOM99';
+      const stored = 'DODO100001';
       final refund =
           BookingForRefundModel.fromMap(_refundBookingMap(bookingNumber: stored));
       final my = MyBookingModel.fromJson(_myBookingMap(bookingNumber: stored));
@@ -91,9 +91,7 @@ void main() {
     });
 
     test('backfill value matches client-generated fallback — no visible change', () {
-      // Migration 20260923000007 writes: 'BK-' || UPPER(LEFT(id::text, 8))
-      // Simulate what the migration writes:
-      final backfilled = 'BK-${_uuid.substring(0, 8).toUpperCase()}';
+      final backfilled = 'DODO${_uuid.substring(0, 8).toUpperCase()}';
 
       // With null (pre-migration): client generates same value.
       final preBackfill = BookingForRefundModel.fromMap(_refundBookingMap());
@@ -113,31 +111,26 @@ void main() {
       expect(b.displayBookingNumber, isNot(contains('-aaaa-')));
     });
 
-    test('reference always starts with BK-', () {
+    test('reference always starts with DODO', () {
       final b = BookingForRefundModel.fromMap(_refundBookingMap());
       final m = MyBookingModel.fromJson(_myBookingMap());
-      expect(b.displayBookingNumber, startsWith('BK-'));
-      expect(m.displayBookingNumber, startsWith('BK-'));
+      expect(b.displayBookingNumber, startsWith('DODO'));
+      expect(m.displayBookingNumber, startsWith('DODO'));
     });
   });
 
   group('Admin search — last-5-chars lookup logic', () {
-    // The admin dialog hint says "last 5 digits of booking number".
-    // The customer reads e.g. BK-C86B1C92 → tells admin "B1C92".
-    // Admin enters "B1C92" → repository searches id::text ILIKE '%B1C92%'.
-    // This group verifies the string relationship that makes that work.
-
-    test('last 5 chars of BK suffix appear in the raw UUID', () {
-      final ref = _expectedRef; // 'BK-C86B1C92'
-      final suffix = ref.substring(3); // 'C86B1C92'
+    test('last 5 chars of DODO suffix appear in the raw UUID', () {
+      final ref = _expectedRef; // 'DODOC86B1C92'
+      final suffix = ref.substring(4); // 'C86B1C92'
       final last5 = suffix.substring(suffix.length - 5); // 'B1C92'
       expect(_uuid.toUpperCase().contains(last5), isTrue);
     });
 
-    test('stripping BK- prefix from query gives id search term', () {
-      const query = 'BK-C86B1C92';
+    test('stripping DODO prefix from query gives id search term', () {
+      const query = 'DODOC86B1C92';
       final idQuery =
-          query.toUpperCase().startsWith('BK-') ? query.substring(3) : query;
+          query.toUpperCase().startsWith('DODO') ? query.substring(4) : query;
       expect(_uuid.toUpperCase().contains(idQuery), isTrue);
     });
 
@@ -147,10 +140,9 @@ void main() {
     });
 
     test('after backfill, booking_number search also finds booking', () {
-      final backfilled = 'BK-${_uuid.substring(0, 8).toUpperCase()}';
-      const last5 = 'B1C92';
-      // Path A (booking_number ILIKE '%B1C92%') will match after migration.
-      expect(backfilled.contains(last5), isTrue);
+      final backfilled = 'DODO100001';
+      const term = '100001';
+      expect(backfilled.contains(term), isTrue);
     });
   });
 }

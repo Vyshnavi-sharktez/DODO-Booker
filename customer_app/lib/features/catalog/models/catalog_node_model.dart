@@ -128,6 +128,20 @@ class CatalogNodeModel {
 
   bool get hasChildren => childrenCount > 0;
 
+  /// True when this service can be booked right now.
+  bool get isCurrentlyAvailable =>
+      isActive && isBookable && availabilityStatus == 'active';
+
+  /// Human-readable reason why the service cannot be booked.
+  /// Only meaningful when [isCurrentlyAvailable] is false.
+  String get unavailabilityReason {
+    if (!isActive) return 'This service is currently inactive.';
+    if (!isBookable) return 'This service is not available for booking.';
+    return unavailabilityMessage?.isNotEmpty == true
+        ? unavailabilityMessage!
+        : 'This service is currently unavailable.';
+  }
+
   /// True when this item has no parent categories.
   bool get isRoot => parentIds.isEmpty;
 

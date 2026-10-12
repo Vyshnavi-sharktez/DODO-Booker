@@ -95,6 +95,10 @@ class _SupportChatScreenState extends ConsumerState<SupportChatScreen> {
   // to active state immediately, before _initConversation() returns.
   bool _activatingNewChat = false;
 
+  // Init loading/error state
+  bool _initializing = false;
+  String? _initError;
+
   // Scroll management
   bool _atBottom = true;
   bool _hasNewMessages = false;
@@ -214,6 +218,22 @@ class _SupportChatScreenState extends ConsumerState<SupportChatScreen> {
             ref.invalidate(supportMessagesProvider(convId));
           },
         )
+        // Listens for conversation status changes (admin closes → "chat closed"
+        // banner appears immediately without needing a manual refresh).
+        .onPostgresChanges(
+          event: PostgresChangeEvent.update,
+          schema: 'public',
+          table: 'support_conversations',
+          filter: PostgresChangeFilter(
+            type: PostgresChangeFilterType.eq,
+            column: 'id',
+            value: convId,
+          ),
+          callback: (_) {
+            if (!mounted) return;
+            ref.invalidate(supportConversationProvider);
+          },
+        )
         .subscribe();
   }
 
@@ -232,23 +252,43 @@ class _SupportChatScreenState extends ConsumerState<SupportChatScreen> {
   }
 
   Future<void> _initConversation() async {
+    if (_initializing) return;
+    setState(() {
+      _initializing = true;
+      _initError = null;
+    });
     try {
-      final conv =
-          await ref.read(supportChatServiceProvider).getOrCreateConversation();
+      final conv = await ref
+          .read(supportChatServiceProvider)
+          .getOrCreateConversation()
+          .timeout(const Duration(seconds: 15));
       if (!mounted) return;
       setState(() {
         _conversation = conv;
         _inputEnabled = !conv.isClosed;
         _activatingNewChat = false;
+        _initializing = false;
       });
       ref.invalidate(supportMessagesProvider(conv.id));
       ref.read(supportChatServiceProvider).markRead(conv.id);
       _subscribeTyping(conv.id);
       _subscribeMessages(conv.id);
     } catch (e) {
-      debugPrint('[Support] initConversation error: $e');
-      if (mounted) setState(() => _activatingNewChat = false);
+      debugPrint('[Support] initConversation error (type: ${e.runtimeType})');
+      if (!mounted) return;
+      setState(() {
+        _initializing = false;
+        _activatingNewChat = false;
+        _initError = e.toString().toLowerCase().contains('timeout')
+            ? 'Connection timed out. Please check your internet and try again.'
+            : 'Could not connect to support. Please try again.';
+      });
     }
+  }
+
+  Future<void> _retryInit() async {
+    setState(() => _initError = null);
+    await _initConversation();
   }
 
   void _onFirstLoad(List<SupportMessage> messages) {
@@ -574,6 +614,9 @@ class _SupportChatScreenState extends ConsumerState<SupportChatScreen> {
 
   Widget _buildBody() {
     final conv = _conversation;
+    if (_initError != null) {
+      return _InitErrorView(message: _initError!, onRetry: _retryInit);
+    }
     if (conv == null) return const _LoadingView();
 
     return Column(
@@ -1873,6 +1916,60 @@ class _TypingIndicatorState extends State<_TypingIndicator> {
               fontStyle: FontStyle.italic,
               fontSize: 12,
             ),
+      ),
+    );
+  }
+}
+
+// ── Init error view ───────────────────────────────────────────────────────────
+
+class _InitErrorView extends StatelessWidget {
+  final String message;
+  final VoidCallback onRetry;
+
+  const _InitErrorView({required this.message, required this.onRetry});
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 64,
+              height: 64,
+              decoration: BoxDecoration(
+                color: AppColors.error.withAlpha(18),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.wifi_off_rounded,
+                  size: 30, color: AppColors.error),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              message,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: AppColors.textSecondary,
+                    height: 1.55,
+                  ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 20),
+            FilledButton.icon(
+              onPressed: onRetry,
+              icon: const Icon(Icons.refresh_rounded, size: 16),
+              label: const Text('Retry'),
+              style: FilledButton.styleFrom(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12)),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

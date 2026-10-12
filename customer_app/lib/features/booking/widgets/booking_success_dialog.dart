@@ -1,4 +1,4 @@
-﻿import 'dart:ui';
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../../core/constants/app_colors.dart';
@@ -219,7 +219,7 @@ class _SummaryCard extends StatelessWidget {
       ),
       child: Column(
         children: [
-          _BookingIdRow(id: booking.id),
+          _BookingIdRow(id: booking.displayBookingNumber),
           const Divider(height: 20),
           _SummaryRow(label: 'Service', value: booking.serviceName),
           const SizedBox(height: 10),
@@ -288,39 +288,48 @@ class _BookingIdRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final tt = Theme.of(context).textTheme;
     return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
         Text(
           'Booking ID',
           style: tt.labelSmall?.copyWith(color: AppColors.textSecondary),
         ),
-        const Spacer(),
+        const SizedBox(width: 12),
         Flexible(
-          child: Text(
-            id,
-            style: tt.labelSmall?.copyWith(
-              fontWeight: FontWeight.w700,
-              color: AppColors.primary,
-            ),
-            textAlign: TextAlign.right,
-            overflow: TextOverflow.ellipsis,
-            maxLines: 1,
-            softWrap: false,
-          ),
-        ),
-        const SizedBox(width: 4),
-        GestureDetector(
-          onTap: () {
-            Clipboard.setData(ClipboardData(text: id));
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('Booking ID copied'),
-                duration: Duration(seconds: 2),
-                behavior: SnackBarBehavior.floating,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              Flexible(
+                child: Text(
+                  id,
+                  style: tt.labelSmall?.copyWith(
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.primary,
+                  ),
+                  textAlign: TextAlign.right,
+                  overflow: TextOverflow.ellipsis,
+                  maxLines: 1,
+                  softWrap: false,
+                ),
               ),
-            );
-          },
-          child: Icon(Icons.copy_rounded, size: 14, color: AppColors.textSecondary),
+              const SizedBox(width: 6),
+              GestureDetector(
+                onTap: () {
+                  Clipboard.setData(ClipboardData(text: id));
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Booking ID copied'),
+                      duration: Duration(seconds: 2),
+                      behavior: SnackBarBehavior.floating,
+                    ),
+                  );
+                },
+                child: Icon(Icons.copy_rounded, size: 14, color: AppColors.textSecondary),
+              ),
+            ],
+          ),
         ),
       ],
     );

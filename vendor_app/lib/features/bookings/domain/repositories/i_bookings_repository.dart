@@ -12,6 +12,11 @@ abstract class IBookingsRepository {
   });
   Future<void> initiateCompletion(String bookingId);
   Future<bool> verifyCompletionOtp(String bookingId, String otp);
+  Future<void> completeCodBookingAfterOtp({
+    required String bookingId,
+    required bool cashCollected,
+    String? notCollectedReason,
+  });
   Future<void> createAdminNotification({
     required String title,
     required String message,

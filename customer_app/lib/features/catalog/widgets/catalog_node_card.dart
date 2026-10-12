@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/utils/service_image_registry.dart';
+import '../../wishlist/widgets/heart_button.dart';
 import '../../category/services/category_providers.dart';
 import '../../loyalty/providers/loyalty_providers.dart';
 import '../../loyalty/utils/loyalty_utils.dart';
@@ -91,22 +92,39 @@ class _CardImage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final url = ServiceImageRegistry.resolve(node.imageUrl, node.name);
-    return Image.network(
-      url,
-      fit: BoxFit.cover,
-      width: double.infinity,
-      height: double.infinity,
-      loadingBuilder: (_, child, p) =>
-          p == null ? child : const ColoredBox(color: Color(0xFFEEEEEE)),
-      errorBuilder: (_, _, _) => Container(
-        color: AppColors.goldLight,
-        alignment: Alignment.center,
-        child: const Icon(
-          Icons.home_repair_service_rounded,
-          size: 32,
-          color: AppColors.gold,
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        Image.network(
+          url,
+          fit: BoxFit.cover,
+          width: double.infinity,
+          height: double.infinity,
+          loadingBuilder: (_, child, p) =>
+              p == null ? child : const ColoredBox(color: Color(0xFFEEEEEE)),
+          errorBuilder: (_, _, _) => Container(
+            color: AppColors.goldLight,
+            alignment: Alignment.center,
+            child: const Icon(
+              Icons.home_repair_service_rounded,
+              size: 32,
+              color: AppColors.gold,
+            ),
+          ),
         ),
-      ),
+        if (node.isLeafBookable)
+          Positioned(
+            top: 4,
+            right: 4,
+            child: Container(
+              decoration: const BoxDecoration(
+                color: Color(0xCCFFFFFF),
+                shape: BoxShape.circle,
+              ),
+              child: HeartButton(serviceId: node.id),
+            ),
+          ),
+      ],
     );
   }
 }

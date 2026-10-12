@@ -447,6 +447,7 @@ class _ChatPaneState extends ConsumerState<_ChatPane> {
 
   RealtimeChannel? _typingChannel;
   RealtimeChannel? _readStatusChannel;
+  RealtimeChannel? _messagesChannel;
   bool _customerIsTyping = false;
   Timer? _customerTypingTimeout;
   bool _typingThrottled = false;
@@ -461,6 +462,7 @@ class _ChatPaneState extends ConsumerState<_ChatPane> {
     if (!widget.viewHistory) {
       _subscribeTyping();
       _subscribeReadStatus();
+      _subscribeNewMessages();
     }
   }
 
@@ -474,6 +476,9 @@ class _ChatPaneState extends ConsumerState<_ChatPane> {
     }
     if (_readStatusChannel != null) {
       Supabase.instance.client.removeChannel(_readStatusChannel!);
+    }
+    if (_messagesChannel != null) {
+      Supabase.instance.client.removeChannel(_messagesChannel!);
     }
     super.dispose();
   }
@@ -527,6 +532,28 @@ class _ChatPaneState extends ConsumerState<_ChatPane> {
           callback: (_) {
             if (!mounted) return;
             ref.invalidate(supportMessagesProvider(widget.conversationId));
+          },
+        )
+        .subscribe();
+  }
+
+  void _subscribeNewMessages() {
+    _messagesChannel = Supabase.instance.client
+        .channel('admin-support-msgs-${widget.conversationId}')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.insert,
+          schema: 'public',
+          table: 'support_messages',
+          filter: PostgresChangeFilter(
+            type: PostgresChangeFilterType.eq,
+            column: 'conversation_id',
+            value: widget.conversationId,
+          ),
+          callback: (_) {
+            if (!mounted) return;
+            ref.invalidate(supportMessagesProvider(widget.conversationId));
+            ref.invalidate(supportConversationDetailProvider(widget.conversationId));
+            ref.invalidate(supportConversationsProvider);
           },
         )
         .subscribe();
@@ -922,6 +949,13 @@ class _ChatHeader extends StatelessWidget {
                     ),
                     const SizedBox(width: 6),
                     _StatusBadge(label: c.statusLabel, color: c.statusColor),
+                    if (c.customerIsActive == false) ...[
+                      const SizedBox(width: 6),
+                      const _StatusBadge(
+                        label: 'Booking Restricted',
+                        color: Color(0xFFDD6B20),
+                      ),
+                    ],
                     const SizedBox(width: 6),
                     InkWell(
                       onTap: () => context
@@ -960,6 +994,48 @@ class _ChatHeader extends StatelessWidget {
                           text: c.customerEmail!),
                   ],
                 ),
+                if (c.customerIsActive == false) ...[
+                  const SizedBox(height: 6),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 10, vertical: 7),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFDD6B20).withAlpha(15),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(
+                          color: const Color(0xFFDD6B20).withAlpha(60)),
+                    ),
+                    child: const Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Icon(Icons.info_outline_rounded,
+                                size: 13, color: Color(0xFFDD6B20)),
+                            SizedBox(width: 5),
+                            Text(
+                              'Account status: Inactive',
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w700,
+                                color: Color(0xFFDD6B20),
+                              ),
+                            ),
+                          ],
+                        ),
+                        SizedBox(height: 2),
+                        Text(
+                          'Customer can contact support, but cannot place new bookings.',
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: Color(0xFF975A16),
+                            height: 1.4,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
               ],
             ),
           ),

@@ -1,11 +1,59 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../data/service_scheduling_repository.dart';
 import '../../../global_scheduling/data/global_scheduling_repository.dart';
+import '../../../global_scheduling/data/calendar_schedule_repository.dart';
+import '../../../global_scheduling/application/scheduling_providers.dart';
 
-class ServiceSchedulingDialog extends StatefulWidget {
+// ── Mutable draft state for a single calendar entry card ───────────────────────
+class _CalendarEntryDraft {
+  String? id;
+  final DateTime date;
+  String? startTime;
+  String? endTime;
+  bool isEnabled;
+  final TextEditingController maxBookings;
+  final TextEditingController intervalHours;
+  final TextEditingController intervalMinutes;
+  bool isSaving = false;
+  String? error;
+
+  _CalendarEntryDraft({
+    this.id,
+    required this.date,
+    this.startTime,
+    this.endTime,
+    this.isEnabled = true,
+    int maxBookingsValue = 5,
+    int intervalHoursValue = 0,
+    int intervalMinutesValue = 30,
+  })  : maxBookings = TextEditingController(text: maxBookingsValue.toString()),
+        intervalHours = TextEditingController(text: intervalHoursValue.toString()),
+        intervalMinutes = TextEditingController(text: intervalMinutesValue.toString());
+
+  factory _CalendarEntryDraft.fromEntry(CalendarScheduleEntry e) =>
+      _CalendarEntryDraft(
+        id: e.id,
+        date: e.scheduleDate,
+        startTime: e.slotStartTime,
+        endTime: e.slotEndTime,
+        isEnabled: e.isEnabled,
+        maxBookingsValue: e.maxBookingsPerSlot,
+        intervalHoursValue: e.slotIntervalHours,
+        intervalMinutesValue: e.slotIntervalMinutes,
+      );
+
+  void dispose() {
+    maxBookings.dispose();
+    intervalHours.dispose();
+    intervalMinutes.dispose();
+  }
+}
+
+class ServiceSchedulingDialog extends ConsumerStatefulWidget {
   final String serviceId;
   final String serviceName;
 
@@ -16,18 +64,21 @@ class ServiceSchedulingDialog extends StatefulWidget {
   });
 
   @override
-  State<ServiceSchedulingDialog> createState() =>
+  ConsumerState<ServiceSchedulingDialog> createState() =>
       _ServiceSchedulingDialogState();
 }
 
-class _ServiceSchedulingDialogState extends State<ServiceSchedulingDialog> {
+class _ServiceSchedulingDialogState extends ConsumerState<ServiceSchedulingDialog>
+    with SingleTickerProviderStateMixin {
   final _repo = ServiceSchedulingRepository(Supabase.instance.client);
+  final _calRepo = CalendarScheduleRepository(Supabase.instance.client);
+
+  late TabController _tabController;
 
   bool _loading = true;
   bool _saving = false;
   String? _error;
 
-  // True when the global scheduling master switch is ON.
   bool _globalEnabled = false;
 
   late bool _isEnabled;
@@ -41,11 +92,15 @@ class _ServiceSchedulingDialogState extends State<ServiceSchedulingDialog> {
   late TextEditingController _intervalHours;
   late TextEditingController _intervalMinutes;
 
+  // Calendar tab
+  List<_CalendarEntryDraft> _calEntries = [];
+
   static const _dayLabels = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
   @override
   void initState() {
     super.initState();
+    _tabController = TabController(length: 2, vsync: this);
     _maxBookings = TextEditingController();
     _intervalHours = TextEditingController();
     _intervalMinutes = TextEditingController();
@@ -56,9 +111,13 @@ class _ServiceSchedulingDialogState extends State<ServiceSchedulingDialog> {
 
   @override
   void dispose() {
+    _tabController.dispose();
     _maxBookings.dispose();
     _intervalHours.dispose();
     _intervalMinutes.dispose();
+    for (final e in _calEntries) {
+      e.dispose();
+    }
     super.dispose();
   }
 
@@ -67,13 +126,19 @@ class _ServiceSchedulingDialogState extends State<ServiceSchedulingDialog> {
       final serviceFuture = _repo.fetchForService(widget.serviceId);
       final globalFuture =
           GlobalSchedulingRepository(Supabase.instance.client).fetch();
+      final calFuture = _calRepo.fetchForService(widget.serviceId);
 
       final cfg = (await serviceFuture) ??
           ServiceSchedulingConfig.defaults(widget.serviceId);
       final globalCfg = await globalFuture;
+      final calEntries = await calFuture;
 
       _applyConfig(cfg);
       _globalEnabled = globalCfg.isEnabled;
+      for (final e in _calEntries) {
+        e.dispose();
+      }
+      _calEntries = calEntries.map(_CalendarEntryDraft.fromEntry).toList();
     } catch (e) {
       _applyConfig(ServiceSchedulingConfig.defaults(widget.serviceId));
       if (mounted) setState(() => _error = 'Could not load existing config: $e');
@@ -94,7 +159,6 @@ class _ServiceSchedulingDialogState extends State<ServiceSchedulingDialog> {
 
   // ── Time helpers ──────────────────────────────────────────────────────────────
 
-  // "09:00 AM" → minutes since midnight
   int _toMinutes(String label) {
     final parts = label.split(' ');
     final hp = parts[0].split(':');
@@ -106,7 +170,6 @@ class _ServiceSchedulingDialogState extends State<ServiceSchedulingDialog> {
     return hour * 60 + minute;
   }
 
-  // minutes since midnight → "09:00 AM"
   String _minutesToLabel(int totalMinutes) {
     final hour24 = totalMinutes ~/ 60;
     final minute = totalMinutes % 60;
@@ -131,6 +194,15 @@ class _ServiceSchedulingDialogState extends State<ServiceSchedulingDialog> {
     if (parts[1] == 'PM' && hour != 12) hour += 12;
     if (parts[1] == 'AM' && hour == 12) hour = 0;
     return TimeOfDay(hour: hour, minute: minute);
+  }
+
+  String _formatDate(DateTime date) {
+    const months = [
+      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+    ];
+    const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    return '${days[date.weekday % 7]}, ${months[date.month - 1]} ${date.day}, ${date.year}';
   }
 
   // ── Slot generation ───────────────────────────────────────────────────────────
@@ -188,7 +260,7 @@ class _ServiceSchedulingDialogState extends State<ServiceSchedulingDialog> {
     });
   }
 
-  // ── Save ──────────────────────────────────────────────────────────────────────
+  // ── Normal schedule save ──────────────────────────────────────────────────────
 
   Future<void> _save() async {
     if (!_useGlobalSchedule) {
@@ -254,10 +326,141 @@ class _ServiceSchedulingDialogState extends State<ServiceSchedulingDialog> {
     }
   }
 
+  // ── Calendar entry operations ─────────────────────────────────────────────────
+
+  Future<void> _addCalEntry() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: DateTime.now(),
+      firstDate: DateTime.now().subtract(const Duration(days: 1)),
+      lastDate: DateTime.now().add(const Duration(days: 365 * 2)),
+    );
+    if (picked == null || !mounted) return;
+    final dateStr = picked.toIso8601String().split('T').first;
+    final exists = _calEntries
+        .any((e) => e.date.toIso8601String().split('T').first == dateStr);
+    if (exists) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('An override for this date already exists.'),
+        backgroundColor: Colors.red,
+        behavior: SnackBarBehavior.floating,
+      ));
+      return;
+    }
+    setState(() {
+      _calEntries.add(_CalendarEntryDraft(date: picked));
+      _calEntries.sort((a, b) => a.date.compareTo(b.date));
+    });
+  }
+
+  Future<void> _pickTimeForEntry(
+      _CalendarEntryDraft draft, {required bool isStart}) async {
+    final current = isStart ? draft.startTime : draft.endTime;
+    final initial = current != null ? _parseLabel(current) : TimeOfDay.now();
+    final picked = await showTimePicker(
+      context: context,
+      initialTime: initial,
+      helpText: isStart ? 'Select start time' : 'Select end time',
+      builder: (ctx, child) => MediaQuery(
+        data: MediaQuery.of(ctx).copyWith(alwaysUse24HourFormat: false),
+        child: child!,
+      ),
+    );
+    if (picked == null || !mounted) return;
+    setState(() {
+      final label = _formatTimeOfDay(picked);
+      if (isStart) {
+        draft.startTime = label;
+      } else {
+        draft.endTime = label;
+      }
+    });
+  }
+
+  List<String> _generateSlotsForDraft(_CalendarEntryDraft draft) {
+    if (draft.startTime == null || draft.endTime == null) return [];
+    final iH = int.tryParse(draft.intervalHours.text.trim()) ?? 0;
+    final iM = int.tryParse(draft.intervalMinutes.text.trim()) ?? 0;
+    return _generateSlots(draft.startTime!, draft.endTime!, iH, iM);
+  }
+
+  Future<void> _saveCalEntry(_CalendarEntryDraft draft) async {
+    final maxVal = int.tryParse(draft.maxBookings.text.trim());
+    if (maxVal == null || maxVal < 1) {
+      setState(() => draft.error = 'Max bookings must be at least 1.');
+      return;
+    }
+    final iH = int.tryParse(draft.intervalHours.text.trim()) ?? 0;
+    final iM = int.tryParse(draft.intervalMinutes.text.trim()) ?? 0;
+    if (draft.startTime == null || draft.endTime == null || iH * 60 + iM <= 0) {
+      setState(() => draft.error = 'Set start time, end time, and interval.');
+      return;
+    }
+    final slots = _generateSlots(draft.startTime!, draft.endTime!, iH, iM);
+    if (slots.isEmpty) {
+      setState(() => draft.error = 'End time must be after start time.');
+      return;
+    }
+    setState(() {
+      draft.isSaving = true;
+      draft.error = null;
+    });
+    try {
+      final entry = CalendarScheduleEntry(
+        id: draft.id,
+        serviceId: widget.serviceId,
+        scheduleDate: draft.date,
+        slots: slots,
+        maxBookingsPerSlot: maxVal,
+        isEnabled: draft.isEnabled,
+        slotStartTime: draft.startTime,
+        slotEndTime: draft.endTime,
+        slotIntervalHours: iH,
+        slotIntervalMinutes: iM,
+      );
+      final saved = await _calRepo.save(entry);
+      if (mounted) {
+        setState(() => draft.id = saved.id);
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Calendar entry saved.'),
+          behavior: SnackBarBehavior.floating,
+        ));
+      }
+    } catch (e) {
+      if (mounted) setState(() => draft.error = 'Save failed: $e');
+    } finally {
+      if (mounted) setState(() => draft.isSaving = false);
+    }
+  }
+
+  Future<void> _deleteCalEntry(_CalendarEntryDraft draft) async {
+    if (draft.id == null) {
+      draft.dispose();
+      setState(() => _calEntries.remove(draft));
+      return;
+    }
+    try {
+      await _calRepo.delete(draft.id!);
+      draft.dispose();
+      if (mounted) setState(() => _calEntries.remove(draft));
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('Delete failed: $e'),
+          backgroundColor: Colors.red,
+          behavior: SnackBarBehavior.floating,
+        ));
+      }
+    }
+  }
+
   // ── Build ─────────────────────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
+    ref.listen<int>(schedulingRefreshProvider, (_, __) {
+      if (mounted) _loadConfig();
+    });
     return Dialog(
       insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -272,8 +475,34 @@ class _ServiceSchedulingDialogState extends State<ServiceSchedulingDialog> {
               const Expanded(
                 child: Center(child: CircularProgressIndicator()),
               )
-            else
-              Flexible(child: SingleChildScrollView(child: _buildForm())),
+            else ...[
+              // Tab bar
+              Container(
+                color: AppColors.surface,
+                child: TabBar(
+                  controller: _tabController,
+                  labelColor: AppColors.primary,
+                  unselectedLabelColor: AppColors.textSecondary,
+                  indicatorColor: AppColors.primary,
+                  labelStyle: const TextStyle(
+                      fontSize: 13, fontWeight: FontWeight.w600),
+                  tabs: const [
+                    Tab(text: 'Normal'),
+                    Tab(text: 'Calendar'),
+                  ],
+                ),
+              ),
+              // Tab content
+              Flexible(
+                child: TabBarView(
+                  controller: _tabController,
+                  children: [
+                    SingleChildScrollView(child: _buildForm()),
+                    SingleChildScrollView(child: _buildCalendarTab()),
+                  ],
+                ),
+              ),
+            ],
             if (!_loading) _buildFooter(),
           ],
         ),
@@ -632,6 +861,337 @@ class _ServiceSchedulingDialogState extends State<ServiceSchedulingDialog> {
             const SizedBox(height: 16),
             _ErrorBanner(message: _error!),
           ],
+        ],
+      ),
+    );
+  }
+
+  // ── Calendar overrides tab ────────────────────────────────────────────────────
+
+  Widget _buildCalendarTab() {
+    return Padding(
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Info
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: AppColors.primary.withValues(alpha: 0.06),
+              borderRadius: BorderRadius.circular(8),
+              border:
+                  Border.all(color: AppColors.primary.withValues(alpha: 0.25)),
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(Icons.event_note_rounded,
+                    color: AppColors.primary, size: 15),
+                const SizedBox(width: 8),
+                const Expanded(
+                  child: Text(
+                    'Define specific slots for a particular date. '
+                    'This overrides the normal weekly schedule for that date.',
+                    style: TextStyle(
+                        fontSize: 12,
+                        color: AppColors.textSecondary,
+                        height: 1.4),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+
+          if (_calEntries.isEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 24),
+              child: Center(
+                child: Column(
+                  children: [
+                    Icon(Icons.calendar_today_outlined,
+                        size: 36, color: AppColors.textSecondary),
+                    const SizedBox(height: 10),
+                    const Text(
+                      'No calendar overrides yet.',
+                      style: TextStyle(
+                          fontSize: 13, color: AppColors.textSecondary),
+                    ),
+                  ],
+                ),
+              ),
+            )
+          else
+            for (final draft in _calEntries) _buildCalCard(draft),
+
+          const SizedBox(height: 8),
+          OutlinedButton.icon(
+            onPressed: _addCalEntry,
+            icon: const Icon(Icons.add, size: 16),
+            label: const Text('Add Date Override', style: TextStyle(fontSize: 13)),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: AppColors.primary,
+              side: BorderSide(color: AppColors.primary),
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCalCard(_CalendarEntryDraft draft) {
+    final generatedSlots = _generateSlotsForDraft(draft);
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.background,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Date + enabled
+          Row(
+            children: [
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: AppColors.primary.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(5),
+                ),
+                child: Text(
+                  _formatDate(draft.date),
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.primary,
+                  ),
+                ),
+              ),
+              const Spacer(),
+              Switch(
+                value: draft.isEnabled,
+                onChanged: (v) => setState(() => draft.isEnabled = v),
+                activeThumbColor: AppColors.success,
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+
+          // Slot generator
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: AppColors.surface,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: AppColors.border),
+            ),
+            child: Column(
+              children: [
+                _TimeRow(
+                  label: 'Start Time',
+                  value: draft.startTime,
+                  onTap: () => _pickTimeForEntry(draft, isStart: true),
+                ),
+                const Divider(height: 14, color: AppColors.border),
+                _TimeRow(
+                  label: 'End Time',
+                  value: draft.endTime,
+                  onTap: () => _pickTimeForEntry(draft, isStart: false),
+                ),
+                const Divider(height: 14, color: AppColors.border),
+                Row(
+                  children: [
+                    const Text(
+                      'Interval',
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: AppColors.textSecondary,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    const Spacer(),
+                    SizedBox(
+                      width: 58,
+                      child: TextField(
+                        controller: draft.intervalHours,
+                        textAlign: TextAlign.center,
+                        keyboardType: TextInputType.number,
+                        inputFormatters: [
+                          FilteringTextInputFormatter.digitsOnly
+                        ],
+                        style: const TextStyle(
+                            fontSize: 13, fontWeight: FontWeight.w600),
+                        onChanged: (_) => setState(() {}),
+                        decoration: InputDecoration(
+                          isDense: true,
+                          contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 6, vertical: 8),
+                          border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(6)),
+                          hintText: '0',
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 5),
+                    const Text('hr',
+                        style: TextStyle(
+                            fontSize: 11, color: AppColors.textSecondary)),
+                    const SizedBox(width: 8),
+                    SizedBox(
+                      width: 58,
+                      child: TextField(
+                        controller: draft.intervalMinutes,
+                        textAlign: TextAlign.center,
+                        keyboardType: TextInputType.number,
+                        inputFormatters: [
+                          FilteringTextInputFormatter.digitsOnly
+                        ],
+                        style: const TextStyle(
+                            fontSize: 13, fontWeight: FontWeight.w600),
+                        onChanged: (_) => setState(() {}),
+                        decoration: InputDecoration(
+                          isDense: true,
+                          contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 6, vertical: 8),
+                          border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(6)),
+                          hintText: '30',
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 5),
+                    const Text('min',
+                        style: TextStyle(
+                            fontSize: 11, color: AppColors.textSecondary)),
+                  ],
+                ),
+              ],
+            ),
+          ),
+
+          // Generated slots preview
+          if (generatedSlots.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Text(
+              '${generatedSlots.length} slot${generatedSlots.length == 1 ? '' : 's'}',
+              style: const TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.textSecondary),
+            ),
+            const SizedBox(height: 5),
+            Wrap(
+              spacing: 5,
+              runSpacing: 5,
+              children: generatedSlots
+                  .map((s) => Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: AppColors.primary.withValues(alpha: 0.08),
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(
+                              color:
+                                  AppColors.primary.withValues(alpha: 0.25)),
+                        ),
+                        child: Text(
+                          s,
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.primary,
+                          ),
+                        ),
+                      ))
+                  .toList(),
+            ),
+          ],
+          const SizedBox(height: 10),
+
+          // Capacity row
+          Row(
+            children: [
+              const Text('Max / slot',
+                  style: TextStyle(
+                      fontSize: 12, color: AppColors.textSecondary)),
+              const Spacer(),
+              SizedBox(
+                width: 72,
+                child: TextField(
+                  controller: draft.maxBookings,
+                  textAlign: TextAlign.center,
+                  keyboardType: TextInputType.number,
+                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                  style: const TextStyle(
+                      fontSize: 13, fontWeight: FontWeight.w600),
+                  decoration: InputDecoration(
+                    isDense: true,
+                    contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 6, vertical: 8),
+                    border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(6)),
+                    hintText: '5',
+                  ),
+                ),
+              ),
+            ],
+          ),
+
+          if (draft.error != null) ...[
+            const SizedBox(height: 8),
+            _ErrorBanner(message: draft.error!),
+          ],
+
+          const SizedBox(height: 10),
+
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              if (draft.id != null)
+                TextButton(
+                  onPressed: draft.isSaving
+                      ? null
+                      : () => _deleteCalEntry(draft),
+                  style: TextButton.styleFrom(
+                    foregroundColor: AppColors.error,
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 12, vertical: 6),
+                    minimumSize: Size.zero,
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  ),
+                  child: const Text('Delete',
+                      style: TextStyle(fontSize: 12)),
+                ),
+              const SizedBox(width: 8),
+              FilledButton(
+                onPressed:
+                    draft.isSaving ? null : () => _saveCalEntry(draft),
+                style: FilledButton.styleFrom(
+                  backgroundColor: AppColors.primary,
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 16, vertical: 8),
+                  minimumSize: Size.zero,
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+                child: draft.isSaving
+                    ? const SizedBox(
+                        width: 12,
+                        height: 12,
+                        child: CircularProgressIndicator(
+                            strokeWidth: 2, color: Colors.white),
+                      )
+                    : const Text('Save',
+                        style: TextStyle(fontSize: 12)),
+              ),
+            ],
+          ),
         ],
       ),
     );

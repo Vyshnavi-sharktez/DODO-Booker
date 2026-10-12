@@ -1,4 +1,4 @@
-﻿import 'package:intl/intl.dart';
+import 'package:intl/intl.dart';
 
 class BookingForRefundModel {
   final String id;
@@ -59,7 +59,7 @@ class BookingForRefundModel {
     if (bookingNumber != null && bookingNumber!.isNotEmpty) {
       return bookingNumber!;
     }
-    return 'BK-${id.substring(0, 8).toUpperCase()}';
+    return 'DODO${id.substring(0, 8).toUpperCase()}';
   }
 
   bool get isOnlinePayment =>

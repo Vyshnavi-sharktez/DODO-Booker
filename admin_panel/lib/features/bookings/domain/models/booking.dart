@@ -58,6 +58,8 @@ class Booking {
   final String id;
   final String bookingNumber;
   final String customerId;
+  final String? customerName;
+  final String? customerPhone;
   final String vendorId;
   final String vendorName;
   final String dodoTeamId;
@@ -69,7 +71,9 @@ class Booking {
   final double taxAmount;
   final double discountAmount;
   final double totalAmount;
+  final String? couponCode;
   final String? address;
+  final String? scheduledTime;
   final String? notes;
   final DateTime? createdAt;
   final DateTime? updatedAt;
@@ -113,6 +117,8 @@ class Booking {
     required this.id,
     required this.bookingNumber,
     required this.customerId,
+    this.customerName,
+    this.customerPhone,
     required this.vendorId,
     this.vendorName = '',
     this.dodoTeamId = '',
@@ -124,7 +130,9 @@ class Booking {
     this.taxAmount = 0.0,
     required this.discountAmount,
     required this.totalAmount,
+    this.couponCode,
     this.address,
+    this.scheduledTime,
     this.notes,
     this.createdAt,
     this.updatedAt,
@@ -244,10 +252,14 @@ class Booking {
     final vendorData = map['vendors'] as Map<String, dynamic>?;
     final vendorName = (vendorData?['business_name'] as String?) ?? '';
 
+    final customerData = map['customers'] as Map<String, dynamic>?;
+
     return Booking(
       id: map['id'] as String,
       bookingNumber: map['booking_number'] as String? ?? '',
       customerId: map['customer_id'] as String? ?? '',
+      customerName: customerData?['full_name'] as String?,
+      customerPhone: customerData?['phone'] as String?,
       vendorId: map['vendor_id'] as String? ?? '',
       vendorName: vendorName,
       dodoTeamId: map['dodo_team_id'] as String? ?? '',
@@ -261,7 +273,9 @@ class Booking {
       taxAmount: (map['tax_amount'] as num?)?.toDouble() ?? 0.0,
       discountAmount: (map['discount_amount'] as num?)?.toDouble() ?? 0.0,
       totalAmount: (map['total_amount'] as num?)?.toDouble() ?? 0.0,
+      couponCode: map['coupon_code'] as String?,
       address: map['address'] as String?,
+      scheduledTime: map['scheduled_time'] as String?,
       notes: map['notes'] as String?,
       createdAt: map['created_at'] != null
           ? DateTime.tryParse(map['created_at'] as String)
@@ -348,6 +362,8 @@ class Booking {
     DateTime? serviceDate,
     String? status,
     String? dispatchStatus,
+    String? address,
+    String? scheduledTime,
     String? notes,
     String? completionOtp,
     List<BookingAddon>? addons,
@@ -368,7 +384,9 @@ class Booking {
       subtotal: subtotal,
       discountAmount: discountAmount,
       totalAmount: totalAmount,
-      address: address,
+      couponCode: couponCode,
+      address: address ?? this.address,
+      scheduledTime: scheduledTime ?? this.scheduledTime,
       notes: notes ?? this.notes,
       createdAt: createdAt,
       updatedAt: updatedAt,

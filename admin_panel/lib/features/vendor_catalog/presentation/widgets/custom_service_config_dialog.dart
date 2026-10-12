@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../../core/theme/app_theme.dart';
@@ -9,7 +9,7 @@ import '../../../vendor_subscriptions/domain/models/subscription_plan.dart'
 import '../../../vendor_subscriptions/domain/subscription_feature_registry.dart';
 
 // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-// CustomServiceConfigDialog â€” 7-tab module configuration for a vendor custom
+// CustomServiceConfigDialog - 7-tab module configuration for a vendor custom
 // service (vendor_service_requests row).
 //
 // Tabs: Tax Â· Loyalty Â· Scheduling Â· Platform Commission Â· Surge Fee Â·
@@ -60,40 +60,40 @@ class _CustomServiceConfigDialogState extends State<CustomServiceConfigDialog>
   // Configs keyed by module
   final Map<String, CatalogNodeConfigModel?> _configs = {};
 
-  // â”€â”€ Tax â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // -- Tax ----------------------------------------------------------------------
   final _taxValueCtrl = TextEditingController();
   String _taxType = 'percentage';
   final _taxNameCtrl = TextEditingController(text: 'GST');
 
-  // â”€â”€ Loyalty â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // -- Loyalty -------------------------------------------------------------------
   bool _loyaltyEarnEnabled = true;
   String _loyaltyRule = 'global';
   final _loyaltyFixedCtrl = TextEditingController();
   final _loyaltyPercentCtrl = TextEditingController();
 
-  // â”€â”€ Scheduling â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // -- Scheduling ----------------------------------------------------------------
   bool _schedEnabled = true;
   final List<bool> _schedDays = List.filled(7, true);
   final _schedMaxCtrl = TextEditingController(text: '5');
   final _schedSlotsCtrl = TextEditingController();
 
-  // â”€â”€ Commission â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // -- Commission ----------------------------------------------------------------
   final _commValueCtrl = TextEditingController();
   String _commType = 'percentage';
 
-  // â”€â”€ Surge fee â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // -- Surge fee -----------------------------------------------------------------
   final _surgeValueCtrl = TextEditingController();
   String _surgeType = 'percentage';
   final _surgeNameCtrl = TextEditingController(text: 'Surge Fee');
 
-  // â”€â”€ Preferred vendors â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // -- Preferred vendors ---------------------------------------------------------
   bool _pvEnabled = false;
   Set<String> _pvSelectedIds = {};
   Map<String, double> _pvVendorFees = {};
   final Map<String, TextEditingController> _pvFeeControllers = {};
   List<Map<String, dynamic>> _pvVendors = [];
 
-  // â”€â”€ Vendor Subscription â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // -- Vendor Subscription -------------------------------------------------------
   bool _vsEnabled = false;
   final _vsNameCtrl = TextEditingController();
   final _vsDescCtrl = TextEditingController();
@@ -154,7 +154,7 @@ class _CustomServiceConfigDialogState extends State<CustomServiceConfigDialog>
     super.dispose();
   }
 
-  // â”€â”€ Data loading â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // -- Data loading --------------------------------------------------------------
 
   Future<void> _loadData() async {
     try {
@@ -381,7 +381,7 @@ class _CustomServiceConfigDialogState extends State<CustomServiceConfigDialog>
     }
   }
 
-  // â”€â”€ Save / Delete (module configs) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // -- Save / Delete (module configs) -------------------------------------------
 
   Future<void> _save(String module) async {
     setState(() {
@@ -429,7 +429,7 @@ class _CustomServiceConfigDialogState extends State<CustomServiceConfigDialog>
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-                '${_tabLabels[_modules.indexOf(module)]} settings removed â€” default settings will apply.'),
+                '${_tabLabels[_modules.indexOf(module)]} settings removed - default settings will apply.'),
           ),
         );
       }
@@ -536,7 +536,7 @@ class _CustomServiceConfigDialogState extends State<CustomServiceConfigDialog>
     }
   }
 
-  // â”€â”€ Build â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // -- Build ---------------------------------------------------------------------
 
   @override
   Widget build(BuildContext context) {
@@ -547,7 +547,7 @@ class _CustomServiceConfigDialogState extends State<CustomServiceConfigDialog>
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            // â”€â”€ Header â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+            // -- Header ----------------------------------------------------
             Container(
               padding: const EdgeInsets.fromLTRB(20, 16, 12, 12),
               decoration: const BoxDecoration(
@@ -592,7 +592,7 @@ class _CustomServiceConfigDialogState extends State<CustomServiceConfigDialog>
               const Expanded(
                   child: Center(child: CircularProgressIndicator()))
             else ...[
-              // â”€â”€ Tabs â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+              // -- Tabs --------------------------------------------------
               TabBar(
                 controller: _tabController,
                 isScrollable: true,
@@ -725,7 +725,7 @@ class _CustomServiceConfigDialogState extends State<CustomServiceConfigDialog>
             Padding(
               padding: const EdgeInsets.only(top: 8),
               child: Text(
-                'No custom settings â€” default ${_tabLabels[_modules.indexOf(module)]} settings will apply.',
+                'No custom settings - default ${_tabLabels[_modules.indexOf(module)]} settings will apply.',
                 style: const TextStyle(
                     fontSize: 11, color: AppColors.textSecondary),
               ),
@@ -769,13 +769,13 @@ class _CustomServiceConfigDialogState extends State<CustomServiceConfigDialog>
         SegmentedButton<String>(
           segments: const [
             ButtonSegment(value: 'percentage', label: Text('Percentage (%)')),
-            ButtonSegment(value: 'fixed', label: Text('Fixed (â‚¹)')),
+            ButtonSegment(value: 'fixed', label: Text('Fixed (₹)')),
           ],
           selected: {_taxType},
           onSelectionChanged: (s) => setState(() => _taxType = s.first),
         ),
         const SizedBox(height: 12),
-        _label(_taxType == 'percentage' ? 'Tax Rate (%)' : 'Fixed Amount (â‚¹)'),
+        _label(_taxType == 'percentage' ? 'Tax Rate (%)' : 'Fixed Amount (₹)'),
         const SizedBox(height: 4),
         TextField(
           controller: _taxValueCtrl,
@@ -812,7 +812,7 @@ class _CustomServiceConfigDialogState extends State<CustomServiceConfigDialog>
             DropdownMenuItem(value: 'global', child: Text('Global rate')),
             DropdownMenuItem(value: 'fixed', child: Text('Fixed points')),
             DropdownMenuItem(
-                value: 'percentage', child: Text('Points per â‚¹100')),
+                value: 'percentage', child: Text('Points per ₹100')),
           ],
           onChanged: (v) => setState(() => _loyaltyRule = v ?? 'global'),
         ),
@@ -828,7 +828,7 @@ class _CustomServiceConfigDialogState extends State<CustomServiceConfigDialog>
           ),
         ] else if (_loyaltyRule == 'percentage') ...[
           const SizedBox(height: 12),
-          _label('Points per â‚¹100 spent'),
+          _label('Points per ₹100 spent'),
           const SizedBox(height: 4),
           TextField(
             controller: _loyaltyPercentCtrl,
@@ -898,7 +898,7 @@ class _CustomServiceConfigDialogState extends State<CustomServiceConfigDialog>
         SegmentedButton<String>(
           segments: const [
             ButtonSegment(value: 'percentage', label: Text('Percentage (%)')),
-            ButtonSegment(value: 'fixed', label: Text('Fixed (â‚¹)')),
+            ButtonSegment(value: 'fixed', label: Text('Fixed (₹)')),
           ],
           selected: {_commType},
           onSelectionChanged: (s) => setState(() => _commType = s.first),
@@ -906,7 +906,7 @@ class _CustomServiceConfigDialogState extends State<CustomServiceConfigDialog>
         const SizedBox(height: 12),
         _label(_commType == 'percentage'
             ? 'Platform Commission Rate (%)'
-            : 'Fixed Amount (â‚¹)'),
+            : 'Fixed Amount (₹)'),
         const SizedBox(height: 4),
         TextField(
           controller: _commValueCtrl,
@@ -937,7 +937,7 @@ class _CustomServiceConfigDialogState extends State<CustomServiceConfigDialog>
         SegmentedButton<String>(
           segments: const [
             ButtonSegment(value: 'percentage', label: Text('Percentage (%)')),
-            ButtonSegment(value: 'fixed', label: Text('Fixed (â‚¹)')),
+            ButtonSegment(value: 'fixed', label: Text('Fixed (₹)')),
           ],
           selected: {_surgeType},
           onSelectionChanged: (s) => setState(() => _surgeType = s.first),
@@ -945,7 +945,7 @@ class _CustomServiceConfigDialogState extends State<CustomServiceConfigDialog>
         const SizedBox(height: 12),
         _label(_surgeType == 'percentage'
             ? 'Surge Rate (%)'
-            : 'Fixed Amount (â‚¹)'),
+            : 'Fixed Amount (₹)'),
         const SizedBox(height: 4),
         TextField(
           controller: _surgeValueCtrl,
@@ -1032,7 +1032,7 @@ class _CustomServiceConfigDialogState extends State<CustomServiceConfigDialog>
 
           if (_pvSelectedIds.isNotEmpty) ...[
             const SizedBox(height: 16),
-            _label('Additional Fee per Vendor (â‚¹)'),
+            _label('Additional Fee per Vendor (₹)'),
             const SizedBox(height: 8),
             ..._pvVendors
                 .where((v) => _pvSelectedIds.contains(v['id'] as String))
@@ -1056,7 +1056,7 @@ class _CustomServiceConfigDialogState extends State<CustomServiceConfigDialog>
                       child: TextField(
                         controller: ctrl,
                         decoration:
-                            _inputDeco('e.g. 200').copyWith(prefixText: 'â‚¹ '),
+                            _inputDeco('e.g. 200').copyWith(prefixText: '₹ '),
                         keyboardType:
                             const TextInputType.numberWithOptions(decimal: true),
                         inputFormatters: [
@@ -1271,7 +1271,7 @@ class _CustomServiceConfigDialogState extends State<CustomServiceConfigDialog>
     );
   }
 
-  // â”€â”€ Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // -- Helpers -------------------------------------------------------------------
 
   Widget _label(String text) => Text(
         text,

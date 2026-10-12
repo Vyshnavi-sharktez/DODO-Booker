@@ -20,6 +20,7 @@ import '../services/booking_providers.dart';
 import '../services/razorpay_service.dart';
 import '../services/coupon_providers.dart';
 import '../widgets/payment_failed_dialog.dart';
+import '../widgets/booking_restricted_dialog.dart';
 import '../../bookings/services/bookings_providers.dart';
 import '../../cart/utils/cart_launcher.dart';
 import '../../../features/tax/providers/tax_provider.dart';
@@ -173,6 +174,7 @@ Future<void> launchBookingFlow(
           date: date,
           slot: slot,
           couponId: amcPlan != null ? null : selectedCoupon?.id,
+          couponCode: amcPlan != null ? null : selectedCoupon?.code,
           discountAmount: discountAmount,
           priceAdjustment: priceAdjustment,
           selectedAddons: selectedAddons,
@@ -296,13 +298,17 @@ Future<void> launchBookingFlow(
     ref.read(selectedCouponProvider.notifier).state = null;
     debugPrint('[DODO][Booking] createBooking failed: $e');
     if (!context.mounted) return;
-    final message = e.toString().replaceFirst('Exception: ', '');
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Booking failed: $message'),
-        backgroundColor: const Color(0xFFEA4335),
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
+    if (isBookingRestrictionError(e)) {
+      await showBookingRestrictedDialog(context);
+    } else {
+      final message = e.toString().replaceFirst('Exception: ', '');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Booking failed: $message'),
+          backgroundColor: const Color(0xFFEA4335),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
   }
 }

@@ -1,0 +1,1 @@
+ALTER TABLE booking_items ADD COLUMN IF NOT EXISTS item_name TEXT;

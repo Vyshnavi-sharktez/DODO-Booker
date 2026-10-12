@@ -15,7 +15,8 @@ void main() {
     });
 
     final testBooking = BookingModel(
-      id: 'BOOKING-2026-0829-99482818-VERY-LONG-ID-123456789',
+      id: '1d6463c5-9fff-4762-9f50-278776487230',
+      bookingNumber: 'DODO100062',
       serviceId: 'srv_1',
       serviceName: 'Full House Deep Cleaning & Sanitization Service',
       addressId: 'addr_1',
@@ -42,7 +43,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Booking Confirmed!'), findsOneWidget);
-    expect(find.text('BOOKING-2026-0829-99482818-VERY-LONG-ID-123456789'), findsOneWidget);
+    expect(find.text('DODO100062'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 }

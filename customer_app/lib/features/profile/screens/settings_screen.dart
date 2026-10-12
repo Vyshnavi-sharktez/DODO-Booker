@@ -6,6 +6,7 @@ import '../../../routes/app_router.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../../../features/home/services/home_providers.dart';
 import '../services/profile_providers.dart';
+import '../../auth/utils/auth_modal_gate.dart';
 import 'about_screen.dart';
 import 'privacy_policy_screen.dart';
 
@@ -296,6 +297,7 @@ class _LogoutCardState extends ConsumerState<_LogoutCard> {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final isAuth = ref.watch(isAuthenticatedProvider);
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16),
       decoration: BoxDecoration(
@@ -312,13 +314,20 @@ class _LogoutCardState extends ConsumerState<_LogoutCard> {
       ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(16),
-        child: _SettingsTile(
-          icon: Icons.logout_rounded,
-          iconColor: cs.error,
-          title: 'Logout',
-          isDestructive: true,
-          onTap: _loading ? null : () => _confirmLogout(context),
-        ),
+        child: isAuth
+            ? _SettingsTile(
+                icon: Icons.logout_rounded,
+                iconColor: cs.error,
+                title: 'Logout',
+                isDestructive: true,
+                onTap: _loading ? null : () => _confirmLogout(context),
+              )
+            : _SettingsTile(
+                icon: Icons.login_rounded,
+                iconColor: cs.primary,
+                title: 'Sign In',
+                onTap: () => requireAuth(context, ref),
+              ),
       ),
     );
   }

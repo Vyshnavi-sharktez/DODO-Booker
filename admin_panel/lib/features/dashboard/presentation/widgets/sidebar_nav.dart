@@ -31,12 +31,19 @@ class _NavGroup {
   final List<_NavItem> children;
 }
 
-// ── Dashboard (standalone direct item) ───────────────────────────────────────
+// ── Standalone direct items ───────────────────────────────────────────────────
 
 const _kDashboard = _NavItem(
   label: 'Dashboard',
   icon: Icons.dashboard_rounded,
   route: '/dashboard',
+);
+
+const _kNotifications = _NavItem(
+  label: 'Notifications',
+  icon: Icons.campaign_rounded,
+  route: '/dashboard/notifications',
+  requiredPermission: 'settings.manage',
 );
 
 // ── Grouped navigation structure ─────────────────────────────────────────────
@@ -383,6 +390,11 @@ class _SidebarNavState extends ConsumerState<SidebarNav> {
                   item: _kDashboard,
                   isActive: location == '/dashboard',
                 ),
+                if (ref.watch(hasPermissionProvider('settings.manage')))
+                  _NavTile(
+                    item: _kNotifications,
+                    isActive: _isActive(location, '/dashboard/notifications'),
+                  ),
                 for (final group in _kNavGroups)
                   _buildGroup(group, location, effectiveExpanded, activeGroupLabels),
               ],

@@ -190,6 +190,15 @@ class SettingsPage extends ConsumerWidget {
           hint: 'Send booking confirmations via SMS',
           type: SettingFieldType.toggle,
         ),
+        SettingFieldDef(
+          key: 'notification_retention_days',
+          label: 'Notification Retention',
+          hint: 'Days to keep notifications before automatic deletion',
+          type: SettingFieldType.integer,
+          unit: 'days',
+          min: 1,
+          max: 365,
+        ),
       ],
     ),
     SettingSectionDef(

@@ -201,7 +201,7 @@ class _BookingDetailsScreenState extends ConsumerState<BookingDetailsScreen> {
       if (!mounted) return;
       ref.invalidate(myBookingsProvider);
       ref.invalidate(bookingByIdProvider(b.id));
-      ref.invalidate(notificationsProvider);
+      ref.read(notificationsProvider.notifier).refresh();
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Booking cancelled successfully'),

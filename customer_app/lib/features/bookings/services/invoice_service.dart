@@ -187,13 +187,7 @@ class InvoiceService {
             children: [
               _sectionLabel('SERVICE DETAILS'),
               pw.SizedBox(height: 6),
-              _detailRow(
-                'Booking ID',
-                booking.id
-                    .replaceAll('-', '')
-                    .substring(0, min(8, booking.id.replaceAll('-', '').length))
-                    .toUpperCase(),
-              ),
+              _detailRow('Booking ID', booking.displayBookingNumber),
               _detailRow('Date', _dateFmt.format(booking.scheduledDate)),
               _detailRow('Time', booking.timeSlot),
               if (assignedTo != null) _detailRow('Assigned To', assignedTo),

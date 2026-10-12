@@ -101,6 +101,8 @@ class Booking {
         .map((e) => BookingItem.fromMap(e as Map<String, dynamic>))
         .toList();
 
+    final customerRow = map['customers'] as Map<String, dynamic>?;
+
     return Booking(
       id: map['id'] as String,
       bookingNumber: map['booking_number'] as String? ?? '',
@@ -115,6 +117,7 @@ class Booking {
           : null,
       address: map['address'] as String?,
       notes: map['notes'] as String?,
+      customerName: customerRow?['full_name'] as String?,
       createdAt: map['created_at'] != null
           ? DateTime.tryParse(map['created_at'] as String)
           : null,

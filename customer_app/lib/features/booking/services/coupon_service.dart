@@ -13,8 +13,10 @@ class CouponService {
         .eq('is_active', true)
         .order('created_at', ascending: false);
 
+    final now = DateTime.now();
     final coupons = (data as List<dynamic>)
         .map((r) => CouponModel.fromMap(r as Map<String, dynamic>))
+        .where((c) => c.validTo == null || c.validTo!.isAfter(now))
         .toList();
 
     // Resolve applicable node names in a single batch query.

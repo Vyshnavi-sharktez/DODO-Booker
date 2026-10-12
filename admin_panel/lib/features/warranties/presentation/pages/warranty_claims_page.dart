@@ -261,7 +261,7 @@ class _WarrantyClaimsPageState extends ConsumerState<WarrantyClaimsPage> {
                         children: [
                           Row(
                             children: [
-                              // Search Input
+                              // Search Input — fills all remaining space
                               Expanded(
                                 child: TextField(
                                   decoration: InputDecoration(
@@ -279,10 +279,11 @@ class _WarrantyClaimsPageState extends ConsumerState<WarrantyClaimsPage> {
                               ),
                               const SizedBox(width: 8),
 
-                              // Vendor Dropdown Filter
+                              // Vendor Dropdown Filter — fixed width so it never crowds others
                               SizedBox(
-                                width: 160,
+                                width: 200,
                                 child: DropdownButtonFormField<String?>(
+                                  isExpanded: true,
                                   initialValue: _selectedVendorFilter,
                                   decoration: InputDecoration(
                                     isDense: true,
@@ -299,79 +300,82 @@ class _WarrantyClaimsPageState extends ConsumerState<WarrantyClaimsPage> {
                               ),
                               const SizedBox(width: 8),
 
-                              // Date Range Filter Button
-                              OutlinedButton.icon(
-                                onPressed: _pickDateFilter,
-                                icon: const Icon(Icons.calendar_today_rounded, size: 16),
-                                label: Text(
-                                  _selectedDateFilter != null
-                                      ? DateFormat('dd MMM yyyy').format(_selectedDateFilter!)
-                                      : 'Filter Date',
-                                ),
-                                style: OutlinedButton.styleFrom(
-                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
-                                  minimumSize: Size.zero,
-                                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                              // Date Range Filter Button + optional Clear — natural size, can shrink
+                              Flexible(
+                                fit: FlexFit.loose,
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    OutlinedButton.icon(
+                                      onPressed: _pickDateFilter,
+                                      icon: const Icon(Icons.calendar_today_rounded, size: 16),
+                                      label: Text(
+                                        _selectedDateFilter != null
+                                            ? DateFormat('dd MMM yyyy').format(_selectedDateFilter!)
+                                            : 'Filter Date',
+                                      ),
+                                      style: OutlinedButton.styleFrom(
+                                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                                        minimumSize: const Size(0, 44),
+                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                      ),
+                                    ),
+                                    if (_selectedDateFilter != null || _selectedVendorFilter != null || _searchQuery.isNotEmpty || _selectedStatusFilter != 'All Claims') ...[
+                                      const SizedBox(width: 8),
+                                      TextButton.icon(
+                                        onPressed: () => setState(() {
+                                          _searchQuery = '';
+                                          _selectedStatusFilter = 'All Claims';
+                                          _selectedVendorFilter = null;
+                                          _selectedDateFilter = null;
+                                        }),
+                                        icon: const Icon(Icons.filter_alt_off_rounded, size: 16),
+                                        label: const Text('Clear'),
+                                        style: TextButton.styleFrom(
+                                          minimumSize: Size.zero,
+                                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                        ),
+                                      ),
+                                    ],
+                                  ],
                                 ),
                               ),
-
-                              if (_selectedDateFilter != null || _selectedVendorFilter != null || _searchQuery.isNotEmpty || _selectedStatusFilter != 'All Claims') ...[
-                                const SizedBox(width: 8),
-                                TextButton.icon(
-                                  onPressed: () => setState(() {
-                                    _searchQuery = '';
-                                    _selectedStatusFilter = 'All Claims';
-                                    _selectedVendorFilter = null;
-                                    _selectedDateFilter = null;
-                                  }),
-                                  icon: const Icon(Icons.filter_alt_off_rounded, size: 16),
-                                  label: const Text('Clear'),
-                                  style: TextButton.styleFrom(
-                                    minimumSize: Size.zero,
-                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-                                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                                  ),
-                                ),
-                              ],
                             ],
                           ),
 
                           const SizedBox(height: 12),
 
                           // Status Filter Chips
-                          Row(
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 8,
+                            crossAxisAlignment: WrapCrossAlignment.center,
                             children: [
                               const Text('Status Filter: ', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: Wrap(
-                                  spacing: 8,
-                                  children: [
-                                    'All Claims',
-                                    'Pending Review',
-                                    'Approved',
-                                    'In Progress',
-                                    'Resolved',
-                                    'Rejected',
-                                  ].map((filter) {
-                                    final isSelected = _selectedStatusFilter == filter;
-                                    return ChoiceChip(
-                                      label: Text(filter),
-                                      selected: isSelected,
-                                      selectedColor: AppColors.primary,
-                                      labelStyle: TextStyle(
-                                        fontSize: 11,
-                                        fontWeight: FontWeight.bold,
-                                        color: isSelected ? Colors.white : AppColors.textPrimary,
-                                      ),
-                                      onSelected: (sel) {
-                                        if (sel) setState(() => _selectedStatusFilter = filter);
-                                      },
-                                    );
-                                  }).toList(),
-                                ),
-                              ),
+                              ...[
+                                'All Claims',
+                                'Pending Review',
+                                'Approved',
+                                'In Progress',
+                                'Resolved',
+                                'Rejected',
+                              ].map((filter) {
+                                final isSelected = _selectedStatusFilter == filter;
+                                return ChoiceChip(
+                                  label: Text(filter),
+                                  selected: isSelected,
+                                  selectedColor: AppColors.primary,
+                                  labelStyle: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.bold,
+                                    color: isSelected ? Colors.white : AppColors.textPrimary,
+                                  ),
+                                  onSelected: (sel) {
+                                    if (sel) setState(() => _selectedStatusFilter = filter);
+                                  },
+                                );
+                              }),
                             ],
                           ),
                         ],

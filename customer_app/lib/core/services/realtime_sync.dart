@@ -50,7 +50,6 @@ import '../../features/warranties/services/warranty_providers.dart';
 ///   coupons                                  → activeCouponsProvider
 ///   landing_page_sections                    → landingPageSectionsProvider
 ///   notifications (broadcast, user_type=customer) → notificationsProvider
-///   bookings                                 → myBookingsProvider + amcContractProvider
 ///   amc_contracts                            → processedBookingsProvider + amcContractProvider + allAmcContractsProvider
 ///   amc_scheduling_requests                  → pendingAmcRequestProvider + amcContractProvider
 ///   amc_pause_requests                       → pause request + contract providers
@@ -58,6 +57,7 @@ import '../../features/warranties/services/warranty_providers.dart';
 ///
 /// Event → invalidation map (personal channel, filtered by customer_id):
 ///   notifications INSERT                     → notificationsProvider + AMC + support + refund + loyalty
+///   bookings INSERT/UPDATE/DELETE            → myBookingsProvider + bookingByIdProvider + processedBookingsProvider + amcContractProvider
 ///   refund_requests INSERT/UPDATE            → myRefundQueriesProvider + refundQueryDetailProvider
 ///   refund_status_history INSERT             → myRefundQueriesProvider + refundQueryDetailProvider
 ///   refund_messages INSERT                   → refundQueryDetailProvider
@@ -158,21 +158,18 @@ class CustomerRealtimeSync {
             column: 'user_type',
             value: 'customer',
           ),
-          callback: (_) {
-            debugPrint('[DODO][CustomerSync] broadcast notification → invalidating notificationsProvider');
-            _ref.invalidate(notificationsProvider);
+          callback: (payload) {
+            if (payload.eventType == PostgresChangeEvent.insert) {
+              debugPrint('[DODO][CustomerSync] broadcast notification INSERT → insertFromRealtime');
+              _ref.read(notificationsProvider.notifier).insertFromRealtime(payload.newRecord);
+            } else {
+              debugPrint('[DODO][CustomerSync] broadcast notification ${payload.eventType} → refresh');
+              _ref.read(notificationsProvider.notifier).refresh();
+            }
           },
         )
-        // ── Booking status changes ────────────────────────────────────────────
-        .onPostgresChanges(
-          event: PostgresChangeEvent.all,
-          schema: 'public',
-          table: 'bookings',
-          callback: (_) {
-            _ref.invalidate(myBookingsProvider);
-            _ref.invalidate(amcContractProvider);
-          },
-        )
+        // bookings moved to personal channel (customer_id filter) — unfiltered
+        // realtime events are silently dropped by RLS under the anon key.
         // ── AMC scheduling request resolved ───────────────────────────────────
         .onPostgresChanges(
           event: PostgresChangeEvent.all,
@@ -256,15 +253,16 @@ class CustomerRealtimeSync {
             column: 'user_id',
             value: customerId,
           ),
-          callback: (_) {
-            debugPrint('[DODO][CustomerSync] personal notification INSERT → invalidating all relevant providers');
-            _ref.invalidate(notificationsProvider);
+          callback: (payload) {
+            debugPrint('[DODO][CustomerSync] personal notification INSERT → insertFromRealtime');
+            _ref.read(notificationsProvider.notifier).insertFromRealtime(payload.newRecord);
             _ref.invalidate(supportConversationProvider);
             // Safety-net re-fetch for AMC state (covers RLS-dropped events).
             _ref.invalidate(amcContractProvider);
             _ref.invalidate(allAmcContractsProvider);
             _ref.invalidate(processedBookingsProvider);
             _ref.invalidate(myBookingsProvider);
+            _ref.invalidate(bookingByIdProvider);
             _ref.invalidate(pendingAmcRequestProvider);
             _ref.invalidate(pendingAmcPauseRequestProvider);
             _ref.invalidate(pendingAmcResumeRequestProvider);
@@ -365,6 +363,24 @@ class CustomerRealtimeSync {
             _ref.invalidate(warrantyByIdProvider);
           },
         )
+        // ── Booking changes (filtered by customer_id) ──────────────────────
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'bookings',
+          filter: PostgresChangeFilter(
+            type: PostgresChangeFilterType.eq,
+            column: 'customer_id',
+            value: customerId,
+          ),
+          callback: (_) {
+            debugPrint('[DODO][CustomerSync] bookings change → invalidating booking providers');
+            _ref.invalidate(myBookingsProvider);
+            _ref.invalidate(bookingByIdProvider);
+            _ref.invalidate(processedBookingsProvider);
+            _ref.invalidate(amcContractProvider);
+          },
+        )
         .subscribe((status, error) {
           debugPrint('[DODO][CustomerSync] notif channel status=$status error=$error');
         });
@@ -412,6 +428,7 @@ class CustomerRealtimeSync {
     _invalidateConfig();
     _ref.invalidate(landingPageSectionsProvider);
     _ref.invalidate(myBookingsProvider);
+    _ref.invalidate(bookingByIdProvider);
     _ref.invalidate(processedBookingsProvider);
     _ref.invalidate(amcContractProvider);
     _ref.invalidate(allAmcContractsProvider);

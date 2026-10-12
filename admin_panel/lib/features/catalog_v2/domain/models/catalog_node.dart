@@ -97,6 +97,10 @@ class CatalogNode {
     this.updatedAt,
   });
 
+  /// True when this service can be booked right now.
+  bool get isCurrentlyAvailable =>
+      isActive && isBookable && availabilityStatus == 'active';
+
   /// True when this item has no parent categories.
   bool get isRoot => parentIds.isEmpty;
 
