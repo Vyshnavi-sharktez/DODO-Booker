@@ -301,11 +301,14 @@ void main() {
       expect(c.read(cartProvider).first.serviceId, 's1');
     });
 
-    test('two addToCart conflicts accumulate separate saved carts', () async {
+    test(
+        'third conflict evicts oldest saved cart, keeping total at 2',
+        () async {
       final c = _makeContainer();
       addTearDown(c.dispose);
       await Future<void>.delayed(Duration.zero);
 
+      // Conflict 1: root-ac → saved, root-plumbing becomes active.
       c.read(cartProvider.notifier).addToCart(
             _node('s1', 'AC Service', 299),
             rootCategoryId: 'root-ac',
@@ -314,14 +317,20 @@ void main() {
             _node('s2', 'Plumbing Fix', 199),
             rootCategoryId: 'root-plumbing',
           );
+      // Conflict 2: root-plumbing → saved (now 2 saved), trimToOne() evicts
+      // root-ac (oldest), leaving exactly 1 saved cart + 1 active = 2 total.
       c.read(cartProvider.notifier).addToCart(
             _node('s3', 'Pest Control', 399),
             rootCategoryId: 'root-pest',
           );
-      // root-ac and root-plumbing are saved; root-pest is active
-      expect(c.read(savedCartsProvider).length, 2);
-      expect(c.read(savedCartsProvider).containsKey('root-ac'), isTrue);
+
+      // Exactly 1 saved cart — no third cart is ever created.
+      expect(c.read(savedCartsProvider).length, 1);
+      // Oldest saved cart (root-ac) was evicted to stay within the 2-cart cap.
+      expect(c.read(savedCartsProvider).containsKey('root-ac'), isFalse);
+      // Most-recently saved cart (root-plumbing) is retained.
       expect(c.read(savedCartsProvider).containsKey('root-plumbing'), isTrue);
+      // Newest item is in the active cart.
       expect(c.read(cartProvider).first.rootCategoryId, 'root-pest');
     });
   });
