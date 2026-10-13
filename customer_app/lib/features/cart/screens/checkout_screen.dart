@@ -175,7 +175,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     if (items.isEmpty) return;
 
     if (_selectedAddress == null) {
-      _showError('Please select a delivery address.');
+      await _showValidationDialog('Address Required', 'Please select a delivery address before proceeding.');
       return;
     }
 
@@ -190,11 +190,11 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     }
 
     if (_selectedDate == null) {
-      _showError('Please select a service date.');
+      await _showValidationDialog('Date Required', 'Please select a service date before proceeding.');
       return;
     }
     if (_selectedSlot == null) {
-      _showError('Please select a time slot.');
+      await _showValidationDialog('Time Slot Required', 'Please select a time slot before proceeding.');
       return;
     }
 
@@ -667,6 +667,29 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         behavior: SnackBarBehavior.floating,
         duration: const Duration(seconds: 3),
       ));
+  }
+
+  Future<void> _showValidationDialog(String title, String message) {
+    return showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text(
+          title,
+          style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16),
+        ),
+        content: Text(
+          message,
+          style: const TextStyle(fontSize: 14, height: 1.5),
+        ),
+        actions: [
+          FilledButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
   }
 
   @override

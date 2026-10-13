@@ -943,99 +943,11 @@ class _SubChip extends StatelessWidget {
 
 // ── Desktop list card (horizontal: image-left, info-right, web/desktop only) ──
 
-void _showCategoryConflictDialog(BuildContext context) {
-  showDialog<void>(
-    context: context,
-    builder: (ctx) => Dialog(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-      insetPadding: const EdgeInsets.symmetric(horizontal: 40, vertical: 40),
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 360),
-        child: Stack(
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(24, 32, 24, 24),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Container(
-                    width: 60,
-                    height: 60,
-                    decoration: const BoxDecoration(
-                      color: Color(0xFFFEF3C7),
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Center(
-                      child: Text(
-                        '!',
-                        style: TextStyle(
-                          fontSize: 28,
-                          fontWeight: FontWeight.w800,
-                          color: Color(0xFFD97706),
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  const Text(
-                    'Different Category Service',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: 17,
-                      fontWeight: FontWeight.w700,
-                      color: Color(0xFF1A1A1A),
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  const Text(
-                    "Sorry, you can't book services from different categories in the same booking. "
-                    'Please complete this booking first or remove the existing service.',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: 13,
-                      color: Color(0xFF888888),
-                      height: 1.55,
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton(
-                      onPressed: () => Navigator.of(ctx).pop(),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFFFBBF24),
-                        foregroundColor: const Color(0xFF1A1A1A),
-                        elevation: 0,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(100),
-                        ),
-                        padding:
-                            const EdgeInsets.symmetric(vertical: 14),
-                      ),
-                      child: const Text(
-                        'OK',
-                        style: TextStyle(
-                            fontSize: 15, fontWeight: FontWeight.w600),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            Positioned(
-              top: 8,
-              right: 8,
-              child: GestureDetector(
-                onTap: () => Navigator.of(ctx).pop(),
-                child: const Padding(
-                  padding: EdgeInsets.all(4),
-                  child: Icon(Icons.close, size: 18, color: Color(0xFF999999)),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
+void _showNewCartStartedSnackBar(BuildContext context) {
+  ScaffoldMessenger.of(context).showSnackBar(
+    const SnackBar(
+      content: Text('New cart started — previous cart saved'),
+      duration: Duration(seconds: 3),
     ),
   );
 }
@@ -1054,12 +966,12 @@ class _DesktopListCard extends ConsumerWidget {
   });
 
   void _addToCart(BuildContext context, WidgetRef ref) {
-    final added = ref.read(cartProvider.notifier).addToCart(
+    final result = ref.read(cartProvider.notifier).addToCart(
           node,
           parentNodeId: parentId,
           rootCategoryId: rootCategoryId,
         );
-    if (!added) _showCategoryConflictDialog(context);
+    if (result == CartAddResult.newCartStarted) _showNewCartStartedSnackBar(context);
   }
 
   String _formatReviews(int count) {

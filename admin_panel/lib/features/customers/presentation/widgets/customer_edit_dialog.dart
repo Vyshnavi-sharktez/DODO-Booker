@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/image_upload_field.dart';
+import '../../../../core/widgets/phone_input_field.dart';
+import '../../../vendors/presentation/widgets/vendor_location_picker_dialog.dart';
 import '../../domain/models/customer.dart';
 import '../../domain/models/customer_address.dart';
 
@@ -15,6 +17,8 @@ class _AddrEntry {
   final TextEditingController state;
   final TextEditingController pincode;
   bool isDefault;
+  double? latitude;
+  double? longitude;
 
   _AddrEntry({
     this.id,
@@ -24,6 +28,8 @@ class _AddrEntry {
     String stateInit = '',
     String pincodeInit = '',
     this.isDefault = false,
+    this.latitude,
+    this.longitude,
   })  : line1 = TextEditingController(text: line1Init),
         line2 = TextEditingController(text: line2Init),
         city = TextEditingController(text: cityInit),
@@ -38,6 +44,8 @@ class _AddrEntry {
         stateInit: a.state,
         pincodeInit: a.pincode,
         isDefault: a.isDefault,
+        latitude: a.latitude,
+        longitude: a.longitude,
       );
 
   void dispose() {
@@ -89,7 +97,10 @@ class _CustomerEditDialogState extends State<CustomerEditDialog> {
     super.initState();
     final c = widget.customer;
     _fullName = TextEditingController(text: c.fullName);
-    _phone = TextEditingController(text: c.phone);
+    final phone = c.phone;
+    _phone = TextEditingController(
+      text: phone.startsWith('+91') ? phone.substring(3) : phone,
+    );
     _email = TextEditingController(text: c.email);
     _profileImageUrl =
         c.profileImageUrl?.isNotEmpty == true ? c.profileImageUrl : null;
@@ -176,6 +187,8 @@ class _CustomerEditDialogState extends State<CustomerEditDialog> {
         'state': a.state.text.trim(),
         'pincode': a.pincode.text.trim(),
         'is_default': a.isDefault,
+        if (a.latitude != null) 'latitude': a.latitude,
+        if (a.longitude != null) 'longitude': a.longitude,
       };
       if (a.id != null) {
         await client
@@ -194,7 +207,7 @@ class _CustomerEditDialogState extends State<CustomerEditDialog> {
     try {
       await widget.onSave(
         fullName: _fullName.text.trim(),
-        phone: _phone.text.trim(),
+        phone: '+91${_phone.text.trim()}',
         email: _email.text.trim(),
         profileImageUrl: _profileImageUrl,
         isActive: _isActive,
@@ -286,14 +299,10 @@ class _CustomerEditDialogState extends State<CustomerEditDialog> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Expanded(
-                            child: TextFormField(
+                            child: PhoneInputField(
                               controller: _phone,
-                              decoration: const InputDecoration(
-                                labelText: 'Phone *',
-                                hintText: 'Phone Number',
-                                prefixIcon: Icon(Icons.phone_rounded),
-                              ),
-                              keyboardType: TextInputType.phone,
+                              labelText: 'Phone *',
+                              hintText: 'Phone Number',
                               validator: (v) =>
                                   v == null || v.trim().isEmpty
                                       ? 'Phone is required'
@@ -512,6 +521,33 @@ class _AddressCard extends StatefulWidget {
 }
 
 class _AddressCardState extends State<_AddressCard> {
+  Future<void> _pickFromMap() async {
+    final result = await showDialog<VendorLocationPickerResult>(
+      context: context,
+      builder: (_) => VendorLocationPickerDialog(
+        initialLatitude: widget.entry.latitude,
+        initialLongitude: widget.entry.longitude,
+      ),
+    );
+    if (result != null && mounted) {
+      widget.entry.latitude = result.latitude;
+      widget.entry.longitude = result.longitude;
+      if (result.address?.isNotEmpty == true) {
+        widget.entry.line1.text = result.address!;
+      }
+      if (result.city?.isNotEmpty == true) {
+        widget.entry.city.text = result.city!;
+      }
+      if (result.state?.isNotEmpty == true) {
+        widget.entry.state.text = result.state!;
+      }
+      if (result.pincode?.isNotEmpty == true) {
+        widget.entry.pincode.text = result.pincode!;
+      }
+      setState(() {});
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -563,6 +599,23 @@ class _AddressCardState extends State<_AddressCard> {
                 ),
               ],
               const Spacer(),
+              IconButton(
+                onPressed: _pickFromMap,
+                icon: Icon(
+                  Icons.map_outlined,
+                  size: 16,
+                  color: widget.entry.latitude != null
+                      ? AppColors.primary
+                      : AppColors.textSecondary,
+                ),
+                tooltip: widget.entry.latitude != null
+                    ? 'Location set — re-pick on map'
+                    : 'Pick on map',
+                visualDensity: VisualDensity.compact,
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(),
+              ),
+              const SizedBox(width: 4),
               if (!widget.entry.isDefault)
                 TextButton(
                   onPressed: widget.onSetDefault,

@@ -1660,7 +1660,17 @@ class _AttachmentViewCustomerState extends State<_AttachmentViewCustomer> {
 
     if (isImage) {
       return GestureDetector(
-        onTap: () => _openUrl(_signedUrl!),
+        onTap: () => showGeneralDialog<void>(
+          context: context,
+          barrierColor: Colors.transparent,
+          barrierDismissible: false,
+          barrierLabel: '',
+          transitionDuration: const Duration(milliseconds: 200),
+          transitionBuilder: (ctx, anim, _, child) =>
+              FadeTransition(opacity: anim, child: child),
+          pageBuilder: (ctx, _, __) =>
+              _ImageViewerDialog(imageUrl: _signedUrl!),
+        ),
         child: ClipRRect(
           borderRadius: BorderRadius.circular(8),
           child: Image.network(
@@ -1715,6 +1725,165 @@ class _AttachmentViewCustomerState extends State<_AttachmentViewCustomer> {
   Future<void> _openUrl(String url) async {
     final uri = Uri.parse(url);
     if (await canLaunchUrl(uri)) await launchUrl(uri);
+  }
+}
+
+// ── Image viewer dialog ───────────────────────────────────────────────────────
+
+class _ImageViewerDialog extends StatefulWidget {
+  final String imageUrl;
+
+  const _ImageViewerDialog({required this.imageUrl});
+
+  @override
+  State<_ImageViewerDialog> createState() => _ImageViewerDialogState();
+}
+
+class _ImageViewerDialogState extends State<_ImageViewerDialog> {
+  final TransformationController _transform = TransformationController();
+  bool _isFullscreen = false;
+
+  @override
+  void dispose() {
+    _transform.dispose();
+    super.dispose();
+  }
+
+  void _zoomIn() {
+    final s = (_transform.value.getMaxScaleOnAxis() * 1.4).clamp(0.5, 5.0);
+    _transform.value = Matrix4.diagonal3Values(s, s, 1.0);
+  }
+
+  void _zoomOut() {
+    final s = (_transform.value.getMaxScaleOnAxis() / 1.4).clamp(0.5, 5.0);
+    _transform.value = Matrix4.diagonal3Values(s, s, 1.0);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final size = MediaQuery.sizeOf(context);
+    final safeTop = MediaQuery.paddingOf(context).top;
+
+    final double modalW =
+        _isFullscreen ? size.width : (size.width * 0.92).clamp(0.0, 640.0);
+    final double modalH =
+        _isFullscreen ? size.height : (size.height * 0.78).clamp(320.0, 700.0);
+
+    return Material(
+      color: Colors.transparent,
+      child: Stack(
+        children: [
+          // Blurred + darkened backdrop — tap to close
+          Positioned.fill(
+            child: GestureDetector(
+              onTap: () => Navigator.pop(context),
+              child: BackdropFilter(
+                filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+                child: const ColoredBox(color: Color(0xAA000000)),
+              ),
+            ),
+          ),
+          // Centered modal
+          Center(
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 220),
+              curve: Curves.easeInOut,
+              width: modalW,
+              height: modalH,
+              clipBehavior: Clip.hardEdge,
+              decoration: _isFullscreen
+                  ? const BoxDecoration(color: Color(0xFF111111))
+                  : BoxDecoration(
+                      color: const Color(0xFF111111),
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+              child: Column(
+                children: [
+                  // Toolbar
+                  Container(
+                    padding: EdgeInsets.only(
+                      top: _isFullscreen ? safeTop : 0,
+                      left: 4,
+                      right: 4,
+                    ),
+                    color: const Color(0xFF1A1A1A),
+                    child: Row(
+                      children: [
+                        IconButton(
+                          onPressed: () => Navigator.pop(context),
+                          icon: const Icon(Icons.close, color: Colors.white70),
+                          tooltip: 'Close',
+                        ),
+                        const Spacer(),
+                        IconButton(
+                          onPressed: _zoomOut,
+                          icon: const Icon(Icons.zoom_out,
+                              color: Colors.white70),
+                          tooltip: 'Zoom out',
+                        ),
+                        IconButton(
+                          onPressed: () => setState(
+                              () => _transform.value = Matrix4.identity()),
+                          icon: const Icon(Icons.zoom_out_map,
+                              color: Colors.white70),
+                          tooltip: 'Reset zoom',
+                        ),
+                        IconButton(
+                          onPressed: _zoomIn,
+                          icon: const Icon(Icons.zoom_in,
+                              color: Colors.white70),
+                          tooltip: 'Zoom in',
+                        ),
+                        IconButton(
+                          onPressed: () => setState(
+                              () => _isFullscreen = !_isFullscreen),
+                          icon: Icon(
+                            _isFullscreen
+                                ? Icons.fullscreen_exit
+                                : Icons.fullscreen,
+                            color: Colors.white70,
+                          ),
+                          tooltip:
+                              _isFullscreen ? 'Exit fullscreen' : 'Fullscreen',
+                        ),
+                      ],
+                    ),
+                  ),
+                  // Image
+                  Expanded(
+                    child: InteractiveViewer(
+                      transformationController: _transform,
+                      minScale: 0.5,
+                      maxScale: 5.0,
+                      child: Image.network(
+                        widget.imageUrl,
+                        fit: BoxFit.contain,
+                        loadingBuilder: (ctx, child, progress) {
+                          if (progress == null) return child;
+                          return const Center(
+                            child: CircularProgressIndicator(
+                              color: Colors.white54,
+                              strokeWidth: 2,
+                            ),
+                          );
+                        },
+                        errorBuilder: (ctx, _, __) => const Center(
+                          child: Text(
+                            '⚠ Image failed to load',
+                            style: TextStyle(
+                                color: Colors.white70, fontSize: 14),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 

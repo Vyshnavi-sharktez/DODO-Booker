@@ -485,8 +485,11 @@ class _BookingInfoCard extends StatelessWidget {
   }
 
   String get _createdDate {
-    final d = booking.createdAt;
-    return '${d.day} ${_months[d.month - 1]} ${d.year}';
+    final d = booking.createdAt.toLocal();
+    final hour = d.hour % 12 == 0 ? 12 : d.hour % 12;
+    final minute = d.minute.toString().padLeft(2, '0');
+    final period = d.hour < 12 ? 'AM' : 'PM';
+    return '${d.day} ${_months[d.month - 1]} ${d.year}, $hour:$minute $period';
   }
 
   @override

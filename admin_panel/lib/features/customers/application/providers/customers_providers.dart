@@ -59,6 +59,8 @@ class CustomersNotifier extends StateNotifier<AsyncValue<List<Customer>>> {
       String pincode,
       String landmark,
       bool isDefault,
+      double? latitude,
+      double? longitude,
     })> addresses = const [],
   }) async {
     final created = await _repo.createCustomer(

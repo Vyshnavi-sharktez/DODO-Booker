@@ -5,7 +5,9 @@ import '../models/cart_item.dart';
 
 class CartSyncService {
   static const _phoneKey = 'dodo_auth_phone';
-  final _client = Supabase.instance.client;
+  // Lazy getter so constructing CartSyncService does not require Supabase to be
+  // initialised yet (important for tests and early app startup).
+  SupabaseClient get _client => Supabase.instance.client;
 
   Future<String?> _customerId() async {
     try {

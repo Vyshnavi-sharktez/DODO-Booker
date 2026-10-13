@@ -8,6 +8,7 @@ import 'package:intl/intl.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../auth/application/providers/auth_provider.dart';
 import '../../../catalog_v2/application/providers/catalog_node_providers.dart';
+import '../../../customers/domain/models/customer_address.dart';
 import '../../../catalog_v2/domain/models/catalog_node.dart';
 import '../../../coupons/application/providers/coupons_providers.dart';
 import '../../../coupons/domain/models/coupon.dart';
@@ -83,6 +84,11 @@ class _CreateBookingDialogState extends ConsumerState<CreateBookingDialog> {
   double? _latitude;
   double? _longitude;
 
+  // Customer saved addresses
+  List<CustomerAddress> _customerAddresses = [];
+  CustomerAddress? _selectedAddress;
+  bool _addressLoading = false;
+
   // Catalog item keys
   final List<GlobalKey<_BookingItemRowState>> _itemKeys = [
     GlobalKey<_BookingItemRowState>(),
@@ -153,6 +159,39 @@ class _CreateBookingDialogState extends ConsumerState<CreateBookingDialog> {
       }
     } catch (_) {
       if (mounted) setState(() => _customerSearching = false);
+    }
+  }
+
+  Future<void> _loadCustomerAddresses(String customerId) async {
+    setState(() => _addressLoading = true);
+    try {
+      final client = ref.read(supabaseClientProvider);
+      final rows = await client
+          .from('customer_addresses')
+          .select()
+          .eq('customer_id', customerId)
+          .order('is_default', ascending: false);
+      if (!mounted) return;
+      final addresses = (rows as List<dynamic>)
+          .map((r) => CustomerAddress.fromMap(r as Map<String, dynamic>))
+          .toList();
+      CustomerAddress? defaultAddr;
+      if (addresses.isNotEmpty) {
+        defaultAddr = addresses.firstWhere(
+          (a) => a.isDefault,
+          orElse: () => addresses.first,
+        );
+        _addressCtrl.text = defaultAddr.fullAddress;
+        _latitude = defaultAddr.latitude;
+        _longitude = defaultAddr.longitude;
+      }
+      setState(() {
+        _customerAddresses = addresses;
+        _selectedAddress = defaultAddr;
+        _addressLoading = false;
+      });
+    } catch (_) {
+      if (mounted) setState(() => _addressLoading = false);
     }
   }
 
@@ -274,7 +313,6 @@ class _CreateBookingDialogState extends ConsumerState<CreateBookingDialog> {
   }
 
   Future<void> _pickDate() async {
-    if (_primaryServiceId == null) return;
     final picked = await showDatePicker(
       context: context,
       initialDate: _serviceDate ?? DateTime.now(),
@@ -285,11 +323,15 @@ class _CreateBookingDialogState extends ConsumerState<CreateBookingDialog> {
       setState(() {
         _serviceDate = picked;
         _scheduledTime = null;
-        _slotsFuture = AdminSlotService.fetchSlots(
-          ref.read(supabaseClientProvider),
-          _primaryServiceId!,
-          picked,
-        );
+        if (_primaryServiceId != null) {
+          _slotsFuture = AdminSlotService.fetchSlots(
+            ref.read(supabaseClientProvider),
+            _primaryServiceId!,
+            picked,
+          );
+        } else {
+          _slotsFuture = null;
+        }
       });
     }
   }
@@ -302,15 +344,148 @@ class _CreateBookingDialogState extends ConsumerState<CreateBookingDialog> {
         initialLongitude: _longitude,
       ),
     );
-    if (result != null) {
+    if (result != null && mounted) {
       setState(() {
         _latitude = result.latitude;
         _longitude = result.longitude;
-        if (_addressCtrl.text.trim().isEmpty) {
-          _addressCtrl.text = result.address ?? result.city ?? '';
-        }
+        _addressCtrl.text = result.address ?? result.city ?? '';
+        _selectedAddress = null; // deselect saved address when map overrides
       });
     }
+  }
+
+  Widget _buildAddressSection() {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (_addressLoading)
+          const Padding(
+            padding: EdgeInsets.only(bottom: 4),
+            child: LinearProgressIndicator(minHeight: 2),
+          ),
+        _buildAddressSelector(),
+      ],
+    );
+  }
+
+  Widget _buildMapButton() {
+    return Tooltip(
+      message: _latitude != null
+          ? 'Location set (${_latitude!.toStringAsFixed(4)}, ${_longitude!.toStringAsFixed(4)})'
+          : 'Pick on map',
+      child: InkWell(
+        onTap: _pickLocation,
+        borderRadius: BorderRadius.circular(8),
+        child: Container(
+          margin: const EdgeInsets.only(top: 4),
+          padding: const EdgeInsets.all(9),
+          decoration: BoxDecoration(
+            color: _latitude != null
+                ? AppColors.primary.withValues(alpha: 0.1)
+                : AppColors.surface,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(
+              color: _latitude != null
+                  ? AppColors.primary.withValues(alpha: 0.4)
+                  : AppColors.border,
+            ),
+          ),
+          child: Icon(
+            Icons.map_outlined,
+            size: 18,
+            color: _latitude != null
+                ? AppColors.primary
+                : AppColors.textSecondary,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildAddressSelector() {
+    if (_customerAddresses.isNotEmpty) {
+      // Saved addresses available — unified dropdown.
+      // Key changes when the selection changes so initialValue is re-applied.
+      return DropdownButtonFormField<String?>(
+        key: ValueKey('addr_${_selectedAddress?.id ?? '__map__'}'),
+        initialValue: _selectedAddress?.id,
+        isExpanded: true,
+        decoration: const InputDecoration(
+          labelText: 'Address *',
+          isDense: true,
+          contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        ),
+        validator: (_) =>
+            _addressCtrl.text.trim().isEmpty ? 'Required' : null,
+        items: [
+          ..._customerAddresses.map((a) => DropdownMenuItem<String?>(
+                value: a.id,
+                child: Text(
+                  '${a.addressType} · ${a.addressLine1}, ${a.city}',
+                  overflow: TextOverflow.ellipsis,
+                ),
+              )),
+          DropdownMenuItem<String?>(
+            value: null,
+            child: Text(
+              _addressCtrl.text.isNotEmpty && _selectedAddress == null
+                  ? '📍 ${_addressCtrl.text}'
+                  : 'Pick on map…',
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: _addressCtrl.text.isNotEmpty && _selectedAddress == null
+                    ? AppColors.textPrimary
+                    : AppColors.textSecondary,
+                fontStyle:
+                    _addressCtrl.text.isEmpty || _selectedAddress != null
+                        ? FontStyle.italic
+                        : FontStyle.normal,
+              ),
+            ),
+          ),
+        ],
+        onChanged: (val) {
+          if (val == null) return; // map item — map button handles the picker
+          final addr = _customerAddresses.firstWhere((a) => a.id == val);
+          setState(() {
+            _selectedAddress = addr;
+            _addressCtrl.text = addr.fullAddress;
+            _latitude = addr.latitude;
+            _longitude = addr.longitude;
+          });
+        },
+      );
+    }
+
+    // No saved addresses — read-only display tile; validated via FormField.
+    return FormField<String>(
+      validator: (_) =>
+          _addressCtrl.text.trim().isEmpty ? 'Required' : null,
+      builder: (field) => InputDecorator(
+        decoration: InputDecoration(
+          labelText: 'Address *',
+          prefixIcon: const Icon(Icons.location_on_outlined),
+          isDense: true,
+          errorText: field.errorText,
+        ),
+        child: Text(
+          _addressCtrl.text.isNotEmpty
+              ? _addressCtrl.text
+              : 'Use map button to set address',
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            fontSize: 13,
+            color: _addressCtrl.text.isNotEmpty
+                ? AppColors.textPrimary
+                : AppColors.textSecondary,
+            fontStyle: _addressCtrl.text.isEmpty
+                ? FontStyle.italic
+                : FontStyle.normal,
+          ),
+        ),
+      ),
+    );
   }
 
   Widget _buildCustomerPicker() {
@@ -352,6 +527,11 @@ class _CreateBookingDialogState extends ConsumerState<CreateBookingDialog> {
                 _selectedCustomer = null;
                 _customerSearchCtrl.clear();
                 _customerSearchResults = [];
+                _customerAddresses = [];
+                _selectedAddress = null;
+                _addressCtrl.clear();
+                _latitude = null;
+                _longitude = null;
               }),
               borderRadius: BorderRadius.circular(4),
               child: const Padding(
@@ -418,11 +598,19 @@ class _CreateBookingDialogState extends ConsumerState<CreateBookingDialog> {
               children: List.generate(_customerSearchResults.length, (i) {
                 final c = _customerSearchResults[i];
                 return InkWell(
-                  onTap: () => setState(() {
-                    _selectedCustomer = c;
-                    _customerSearchResults = [];
-                    _customerSearchCtrl.clear();
-                  }),
+                  onTap: () {
+                    setState(() {
+                      _selectedCustomer = c;
+                      _customerSearchResults = [];
+                      _customerSearchCtrl.clear();
+                      _customerAddresses = [];
+                      _selectedAddress = null;
+                      _addressCtrl.clear();
+                      _latitude = null;
+                      _longitude = null;
+                    });
+                    _loadCustomerAddresses(c.id);
+                  },
                   child: Container(
                     padding: const EdgeInsets.symmetric(
                         horizontal: 12, vertical: 10),
@@ -503,7 +691,11 @@ class _CreateBookingDialogState extends ConsumerState<CreateBookingDialog> {
             setState(() => _scheduledTime = v.trim().isEmpty ? null : v.trim()),
         decoration: InputDecoration(
           labelText: 'Time Slot',
-          hintText: hasService && hasDate ? 'e.g. 10:00 AM' : 'Select service & date first',
+          hintText: hasDate
+              ? 'e.g. 10:00 AM'
+              : (hasService || _customItemKeys.isNotEmpty)
+                  ? 'Select date first'
+                  : 'Select service & date first',
           prefixIcon: const Icon(Icons.access_time_rounded),
           isDense: true,
         ),
@@ -881,64 +1073,11 @@ class _CreateBookingDialogState extends ConsumerState<CreateBookingDialog> {
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Expanded(child: _buildCustomerPicker()),
+                    Expanded(flex: 5, child: _buildCustomerPicker()),
                     const SizedBox(width: 12),
-                    Expanded(
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Expanded(
-                            child: TextFormField(
-                              controller: _addressCtrl,
-                              decoration: const InputDecoration(
-                                labelText: 'Address *',
-                                prefixIcon: Icon(Icons.location_on_outlined),
-                                isDense: true,
-                              ),
-                              textCapitalization: TextCapitalization.sentences,
-                              validator: (v) =>
-                                  v == null || v.trim().isEmpty
-                                      ? 'Required'
-                                      : null,
-                            ),
-                          ),
-                          const SizedBox(width: 6),
-                          Tooltip(
-                            message: _latitude != null
-                                ? 'Location set (${_latitude!.toStringAsFixed(4)}, ${_longitude!.toStringAsFixed(4)})'
-                                : 'Pick on map',
-                            child: InkWell(
-                              onTap: _pickLocation,
-                              borderRadius: BorderRadius.circular(8),
-                              child: Container(
-                                margin: const EdgeInsets.only(top: 4),
-                                padding: const EdgeInsets.all(9),
-                                decoration: BoxDecoration(
-                                  color: _latitude != null
-                                      ? AppColors.primary
-                                          .withValues(alpha: 0.1)
-                                      : AppColors.surface,
-                                  borderRadius: BorderRadius.circular(8),
-                                  border: Border.all(
-                                    color: _latitude != null
-                                        ? AppColors.primary
-                                            .withValues(alpha: 0.4)
-                                        : AppColors.border,
-                                  ),
-                                ),
-                                child: Icon(
-                                  Icons.map_outlined,
-                                  size: 18,
-                                  color: _latitude != null
-                                      ? AppColors.primary
-                                      : AppColors.textSecondary,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
+                    Expanded(flex: 7, child: _buildAddressSection()),
+                    const SizedBox(width: 6),
+                    _buildMapButton(),
                   ],
                 ),
                 const SizedBox(height: 12),
@@ -1004,11 +1143,13 @@ class _CreateBookingDialogState extends ConsumerState<CreateBookingDialog> {
                   children: [
                     Expanded(
                       child: Tooltip(
-                        message: _primaryServiceId == null
+                        message: _primaryServiceId == null && _customItemKeys.isEmpty
                             ? 'Select a service above first'
                             : '',
                         child: InkWell(
-                          onTap: _primaryServiceId != null ? _pickDate : null,
+                          onTap: (_primaryServiceId != null || _customItemKeys.isNotEmpty)
+                              ? _pickDate
+                              : null,
                           borderRadius: BorderRadius.circular(8),
                           child: InputDecorator(
                             decoration: InputDecoration(
@@ -1016,12 +1157,12 @@ class _CreateBookingDialogState extends ConsumerState<CreateBookingDialog> {
                               prefixIcon:
                                   const Icon(Icons.calendar_today_rounded),
                               isDense: true,
-                              enabled: _primaryServiceId != null,
+                              enabled: _primaryServiceId != null || _customItemKeys.isNotEmpty,
                             ),
                             child: Text(
                               _serviceDate != null
                                   ? _dateFmt.format(_serviceDate!)
-                                  : (_primaryServiceId == null
+                                  : (_primaryServiceId == null && _customItemKeys.isEmpty
                                       ? 'Select a service first'
                                       : 'Select date'),
                               style: TextStyle(

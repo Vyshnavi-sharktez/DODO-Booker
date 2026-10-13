@@ -19,7 +19,6 @@ import '../features/bookings/screens/my_bookings_screen.dart';
 import '../features/bookings/utils/my_bookings_launcher.dart';
 import '../features/amc/screens/amc_plans_page.dart';
 import '../features/profile/screens/profile_screen.dart';
-import '../features/profile/screens/edit_profile_screen.dart';
 import '../features/wishlist/screens/wishlist_screen.dart';
 import '../features/notifications/screens/notification_booking_screen.dart';
 import '../features/cart/providers/cart_provider.dart';
@@ -94,7 +93,6 @@ class AppRoutes {
   static const String bookingDetail = '/booking-detail/:id';
   static const String notificationBooking = '/notification-booking/:id';
   static const String address = '/address';
-  static const String editProfile = '/edit-profile';
   static const String wishlist = '/wishlist';
   static const String cart = '/cart';
   static const String checkout = '/cart/checkout';
@@ -201,10 +199,6 @@ final appRouter = GoRouter(
     GoRoute(
       path: AppRoutes.profile,
       builder: (context, state) => const ProfileScreen(),
-    ),
-    GoRoute(
-      path: AppRoutes.editProfile,
-      builder: (context, state) => const EditProfileScreen(),
     ),
     GoRoute(
       path: AppRoutes.wishlist,

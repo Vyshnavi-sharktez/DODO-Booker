@@ -54,6 +54,8 @@ class CustomersRepository {
       String pincode,
       String landmark,
       bool isDefault,
+      double? latitude,
+      double? longitude,
     })> addresses = const [],
   }) async {
     // auth_user_id is intentionally omitted — null marks this as admin-created.
@@ -88,6 +90,8 @@ class CustomersRepository {
           'state': a.state,
           'pincode': a.pincode,
           'is_default': a.isDefault,
+          if (a.latitude != null) 'latitude': a.latitude,
+          if (a.longitude != null) 'longitude': a.longitude,
         };
       }).toList();
       await _supabase.from('customer_addresses').insert(rows);

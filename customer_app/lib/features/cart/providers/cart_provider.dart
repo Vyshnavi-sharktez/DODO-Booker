@@ -10,6 +10,7 @@ import '../../../features/amc/models/amc_plan_model.dart';
 import '../../../features/vendor_custom_service/models/vendor_custom_service_model.dart';
 import '../../../models/addon_model.dart';
 import '../services/cart_sync_service.dart';
+import 'saved_carts_provider.dart';
 
 /// Composite key for merging cart items by catalog occurrence (serviceId + parentNodeId).
 String _cartMergeKey(String serviceId, String? parentNodeId) =>
@@ -51,13 +52,24 @@ CartItem? findMatchingCartItem(
   return null;
 }
 
+/// Result returned by [CartNotifier.addToCart].
+enum CartAddResult {
+  /// Item added to the active cart (or an existing identical item was merged).
+  added,
+  /// A new cart was automatically started because the service belongs to a
+  /// different root category. The previous cart has been saved and is shown
+  /// in the cart screen's saved-carts strip.
+  newCartStarted,
+}
+
 class CartNotifier extends StateNotifier<List<CartItem>> {
   static const _storageKey = 'dodo_cart_v1';
 
+  final Ref _ref;
   final _sync = CartSyncService();
   RealtimeChannel? _catalogChannel;
 
-  CartNotifier() : super([]) {
+  CartNotifier(this._ref) : super([]) {
     _load();
     _subscribeCatalogNodes();
   }
@@ -113,6 +125,7 @@ class CartNotifier extends StateNotifier<List<CartItem>> {
 
   Future<void> _load() async {
     final prefs = await SharedPreferences.getInstance();
+    if (!mounted) return;
     final raw = prefs.getString(_storageKey);
     if (raw != null) {
       try {
@@ -133,10 +146,14 @@ class CartNotifier extends StateNotifier<List<CartItem>> {
   }
 
   Future<void> _save() async {
+    // Capture state synchronously before any async gap so that if the notifier
+    // is disposed while the prefs write is in flight, the stale state is still
+    // written correctly and accessing `state` after dispose is avoided.
+    final snapshot = state;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(
       _storageKey,
-      jsonEncode(state.map((e) => e.toJson()).toList()),
+      jsonEncode(snapshot.map((e) => e.toJson()).toList()),
     );
   }
 
@@ -148,6 +165,7 @@ class CartNotifier extends StateNotifier<List<CartItem>> {
   /// and a null from remote must not erase the navigation context set locally.
   Future<void> loadFromRemote() async {
     final remoteItems = await _sync.fetchAll();
+    if (!mounted) return;
     if (remoteItems.isEmpty && state.isEmpty) return;
 
     // Key by (serviceId, parentNodeId) so shared-node occurrences stay separate.
@@ -204,15 +222,21 @@ class CartNotifier extends StateNotifier<List<CartItem>> {
       }
     }
 
+    if (!mounted) return;
     state = merged.values.toList();
     await _save();
   }
 
   // ── Mutations ─────────────────────────────────────────────────────────────
 
-  /// Returns false when the service belongs to a different root category than
-  /// the items already in the cart. The caller should show the conflict dialog.
-  bool addToCart(
+  /// Adds [service] to the active cart and returns the result.
+  ///
+  /// When [rootCategoryId] differs from the root category of the existing cart
+  /// items, the current cart is automatically saved to [savedCartsProvider] and
+  /// a fresh cart is started for the new category. Returns
+  /// [CartAddResult.newCartStarted] in that case so the caller can notify the
+  /// user. All other cases return [CartAddResult.added].
+  CartAddResult addToCart(
     CatalogNodeModel service, {
     double priceAdjustment = 0.0,
     double? unitPriceOverride,
@@ -230,15 +254,31 @@ class CartNotifier extends StateNotifier<List<CartItem>> {
   }) {
     debugPrint('[DODO][CartSync][1] addToCart() entered — serviceId=${service.id} name=${service.name} parentNodeId=$parentNodeId isAmc=${amcPlan != null}');
 
-    // Root category enforcement: block if any existing item belongs to a
-    // different known root category.
+    bool startedNewCart = false;
+
+    // Root category conflict: save the current cart and start fresh so the
+    // customer never loses their previous selection.
     if (rootCategoryId != null && state.isNotEmpty) {
       final hasConflict = state.any(
         (item) =>
             item.rootCategoryId != null &&
             item.rootCategoryId != rootCategoryId,
       );
-      if (hasConflict) return false;
+      if (hasConflict) {
+        final activeRootId = state
+            .where((i) => i.rootCategoryId != null)
+            .map((i) => i.rootCategoryId!)
+            .firstOrNull;
+        if (activeRootId != null) {
+          _ref.read(savedCartsProvider.notifier).saveCart(activeRootId, state);
+          // Cap at 2 total carts: evict the oldest inactive saved cart if needed.
+          _ref.read(savedCartsProvider.notifier).trimToOne();
+        }
+        state = [];
+        _save();
+        unawaited(_sync.clearAll());
+        startedNewCart = true;
+      }
     }
     final isAmc = amcPlan != null;
     final unitPrice = isAmc
@@ -263,7 +303,7 @@ class CartNotifier extends StateNotifier<List<CartItem>> {
         existing.bookingId,
         quantity ?? (existing.quantity + 1),
       );
-      return true;
+      return startedNewCart ? CartAddResult.newCartStarted : CartAddResult.added;
     }
 
     final bookingId = '${service.id}_${DateTime.now().millisecondsSinceEpoch}';
@@ -299,7 +339,7 @@ class CartNotifier extends StateNotifier<List<CartItem>> {
     state = [...state, newItem];
     _save();
     unawaited(_sync.upsertItem(newItem));
-    return true;
+    return startedNewCart ? CartAddResult.newCartStarted : CartAddResult.added;
   }
 
   void removeFromCart(String bookingId) {
@@ -501,6 +541,43 @@ class CartNotifier extends StateNotifier<List<CartItem>> {
     return removed;
   }
 
+  /// Switches the active cart to the saved cart identified by [rootCategoryId].
+  ///
+  /// If the current active cart is non-empty it is saved before the switch so
+  /// no items are lost. The target cart is removed from [savedCartsProvider]
+  /// and becomes the new active cart. The remote cart_items table is updated to
+  /// reflect the new active selection.
+  void switchToCart(String rootCategoryId) {
+    final newItems =
+        _ref.read(savedCartsProvider.notifier).takeCart(rootCategoryId);
+    if (newItems == null || newItems.isEmpty) return;
+
+    if (state.isNotEmpty) {
+      final activeRootId = state
+          .where((i) => i.rootCategoryId != null)
+          .map((i) => i.rootCategoryId!)
+          .firstOrNull;
+      if (activeRootId != null) {
+        _ref.read(savedCartsProvider.notifier).saveCart(activeRootId, state);
+      }
+    }
+
+    state = newItems;
+    _save();
+    unawaited(_syncActiveToRemote());
+  }
+
+  Future<void> _syncActiveToRemote() async {
+    // Capture before any await so the notifier can be safely disposed midway.
+    final snapshot = state;
+    await _sync.clearAll();
+    for (final item in snapshot) {
+      if (!item.isCustomService) {
+        await _sync.upsertItem(item);
+      }
+    }
+  }
+
   void clearCart() {
     state = [];
     _save();
@@ -516,7 +593,7 @@ class CartNotifier extends StateNotifier<List<CartItem>> {
 }
 
 final cartProvider = StateNotifierProvider<CartNotifier, List<CartItem>>(
-  (_) => CartNotifier(),
+  (ref) => CartNotifier(ref),
 );
 
 final cartItemCountProvider = Provider<int>((ref) {

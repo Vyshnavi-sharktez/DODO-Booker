@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/widgets/app_modal_dialog.dart';
+import '../../../core/widgets/phone_input_field.dart';
 import '../providers/auth_provider.dart';
 
 /// Phone number entry modal. Pops with the full phone string (e.g. "+919876543210")
@@ -40,7 +40,7 @@ class _OtpLoginModalState extends ConsumerState<OtpLoginModal> {
       _error = null;
     });
     try {
-      final fullPhone = '+91${_ctrl.text.trim()}';
+      final fullPhone = '${PhoneInputField.dialCode}${_ctrl.text.trim()}';
       await ref.read(authServiceProvider).checkPhone(fullPhone);
       if (!mounted) return;
       Navigator.of(context).pop(fullPhone);
@@ -65,20 +65,14 @@ class _OtpLoginModalState extends ConsumerState<OtpLoginModal> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           const SizedBox(height: 4),
-          TextField(
+          PhoneInputField(
             controller: _ctrl,
             autofocus: true,
-            keyboardType: TextInputType.phone,
-            inputFormatters: [
-              FilteringTextInputFormatter.digitsOnly,
-              LengthLimitingTextInputFormatter(10),
-            ],
-            onSubmitted: (_) => _sendOtp(),
+            onSubmitted: _sendOtp,
             decoration: InputDecoration(
               counterText: '',
               hintText: '9876543210',
               errorText: _error,
-              prefixIcon: _PhonePrefix(),
               border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
               enabledBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
@@ -128,33 +122,3 @@ class _OtpLoginModalState extends ConsumerState<OtpLoginModal> {
   }
 }
 
-class _PhonePrefix extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final tt = Theme.of(context).textTheme;
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const Text('🇮🇳', style: TextStyle(fontSize: 18)),
-          const SizedBox(width: 6),
-          Text(
-            '+91',
-            style: tt.bodyLarge?.copyWith(fontWeight: FontWeight.w600),
-          ),
-          const SizedBox(width: 6),
-          Icon(
-            Icons.keyboard_arrow_down_rounded,
-            size: 16,
-            color: cs.onSurfaceVariant,
-          ),
-          const SizedBox(width: 8),
-          Container(width: 1, height: 20, color: cs.outline.withAlpha(80)),
-          const SizedBox(width: 4),
-        ],
-      ),
-    );
-  }
-}

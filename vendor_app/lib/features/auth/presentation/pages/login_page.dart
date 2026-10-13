@@ -19,7 +19,6 @@ class LoginPage extends ConsumerStatefulWidget {
 class _LoginPageState extends ConsumerState<LoginPage> {
   final _formKey = GlobalKey<FormState>();
   final _phoneController = TextEditingController();
-  static const _countryCode = '+91';
 
   @override
   void dispose() {
@@ -27,12 +26,12 @@ class _LoginPageState extends ConsumerState<LoginPage> {
     super.dispose();
   }
 
-  String get _fullPhone => '$_countryCode${_phoneController.text.trim()}';
+  String get _fullPhone => '+91${_phoneController.text.trim()}';
 
   void _handleSendOtp() {
     if (!_formKey.currentState!.validate()) return;
     debugPrint('[DODO][LoginPage] raw input   : "${_phoneController.text}"');
-    debugPrint('[DODO][LoginPage] countryCode : "$_countryCode"');
+    debugPrint('[DODO][LoginPage] dialCode    : "+91"');
     debugPrint('[DODO][LoginPage] fullPhone   : "$_fullPhone"');
     debugPrint('[DODO][LoginPage] length      : ${_fullPhone.length}');
     debugPrint('[DODO][LoginPage] codeUnits   : ${_fullPhone.codeUnits}');
@@ -117,7 +116,6 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                             const SizedBox(height: 8),
                             PhoneNumberField(
                               controller: _phoneController,
-                              countryCode: _countryCode,
                               onSubmitted: _handleSendOtp,
                               validator: (value) {
                                 if (value == null || value.trim().isEmpty) {

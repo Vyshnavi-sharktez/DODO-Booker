@@ -17,51 +17,16 @@ class NotificationsPage extends ConsumerStatefulWidget {
 
 class _NotificationsPageState extends ConsumerState<NotificationsPage> {
   final _locallyRead = <String>{};
-  final _locallyUnread = <String>{};
-  final _locallyDeleted = <String>{};
 
   bool _isRead(VendorNotification n) {
-    if (_locallyUnread.contains(n.id)) return false;
     return n.isRead || _locallyRead.contains(n.id);
   }
 
   Future<void> _markRead(VendorNotification n) async {
     if (_isRead(n)) return;
-    setState(() {
-      _locallyRead.add(n.id);
-      _locallyUnread.remove(n.id);
-    });
+    setState(() => _locallyRead.add(n.id));
     try {
       await ref.read(notificationsRepositoryProvider).markAsRead(n.id);
-      ref.invalidate(vendorNotificationsProvider);
-    } catch (_) {}
-  }
-
-  Future<void> _toggleRead(VendorNotification n) async {
-    final currentlyRead = _isRead(n);
-    setState(() {
-      if (currentlyRead) {
-        _locallyUnread.add(n.id);
-        _locallyRead.remove(n.id);
-      } else {
-        _locallyRead.add(n.id);
-        _locallyUnread.remove(n.id);
-      }
-    });
-    try {
-      if (currentlyRead) {
-        await ref.read(notificationsRepositoryProvider).markAsUnread(n.id);
-      } else {
-        await ref.read(notificationsRepositoryProvider).markAsRead(n.id);
-      }
-      ref.invalidate(vendorNotificationsProvider);
-    } catch (_) {}
-  }
-
-  Future<void> _delete(VendorNotification n) async {
-    setState(() => _locallyDeleted.add(n.id));
-    try {
-      await ref.read(notificationsRepositoryProvider).deleteNotification(n.id);
       ref.invalidate(vendorNotificationsProvider);
     } catch (_) {}
   }
@@ -97,23 +62,6 @@ class _NotificationsPageState extends ConsumerState<NotificationsPage> {
     }
   }
 
-  Future<void> _markAllRead(List<VendorNotification> notifications) async {
-    final user = ref.read(currentVendorUserProvider);
-    if (user == null) return;
-    final unreadIds = notifications
-        .where((n) => !_locallyDeleted.contains(n.id) && !_isRead(n))
-        .map((n) => n.id)
-        .toSet();
-    if (unreadIds.isEmpty) return;
-    setState(() => _locallyRead.addAll(unreadIds));
-    try {
-      await ref
-          .read(notificationsRepositoryProvider)
-          .markAllAsRead(user.id);
-      ref.invalidate(vendorNotificationsProvider);
-    } catch (_) {}
-  }
-
   @override
   Widget build(BuildContext context) {
     final notificationsAsync = ref.watch(vendorNotificationsProvider);
@@ -125,29 +73,12 @@ class _NotificationsPageState extends ConsumerState<NotificationsPage> {
           onRetry: () => ref.invalidate(vendorNotificationsProvider),
         ),
         data: (notifications) {
-          final visible = notifications
-              .where((n) => !_locallyDeleted.contains(n.id))
-              .toList();
-          final hasUnread = visible.any((n) => !_isRead(n));
           return RefreshIndicator(
             onRefresh: () async =>
                 ref.invalidate(vendorNotificationsProvider),
             child: CustomScrollView(
               slivers: [
-                if (hasUnread)
-                  SliverToBoxAdapter(
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 8, 8, 0),
-                      child: Align(
-                        alignment: Alignment.centerRight,
-                        child: TextButton(
-                          onPressed: () => _markAllRead(notifications),
-                          child: const Text('Mark all as read'),
-                        ),
-                      ),
-                    ),
-                  ),
-                if (visible.isEmpty)
+                if (notifications.isEmpty)
                   const SliverFillRemaining(
                     hasScrollBody: false,
                     child: _EmptyState(),
@@ -156,7 +87,7 @@ class _NotificationsPageState extends ConsumerState<NotificationsPage> {
                   SliverList(
                     delegate: SliverChildBuilderDelegate(
                       (context, i) {
-                        final n = visible[i];
+                        final n = notifications[i];
                         return Column(
                           mainAxisSize: MainAxisSize.min,
                           children: [
@@ -164,10 +95,8 @@ class _NotificationsPageState extends ConsumerState<NotificationsPage> {
                               notification: n,
                               isRead: _isRead(n),
                               onTap: () => _handleTap(n),
-                              onToggleRead: () => _toggleRead(n),
-                              onDelete: () => _delete(n),
                             ),
-                            if (i < visible.length - 1)
+                            if (i < notifications.length - 1)
                               const Divider(
                                 height: 1,
                                 indent: 68,
@@ -176,7 +105,7 @@ class _NotificationsPageState extends ConsumerState<NotificationsPage> {
                           ],
                         );
                       },
-                      childCount: visible.length,
+                      childCount: notifications.length,
                     ),
                   ),
               ],

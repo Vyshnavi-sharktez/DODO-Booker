@@ -13,6 +13,7 @@ import '../../address/screens/address_screen.dart';
 import 'settings_screen.dart';
 import '../../amc/screens/amc_plans_page.dart';
 import '../../bookings/utils/my_bookings_launcher.dart';
+import 'edit_profile_screen.dart';
 import '../../warranties/screens/my_warranties_screen.dart';
 import '../../refund_queries/screens/refund_queries_flow.dart';
 import '../../support/screens/support_chat_screen.dart';
@@ -374,7 +375,7 @@ class _ProfileCard extends StatelessWidget {
             const SizedBox(height: 24),
 
             OutlinedButton.icon(
-              onPressed: () => context.push(AppRoutes.editProfile),
+              onPressed: () => showEditProfileModal(context),
               icon: const Icon(Icons.edit_outlined, size: 15),
               label: const Text('Edit Profile'),
               style: OutlinedButton.styleFrom(

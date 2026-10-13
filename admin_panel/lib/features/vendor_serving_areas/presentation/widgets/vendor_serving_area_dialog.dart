@@ -123,8 +123,8 @@ class _VendorServingAreaDialogState extends State<VendorServingAreaDialog> {
       _center = newCenter;
       _showResults = false;
       _searchResults = [];
-      _searchCtrl.clear();
-      
+      _searchCtrl.text = result.displayName;
+
       if (extractedName.isNotEmpty) {
         _nameCtrl.text = extractedName;
       }
@@ -170,6 +170,13 @@ class _VendorServingAreaDialogState extends State<VendorServingAreaDialog> {
         }
         if (addr.city != null && addr.city!.trim().isNotEmpty) {
           _cityCtrl.text = addr.city!.trim();
+        }
+        if (!_showResults) {
+          final parts = <String>[
+            if (addr.line1 != null && addr.line1!.trim().isNotEmpty) addr.line1!.trim(),
+            if (addr.city != null && addr.city!.trim().isNotEmpty) addr.city!.trim(),
+          ];
+          if (parts.isNotEmpty) _searchCtrl.text = parts.join(', ');
         }
       });
     } catch (e) {
@@ -336,7 +343,18 @@ class _VendorServingAreaDialogState extends State<VendorServingAreaDialog> {
                       child: CircularProgressIndicator(strokeWidth: 2),
                     ),
                   )
-                : null,
+                : _searchCtrl.text.isNotEmpty
+                    ? IconButton(
+                        icon: const Icon(Icons.clear_rounded, size: 18),
+                        onPressed: () {
+                          _searchCtrl.clear();
+                          setState(() {
+                            _searchResults = [];
+                            _showResults = false;
+                          });
+                        },
+                      )
+                    : null,
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(10),
             ),

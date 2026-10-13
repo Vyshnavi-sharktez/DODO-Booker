@@ -51,6 +51,8 @@ class AdminRealtimeSync {
   final SupabaseClient _client;
   RealtimeChannel? _channel;
 
+  bool _wasDisconnected = false;
+
   AdminRealtimeSync(this._ref, this._client) {
     _subscribe();
     // Dispatch escalation processing is kept as a timer because it triggers
@@ -291,6 +293,15 @@ class AdminRealtimeSync {
         )
         .subscribe((status, error) {
           debugPrint('[DODO][AdminSync] channel status=$status error=$error');
+          if (status == RealtimeSubscribeStatus.subscribed) {
+            if (_wasDisconnected) {
+              debugPrint('[DODO][AdminSync] reconnected — refetching all data');
+              refetchAll();
+            }
+            _wasDisconnected = false;
+          } else {
+            _wasDisconnected = true;
+          }
         });
   }
 

@@ -10,6 +10,7 @@ import '../../domain/models/subscription_plan.dart';
 import '../../domain/models/vendor_subscription.dart';
 import '../widgets/plan_form_dialog.dart';
 import '../widgets/vendor_subscription_dialog.dart';
+import '../../../../core/widgets/pagination_bar.dart';
 
 // ── Status colours ────────────────────────────────────────────────────────────
 
@@ -518,7 +519,7 @@ class _PlanCard extends StatelessWidget {
 
 // ── Subscribers Tab ───────────────────────────────────────────────────────────
 
-class _SubscribersTab extends ConsumerWidget {
+class _SubscribersTab extends ConsumerStatefulWidget {
   const _SubscribersTab({
     required this.statusFilter,
     required this.onFilterChanged,
@@ -531,6 +532,22 @@ class _SubscribersTab extends ConsumerWidget {
     required VendorSubscription existing,
     required List<SubscriptionPlan> plans,
   }) onOpenDialog;
+
+  @override
+  ConsumerState<_SubscribersTab> createState() => _SubscribersTabState();
+}
+
+class _SubscribersTabState extends ConsumerState<_SubscribersTab> {
+  int _page = 1;
+  static const int _pageSize = 10;
+
+  @override
+  void didUpdateWidget(_SubscribersTab oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.statusFilter != widget.statusFilter) {
+      _page = 1;
+    }
+  }
 
   Future<void> _confirmCancel(
       BuildContext context, WidgetRef ref, VendorSubscription sub) async {
@@ -576,7 +593,7 @@ class _SubscribersTab extends ConsumerWidget {
   }
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final subAsync = ref.watch(vendorSubscriptionsNotifierProvider);
     final plansAsync = ref.watch(plansNotifierProvider);
     final plans = plansAsync.valueOrNull ?? [];
@@ -588,9 +605,10 @@ class _SubscribersTab extends ConsumerWidget {
           onRetry: () =>
               ref.read(vendorSubscriptionsNotifierProvider.notifier).refresh()),
       data: (subs) {
-        final filtered = statusFilter == null
+        final filtered = widget.statusFilter == null
             ? subs
-            : subs.where((s) => s.status == statusFilter).toList();
+            : subs.where((s) => s.status == widget.statusFilter).toList();
+        final paged = filtered.skip((_page - 1) * _pageSize).take(_pageSize).toList();
 
         return Padding(
           padding: const EdgeInsets.all(24),
@@ -604,13 +622,13 @@ class _SubscribersTab extends ConsumerWidget {
                   children: [
                     _FilterChip(
                         label: 'All',
-                        selected: statusFilter == null,
-                        onTap: () => onFilterChanged(null)),
+                        selected: widget.statusFilter == null,
+                        onTap: () => widget.onFilterChanged(null)),
                     ...kSubscriptionStatuses.map((s) => _FilterChip(
                           label: s[0].toUpperCase() + s.substring(1),
-                          selected: statusFilter == s,
-                          onTap: () => onFilterChanged(
-                              statusFilter == s ? null : s),
+                          selected: widget.statusFilter == s,
+                          onTap: () => widget.onFilterChanged(
+                              widget.statusFilter == s ? null : s),
                         )),
                   ],
                 ),
@@ -627,20 +645,26 @@ class _SubscribersTab extends ConsumerWidget {
                         message: 'No subscriptions match the current filter.',
                       )
                     : ListView.separated(
-                        itemCount: filtered.length,
+                        itemCount: paged.length,
                         separatorBuilder: (_, __) => const SizedBox(height: 10),
                         itemBuilder: (_, i) => _SubscriptionCard(
-                          sub: filtered[i],
-                          onTap: () => onOpenDialog(
-                              existing: filtered[i], plans: plans),
+                          sub: paged[i],
+                          onTap: () => widget.onOpenDialog(
+                              existing: paged[i], plans: plans),
                           onUpdateStatus: (newStatus) => ref
                               .read(vendorSubscriptionsNotifierProvider.notifier)
-                              .updateStatus(filtered[i].id, newStatus),
-                          onCancel: filtered[i].status == 'active'
-                              ? () => _confirmCancel(context, ref, filtered[i])
+                              .updateStatus(paged[i].id, newStatus),
+                          onCancel: paged[i].status == 'active'
+                              ? () => _confirmCancel(context, ref, paged[i])
                               : null,
                         ),
                       ),
+              ),
+              PaginationBar(
+                totalItems: filtered.length,
+                currentPage: _page,
+                pageSize: _pageSize,
+                onPageChanged: (p) => setState(() => _page = p),
               ),
             ],
           ),
@@ -1011,6 +1035,8 @@ class _SubscriptionPlansTabState
   String? _scopeFilter; // null = All, 'global', 'catalog'
   bool? _statusFilter; // null = All, true = Enabled, false = Disabled
   bool _toggling = false;
+  int _page = 1;
+  static const int _pageSize = 10;
 
   @override
   void dispose() {
@@ -1105,6 +1131,7 @@ class _SubscriptionPlansTabState
     ];
 
     final filtered = _applyFilters(allEntries);
+    final paged = filtered.skip((_page - 1) * _pageSize).take(_pageSize).toList();
 
     if (loading && allEntries.isEmpty) {
       return const Center(child: CircularProgressIndicator());
@@ -1144,7 +1171,7 @@ class _SubscriptionPlansTabState
                     fillColor: AppColors.surface,
                   ),
                   onChanged: (v) =>
-                      setState(() => _query = v.toLowerCase().trim()),
+                      setState(() { _query = v.toLowerCase().trim(); _page = 1; }),
                 ),
               ),
               const SizedBox(width: 10),
@@ -1157,7 +1184,7 @@ class _SubscriptionPlansTabState
                   DropdownMenuItem(
                       value: 'catalog', child: Text('Catalog')),
                 ],
-                onChanged: (v) => setState(() => _scopeFilter = v),
+                onChanged: (v) => setState(() { _scopeFilter = v; _page = 1; }),
               ),
               const SizedBox(width: 10),
               _DropdownFilter<bool?>(
@@ -1170,7 +1197,7 @@ class _SubscriptionPlansTabState
                   DropdownMenuItem(
                       value: false, child: Text('Disabled')),
                 ],
-                onChanged: (v) => setState(() => _statusFilter = v),
+                onChanged: (v) => setState(() { _statusFilter = v; _page = 1; }),
               ),
             ],
           ),
@@ -1192,11 +1219,11 @@ class _SubscriptionPlansTabState
                         : 'No plans match the current filter.',
                   )
                 : ListView.separated(
-                    itemCount: filtered.length,
+                    itemCount: paged.length,
                     separatorBuilder: (_, __) =>
                         const SizedBox(height: 10),
                     itemBuilder: (_, i) {
-                      final e = filtered[i];
+                      final e = paged[i];
                       return _PlanOverviewRow(
                         entry: e,
                         toggling: _toggling,
@@ -1211,6 +1238,12 @@ class _SubscriptionPlansTabState
                       );
                     },
                   ),
+          ),
+          PaginationBar(
+            totalItems: filtered.length,
+            currentPage: _page,
+            pageSize: _pageSize,
+            onPageChanged: (p) => setState(() => _page = p),
           ),
         ],
       ),

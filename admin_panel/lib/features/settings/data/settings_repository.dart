@@ -28,4 +28,12 @@ class SettingsRepository {
         .toList();
     await _supabase.from('settings').upsert(rows, onConflict: 'setting_key');
   }
+
+  /// Calls the server-side purge function immediately and returns the number
+  /// of notification rows deleted.  Throws on RPC failure.
+  Future<int> triggerNotificationPurge() async {
+    final result = await _supabase.rpc('admin_trigger_notification_purge');
+    final map = result as Map<String, dynamic>;
+    return (map['notifications_deleted'] as num? ?? 0).toInt();
+  }
 }

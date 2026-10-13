@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/admin_search_bar.dart';
 import '../../../../core/widgets/highlighted_text.dart';
+import '../../../../core/widgets/pagination_bar.dart';
 import '../../application/providers/dodo_teams_providers.dart';
 import '../../domain/models/dodo_team.dart';
 import '../widgets/dodo_team_form_dialog.dart';
@@ -27,6 +28,8 @@ class _DodoTeamsPageState extends ConsumerState<DodoTeamsPage> {
   String _searchQuery = '';
   String? _localityFilter;
   String? _statusFilter;
+  int _page = 1;
+  static const int _pageSize = 10;
 
   @override
   void dispose() {
@@ -272,7 +275,7 @@ class _DodoTeamsPageState extends ConsumerState<DodoTeamsPage> {
                   hintText: 'Search team or supervisor…',
                   width: 240,
                   controller: _searchController,
-                  onChanged: (q) => setState(() => _searchQuery = q),
+                  onChanged: (q) => setState(() { _searchQuery = q; _page = 1; }),
                 ),
 
                 SizedBox(
@@ -294,7 +297,7 @@ class _DodoTeamsPageState extends ConsumerState<DodoTeamsPage> {
                         (l) => DropdownMenuItem(value: l, child: Text(l)),
                       ),
                     ],
-                    onChanged: (v) => setState(() => _localityFilter = v),
+                    onChanged: (v) => setState(() { _localityFilter = v; _page = 1; }),
                     isExpanded: true,
                   ),
                 ),
@@ -323,7 +326,7 @@ class _DodoTeamsPageState extends ConsumerState<DodoTeamsPage> {
                         ),
                       ),
                     ],
-                    onChanged: (v) => setState(() => _statusFilter = v),
+                    onChanged: (v) => setState(() { _statusFilter = v; _page = 1; }),
                     isExpanded: true,
                   ),
                 ),
@@ -337,6 +340,7 @@ class _DodoTeamsPageState extends ConsumerState<DodoTeamsPage> {
                       _statusFilter = null;
                       _searchQuery = '';
                       _searchController.clear();
+                      _page = 1;
                     }),
                     icon: const Icon(Icons.filter_alt_off_rounded, size: 16),
                     label: const Text('Clear'),
@@ -400,12 +404,25 @@ class _DodoTeamsPageState extends ConsumerState<DodoTeamsPage> {
                     sub: 'Try adjusting your search or filters.',
                   );
                 }
-                return _TeamsTable(
-                  teams: filtered,
-                  totalCount: all.length,
-                  onEdit: _openEdit,
-                  onDelete: _confirmDelete,
-                  searchQuery: _searchQuery,
+                final paged = filtered.skip((_page - 1) * _pageSize).take(_pageSize).toList();
+                return Column(
+                  children: [
+                    Expanded(
+                      child: _TeamsTable(
+                        teams: paged,
+                        totalCount: all.length,
+                        onEdit: _openEdit,
+                        onDelete: _confirmDelete,
+                        searchQuery: _searchQuery,
+                      ),
+                    ),
+                    PaginationBar(
+                      totalItems: filtered.length,
+                      currentPage: _page,
+                      pageSize: _pageSize,
+                      onPageChanged: (p) => setState(() => _page = p),
+                    ),
+                  ],
                 );
               },
             ),

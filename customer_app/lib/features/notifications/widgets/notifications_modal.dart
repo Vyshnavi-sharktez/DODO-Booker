@@ -26,8 +26,6 @@ class NotificationsModal extends ConsumerStatefulWidget {
 
 class _NotificationsModalState extends ConsumerState<NotificationsModal> {
   final _locallyRead = <String>{};
-  final _locallyUnread = <String>{};
-  final _locallyDeleted = <String>{};
 
   @override
   void initState() {
@@ -36,51 +34,18 @@ class _NotificationsModalState extends ConsumerState<NotificationsModal> {
   }
 
   bool _isRead(NotificationModel n) {
-    if (_locallyUnread.contains(n.id)) return false;
     return n.isRead || _locallyRead.contains(n.id);
   }
 
   Future<void> _markRead(NotificationModel n) async {
     if (_isRead(n)) return;
-    setState(() {
-      _locallyRead.add(n.id);
-      _locallyUnread.remove(n.id);
-    });
+    setState(() => _locallyRead.add(n.id));
     try {
       await ref.read(notificationServiceProvider).markAsRead(n.id);
       ref.read(notificationsProvider.notifier).refresh();
     } catch (_) {
       // Non-fatal — optimistic state already applied.
     }
-  }
-
-  Future<void> _toggleRead(NotificationModel n) async {
-    final currentlyRead = _isRead(n);
-    setState(() {
-      if (currentlyRead) {
-        _locallyUnread.add(n.id);
-        _locallyRead.remove(n.id);
-      } else {
-        _locallyRead.add(n.id);
-        _locallyUnread.remove(n.id);
-      }
-    });
-    try {
-      if (currentlyRead) {
-        await ref.read(notificationServiceProvider).markAsUnread(n.id);
-      } else {
-        await ref.read(notificationServiceProvider).markAsRead(n.id);
-      }
-      ref.read(notificationsProvider.notifier).refresh();
-    } catch (_) {}
-  }
-
-  Future<void> _delete(NotificationModel n) async {
-    setState(() => _locallyDeleted.add(n.id));
-    try {
-      await ref.read(notificationServiceProvider).deleteNotification(n.id);
-      ref.read(notificationsProvider.notifier).refresh();
-    } catch (_) {}
   }
 
   Future<void> _handleTap(NotificationModel n) async {
@@ -177,22 +142,17 @@ class _NotificationsModalState extends ConsumerState<NotificationsModal> {
           const Center(child: CircularProgressIndicator()),
       error: (e, _) => const _EmptyState(),
       data: (notifications) {
-        final visible = notifications
-            .where((n) => !_locallyDeleted.contains(n.id))
-            .toList();
         // During a refresh (isAuth false→true), Riverpod calls data: with
         // the stale [] instead of loading:. Treat that as loading.
-        if (visible.isEmpty && notificationsAsync.isLoading) {
+        if (notifications.isEmpty && notificationsAsync.isLoading) {
           return const Center(child: CircularProgressIndicator());
         }
-        if (visible.isEmpty) return const _EmptyState();
+        if (notifications.isEmpty) return const _EmptyState();
         return _NotificationList(
-          notifications: visible,
+          notifications: notifications,
           isRead: _isRead,
           onTap: _handleTap,
           onRateService: _openRatingModal,
-          onToggleRead: _toggleRead,
-          onDelete: _delete,
         );
       },
     );
@@ -213,16 +173,12 @@ class _NotificationList extends StatelessWidget {
   final bool Function(NotificationModel) isRead;
   final void Function(NotificationModel) onTap;
   final void Function(NotificationModel)? onRateService;
-  final void Function(NotificationModel) onToggleRead;
-  final void Function(NotificationModel) onDelete;
 
   const _NotificationList({
     required this.notifications,
     required this.isRead,
     required this.onTap,
     this.onRateService,
-    required this.onToggleRead,
-    required this.onDelete,
   });
 
   @override
@@ -241,8 +197,6 @@ class _NotificationList extends StatelessWidget {
                   onRateService != null
               ? () => onRateService!(n)
               : null,
-          onToggleRead: () => onToggleRead(n),
-          onDelete: () => onDelete(n),
         );
       },
     );
@@ -254,16 +208,12 @@ class _NotificationTile extends StatelessWidget {
   final bool read;
   final VoidCallback onTap;
   final VoidCallback? onRateService;
-  final VoidCallback onToggleRead;
-  final VoidCallback onDelete;
 
   const _NotificationTile({
     required this.notification,
     required this.read,
     required this.onTap,
     this.onRateService,
-    required this.onToggleRead,
-    required this.onDelete,
   });
 
   static const _months = [
@@ -373,60 +323,7 @@ class _NotificationTile extends StatelessWidget {
             ),
           ),
         ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(0, 10, 8, 10),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              _SmallAction(
-                icon: read
-                    ? Icons.mark_email_unread_outlined
-                    : Icons.mark_email_read_outlined,
-                tooltip: read ? 'Mark unread' : 'Mark read',
-                onTap: onToggleRead,
-              ),
-              const SizedBox(height: 2),
-              _SmallAction(
-                icon: Icons.delete_outline_rounded,
-                tooltip: 'Delete',
-                onTap: onDelete,
-              ),
-            ],
-          ),
-        ),
       ],
-    );
-  }
-}
-
-// ── Small action button ───────────────────────────────────────────────────────
-
-class _SmallAction extends StatelessWidget {
-  const _SmallAction({
-    required this.icon,
-    required this.tooltip,
-    required this.onTap,
-  });
-
-  final IconData icon;
-  final String tooltip;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Tooltip(
-      message: tooltip,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(8),
-        child: SizedBox(
-          width: 44,
-          height: 44,
-          child: Center(
-            child: Icon(icon, size: 18, color: AppColors.textHint),
-          ),
-        ),
-      ),
     );
   }
 }

@@ -11,6 +11,7 @@ import '../../../vendor_tiers/domain/models/vendor_tier.dart';
 import '../widgets/vendor_form_dialog.dart';
 import '../../../bulk_upload/data/modules/vendor_bulk_module.dart';
 import '../../../bulk_upload/presentation/bulk_upload_dialog.dart';
+import '../../../../core/widgets/pagination_bar.dart';
 
 // ── Status display config ─────────────────────────────────────────────────────
 
@@ -34,6 +35,8 @@ class _VendorsPageState extends ConsumerState<VendorsPage> {
   String _searchQuery = '';
   String? _cityFilter;
   String? _statusFilter;
+  int _page = 1;
+  static const int _pageSize = 10;
 
   List<Vendor> _applyFilters(List<Vendor> all) {
     var result = all;
@@ -253,7 +256,7 @@ class _VendorsPageState extends ConsumerState<VendorsPage> {
                 AdminSearchBar(
                   hintText: 'Search name, phone, email…',
                   width: 280,
-                  onChanged: (q) => setState(() => _searchQuery = q),
+                  onChanged: (q) => setState(() { _searchQuery = q; _page = 1; }),
                 ),
 
                 // City filter
@@ -281,7 +284,7 @@ class _VendorsPageState extends ConsumerState<VendorsPage> {
                         ),
                       ),
                     ],
-                    onChanged: (v) => setState(() => _cityFilter = v),
+                    onChanged: (v) => setState(() { _cityFilter = v; _page = 1; }),
                     isExpanded: true,
                   ),
                 ),
@@ -313,7 +316,7 @@ class _VendorsPageState extends ConsumerState<VendorsPage> {
                         ),
                       ),
                     ],
-                    onChanged: (v) => setState(() => _statusFilter = v),
+                    onChanged: (v) => setState(() { _statusFilter = v; _page = 1; }),
                     isExpanded: true,
                   ),
                 ),
@@ -324,6 +327,7 @@ class _VendorsPageState extends ConsumerState<VendorsPage> {
                     onPressed: () => setState(() {
                       _cityFilter = null;
                       _statusFilter = null;
+                      _page = 1;
                     }),
                     icon: const Icon(Icons.filter_alt_off_rounded,
                         size: 16),
@@ -389,14 +393,27 @@ class _VendorsPageState extends ConsumerState<VendorsPage> {
                     sub: 'Try adjusting your search or filters.',
                   );
                 }
-                return _VendorsTable(
-                  searchQuery: _searchQuery,
-                  vendors: filtered,
-                  totalCount: all.length,
-                  onDelete: _confirmDelete,
-                  onToggle: _toggle,
-                  onViewDetails: (v) =>
-                      context.push('/dashboard/vendors/${v.id}'),
+                final paged = filtered.skip((_page - 1) * _pageSize).take(_pageSize).toList();
+                return Column(
+                  children: [
+                    Expanded(
+                      child: _VendorsTable(
+                        searchQuery: _searchQuery,
+                        vendors: paged,
+                        totalCount: all.length,
+                        onDelete: _confirmDelete,
+                        onToggle: _toggle,
+                        onViewDetails: (v) =>
+                            context.push('/dashboard/vendors/${v.id}'),
+                      ),
+                    ),
+                    PaginationBar(
+                      totalItems: filtered.length,
+                      currentPage: _page,
+                      pageSize: _pageSize,
+                      onPageChanged: (p) => setState(() => _page = p),
+                    ),
+                  ],
                 );
               },
             ),

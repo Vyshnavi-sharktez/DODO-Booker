@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import '../../../../core/theme/app_theme.dart';
+import '../../../../core/widgets/pagination_bar.dart';
 import '../../application/abandoned_carts_provider.dart';
 import '../../data/abandoned_carts_repository.dart';
 
@@ -10,11 +11,19 @@ final _timeFmt = DateFormat('dd MMM, hh:mm a');
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 
-class AbandonedCartsPage extends ConsumerWidget {
+class AbandonedCartsPage extends ConsumerStatefulWidget {
   const AbandonedCartsPage({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<AbandonedCartsPage> createState() => _AbandonedCartsPageState();
+}
+
+class _AbandonedCartsPageState extends ConsumerState<AbandonedCartsPage> {
+  int _page = 1;
+  static const int _pageSize = 10;
+
+  @override
+  Widget build(BuildContext context) {
     final cartsAsync = ref.watch(abandonedCartsProvider);
 
     return Scaffold(
@@ -22,7 +31,10 @@ class AbandonedCartsPage extends ConsumerWidget {
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _PageHeader(onRefresh: () => ref.invalidate(abandonedCartsProvider)),
+          _PageHeader(onRefresh: () {
+            ref.invalidate(abandonedCartsProvider);
+            setState(() => _page = 1);
+          }),
           Expanded(
             child: cartsAsync.when(
               loading: () =>
@@ -33,9 +45,21 @@ class AbandonedCartsPage extends ConsumerWidget {
                   style: const TextStyle(color: AppColors.error),
                 ),
               ),
-              data: (carts) => carts.isEmpty
-                  ? const _EmptyState()
-                  : _CartTable(carts: carts),
+              data: (carts) {
+                if (carts.isEmpty) return const _EmptyState();
+                final paged = carts.skip((_page - 1) * _pageSize).take(_pageSize).toList();
+                return Column(
+                  children: [
+                    Expanded(child: _CartTable(carts: paged)),
+                    PaginationBar(
+                      totalItems: carts.length,
+                      currentPage: _page,
+                      pageSize: _pageSize,
+                      onPageChanged: (p) => setState(() => _page = p),
+                    ),
+                  ],
+                );
+              },
             ),
           ),
         ],

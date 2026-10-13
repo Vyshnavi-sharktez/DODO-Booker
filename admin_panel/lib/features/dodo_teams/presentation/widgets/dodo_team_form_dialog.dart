@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../../../core/theme/app_theme.dart';
+import '../../../../core/widgets/phone_input_field.dart';
 import '../../domain/models/dodo_team.dart';
 
 const _statusOptions = [
@@ -48,7 +49,10 @@ class _DodoTeamFormDialogState extends State<DodoTeamFormDialog> {
     final e = widget.existing;
     _teamNameCtrl = TextEditingController(text: e?.teamName ?? '');
     _supervisorCtrl = TextEditingController(text: e?.supervisorName ?? '');
-    _phoneCtrl = TextEditingController(text: e?.phone ?? '');
+    final phone = e?.phone ?? '';
+    _phoneCtrl = TextEditingController(
+      text: phone.startsWith('+91') ? phone.substring(3) : phone,
+    );
     _emailCtrl = TextEditingController(text: e?.email ?? '');
     _localityCtrl = TextEditingController(text: e?.locality ?? '');
     _membersCtrl = TextEditingController(
@@ -82,7 +86,9 @@ class _DodoTeamFormDialogState extends State<DodoTeamFormDialog> {
         supervisorName: _supervisorCtrl.text.trim().isEmpty
             ? null
             : _supervisorCtrl.text.trim(),
-        phone: _phoneCtrl.text.trim().isEmpty ? null : _phoneCtrl.text.trim(),
+        phone: _phoneCtrl.text.trim().isEmpty
+            ? null
+            : '+91${_phoneCtrl.text.trim()}',
         email:
             _emailCtrl.text.trim().isEmpty ? null : _emailCtrl.text.trim(),
         locality: _localityCtrl.text.trim().isEmpty
@@ -197,20 +203,11 @@ class _DodoTeamFormDialogState extends State<DodoTeamFormDialog> {
                           ),
                           const SizedBox(width: 16),
                           Expanded(
-                            child: TextFormField(
+                            child: PhoneInputField(
                               controller: _phoneCtrl,
-                              decoration: const InputDecoration(
-                                labelText: 'Phone',
-                                hintText: '+91 …',
-                                prefixIcon: Icon(Icons.phone_rounded),
-                                helperText: 'Optional',
-                              ),
-                              keyboardType: TextInputType.phone,
+                              labelText: 'Phone',
+                              helperText: 'Optional',
                               enabled: !_saving,
-                              inputFormatters: [
-                                FilteringTextInputFormatter.allow(
-                                    RegExp(r'[\d\+\-\s\(\)]')),
-                              ],
                             ),
                           ),
                         ],

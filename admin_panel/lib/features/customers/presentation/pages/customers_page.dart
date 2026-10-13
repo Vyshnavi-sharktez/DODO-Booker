@@ -15,6 +15,7 @@ import '../widgets/customer_edit_dialog.dart';
 import '../../../bulk_upload/data/modules/customer_bulk_module.dart';
 import '../../../bulk_upload/presentation/bulk_upload_dialog.dart';
 import '../../../../core/rbac/permission_guard.dart';
+import '../../../../core/widgets/pagination_bar.dart';
 
 final _dateFmtShort = DateFormat('dd MMM yyyy');
 
@@ -34,6 +35,8 @@ class CustomersPage extends ConsumerStatefulWidget {
 class _CustomersPageState extends ConsumerState<CustomersPage> {
   String _searchQuery = '';
   _StatusFilter _statusFilter = _StatusFilter.all;
+  int _page = 1;
+  static const int _pageSize = 10;
 
   @override
   void dispose() {
@@ -363,27 +366,27 @@ class _CustomersPageState extends ConsumerState<CustomersPage> {
                 hintText:
                     'Search name, phone, booking ID, service, vendor…',
                 width: 360,
-                onChanged: (q) => setState(() => _searchQuery = q),
+                onChanged: (q) => setState(() { _searchQuery = q; _page = 1; }),
               ),
               _FilterChip(
                 label: 'All',
                 selected: _statusFilter == _StatusFilter.all,
                 onTap: () =>
-                    setState(() => _statusFilter = _StatusFilter.all),
+                    setState(() { _statusFilter = _StatusFilter.all; _page = 1; }),
               ),
               _FilterChip(
                 label: 'Active',
                 selected: _statusFilter == _StatusFilter.active,
                 color: AppColors.success,
                 onTap: () =>
-                    setState(() => _statusFilter = _StatusFilter.active),
+                    setState(() { _statusFilter = _StatusFilter.active; _page = 1; }),
               ),
               _FilterChip(
                 label: 'Inactive',
                 selected: _statusFilter == _StatusFilter.inactive,
                 color: AppColors.error,
                 onTap: () => setState(
-                    () => _statusFilter = _StatusFilter.inactive),
+                    () { _statusFilter = _StatusFilter.inactive; _page = 1; }),
               ),
             ],
           ),
@@ -437,14 +440,27 @@ class _CustomersPageState extends ConsumerState<CustomersPage> {
                     sub: 'Try adjusting your search or filters.',
                   );
                 }
-                return _CustomersTable(
-                  customers: filtered,
-                  totalCount: all.length,
-                  searchQuery: _searchQuery,
-                  onViewDetails: _openDetails,
-                  onEdit: _openEdit,
-                  onToggleActive: _toggleActive,
-                  onDelete: _confirmDelete,
+                final paged = filtered.skip((_page - 1) * _pageSize).take(_pageSize).toList();
+                return Column(
+                  children: [
+                    Expanded(
+                      child: _CustomersTable(
+                        customers: paged,
+                        totalCount: all.length,
+                        searchQuery: _searchQuery,
+                        onViewDetails: _openDetails,
+                        onEdit: _openEdit,
+                        onToggleActive: _toggleActive,
+                        onDelete: _confirmDelete,
+                      ),
+                    ),
+                    PaginationBar(
+                      totalItems: filtered.length,
+                      currentPage: _page,
+                      pageSize: _pageSize,
+                      onPageChanged: (p) => setState(() => _page = p),
+                    ),
+                  ],
                 );
               },
             ),
