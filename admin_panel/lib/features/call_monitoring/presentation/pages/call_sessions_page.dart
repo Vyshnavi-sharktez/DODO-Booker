@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/theme/app_theme.dart';
+import '../../../../core/widgets/pagination_bar.dart';
 
 import '../../application/call_monitoring_providers.dart';
 import '../../domain/models/admin_call_session.dart';
@@ -18,6 +19,8 @@ class _CallSessionsPageState extends ConsumerState<CallSessionsPage> {
   String _selectedStatus = 'All';
   String _selectedRole = 'All';
   String _selectedDateRange = 'All Time';
+  int _page = 1;
+  static const int _pageSize = 10;
 
   List<AdminCallSession> _applyFilters(List<AdminCallSession> allSessions) {
     return allSessions.where((s) {
@@ -197,6 +200,7 @@ class _CallSessionsPageState extends ConsumerState<CallSessionsPage> {
               ),
               data: (allSessions) {
                 final filtered = _applyFilters(allSessions);
+                final paged = filtered.skip((_page - 1) * _pageSize).take(_pageSize).toList();
 
                 // KPI Calculations
                 final totalCount = allSessions.length;
@@ -279,7 +283,7 @@ class _CallSessionsPageState extends ConsumerState<CallSessionsPage> {
                             SizedBox(
                               width: 260,
                               child: TextField(
-                                onChanged: (v) => setState(() => _searchQuery = v),
+                                onChanged: (v) => setState(() { _searchQuery = v; _page = 1; }),
                                 decoration: InputDecoration(
                                   hintText: 'Search booking / virtual num...',
                                   prefixIcon: const Icon(Icons.search_rounded, size: 18),
@@ -294,7 +298,7 @@ class _CallSessionsPageState extends ConsumerState<CallSessionsPage> {
                               items: ['All', 'initiated', 'ringing', 'connected', 'ended', 'missed', 'failed']
                                   .map((s) => DropdownMenuItem(value: s, child: Text('Status: $s')))
                                   .toList(),
-                              onChanged: (v) => setState(() => _selectedStatus = v ?? 'All'),
+                              onChanged: (v) => setState(() { _selectedStatus = v ?? 'All'; _page = 1; }),
                             ),
                             DropdownButton<String>(
                               value: _selectedRole,
@@ -302,7 +306,7 @@ class _CallSessionsPageState extends ConsumerState<CallSessionsPage> {
                               items: ['All', 'customer', 'vendor']
                                   .map((r) => DropdownMenuItem(value: r, child: Text('Caller: $r')))
                                   .toList(),
-                              onChanged: (v) => setState(() => _selectedRole = v ?? 'All'),
+                              onChanged: (v) => setState(() { _selectedRole = v ?? 'All'; _page = 1; }),
                             ),
                             DropdownButton<String>(
                               value: _selectedDateRange,
@@ -310,7 +314,7 @@ class _CallSessionsPageState extends ConsumerState<CallSessionsPage> {
                               items: ['All Time', 'Today', 'Last 7 Days', 'Last 30 Days']
                                   .map((d) => DropdownMenuItem(value: d, child: Text('Date: $d')))
                                   .toList(),
-                              onChanged: (v) => setState(() => _selectedDateRange = v ?? 'All Time'),
+                              onChanged: (v) => setState(() { _selectedDateRange = v ?? 'All Time'; _page = 1; }),
                             ),
                           ],
                         ),
@@ -339,7 +343,7 @@ class _CallSessionsPageState extends ConsumerState<CallSessionsPage> {
                             DataColumn(label: Text('Duration', style: TextStyle(fontWeight: FontWeight.bold))),
                             DataColumn(label: Text('Actions', style: TextStyle(fontWeight: FontWeight.bold))),
                           ],
-                          rows: filtered.map((session) {
+                          rows: paged.map((session) {
                             final statusCol = _statusColor(session.status);
 
                             return DataRow(
@@ -415,6 +419,13 @@ class _CallSessionsPageState extends ConsumerState<CallSessionsPage> {
                           }).toList(),
                         ),
                       ),
+                    ),
+                    const SizedBox(height: 8),
+                    PaginationBar(
+                      totalItems: filtered.length,
+                      currentPage: _page,
+                      pageSize: _pageSize,
+                      onPageChanged: (p) => setState(() => _page = p),
                     ),
                   ],
                 );

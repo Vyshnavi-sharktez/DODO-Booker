@@ -148,7 +148,7 @@ class _BookingEditDialogState extends ConsumerState<BookingEditDialog> {
     super.didChangeDependencies();
     if (!_slotsInitialized && _slotServiceId != null && _serviceDate != null) {
       _slotsInitialized = true;
-      _startLoadSlots(_slotServiceId!, _serviceDate!);
+      _startLoadSlots(_slotServiceId!, _serviceDate!, preserveTime: true);
     }
   }
 
@@ -180,10 +180,19 @@ class _BookingEditDialogState extends ConsumerState<BookingEditDialog> {
     setState(() {
       if (newServiceId != _slotServiceId) {
         _slotServiceId = newServiceId;
-        _serviceDate = null;
+        // Preserve the service date — only reset the time slot and reload
+        // slots for the new service + existing date combination.
         _scheduledTime = null;
-        _slotsFuture = null;
         _slotWasUnavailable = false;
+        if (newServiceId != null && _serviceDate != null) {
+          _slotsFuture = AdminSlotService.fetchSlots(
+            ref.read(supabaseClientProvider),
+            newServiceId,
+            _serviceDate!,
+          );
+        } else {
+          _slotsFuture = null;
+        }
       }
       _revalidateCoupon();
     });
@@ -441,7 +450,7 @@ class _BookingEditDialogState extends ConsumerState<BookingEditDialog> {
 
   // ── Date + slot ───────────────────────────────────────────────────────────────
 
-  void _startLoadSlots(String svcId, DateTime date) {
+  void _startLoadSlots(String svcId, DateTime date, {bool preserveTime = false}) {
     final future = AdminSlotService.fetchSlots(
       ref.read(supabaseClientProvider),
       svcId,
@@ -451,11 +460,11 @@ class _BookingEditDialogState extends ConsumerState<BookingEditDialog> {
     future.then((slots) {
       if (!mounted) return;
       setState(() {
-        // Clear the existing time only when the slot list loaded successfully
-        // (non-empty) and the existing slot is no longer in it. An empty result
-        // may mean "no scheduling configured" or a transient error — preserve
-        // the existing time so the admin is not blocked unnecessarily.
-        if (slots.isNotEmpty &&
+        // On initial load (preserveTime: true) always keep the existing time
+        // so the admin sees the booking's original values. On a date change
+        // (preserveTime: false) clear the time if it is no longer available.
+        if (!preserveTime &&
+            slots.isNotEmpty &&
             _scheduledTime != null &&
             !slots.contains(_scheduledTime)) {
           _slotWasUnavailable = true;
@@ -527,11 +536,16 @@ class _BookingEditDialogState extends ConsumerState<BookingEditDialog> {
         final slots = snap.data ?? [];
         Widget picker;
 
-        if (slots.isNotEmpty) {
+        // When slots are available and the current time is in the list,
+        // show the dropdown. Otherwise fall back to a text field so the
+        // admin can see and optionally change the preserved original time.
+        final timeInSlots = slots.contains(_scheduledTime);
+
+        if (slots.isNotEmpty && (timeInSlots || _scheduledTime == null)) {
           picker = DropdownButtonFormField<String>(
             key: ValueKey('editslot_${_serviceDate?.toIso8601String()}'),
             // ignore: deprecated_member_use
-            value: slots.contains(_scheduledTime) ? _scheduledTime : null,
+            value: timeInSlots ? _scheduledTime : null,
             hint: const Text('Select time slot'),
             decoration: InputDecoration(
               labelText: 'Time Slot',
@@ -549,6 +563,7 @@ class _BookingEditDialogState extends ConsumerState<BookingEditDialog> {
           );
         } else {
           picker = TextFormField(
+            key: ValueKey('editslot_text_${_serviceDate?.toIso8601String()}'),
             initialValue: _scheduledTime,
             onChanged: (v) => setState(() {
               _scheduledTime = v.trim().isEmpty ? null : v.trim();
@@ -556,7 +571,9 @@ class _BookingEditDialogState extends ConsumerState<BookingEditDialog> {
             }),
             decoration: InputDecoration(
               labelText: 'Time Slot',
-              hintText: 'No slots configured — enter manually',
+              hintText: slots.isEmpty
+                  ? 'No slots configured — enter manually'
+                  : 'e.g. 10:00 AM',
               prefixIcon: const Icon(Icons.access_time_rounded),
               isDense: true,
               errorText: slotError,

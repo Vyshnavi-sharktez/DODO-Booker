@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../application/providers/settings_providers.dart';
+import '../../data/settings_repository.dart';
 import '../../domain/models/settings_defaults.dart';
 
 // ── Field / Section definition types ─────────────────────────────────────────
@@ -317,45 +318,53 @@ class _SettingsSectionCardState extends ConsumerState<SettingsSectionCard> {
           // ── Actions ─────────────────────────────────────────────────────
           Padding(
             padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.end,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                OutlinedButton.icon(
-                  onPressed: _saving ? null : _resetToDefaults,
-                  icon: const Icon(Icons.restart_alt_rounded, size: 16),
-                  label: const Text('Reset to Default'),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: AppColors.textSecondary,
-                    side: const BorderSide(color: AppColors.border),
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 10,
+                if (widget.section.id == 'notification') ...[
+                  _PurgeButton(repo: ref.read(settingsRepositoryProvider)),
+                  const SizedBox(height: 12),
+                ],
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    OutlinedButton.icon(
+                      onPressed: _saving ? null : _resetToDefaults,
+                      icon: const Icon(Icons.restart_alt_rounded, size: 16),
+                      label: const Text('Reset to Default'),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: AppColors.textSecondary,
+                        side: const BorderSide(color: AppColors.border),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 10,
+                        ),
+                      ),
                     ),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                FilledButton.icon(
-                  onPressed: (_dirty && !_saving) ? _save : null,
-                  icon: _saving
-                      ? const SizedBox(
-                          width: 15,
-                          height: 15,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: Colors.white,
-                          ),
-                        )
-                      : const Icon(Icons.save_rounded, size: 16),
-                  label: const Text('Save Changes'),
-                  style: FilledButton.styleFrom(
-                    backgroundColor: AppColors.primary,
-                    disabledBackgroundColor:
-                        AppColors.border,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 20,
-                      vertical: 10,
+                    const SizedBox(width: 12),
+                    FilledButton.icon(
+                      onPressed: (_dirty && !_saving) ? _save : null,
+                      icon: _saving
+                          ? const SizedBox(
+                              width: 15,
+                              height: 15,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.white,
+                              ),
+                            )
+                          : const Icon(Icons.save_rounded, size: 16),
+                      label: const Text('Save Changes'),
+                      style: FilledButton.styleFrom(
+                        backgroundColor: AppColors.primary,
+                        disabledBackgroundColor: AppColors.border,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 20,
+                          vertical: 10,
+                        ),
+                      ),
                     ),
-                  ),
+                  ],
                 ),
               ],
             ),
@@ -516,5 +525,125 @@ class _SettingsSectionCardState extends ConsumerState<SettingsSectionCard> {
       }
     }
     return null;
+  }
+}
+
+// ── Notification purge button ─────────────────────────────────────────────────
+
+enum _PurgeState { idle, loading, success, error }
+
+class _PurgeButton extends StatefulWidget {
+  const _PurgeButton({required this.repo});
+  final SettingsRepository repo;
+
+  @override
+  State<_PurgeButton> createState() => _PurgeButtonState();
+}
+
+class _PurgeButtonState extends State<_PurgeButton> {
+  _PurgeState _state = _PurgeState.idle;
+  int _deletedCount = 0;
+  String _errorMessage = '';
+
+  Future<void> _run() async {
+    setState(() => _state = _PurgeState.loading);
+    try {
+      final count = await widget.repo.triggerNotificationPurge();
+      if (!mounted) return;
+      setState(() {
+        _deletedCount = count;
+        _state = _PurgeState.success;
+      });
+      Future.delayed(const Duration(seconds: 4), () {
+        if (mounted) setState(() => _state = _PurgeState.idle);
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _errorMessage = e.toString();
+        _state = _PurgeState.error;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return switch (_state) {
+      _PurgeState.loading => _buildStatus(
+          icon: const SizedBox(
+            width: 14,
+            height: 14,
+            child: CircularProgressIndicator(strokeWidth: 2),
+          ),
+          label: 'Running cleanup…',
+          color: AppColors.textSecondary,
+        ),
+      _PurgeState.success => _buildStatus(
+          icon: const Icon(Icons.check_circle_outline_rounded,
+              size: 16, color: AppColors.success),
+          label: _deletedCount == 0
+              ? 'No expired notifications found'
+              : 'Deleted $_deletedCount notification${_deletedCount == 1 ? '' : 's'}',
+          color: AppColors.success,
+        ),
+      _PurgeState.error => _buildStatus(
+          icon: const Icon(Icons.error_outline_rounded,
+              size: 16, color: AppColors.error),
+          label: 'Cleanup failed: $_errorMessage',
+          color: AppColors.error,
+          trailing: IconButton(
+            onPressed: () => setState(() => _state = _PurgeState.idle),
+            icon: const Icon(Icons.close_rounded, size: 14),
+            color: AppColors.error,
+            visualDensity: VisualDensity.compact,
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(minWidth: 20, minHeight: 20),
+            tooltip: 'Dismiss',
+          ),
+        ),
+      _PurgeState.idle => OutlinedButton.icon(
+          onPressed: _run,
+          icon: const Icon(Icons.auto_delete_rounded, size: 16),
+          label: const Text('Clean Up Expired Notifications Now'),
+          style: OutlinedButton.styleFrom(
+            foregroundColor: const Color(0xFF805AD5),
+            side: const BorderSide(color: Color(0xFF805AD5)),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          ),
+        ),
+    };
+  }
+
+  Widget _buildStatus({
+    required Widget icon,
+    required String label,
+    required Color color,
+    Widget? trailing,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.07),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: color.withValues(alpha: 0.25)),
+      ),
+      child: Row(
+        children: [
+          icon,
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              label,
+              style: TextStyle(
+                fontSize: 13,
+                color: color,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+          if (trailing != null) trailing,
+        ],
+      ),
+    );
   }
 }

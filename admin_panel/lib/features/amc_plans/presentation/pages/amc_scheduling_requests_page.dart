@@ -2,6 +2,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../../core/theme/app_theme.dart' show AppColors;
+import '../../../../../core/widgets/pagination_bar.dart';
 import '../../../bookings/application/providers/bookings_providers.dart';
 import '../../../bookings/domain/models/booking.dart';
 import '../../../bookings/presentation/widgets/booking_assignment_dialog.dart';
@@ -665,6 +666,12 @@ class _AmcSchedulingRequestsPageState
   String? _resumeFilter = 'pending';
   String _pauseTabType = 'pause'; // 'pause' | 'resume'
 
+  int _schedulingPage = 1;
+  int _cancellationPage = 1;
+  int _pausePage = 1;
+  int _resumePage = 1;
+  static const int _pageSize = 10;
+
   void _refreshAll() {
     ref.invalidate(_amcRequestsProvider);
     ref.invalidate(_amcCancellationRequestsProvider);
@@ -754,7 +761,7 @@ class _AmcSchedulingRequestsPageState
                               selected: _schedulingFilter == 'pending',
                               color: AppColors.warning,
                               onTap: () =>
-                                  setState(() => _schedulingFilter = 'pending'),
+                                  setState(() { _schedulingFilter = 'pending'; _schedulingPage = 1; }),
                             ),
                             const SizedBox(width: 8),
                             _StatusFilterChip(
@@ -762,7 +769,7 @@ class _AmcSchedulingRequestsPageState
                               selected: _schedulingFilter == 'scheduled',
                               color: const Color(0xFF2C7A7B),
                               onTap: () => setState(
-                                () => _schedulingFilter = 'scheduled',
+                                () { _schedulingFilter = 'scheduled'; _schedulingPage = 1; },
                               ),
                             ),
                             const SizedBox(width: 8),
@@ -771,7 +778,7 @@ class _AmcSchedulingRequestsPageState
                               selected: _schedulingFilter == 'rejected',
                               color: AppColors.error,
                               onTap: () => setState(
-                                () => _schedulingFilter = 'rejected',
+                                () { _schedulingFilter = 'rejected'; _schedulingPage = 1; },
                               ),
                             ),
                             const SizedBox(width: 8),
@@ -780,7 +787,7 @@ class _AmcSchedulingRequestsPageState
                               selected: _schedulingFilter == 'cancelled',
                               color: AppColors.textSecondary,
                               onTap: () => setState(
-                                () => _schedulingFilter = 'cancelled',
+                                () { _schedulingFilter = 'cancelled'; _schedulingPage = 1; },
                               ),
                             ),
                             const SizedBox(width: 8),
@@ -789,7 +796,7 @@ class _AmcSchedulingRequestsPageState
                               selected: _schedulingFilter == null,
                               color: AppColors.primary,
                               onTap: () =>
-                                  setState(() => _schedulingFilter = null),
+                                  setState(() { _schedulingFilter = null; _schedulingPage = 1; }),
                             ),
                           ],
                         ),
@@ -825,16 +832,29 @@ class _AmcSchedulingRequestsPageState
                                 statusFilter: _schedulingFilter,
                               );
                             }
-                            return ListView.separated(
-                              padding: const EdgeInsets.fromLTRB(24, 8, 24, 32),
-                              itemCount: requests.length,
-                              separatorBuilder: (_, _) =>
-                                  const SizedBox(height: 10),
-                              itemBuilder: (_, i) => _RequestCard(
-                                request: requests[i],
-                                onRefresh: () =>
-                                    ref.invalidate(_amcRequestsProvider),
-                              ),
+                            final paged = requests.skip((_schedulingPage - 1) * _pageSize).take(_pageSize).toList();
+                            return Column(
+                              children: [
+                                Expanded(
+                                  child: ListView.separated(
+                                    padding: const EdgeInsets.fromLTRB(24, 8, 24, 8),
+                                    itemCount: paged.length,
+                                    separatorBuilder: (_, _) =>
+                                        const SizedBox(height: 10),
+                                    itemBuilder: (_, i) => _RequestCard(
+                                      request: paged[i],
+                                      onRefresh: () =>
+                                          ref.invalidate(_amcRequestsProvider),
+                                    ),
+                                  ),
+                                ),
+                                PaginationBar(
+                                  totalItems: requests.length,
+                                  currentPage: _schedulingPage,
+                                  pageSize: _pageSize,
+                                  onPageChanged: (p) => setState(() => _schedulingPage = p),
+                                ),
+                              ],
                             );
                           },
                         ),
@@ -856,7 +876,7 @@ class _AmcSchedulingRequestsPageState
                               selected: _cancellationFilter == 'pending',
                               color: AppColors.warning,
                               onTap: () => setState(
-                                () => _cancellationFilter = 'pending',
+                                () { _cancellationFilter = 'pending'; _cancellationPage = 1; },
                               ),
                             ),
                             const SizedBox(width: 8),
@@ -865,7 +885,7 @@ class _AmcSchedulingRequestsPageState
                               selected: _cancellationFilter == 'approved',
                               color: AppColors.error,
                               onTap: () => setState(
-                                () => _cancellationFilter = 'approved',
+                                () { _cancellationFilter = 'approved'; _cancellationPage = 1; },
                               ),
                             ),
                             const SizedBox(width: 8),
@@ -874,7 +894,7 @@ class _AmcSchedulingRequestsPageState
                               selected: _cancellationFilter == 'rejected',
                               color: AppColors.textSecondary,
                               onTap: () => setState(
-                                () => _cancellationFilter = 'rejected',
+                                () { _cancellationFilter = 'rejected'; _cancellationPage = 1; },
                               ),
                             ),
                             const SizedBox(width: 8),
@@ -883,7 +903,7 @@ class _AmcSchedulingRequestsPageState
                               selected: _cancellationFilter == null,
                               color: AppColors.primary,
                               onTap: () =>
-                                  setState(() => _cancellationFilter = null),
+                                  setState(() { _cancellationFilter = null; _cancellationPage = 1; }),
                             ),
                           ],
                         ),
@@ -920,22 +940,35 @@ class _AmcSchedulingRequestsPageState
                                 filter: _cancellationFilter,
                               );
                             }
-                            return ListView.separated(
-                              padding: const EdgeInsets.fromLTRB(24, 8, 24, 32),
-                              itemCount: requests.length,
-                              separatorBuilder: (_, _) =>
-                                  const SizedBox(height: 10),
-                              itemBuilder: (_, i) => _CancellationRequestCard(
-                                request: requests[i],
-                                onRefresh: () {
-                                  ref.invalidate(
-                                    _amcCancellationRequestsProvider,
-                                  );
-                                  ref
-                                      .read(bookingsNotifierProvider.notifier)
-                                      .refresh();
-                                },
-                              ),
+                            final paged = requests.skip((_cancellationPage - 1) * _pageSize).take(_pageSize).toList();
+                            return Column(
+                              children: [
+                                Expanded(
+                                  child: ListView.separated(
+                                    padding: const EdgeInsets.fromLTRB(24, 8, 24, 8),
+                                    itemCount: paged.length,
+                                    separatorBuilder: (_, _) =>
+                                        const SizedBox(height: 10),
+                                    itemBuilder: (_, i) => _CancellationRequestCard(
+                                      request: paged[i],
+                                      onRefresh: () {
+                                        ref.invalidate(
+                                          _amcCancellationRequestsProvider,
+                                        );
+                                        ref
+                                            .read(bookingsNotifierProvider.notifier)
+                                            .refresh();
+                                      },
+                                    ),
+                                  ),
+                                ),
+                                PaginationBar(
+                                  totalItems: requests.length,
+                                  currentPage: _cancellationPage,
+                                  pageSize: _pageSize,
+                                  onPageChanged: (p) => setState(() => _cancellationPage = p),
+                                ),
+                              ],
                             );
                           },
                         ),
@@ -983,7 +1016,7 @@ class _AmcSchedulingRequestsPageState
                                 selected: _pauseFilter == 'pending',
                                 color: AppColors.warning,
                                 onTap: () =>
-                                    setState(() => _pauseFilter = 'pending'),
+                                    setState(() { _pauseFilter = 'pending'; _pausePage = 1; }),
                               ),
                               const SizedBox(width: 8),
                               _StatusFilterChip(
@@ -991,7 +1024,7 @@ class _AmcSchedulingRequestsPageState
                                 selected: _pauseFilter == 'approved',
                                 color: const Color(0xFF2C7A7B),
                                 onTap: () =>
-                                    setState(() => _pauseFilter = 'approved'),
+                                    setState(() { _pauseFilter = 'approved'; _pausePage = 1; }),
                               ),
                               const SizedBox(width: 8),
                               _StatusFilterChip(
@@ -999,7 +1032,7 @@ class _AmcSchedulingRequestsPageState
                                 selected: _pauseFilter == 'rejected',
                                 color: AppColors.error,
                                 onTap: () =>
-                                    setState(() => _pauseFilter = 'rejected'),
+                                    setState(() { _pauseFilter = 'rejected'; _pausePage = 1; }),
                               ),
                               const SizedBox(width: 8),
                               _StatusFilterChip(
@@ -1007,7 +1040,7 @@ class _AmcSchedulingRequestsPageState
                                 selected: _pauseFilter == null,
                                 color: AppColors.primary,
                                 onTap: () =>
-                                    setState(() => _pauseFilter = null),
+                                    setState(() { _pauseFilter = null; _pausePage = 1; }),
                               ),
                             ],
                           ),
@@ -1023,7 +1056,7 @@ class _AmcSchedulingRequestsPageState
                                 selected: _resumeFilter == 'pending',
                                 color: AppColors.warning,
                                 onTap: () =>
-                                    setState(() => _resumeFilter = 'pending'),
+                                    setState(() { _resumeFilter = 'pending'; _resumePage = 1; }),
                               ),
                               const SizedBox(width: 8),
                               _StatusFilterChip(
@@ -1031,7 +1064,7 @@ class _AmcSchedulingRequestsPageState
                                 selected: _resumeFilter == 'approved',
                                 color: AppColors.success,
                                 onTap: () =>
-                                    setState(() => _resumeFilter = 'approved'),
+                                    setState(() { _resumeFilter = 'approved'; _resumePage = 1; }),
                               ),
                               const SizedBox(width: 8),
                               _StatusFilterChip(
@@ -1039,7 +1072,7 @@ class _AmcSchedulingRequestsPageState
                                 selected: _resumeFilter == 'rejected',
                                 color: AppColors.error,
                                 onTap: () =>
-                                    setState(() => _resumeFilter = 'rejected'),
+                                    setState(() { _resumeFilter = 'rejected'; _resumePage = 1; }),
                               ),
                               const SizedBox(width: 8),
                               _StatusFilterChip(
@@ -1047,7 +1080,7 @@ class _AmcSchedulingRequestsPageState
                                 selected: _resumeFilter == null,
                                 color: AppColors.primary,
                                 onTap: () =>
-                                    setState(() => _resumeFilter = null),
+                                    setState(() { _resumeFilter = null; _resumePage = 1; }),
                               ),
                             ],
                           ),
@@ -1088,22 +1121,30 @@ class _AmcSchedulingRequestsPageState
                                       label: 'pause',
                                     );
                                   }
-                                  return ListView.separated(
-                                    padding: const EdgeInsets.fromLTRB(
-                                      24,
-                                      8,
-                                      24,
-                                      32,
-                                    ),
-                                    itemCount: requests.length,
-                                    separatorBuilder: (_, _) =>
-                                        const SizedBox(height: 10),
-                                    itemBuilder: (_, i) => _PauseRequestCard(
-                                      request: requests[i],
-                                      onRefresh: () => ref.invalidate(
-                                        _amcPauseRequestsProvider,
+                                  final paged = requests.skip((_pausePage - 1) * _pageSize).take(_pageSize).toList();
+                                  return Column(
+                                    children: [
+                                      Expanded(
+                                        child: ListView.separated(
+                                          padding: const EdgeInsets.fromLTRB(24, 8, 24, 8),
+                                          itemCount: paged.length,
+                                          separatorBuilder: (_, _) =>
+                                              const SizedBox(height: 10),
+                                          itemBuilder: (_, i) => _PauseRequestCard(
+                                            request: paged[i],
+                                            onRefresh: () => ref.invalidate(
+                                              _amcPauseRequestsProvider,
+                                            ),
+                                          ),
+                                        ),
                                       ),
-                                    ),
+                                      PaginationBar(
+                                        totalItems: requests.length,
+                                        currentPage: _pausePage,
+                                        pageSize: _pageSize,
+                                        onPageChanged: (p) => setState(() => _pausePage = p),
+                                      ),
+                                    ],
                                   );
                                 },
                               )
@@ -1139,27 +1180,35 @@ class _AmcSchedulingRequestsPageState
                                       label: 'resume',
                                     );
                                   }
-                                  return ListView.separated(
-                                    padding: const EdgeInsets.fromLTRB(
-                                      24,
-                                      8,
-                                      24,
-                                      32,
-                                    ),
-                                    itemCount: requests.length,
-                                    separatorBuilder: (_, _) =>
-                                        const SizedBox(height: 10),
-                                    itemBuilder: (_, i) => _ResumeRequestCard(
-                                      request: requests[i],
-                                      onRefresh: () {
-                                        ref.invalidate(
-                                          _amcResumeRequestsProvider,
-                                        );
-                                        ref.invalidate(
-                                          _amcPauseRequestsProvider,
-                                        );
-                                      },
-                                    ),
+                                  final paged = requests.skip((_resumePage - 1) * _pageSize).take(_pageSize).toList();
+                                  return Column(
+                                    children: [
+                                      Expanded(
+                                        child: ListView.separated(
+                                          padding: const EdgeInsets.fromLTRB(24, 8, 24, 8),
+                                          itemCount: paged.length,
+                                          separatorBuilder: (_, _) =>
+                                              const SizedBox(height: 10),
+                                          itemBuilder: (_, i) => _ResumeRequestCard(
+                                            request: paged[i],
+                                            onRefresh: () {
+                                              ref.invalidate(
+                                                _amcResumeRequestsProvider,
+                                              );
+                                              ref.invalidate(
+                                                _amcPauseRequestsProvider,
+                                              );
+                                            },
+                                          ),
+                                        ),
+                                      ),
+                                      PaginationBar(
+                                        totalItems: requests.length,
+                                        currentPage: _resumePage,
+                                        pageSize: _pageSize,
+                                        onPageChanged: (p) => setState(() => _resumePage = p),
+                                      ),
+                                    ],
                                   );
                                 },
                               ),

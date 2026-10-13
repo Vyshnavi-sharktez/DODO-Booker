@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:geolocator/geolocator.dart';
 import '../../../../core/services/nominatim_service.dart';
 import '../../../../core/theme/app_theme.dart';
+import '../../../../core/widgets/phone_input_field.dart';
 import '../../domain/models/vendor.dart';
 import 'vendor_location_picker_dialog.dart';
 
@@ -70,7 +71,10 @@ class _VendorFormDialogState extends State<VendorFormDialog> {
     final e = widget.existing;
     _businessName = TextEditingController(text: e?.businessName ?? '');
     _ownerName = TextEditingController(text: e?.ownerName ?? '');
-    _phone = TextEditingController(text: e?.phone ?? '');
+    final phone = e?.phone ?? '';
+    _phone = TextEditingController(
+      text: phone.startsWith('+91') ? phone.substring(3) : phone,
+    );
     _email = TextEditingController(text: e?.email ?? '');
     _city = TextEditingController(text: e?.city ?? '');
     _address = TextEditingController(text: e?.address ?? '');
@@ -190,7 +194,7 @@ class _VendorFormDialogState extends State<VendorFormDialog> {
       await widget.onSave(
         businessName: _businessName.text.trim(),
         ownerName: _ownerName.text.trim().isEmpty ? null : _ownerName.text.trim(),
-        phone: _phone.text.trim(),
+        phone: '+91${_phone.text.trim()}',
         email: _email.text.trim(),
         city: _city.text.trim(),
         address: _address.text.trim().isEmpty ? null : _address.text.trim(),
@@ -329,24 +333,16 @@ class _VendorFormDialogState extends State<VendorFormDialog> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Expanded(
-                            child: TextFormField(
+                            child: PhoneInputField(
                               controller: _phone,
-                              decoration: const InputDecoration(
-                                labelText: 'Phone *',
-                                hintText: 'Phone Number',
-                                prefixIcon: Icon(Icons.phone_rounded),
-                              ),
-                              keyboardType: TextInputType.phone,
-                              inputFormatters: [
-                                FilteringTextInputFormatter.allow(
-                                    RegExp(r'[\d\+\-\s\(\)]')),
-                              ],
+                              labelText: 'Phone *',
+                              hintText: 'Phone Number',
                               validator: (v) {
                                 if (v == null || v.trim().isEmpty) {
                                   return 'Required';
                                 }
-                                if (v.replaceAll(RegExp(r'\D'), '').length < 10) {
-                                  return 'Min 10 digits';
+                                if (v.trim().length < 10) {
+                                  return 'Enter a valid 10-digit number';
                                 }
                                 return null;
                               },

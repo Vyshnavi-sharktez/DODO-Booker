@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/admin_search_bar.dart';
 import '../../../../core/widgets/highlighted_text.dart';
+import '../../../../core/widgets/pagination_bar.dart';
 import '../../../../features/auth/application/providers/auth_provider.dart';
 import '../../../bookings/application/providers/bookings_providers.dart';
 import '../../../bookings/domain/models/booking.dart';
@@ -37,6 +38,8 @@ class _VendorAssignmentPageState
     extends ConsumerState<VendorAssignmentPage> {
   String _searchQuery = '';
   _AssignFilter _filter = _AssignFilter.all;
+  int _page = 1;
+  static const int _pageSize = 10;
 
   // ── Helpers ────────────────────────────────────────────────────────────────
 
@@ -329,41 +332,41 @@ class _VendorAssignmentPageState
               AdminSearchBar(
                 hintText: 'Search booking number…',
                 width: 240,
-                onChanged: (q) => setState(() => _searchQuery = q),
+                onChanged: (q) => setState(() { _searchQuery = q; _page = 1; }),
               ),
               _Chip(
                 label: 'All',
                 selected: _filter == _AssignFilter.all,
                 onTap: () =>
-                    setState(() => _filter = _AssignFilter.all),
+                    setState(() { _filter = _AssignFilter.all; _page = 1; }),
               ),
               _Chip(
                 label: 'Unassigned',
                 selected: _filter == _AssignFilter.pending,
                 color: const Color(0xFFDD6B20),
                 onTap: () =>
-                    setState(() => _filter = _AssignFilter.pending),
+                    setState(() { _filter = _AssignFilter.pending; _page = 1; }),
               ),
               _Chip(
                 label: 'Assigned',
                 selected: _filter == _AssignFilter.assigned,
                 color: const Color(0xFF3182CE),
                 onTap: () =>
-                    setState(() => _filter = _AssignFilter.assigned),
+                    setState(() { _filter = _AssignFilter.assigned; _page = 1; }),
               ),
               _Chip(
                 label: 'In Progress',
                 selected: _filter == _AssignFilter.inProgress,
                 color: AppColors.success,
                 onTap: () => setState(
-                    () => _filter = _AssignFilter.inProgress),
+                    () { _filter = _AssignFilter.inProgress; _page = 1; }),
               ),
               _Chip(
                 label: 'Rejected',
                 selected: _filter == _AssignFilter.rejected,
                 color: AppColors.error,
                 onTap: () =>
-                    setState(() => _filter = _AssignFilter.rejected),
+                    setState(() { _filter = _AssignFilter.rejected; _page = 1; }),
               ),
             ],
           ),
@@ -431,6 +434,7 @@ class _VendorAssignmentPageState
                     ? all.where((b) => b.id == focusBookingId).firstOrNull
                     : null;
 
+                final paged = filtered.skip((_page - 1) * _pageSize).take(_pageSize).toList();
                 return Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
@@ -475,7 +479,7 @@ class _VendorAssignmentPageState
                     ],
                     Expanded(
                       child: _AssignmentTable(
-                        bookings: filtered,
+                        bookings: paged,
                         totalCount: all.length,
                         focusBookingId: focusBookingId,
                         customerNameResolver: _customerName,
@@ -484,6 +488,12 @@ class _VendorAssignmentPageState
                         onHistory: _openHistoryDialog,
                         searchQuery: _searchQuery,
                       ),
+                    ),
+                    PaginationBar(
+                      totalItems: filtered.length,
+                      currentPage: _page,
+                      pageSize: _pageSize,
+                      onPageChanged: (p) => setState(() => _page = p),
                     ),
                   ],
                 );

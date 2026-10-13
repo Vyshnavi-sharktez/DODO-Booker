@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart' show NumberFormat;
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/clickable.dart';
+import '../../../../core/widgets/pagination_bar.dart';
 import '../../application/providers/vendor_settlement_providers.dart';
 import '../../domain/models/vendor_earnings_summary.dart';
 import '../widgets/settlement_create_dialog.dart';
@@ -21,6 +22,8 @@ class VendorSettlementPage extends ConsumerStatefulWidget {
 class _VendorSettlementPageState extends ConsumerState<VendorSettlementPage> {
   final _searchCtrl = TextEditingController();
   _SettlementFilter _filter = _SettlementFilter.all;
+  int _page = 1;
+  static const int _pageSize = 10;
 
   static final _moneyFmt = NumberFormat('#,##0.00', 'en_IN');
 
@@ -188,7 +191,7 @@ class _VendorSettlementPageState extends ConsumerState<VendorSettlementPage> {
                           height: 36,
                           child: TextField(
                             controller: _searchCtrl,
-                            onChanged: (_) => setState(() {}),
+                            onChanged: (_) => setState(() => _page = 1),
                             decoration: InputDecoration(
                               hintText: 'Search vendor…',
                               prefixIcon: const Icon(Icons.search, size: 18),
@@ -212,7 +215,7 @@ class _VendorSettlementPageState extends ConsumerState<VendorSettlementPage> {
                           label: 'All',
                           selected: _filter == _SettlementFilter.all,
                           onTap: () =>
-                              setState(() => _filter = _SettlementFilter.all),
+                              setState(() { _filter = _SettlementFilter.all; _page = 1; }),
                         ),
                         const SizedBox(width: 6),
                         _FilterChip(
@@ -220,21 +223,21 @@ class _VendorSettlementPageState extends ConsumerState<VendorSettlementPage> {
                           selected:
                               _filter == _SettlementFilter.pendingPayment,
                           onTap: () => setState(
-                              () => _filter = _SettlementFilter.pendingPayment),
+                              () { _filter = _SettlementFilter.pendingPayment; _page = 1; }),
                         ),
                         const SizedBox(width: 6),
                         _FilterChip(
                           label: 'Settled',
                           selected: _filter == _SettlementFilter.settled,
                           onTap: () => setState(
-                              () => _filter = _SettlementFilter.settled),
+                              () { _filter = _SettlementFilter.settled; _page = 1; }),
                         ),
                         const SizedBox(width: 6),
                         _FilterChip(
                           label: 'No Earnings',
                           selected: _filter == _SettlementFilter.noEarnings,
                           onTap: () => setState(
-                              () => _filter = _SettlementFilter.noEarnings),
+                              () { _filter = _SettlementFilter.noEarnings; _page = 1; }),
                         ),
                         const SizedBox(width: 12),
                         IconButton(
@@ -283,10 +286,23 @@ class _VendorSettlementPageState extends ConsumerState<VendorSettlementPage> {
                             ),
                           );
                         }
-                        return _VendorTable(
-                          summaries: filtered,
-                          onSettle: _openSettleDialog,
-                          onHistory: _openHistoryDialog,
+                        final paged = filtered.skip((_page - 1) * _pageSize).take(_pageSize).toList();
+                        return Column(
+                          children: [
+                            Expanded(
+                              child: _VendorTable(
+                                summaries: paged,
+                                onSettle: _openSettleDialog,
+                                onHistory: _openHistoryDialog,
+                              ),
+                            ),
+                            PaginationBar(
+                              totalItems: filtered.length,
+                              currentPage: _page,
+                              pageSize: _pageSize,
+                              onPageChanged: (p) => setState(() => _page = p),
+                            ),
+                          ],
                         );
                       },
                     ),

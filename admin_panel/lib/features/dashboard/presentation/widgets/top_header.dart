@@ -350,25 +350,6 @@ class _NotificationsPanelDialogState
                           ),
                         ),
                         const Spacer(),
-                        state.whenOrNull(
-                          data: (items) {
-                            final unread =
-                                items.where((n) => !n.isRead).toList();
-                            if (unread.isEmpty) return null;
-                            return TextButton(
-                              onPressed: () => ref
-                                  .read(notificationsNotifierProvider
-                                      .notifier)
-                                  .bulkMarkAsRead(
-                                      unread.map((n) => n.id).toList()),
-                              style: TextButton.styleFrom(
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 10, vertical: 4),
-                                  textStyle: const TextStyle(fontSize: 12)),
-                              child: const Text('Mark all read'),
-                            );
-                          },
-                        ) ?? const SizedBox.shrink(),
                         IconButton(
                           onPressed: () => Navigator.of(context).pop(),
                           icon: const Icon(Icons.close_rounded, size: 18),
@@ -434,15 +415,6 @@ class _NotificationsPanelDialogState
                               onTap: n.entityType != null
                                   ? () => _handleTap(n)
                                   : null,
-                              onToggleRead: () => ref
-                                  .read(notificationsNotifierProvider
-                                      .notifier)
-                                  .toggleRead(n.id,
-                                      currentIsRead: n.isRead),
-                              onDelete: () => ref
-                                  .read(notificationsNotifierProvider
-                                      .notifier)
-                                  .deleteNotification(n.id),
                             );
                           },
                         );
@@ -461,14 +433,10 @@ class _NotificationsPanelDialogState
 
 class _NotificationTile extends StatelessWidget {
   final AppNotification notification;
-  final VoidCallback onToggleRead;
-  final VoidCallback onDelete;
   final VoidCallback? onTap;
 
   const _NotificationTile({
     required this.notification,
-    required this.onToggleRead,
-    required this.onDelete,
     this.onTap,
   });
 
@@ -538,39 +506,6 @@ class _NotificationTile extends StatelessWidget {
                 ),
               ),
 
-              const SizedBox(width: 4),
-              Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  IconButton(
-                    onPressed: onToggleRead,
-                    icon: Icon(
-                      n.isRead
-                          ? Icons.mark_email_unread_rounded
-                          : Icons.mark_email_read_rounded,
-                      size: 15,
-                      color: n.isRead
-                          ? AppColors.textSecondary
-                          : const Color(0xFF3182CE),
-                    ),
-                    tooltip: n.isRead ? 'Mark unread' : 'Mark read',
-                    visualDensity: VisualDensity.compact,
-                    padding: EdgeInsets.zero,
-                    constraints:
-                        const BoxConstraints(minWidth: 28, minHeight: 28),
-                  ),
-                  IconButton(
-                    onPressed: onDelete,
-                    icon: Icon(Icons.delete_outline_rounded,
-                        size: 15, color: AppColors.error),
-                    tooltip: 'Delete',
-                    visualDensity: VisualDensity.compact,
-                    padding: EdgeInsets.zero,
-                    constraints:
-                        const BoxConstraints(minWidth: 28, minHeight: 28),
-                  ),
-                ],
-              ),
             ],
           ),
         ),

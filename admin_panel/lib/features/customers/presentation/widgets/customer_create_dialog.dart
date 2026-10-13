@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/image_upload_field.dart';
+import '../../../../core/widgets/phone_input_field.dart';
+import '../../../vendors/presentation/widgets/vendor_location_picker_dialog.dart';
 
 class CustomerCreateDialog extends StatefulWidget {
   final Future<void> Function({
@@ -18,6 +20,8 @@ class CustomerCreateDialog extends StatefulWidget {
       String pincode,
       String landmark,
       bool isDefault,
+      double? latitude,
+      double? longitude,
     })> addresses,
   }) onSave;
 
@@ -43,6 +47,8 @@ class _AddressEntry {
   final TextEditingController pincode;
   final TextEditingController landmark;
   bool isDefault = false;
+  double? latitude;
+  double? longitude;
 
   void dispose() {
     line1.dispose();
@@ -116,11 +122,13 @@ class _CustomerCreateDialogState extends State<CustomerCreateDialog> {
             pincode: a.pincode.text.trim(),
             landmark: a.landmark.text.trim(),
             isDefault: a.isDefault,
+            latitude: a.latitude,
+            longitude: a.longitude,
           )).toList();
 
       await widget.onSave(
         fullName: _fullName.text.trim(),
-        phone: _phone.text.trim(),
+        phone: '+91${_phone.text.trim()}',
         email: _email.text.trim(),
         profileImageUrl: _profileImageUrl,
         isActive: _isActive,
@@ -246,14 +254,10 @@ class _CustomerCreateDialogState extends State<CustomerCreateDialog> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Expanded(
-                            child: TextFormField(
+                            child: PhoneInputField(
                               controller: _phone,
-                              decoration: const InputDecoration(
-                                labelText: 'Phone *',
-                                hintText: 'Phone Number',
-                                prefixIcon: Icon(Icons.phone_rounded),
-                              ),
-                              keyboardType: TextInputType.phone,
+                              labelText: 'Phone *',
+                              hintText: 'Phone Number',
                               validator: (v) =>
                                   v == null || v.trim().isEmpty
                                       ? 'Phone is required'
@@ -479,6 +483,33 @@ class _AddressCard extends StatefulWidget {
 }
 
 class _AddressCardState extends State<_AddressCard> {
+  Future<void> _pickFromMap() async {
+    final result = await showDialog<VendorLocationPickerResult>(
+      context: context,
+      builder: (_) => VendorLocationPickerDialog(
+        initialLatitude: widget.entry.latitude,
+        initialLongitude: widget.entry.longitude,
+      ),
+    );
+    if (result != null && mounted) {
+      widget.entry.latitude = result.latitude;
+      widget.entry.longitude = result.longitude;
+      if (result.address?.isNotEmpty == true) {
+        widget.entry.line1.text = result.address!;
+      }
+      if (result.city?.isNotEmpty == true) {
+        widget.entry.city.text = result.city!;
+      }
+      if (result.state?.isNotEmpty == true) {
+        widget.entry.state.text = result.state!;
+      }
+      if (result.pincode?.isNotEmpty == true) {
+        widget.entry.pincode.text = result.pincode!;
+      }
+      setState(() {});
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -530,7 +561,24 @@ class _AddressCardState extends State<_AddressCard> {
                 ),
               ],
               const Spacer(),
-              if (widget.canRemove)
+              IconButton(
+                onPressed: _pickFromMap,
+                icon: Icon(
+                  Icons.map_outlined,
+                  size: 16,
+                  color: widget.entry.latitude != null
+                      ? AppColors.primary
+                      : AppColors.textSecondary,
+                ),
+                tooltip: widget.entry.latitude != null
+                    ? 'Location set — re-pick on map'
+                    : 'Pick on map',
+                visualDensity: VisualDensity.compact,
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(),
+              ),
+              if (widget.canRemove) ...[
+                const SizedBox(width: 4),
                 IconButton(
                   onPressed: widget.onRemove,
                   icon: const Icon(Icons.remove_circle_outline_rounded,
@@ -541,6 +589,7 @@ class _AddressCardState extends State<_AddressCard> {
                   padding: EdgeInsets.zero,
                   constraints: const BoxConstraints(),
                 ),
+              ],
             ],
           ),
           const SizedBox(height: 12),

@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import '../../../../core/rbac/permission_guard.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/admin_search_bar.dart';
+import '../../../../core/widgets/pagination_bar.dart';
 import '../../application/refund_providers.dart';
 import '../../domain/models/refund_request.dart';
 import '../widgets/refund_detail_dialog.dart';
@@ -17,6 +18,9 @@ class RefundRequestsPage extends ConsumerStatefulWidget {
 }
 
 class _RefundRequestsPageState extends ConsumerState<RefundRequestsPage> {
+  int _page = 1;
+  static const int _pageSize = 10;
+
   static const _statusTabs = [
     ('all', 'All'),
     ('awaiting_refund', 'Awaiting Refund'),
@@ -118,9 +122,10 @@ class _RefundRequestsPageState extends ConsumerState<RefundRequestsPage> {
                 // Search
                 AdminSearchBar(
                   hintText: 'Search by ticket #, booking #, customer…',
-                  onChanged: (v) => ref
-                      .read(refundSearchQueryProvider.notifier)
-                      .state = v,
+                  onChanged: (v) {
+                    ref.read(refundSearchQueryProvider.notifier).state = v;
+                    setState(() => _page = 1);
+                  },
                 ),
                 const SizedBox(height: 12),
                 // Status tabs
@@ -135,9 +140,10 @@ class _RefundRequestsPageState extends ConsumerState<RefundRequestsPage> {
                         child: ChoiceChip(
                           label: Text(label),
                           selected: selected,
-                          onSelected: (_) => ref
-                              .read(refundStatusFilterProvider.notifier)
-                              .state = key,
+                          onSelected: (_) {
+                            ref.read(refundStatusFilterProvider.notifier).state = key;
+                            setState(() => _page = 1);
+                          },
                           selectedColor:
                               AppColors.primary.withAlpha(25),
                           labelStyle: TextStyle(
@@ -174,9 +180,21 @@ class _RefundRequestsPageState extends ConsumerState<RefundRequestsPage> {
               loading: () => const Center(child: CircularProgressIndicator()),
               error: (e, _) => _ErrorView(error: e.toString(),
                   onRetry: () => ref.invalidate(refundRequestsProvider)),
-              data: (requests) => requests.isEmpty
-                  ? const _EmptyView()
-                  : _RefundTable(requests: requests),
+              data: (requests) {
+                if (requests.isEmpty) return const _EmptyView();
+                final paged = requests.skip((_page - 1) * _pageSize).take(_pageSize).toList();
+                return Column(
+                  children: [
+                    Expanded(child: _RefundTable(requests: paged)),
+                    PaginationBar(
+                      totalItems: requests.length,
+                      currentPage: _page,
+                      pageSize: _pageSize,
+                      onPageChanged: (p) => setState(() => _page = p),
+                    ),
+                  ],
+                );
+              },
             ),
           ),
         ],

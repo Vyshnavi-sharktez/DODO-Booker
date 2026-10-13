@@ -209,6 +209,13 @@ class _ServiceAvailabilityAreaDialogState
         if (addr.city != null && addr.city!.trim().isNotEmpty) {
           _cityCtrl.text = addr.city!.trim();
         }
+        if (!_showResults) {
+          final parts = <String>[
+            if (addr.line1 != null && addr.line1!.trim().isNotEmpty) addr.line1!.trim(),
+            if (addr.city != null && addr.city!.trim().isNotEmpty) addr.city!.trim(),
+          ];
+          if (parts.isNotEmpty) _searchCtrl.text = parts.join(', ');
+        }
       });
     } catch (e) {
       debugPrint('[ServiceAreaDialog] Reverse geocode error: $e');

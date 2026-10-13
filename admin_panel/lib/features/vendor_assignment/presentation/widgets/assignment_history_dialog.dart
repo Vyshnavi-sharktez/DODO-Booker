@@ -167,7 +167,9 @@ class AssignmentHistoryDialog extends ConsumerWidget {
                                       ? 'Final Accepted Vendor: ${acceptedRecord.vendor?.businessName ?? booking.vendorName}'
                                       : (booking.dispatchStatus == 'exhausted'
                                           ? 'No Vendor Accepted (Dispatch Exhausted)'
-                                          : 'Auto-Dispatching in Progress'),
+                                          : booking.dispatchStatus == 'dispatching'
+                                              ? 'Auto-Dispatching in Progress'
+                                              : 'No Dispatch Attempts Recorded'),
                                   style: TextStyle(
                                     fontSize: 14,
                                     fontWeight: FontWeight.bold,

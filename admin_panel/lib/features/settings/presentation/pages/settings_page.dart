@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../application/providers/settings_providers.dart';
@@ -7,7 +7,7 @@ import '../widgets/settings_section_card.dart';
 class SettingsPage extends ConsumerWidget {
   const SettingsPage({super.key});
 
-  // ── Section + field definitions ─────────────────────────────────────────────
+  // â”€â”€ Section + field definitions â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   //
   // To add a new setting:
   //   1. Add its key and default to kSettingDefaults (settings_defaults.dart)
@@ -84,7 +84,7 @@ class SettingsPage extends ConsumerWidget {
           label: 'Minimum Booking Amount',
           hint: '100',
           type: SettingFieldType.decimal,
-          unit: '₹',
+          unit: 'â‚¹',
           min: 0,
         ),
         SettingFieldDef(
@@ -92,7 +92,7 @@ class SettingsPage extends ConsumerWidget {
           label: 'Maximum Booking Amount',
           hint: '50000',
           type: SettingFieldType.decimal,
-          unit: '₹',
+          unit: 'â‚¹',
           min: 0,
         ),
         SettingFieldDef(
@@ -191,13 +191,13 @@ class SettingsPage extends ConsumerWidget {
           type: SettingFieldType.toggle,
         ),
         SettingFieldDef(
-          key: 'notification_retention_days',
+          key: 'notification_retention_hours',
           label: 'Notification Retention',
-          hint: 'Days to keep notifications before automatic deletion',
+          hint: 'Hours to keep notifications before automatic deletion (e.g. 6, 12, 24, 168)',
           type: SettingFieldType.integer,
-          unit: 'days',
+          unit: 'hrs',
           min: 1,
-          max: 365,
+          max: 8760,
         ),
       ],
     ),
@@ -276,7 +276,7 @@ class SettingsPage extends ConsumerWidget {
           label: 'Minimum Wallet Balance',
           hint: '0 = disabled',
           type: SettingFieldType.decimal,
-          unit: '₹',
+          unit: 'â‚¹',
           min: 0,
         ),
         SettingFieldDef(
@@ -290,7 +290,7 @@ class SettingsPage extends ConsumerWidget {
           label: 'Vendor Rejection Penalty Amount',
           hint: 'Deducted from vendor wallet upon rejection',
           type: SettingFieldType.decimal,
-          unit: '₹',
+          unit: 'â‚¹',
           min: 0,
         ),
         SettingFieldDef(
@@ -304,7 +304,7 @@ class SettingsPage extends ConsumerWidget {
           label: 'Vendor Cancellation Penalty Amount',
           hint: 'Deducted from vendor wallet upon cancellation',
           type: SettingFieldType.decimal,
-          unit: '₹',
+          unit: 'â‚¹',
           min: 0,
         ),
         SettingFieldDef(
@@ -318,7 +318,7 @@ class SettingsPage extends ConsumerWidget {
           label: 'Vendor No-Show Penalty Amount',
           hint: 'Deducted from vendor wallet upon no-show',
           type: SettingFieldType.decimal,
-          unit: '₹',
+          unit: 'â‚¹',
           min: 0,
         ),
       ],
@@ -380,7 +380,7 @@ class SettingsPage extends ConsumerWidget {
         SettingFieldDef(
           key: 'subscription_enabled',
           label: 'Enable Subscription Module',
-          hint: 'Master switch — enables subscription plans and enforcement',
+          hint: 'Master switch â€” enables subscription plans and enforcement',
           type: SettingFieldType.toggle,
         ),
         SettingFieldDef(
@@ -445,7 +445,7 @@ class SettingsPage extends ConsumerWidget {
   }
 }
 
-// ── Body ──────────────────────────────────────────────────────────────────────
+// â”€â”€ Body â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class _SettingsBody extends StatelessWidget {
   const _SettingsBody({required this.sections});
@@ -458,8 +458,10 @@ class _SettingsBody extends StatelessWidget {
       child: LayoutBuilder(
         builder: (context, constraints) {
           final twoCol = constraints.maxWidth >= 860;
+
+          Widget sectionGrid;
           if (!twoCol) {
-            return Column(
+            sectionGrid = Column(
               children: [
                 for (final s in sections) ...[
                   SettingsSectionCard(key: ValueKey(s.id), section: s),
@@ -467,52 +469,49 @@ class _SettingsBody extends StatelessWidget {
                 ],
               ],
             );
+          } else {
+            // Two-column layout: even-index sections on left, odd on right.
+            final pairs = sections.asMap().entries;
+            final left =
+                pairs.where((e) => e.key.isEven).map((e) => e.value).toList();
+            final right =
+                pairs.where((e) => e.key.isOdd).map((e) => e.value).toList();
+
+            sectionGrid = Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: Column(
+                    children: [
+                      for (final s in left) ...[
+                        SettingsSectionCard(key: ValueKey(s.id), section: s),
+                        const SizedBox(height: 20),
+                      ],
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 20),
+                Expanded(
+                  child: Column(
+                    children: [
+                      for (final s in right) ...[
+                        SettingsSectionCard(key: ValueKey(s.id), section: s),
+                        const SizedBox(height: 20),
+                      ],
+                    ],
+                  ),
+                ),
+              ],
+            );
           }
 
-          // Two-column layout: even-index sections on left, odd on right.
-          final pairs = sections.asMap().entries;
-          final left = pairs
-              .where((e) => e.key.isEven)
-              .map((e) => e.value)
-              .toList();
-          final right = pairs
-              .where((e) => e.key.isOdd)
-              .map((e) => e.value)
-              .toList();
-
-          return Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: Column(
-                  children: [
-                    for (final s in left) ...[
-                      SettingsSectionCard(key: ValueKey(s.id), section: s),
-                      const SizedBox(height: 20),
-                    ],
-                  ],
-                ),
-              ),
-              const SizedBox(width: 20),
-              Expanded(
-                child: Column(
-                  children: [
-                    for (final s in right) ...[
-                      SettingsSectionCard(key: ValueKey(s.id), section: s),
-                      const SizedBox(height: 20),
-                    ],
-                  ],
-                ),
-              ),
-            ],
-          );
+          return sectionGrid;
         },
       ),
     );
   }
 }
-
-// ── Error view ────────────────────────────────────────────────────────────────
+// â”€â”€ Error view â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class _ErrorView extends StatelessWidget {
   const _ErrorView({required this.error, required this.onRetry});

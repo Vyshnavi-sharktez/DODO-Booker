@@ -5,6 +5,7 @@ import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/admin_search_bar.dart';
 import '../../../../core/widgets/clickable.dart';
 import '../../../../core/widgets/highlighted_text.dart';
+import '../../../../core/widgets/pagination_bar.dart';
 import '../../application/providers/coupons_providers.dart';
 import '../../domain/models/coupon.dart';
 import '../widgets/coupon_form_dialog.dart';
@@ -40,6 +41,8 @@ class _CouponsPageState extends ConsumerState<CouponsPage> {
   String _searchQuery = '';
   _StatusFilter _statusFilter = _StatusFilter.all;
   String? _typeFilter;
+  int _page = 1;
+  static const int _pageSize = 10;
 
   List<Coupon> _applyFilters(List<Coupon> all) {
     var result = all;
@@ -279,7 +282,7 @@ class _CouponsPageState extends ConsumerState<CouponsPage> {
                 AdminSearchBar(
                   hintText: 'Search coupon code…',
                   width: 240,
-                  onChanged: (q) => setState(() => _searchQuery = q),
+                  onChanged: (q) => setState(() { _searchQuery = q; _page = 1; }),
                 ),
 
                 // Status filter chips
@@ -287,28 +290,28 @@ class _CouponsPageState extends ConsumerState<CouponsPage> {
                   label: 'All',
                   selected: _statusFilter == _StatusFilter.all,
                   onTap: () =>
-                      setState(() => _statusFilter = _StatusFilter.all),
+                      setState(() { _statusFilter = _StatusFilter.all; _page = 1; }),
                 ),
                 _FilterChip(
                   label: 'Active',
                   selected: _statusFilter == _StatusFilter.active,
                   color: const Color(0xFF38A169),
                   onTap: () =>
-                      setState(() => _statusFilter = _StatusFilter.active),
+                      setState(() { _statusFilter = _StatusFilter.active; _page = 1; }),
                 ),
                 _FilterChip(
                   label: 'Inactive',
                   selected: _statusFilter == _StatusFilter.inactive,
                   color: const Color(0xFF718096),
                   onTap: () => setState(
-                      () => _statusFilter = _StatusFilter.inactive),
+                      () { _statusFilter = _StatusFilter.inactive; _page = 1; }),
                 ),
                 _FilterChip(
                   label: 'Expired',
                   selected: _statusFilter == _StatusFilter.expired,
                   color: const Color(0xFFE53E3E),
                   onTap: () => setState(
-                      () => _statusFilter = _StatusFilter.expired),
+                      () { _statusFilter = _StatusFilter.expired; _page = 1; }),
                 ),
 
                 // Discount type filter
@@ -334,7 +337,7 @@ class _CouponsPageState extends ConsumerState<CouponsPage> {
                         ),
                       ),
                     ],
-                    onChanged: (v) => setState(() => _typeFilter = v),
+                    onChanged: (v) => setState(() { _typeFilter = v; _page = 1; }),
                   ),
                 ),
 
@@ -343,6 +346,7 @@ class _CouponsPageState extends ConsumerState<CouponsPage> {
                     onPressed: () => setState(() {
                       _statusFilter = _StatusFilter.all;
                       _typeFilter = null;
+                      _page = 1;
                     }),
                     icon: const Icon(Icons.filter_alt_off_rounded,
                         size: 16),
@@ -407,13 +411,26 @@ class _CouponsPageState extends ConsumerState<CouponsPage> {
                     sub: 'Try adjusting your search or filters.',
                   );
                 }
-                return _CouponsTable(
-                  coupons: filtered,
-                  totalCount: all.length,
-                  onEdit: _openEdit,
-                  onDelete: _confirmDelete,
-                  onToggle: _toggle,
-                  searchQuery: _searchQuery,
+                final paged = filtered.skip((_page - 1) * _pageSize).take(_pageSize).toList();
+                return Column(
+                  children: [
+                    Expanded(
+                      child: _CouponsTable(
+                        coupons: paged,
+                        totalCount: all.length,
+                        onEdit: _openEdit,
+                        onDelete: _confirmDelete,
+                        onToggle: _toggle,
+                        searchQuery: _searchQuery,
+                      ),
+                    ),
+                    PaginationBar(
+                      totalItems: filtered.length,
+                      currentPage: _page,
+                      pageSize: _pageSize,
+                      onPageChanged: (p) => setState(() => _page = p),
+                    ),
+                  ],
                 );
               },
             ),

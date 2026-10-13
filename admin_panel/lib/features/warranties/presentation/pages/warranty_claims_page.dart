@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import '../../../../core/theme/app_theme.dart';
+import '../../../../core/widgets/pagination_bar.dart';
 import '../../domain/models/service_warranty.dart';
 import '../../application/warranties_providers.dart';
 import '../widgets/warranty_claim_details_dialog.dart';
@@ -24,6 +25,8 @@ class _WarrantyClaimsPageState extends ConsumerState<WarrantyClaimsPage> {
   String _selectedStatusFilter = 'All Claims';
   String? _selectedVendorFilter;
   DateTime? _selectedDateFilter;
+  int _page = 1;
+  static const int _pageSize = 10;
 
   Future<void> _openBookingDetails(String bookingId) async {
     if (bookingId.isEmpty) return;
@@ -57,7 +60,7 @@ class _WarrantyClaimsPageState extends ConsumerState<WarrantyClaimsPage> {
       lastDate: DateTime(2030),
     );
     if (picked != null) {
-      setState(() => _selectedDateFilter = picked);
+      setState(() { _selectedDateFilter = picked; _page = 1; });
     }
   }
 
@@ -274,7 +277,7 @@ class _WarrantyClaimsPageState extends ConsumerState<WarrantyClaimsPage> {
                                       borderSide: const BorderSide(color: AppColors.border),
                                     ),
                                   ),
-                                  onChanged: (val) => setState(() => _searchQuery = val.trim()),
+                                  onChanged: (val) => setState(() { _searchQuery = val.trim(); _page = 1; }),
                                 ),
                               ),
                               const SizedBox(width: 8),
@@ -295,7 +298,7 @@ class _WarrantyClaimsPageState extends ConsumerState<WarrantyClaimsPage> {
                                     const DropdownMenuItem(value: null, child: Text('All Vendors')),
                                     ...vendors.map((v) => DropdownMenuItem(value: v.businessName, child: Text(v.businessName))),
                                   ],
-                                  onChanged: (val) => setState(() => _selectedVendorFilter = val),
+                                  onChanged: (val) => setState(() { _selectedVendorFilter = val; _page = 1; }),
                                 ),
                               ),
                               const SizedBox(width: 8),
@@ -328,6 +331,7 @@ class _WarrantyClaimsPageState extends ConsumerState<WarrantyClaimsPage> {
                                           _selectedStatusFilter = 'All Claims';
                                           _selectedVendorFilter = null;
                                           _selectedDateFilter = null;
+                                          _page = 1;
                                         }),
                                         icon: const Icon(Icons.filter_alt_off_rounded, size: 16),
                                         label: const Text('Clear'),
@@ -372,7 +376,7 @@ class _WarrantyClaimsPageState extends ConsumerState<WarrantyClaimsPage> {
                                     color: isSelected ? Colors.white : AppColors.textPrimary,
                                   ),
                                   onSelected: (sel) {
-                                    if (sel) setState(() => _selectedStatusFilter = filter);
+                                    if (sel) setState(() { _selectedStatusFilter = filter; _page = 1; });
                                   },
                                 );
                               }),
@@ -432,7 +436,7 @@ class _WarrantyClaimsPageState extends ConsumerState<WarrantyClaimsPage> {
                                   DataColumn(label: Text('Claim Date', style: TextStyle(fontWeight: FontWeight.bold))),
                                   DataColumn(label: Text('Actions', style: TextStyle(fontWeight: FontWeight.bold))),
                                 ],
-                                rows: filtered.map((warranty) {
+                                rows: filtered.skip((_page - 1) * _pageSize).take(_pageSize).map((warranty) {
                                   return _buildWarrantyRow(context, warranty);
                                 }).toList(),
                               ),
@@ -440,6 +444,12 @@ class _WarrantyClaimsPageState extends ConsumerState<WarrantyClaimsPage> {
                           ],
                         ],
                       ),
+                    ),
+                    PaginationBar(
+                      totalItems: filtered.length,
+                      currentPage: _page,
+                      pageSize: _pageSize,
+                      onPageChanged: (p) => setState(() => _page = p),
                     ),
                   ],
                 );

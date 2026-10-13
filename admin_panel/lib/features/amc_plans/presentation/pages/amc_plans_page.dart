@@ -6,6 +6,7 @@ import '../../../../../core/widgets/admin_search_bar.dart';
 import '../../application/providers/amc_plans_providers.dart';
 import '../../domain/models/amc_plan.dart';
 import '../widgets/amc_plan_form_dialog.dart';
+import '../../../../../core/widgets/pagination_bar.dart';
 
 class AmcPlansPage extends ConsumerStatefulWidget {
   const AmcPlansPage({super.key});
@@ -16,6 +17,8 @@ class AmcPlansPage extends ConsumerStatefulWidget {
 
 class _AmcPlansPageState extends ConsumerState<AmcPlansPage> {
   String _searchQuery = '';
+  int _page = 1;
+  static const int _pageSize = 10;
   static final _currency =
       NumberFormat.currency(locale: 'en_IN', symbol: '₹', decimalDigits: 2);
 
@@ -189,7 +192,7 @@ class _AmcPlansPageState extends ConsumerState<AmcPlansPage> {
             AdminSearchBar(
               hintText: 'Search plans…',
               onChanged: (q) =>
-                  setState(() => _searchQuery = q.toLowerCase()),
+                  setState(() { _searchQuery = q.toLowerCase(); _page = 1; }),
             ),
             const SizedBox(height: 16),
 
@@ -231,7 +234,11 @@ class _AmcPlansPageState extends ConsumerState<AmcPlansPage> {
                     );
                   }
 
-                  return Card(
+                  final paged = list.skip((_page - 1) * _pageSize).take(_pageSize).toList();
+                  return Column(
+                    children: [
+                    Expanded(
+                    child: Card(
                     elevation: 0,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12),
@@ -262,7 +269,7 @@ class _AmcPlansPageState extends ConsumerState<AmcPlansPage> {
                               DataColumn(label: Text('Status')),
                               DataColumn(label: Text('Actions')),
                             ],
-                            rows: list.map((plan) {
+                            rows: paged.map((plan) {
                               return DataRow(cells: [
                                 DataCell(
                                   Text(
@@ -359,7 +366,14 @@ class _AmcPlansPageState extends ConsumerState<AmcPlansPage> {
                         ),
                       ),
                     ),
-                  );
+                  )),
+                  PaginationBar(
+                    totalItems: list.length,
+                    currentPage: _page,
+                    pageSize: _pageSize,
+                    onPageChanged: (p) => setState(() => _page = p),
+                  ),
+                  ]);
                 },
               ),
             ),

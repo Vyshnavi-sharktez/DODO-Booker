@@ -8,6 +8,7 @@ import '../../../core/widgets/clickable.dart';
 import '../../../core/widgets/page_sheet.dart';
 import '../models/cart_item.dart';
 import '../providers/cart_provider.dart';
+import '../providers/saved_carts_provider.dart';
 import '../widgets/min_order_card.dart';
 import '../widgets/service_unavailable_dialog.dart';
 import '../../auth/utils/auth_modal_gate.dart';
@@ -98,6 +99,7 @@ class _CartScreenState extends ConsumerState<CartScreen> {
   Widget build(BuildContext context) {
     final items = ref.watch(cartProvider);
     final subtotal = ref.watch(cartSubtotalProvider);
+    final savedCarts = ref.watch(savedCartsProvider);
 
     if (widget.inModal) {
       return _ModalBody(items: items, subtotal: subtotal);
@@ -126,20 +128,32 @@ class _CartScreenState extends ConsumerState<CartScreen> {
             ),
         ],
       ),
-      body: items.isEmpty
+      // When both active cart and saved carts are empty show the full-screen
+      // empty state. Otherwise always show the saved-carts strip above the
+      // content so the customer can switch to any saved cart.
+      body: savedCarts.isEmpty && items.isEmpty
           ? const _EmptyCart()
-          : ListView(
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+          : Column(
               children: [
-                ...items.map((item) => Padding(
-                      padding: const EdgeInsets.only(bottom: 12),
-                      child: _CartItemCard(item: item),
-                    )),
-                const SizedBox(height: 8),
-                _CartSummaryCard(items: items, subtotal: subtotal),
-                const _CartRecommendations(),
-                // Padding so the sticky bar doesn't overlap the last row
-                const SizedBox(height: 84),
+                const _SavedCartsStrip(),
+                Expanded(
+                  child: items.isEmpty
+                      ? const _EmptyCart()
+                      : ListView(
+                          padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+                          children: [
+                            ...items.map((item) => Padding(
+                                  padding: const EdgeInsets.only(bottom: 12),
+                                  child: _CartItemCard(item: item),
+                                )),
+                            const SizedBox(height: 8),
+                            _CartSummaryCard(items: items, subtotal: subtotal),
+                            const _CartRecommendations(),
+                            // Padding so the sticky bar doesn't overlap the last row
+                            const SizedBox(height: 84),
+                          ],
+                        ),
+                ),
               ],
             ),
       bottomNavigationBar:
@@ -186,6 +200,9 @@ class _ModalBody extends ConsumerWidget {
             ),
           ),
 
+        // Saved carts strip — visible whenever other carts are saved
+        const _SavedCartsStrip(),
+
         Expanded(
           child: items.isEmpty
               ? const _EmptyCart(inModal: true)
@@ -205,6 +222,91 @@ class _ModalBody extends ConsumerWidget {
 
         if (items.isNotEmpty) _ModalCheckoutBar(subtotal: subtotal),
       ],
+    );
+  }
+}
+
+// ── Saved carts strip ─────────────────────────────────────────────────────────
+//
+// Shown at the top of the cart when the customer has carts from other root
+// categories. Tapping a chip switches that cart to active.
+
+class _SavedCartsStrip extends ConsumerWidget {
+  const _SavedCartsStrip();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final savedCarts = ref.watch(savedCartsProvider);
+    if (savedCarts.isEmpty) return const SizedBox.shrink();
+
+    final tt = Theme.of(context).textTheme;
+    return Container(
+      color: AppColors.surface,
+      padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            'Saved carts',
+            style: tt.labelSmall?.copyWith(
+              color: AppColors.textSecondary,
+              fontWeight: FontWeight.w600,
+              letterSpacing: 0.4,
+            ),
+          ),
+          const SizedBox(height: 8),
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: [
+                for (final entry in savedCarts.entries)
+                  Padding(
+                    padding: const EdgeInsets.only(right: 8),
+                    child: _SavedCartChip(
+                      rootCategoryId: entry.key,
+                      items: entry.value,
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SavedCartChip extends ConsumerWidget {
+  final String rootCategoryId;
+  final List<CartItem> items;
+
+  const _SavedCartChip({
+    required this.rootCategoryId,
+    required this.items,
+  });
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final nodeAsync = ref.watch(catalogNodeProvider(rootCategoryId));
+    final name = nodeAsync.valueOrNull?.name;
+    final totalQty = items.fold<int>(0, (s, i) => s + i.quantity);
+    final label = name != null
+        ? '$name ($totalQty ${totalQty == 1 ? 'item' : 'items'})'
+        : '${items.first.serviceName.split(' ').first} ($totalQty)';
+
+    return ActionChip(
+      avatar: const Icon(Icons.shopping_cart_outlined, size: 14),
+      label: Text(label),
+      onPressed: () =>
+          ref.read(cartProvider.notifier).switchToCart(rootCategoryId),
+      backgroundColor: AppColors.primaryLight,
+      side: const BorderSide(color: AppColors.primary, width: 0.8),
+      labelStyle: Theme.of(context).textTheme.labelMedium?.copyWith(
+            color: AppColors.primary,
+            fontWeight: FontWeight.w600,
+          ),
+      visualDensity: VisualDensity.compact,
     );
   }
 }

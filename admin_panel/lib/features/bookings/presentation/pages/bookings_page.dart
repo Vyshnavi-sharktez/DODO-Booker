@@ -22,6 +22,7 @@ import '../widgets/booking_assignment_dialog.dart';
 import '../widgets/booking_edit_dialog.dart';
 import '../widgets/create_booking_dialog.dart';
 import '../../../../core/rbac/permission_guard.dart';
+import '../../../../core/widgets/pagination_bar.dart';
 
 // ── Column widths ─────────────────────────────────────────────────────────────
 // Fixed columns sum to 970px. The Actions column uses Expanded (no fixed width)
@@ -170,7 +171,7 @@ class _AmcContractAggregate {
   String get serviceName {
     if (visits.isEmpty) return '';
     final first = visits.first;
-    if (first.items.isNotEmpty) return first.items.first.serviceName;
+    if (first.items.isNotEmpty) return first.items.first.displayName;
     final notes = first.notes;
     if (notes == null) return '';
     final idx = notes.indexOf(' · ');
@@ -224,6 +225,8 @@ class _BookingsPageState extends ConsumerState<BookingsPage> {
   String? _statusFilter;
   String? _assignedToFilter; // null = All, _kUnassigned = Unassigned, vendorId = specific vendor
   DateTime? _dateFilter;
+  int _page = 1;
+  static const int _pageSize = 10;
 
   // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -368,7 +371,7 @@ class _BookingsPageState extends ConsumerState<BookingsPage> {
       firstDate: DateTime(2020),
       lastDate: DateTime(2030),
     );
-    if (picked != null) setState(() => _dateFilter = picked);
+    if (picked != null) setState(() { _dateFilter = picked; _page = 1; });
   }
 
   // ── Actions ──────────────────────────────────────────────────────────────────
@@ -1063,7 +1066,7 @@ class _BookingsPageState extends ConsumerState<BookingsPage> {
                 label: normalCount > 0 ? 'Normal Bookings ($normalCount)' : 'Normal Bookings',
                 icon: Icons.list_alt_rounded,
                 selected: _tab == 0,
-                onTap: () => setState(() { _tab = 0; _statusFilter = null; }),
+                onTap: () => setState(() { _tab = 0; _statusFilter = null; _page = 1; }),
               ),
               const SizedBox(width: 8),
               _TabButton(
@@ -1072,7 +1075,7 @@ class _BookingsPageState extends ConsumerState<BookingsPage> {
                     : 'AMC Bookings',
                 icon: Icons.autorenew_rounded,
                 selected: _tab == 1,
-                onTap: () => setState(() { _tab = 1; _statusFilter = null; }),
+                onTap: () => setState(() { _tab = 1; _statusFilter = null; _page = 1; }),
               ),
               const SizedBox(width: 8),
               _TabButton(
@@ -1081,7 +1084,7 @@ class _BookingsPageState extends ConsumerState<BookingsPage> {
                     : 'Warranty Reworks',
                 icon: Icons.shield_rounded,
                 selected: _tab == 2,
-                onTap: () => setState(() { _tab = 2; _statusFilter = null; }),
+                onTap: () => setState(() { _tab = 2; _statusFilter = null; _page = 1; }),
               ),
             ],
           ),
@@ -1097,7 +1100,7 @@ class _BookingsPageState extends ConsumerState<BookingsPage> {
               AdminSearchBar(
                 hintText: 'Search by booking ID, customer name or phone…',
                 width: 300,
-                onChanged: (q) => setState(() => _searchQuery = q),
+                onChanged: (q) => setState(() { _searchQuery = q; _page = 1; }),
               ),
 
               // Status
@@ -1136,7 +1139,7 @@ class _BookingsPageState extends ConsumerState<BookingsPage> {
                     ),
                   ],
                   onChanged: (v) =>
-                      setState(() => _statusFilter = v),
+                      setState(() { _statusFilter = v; _page = 1; }),
                 ),
               ),
 
@@ -1171,7 +1174,7 @@ class _BookingsPageState extends ConsumerState<BookingsPage> {
                     ),
                   ],
                   onChanged: (v) =>
-                      setState(() => _assignedToFilter = v),
+                      setState(() { _assignedToFilter = v; _page = 1; }),
                 ),
               ),
 
@@ -1209,7 +1212,7 @@ class _BookingsPageState extends ConsumerState<BookingsPage> {
                         const SizedBox(width: 6),
                         GestureDetector(
                           onTap: () =>
-                              setState(() => _dateFilter = null),
+                              setState(() { _dateFilter = null; _page = 1; }),
                           child: Icon(Icons.close_rounded,
                               size: 14,
                               color: AppColors.textSecondary),
@@ -1227,6 +1230,7 @@ class _BookingsPageState extends ConsumerState<BookingsPage> {
                     _statusFilter = null;
                     _assignedToFilter = null;
                     _dateFilter = null;
+                    _page = 1;
                   }),
                   icon: const Icon(Icons.filter_alt_off_rounded,
                       size: 16),
@@ -1296,18 +1300,31 @@ class _BookingsPageState extends ConsumerState<BookingsPage> {
                       sub: 'Try adjusting your search or filters.',
                     );
                   }
-                  return _BookingsTable(
-                    bookings: filtered,
-                    totalCount: regular.length,
-                    vendors: vendors,
-                    onView: _openDetails,
-                    onEdit: _openEditDialog,
-                    onAssign: _openAssignDialog,
-                    onHistory: _openHistoryDialog,
-                    onStartDodoService: _startDodoService,
-                    onCancel: _confirmCancel,
-                    onDelete: _confirmDelete,
-                    searchQuery: _searchQuery,
+                  final paged = filtered.skip((_page - 1) * _pageSize).take(_pageSize).toList();
+                  return Column(
+                    children: [
+                      Expanded(
+                        child: _BookingsTable(
+                          bookings: paged,
+                          totalCount: regular.length,
+                          vendors: vendors,
+                          onView: _openDetails,
+                          onEdit: _openEditDialog,
+                          onAssign: _openAssignDialog,
+                          onHistory: _openHistoryDialog,
+                          onStartDodoService: _startDodoService,
+                          onCancel: _confirmCancel,
+                          onDelete: _confirmDelete,
+                          searchQuery: _searchQuery,
+                        ),
+                      ),
+                      PaginationBar(
+                        totalItems: filtered.length,
+                        currentPage: _page,
+                        pageSize: _pageSize,
+                        onPageChanged: (p) => setState(() => _page = p),
+                      ),
+                    ],
                   );
                 } else if (_tab == 1) {
                   // ── AMC Bookings (contract-level) ─────────────────────────
@@ -1373,18 +1390,31 @@ class _BookingsPageState extends ConsumerState<BookingsPage> {
                       sub: 'Try adjusting your search or filters.',
                     );
                   }
-                  return _BookingsTable(
-                    bookings: filtered,
-                    totalCount: reworks.length,
-                    vendors: vendors,
-                    onView: _openDetails,
-                    onEdit: _openEditDialog,
-                    onAssign: _openAssignDialog,
-                    onHistory: _openHistoryDialog,
-                    onStartDodoService: _startDodoService,
-                    onCancel: null,
-                    onDelete: _confirmDelete,
-                    searchQuery: _searchQuery,
+                  final paged = filtered.skip((_page - 1) * _pageSize).take(_pageSize).toList();
+                  return Column(
+                    children: [
+                      Expanded(
+                        child: _BookingsTable(
+                          bookings: paged,
+                          totalCount: reworks.length,
+                          vendors: vendors,
+                          onView: _openDetails,
+                          onEdit: _openEditDialog,
+                          onAssign: _openAssignDialog,
+                          onHistory: _openHistoryDialog,
+                          onStartDodoService: _startDodoService,
+                          onCancel: null,
+                          onDelete: _confirmDelete,
+                          searchQuery: _searchQuery,
+                        ),
+                      ),
+                      PaginationBar(
+                        totalItems: filtered.length,
+                        currentPage: _page,
+                        pageSize: _pageSize,
+                        onPageChanged: (p) => setState(() => _page = p),
+                      ),
+                    ],
                   );
                 }
               },
@@ -1831,14 +1861,13 @@ class _BookingRow extends StatelessWidget {
                   tooltip: 'View details',
                   visualDensity: VisualDensity.compact,
                 ),
-                if (booking.status != 'cancelled')
-                  IconButton(
-                    onPressed: onEdit,
-                    icon: Icon(Icons.edit_outlined,
-                        size: 16, color: AppColors.textSecondary),
-                    tooltip: 'Edit booking',
-                    visualDensity: VisualDensity.compact,
-                  ),
+                IconButton(
+                  onPressed: onEdit,
+                  icon: Icon(Icons.edit_outlined,
+                      size: 16, color: AppColors.textSecondary),
+                  tooltip: 'Edit booking',
+                  visualDensity: VisualDensity.compact,
+                ),
                 if (_assignableStatuses.contains(booking.status))
                   IconButton(
                     onPressed: onAssign,
@@ -1852,13 +1881,14 @@ class _BookingRow extends StatelessWidget {
                     tooltip: booking.isUnassigned ? 'Assign' : 'Reassign',
                     visualDensity: VisualDensity.compact,
                   ),
-                IconButton(
-                  onPressed: onHistory,
-                  icon: Icon(Icons.history_rounded,
-                      size: 16, color: AppColors.textSecondary),
-                  tooltip: 'Assignment history',
-                  visualDensity: VisualDensity.compact,
-                ),
+                if (booking.dispatchStatus != 'idle')
+                  IconButton(
+                    onPressed: onHistory,
+                    icon: Icon(Icons.history_rounded,
+                        size: 16, color: AppColors.textSecondary),
+                    tooltip: 'Assignment history',
+                    visualDensity: VisualDensity.compact,
+                  ),
                 if (booking.status == 'assigned_to_dodo_team')
                   IconButton(
                     onPressed: onStartDodoService,
@@ -2037,9 +2067,9 @@ class _ServiceCell extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         Tooltip(
-          message: first.serviceName.isNotEmpty ? first.serviceName : '—',
+          message: first.displayName,
           child: Text(
-            first.serviceName.isNotEmpty ? first.serviceName : '—',
+            first.displayName,
             style: const TextStyle(
                 fontSize: 13, color: AppColors.textPrimary),
             overflow: TextOverflow.ellipsis,

@@ -7,14 +7,25 @@ import '../../../core/widgets/clickable.dart';
 import '../services/profile_providers.dart';
 import '../../../models/profile_model.dart';
 
-class EditProfileScreen extends ConsumerStatefulWidget {
-  const EditProfileScreen({super.key});
-
-  @override
-  ConsumerState<EditProfileScreen> createState() => _EditProfileScreenState();
+/// Shows the Edit Profile floating bottom-sheet modal.
+Future<void> showEditProfileModal(BuildContext context) {
+  return showModalBottomSheet(
+    context: context,
+    isScrollControlled: true,
+    useSafeArea: true,
+    backgroundColor: Colors.transparent,
+    builder: (_) => const _EditProfileSheet(),
+  );
 }
 
-class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
+class _EditProfileSheet extends ConsumerStatefulWidget {
+  const _EditProfileSheet();
+
+  @override
+  ConsumerState<_EditProfileSheet> createState() => _EditProfileSheetState();
+}
+
+class _EditProfileSheetState extends ConsumerState<_EditProfileSheet> {
   final _formKey = GlobalKey<FormState>();
   late final TextEditingController _nameCtrl;
   late final TextEditingController _emailCtrl;
@@ -30,8 +41,6 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
     _nameCtrl = TextEditingController();
     _emailCtrl = TextEditingController();
     _phoneCtrl = TextEditingController();
-
-    // Pre-fill with existing profile data once available
     final profileAsync = ref.read(profileProvider);
     profileAsync.whenData((profile) => _prefill(profile));
   }
@@ -52,28 +61,25 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
 
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
-
     setState(() {
       _isLoading = true;
       _isSaved = false;
       _errorMessage = null;
     });
-
     try {
       final service = ref.read(profileServiceProvider);
       await service.updateProfile(
         fullName: _nameCtrl.text.trim(),
         email: _emailCtrl.text.trim().isEmpty ? null : _emailCtrl.text.trim(),
       );
-
-      // Refresh the profile cache so ProfileScreen gets updated data
       ref.invalidate(profileProvider);
-
       if (mounted) {
         setState(() {
           _isLoading = false;
           _isSaved = true;
         });
+        await Future.delayed(const Duration(milliseconds: 800));
+        if (mounted) Navigator.of(context).pop();
       }
     } catch (e) {
       if (mounted) {
@@ -87,176 +93,204 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final tt = Theme.of(context).textTheme;
     final profileAsync = ref.watch(profileProvider);
+    final bottom = MediaQuery.viewInsetsOf(context).bottom;
 
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        title: const Text('Edit Profile'),
-        centerTitle: true,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_rounded),
-          onPressed: () => Navigator.of(context).pop(),
-        ),
+    return Container(
+      decoration: const BoxDecoration(
+        color: AppColors.background,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
-      body: profileAsync.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (_, _) => Center(
-          child: Text(
-            'Could not load profile data',
-            style: tt.bodyMedium,
+      padding: EdgeInsets.only(bottom: bottom),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // ── Drag handle ──────────────────────────────────────────────────
+          Padding(
+            padding: const EdgeInsets.only(top: 12, bottom: 4),
+            child: Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: AppColors.border,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
           ),
-        ),
-        data: (profile) {
-          // Pre-fill only if controllers are still empty (first render)
-          if (_nameCtrl.text.isEmpty && profile.fullName.isNotEmpty) {
-            _prefill(profile);
-          }
-          return LayoutBuilder(
-            builder: (context, constraints) {
-              final isWide = constraints.maxWidth > 600;
-              return Center(
-                child: ConstrainedBox(
-                  constraints: BoxConstraints(
-                    maxWidth: isWide ? 480 : double.infinity,
-                  ),
-                  child: SingleChildScrollView(
-                    padding: const EdgeInsets.all(24),
-                    child: Form(
-                      key: _formKey,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.center,
-                        children: [
-                          // ── Avatar ───────────────────────────────────────
-                          _AvatarPicker(profile: profile),
 
-                          const SizedBox(height: 32),
-
-                          // ── Full Name ─────────────────────────────────────
-                          _SectionLabel('Personal Information'),
-                          const SizedBox(height: 12),
-
-                          TextFormField(
-                            controller: _nameCtrl,
-                            keyboardType: TextInputType.name,
-                            textCapitalization: TextCapitalization.words,
-                            decoration: _inputDecoration(
-                              label: 'Full Name',
-                              hint: 'Enter your full name',
-                              icon: Icons.person_outline_rounded,
-                            ),
-                            validator: (v) {
-                              if (v == null || v.trim().isEmpty) {
-                                return 'Full name is required';
-                              }
-                              if (v.trim().length < 2) {
-                                return 'Name must be at least 2 characters';
-                              }
-                              return null;
-                            },
-                          ),
-
-                          const SizedBox(height: 16),
-
-                          // ── Mobile (read-only) ────────────────────────────
-                          TextFormField(
-                            controller: _phoneCtrl,
-                            readOnly: true,
-                            decoration: _inputDecoration(
-                              label: 'Mobile Number',
-                              hint: '',
-                              icon: Icons.phone_outlined,
-                            ).copyWith(
-                              filled: true,
-                              fillColor: AppColors.surfaceVariant,
-                              suffixIcon: const Icon(
-                                Icons.lock_outline_rounded,
-                                size: 16,
-                                color: AppColors.textHint,
-                              ),
-                            ),
-                            style: const TextStyle(color: AppColors.textSecondary),
-                          ),
-
-                          const SizedBox(height: 16),
-
-                          // ── Email ─────────────────────────────────────────
-                          TextFormField(
-                            controller: _emailCtrl,
-                            keyboardType: TextInputType.emailAddress,
-                            decoration: _inputDecoration(
-                              label: 'Email Address',
-                              hint: 'Enter your email (optional)',
-                              icon: Icons.email_outlined,
-                            ),
-                            validator: (v) {
-                              if (v == null || v.trim().isEmpty) return null;
-                              final emailRegex = RegExp(r'^[\w\.-]+@[\w\.-]+\.\w{2,}$');
-                              if (!emailRegex.hasMatch(v.trim())) {
-                                return 'Enter a valid email address';
-                              }
-                              return null;
-                            },
-                          ),
-
-                          const SizedBox(height: 28),
-
-                          // ── Error message ─────────────────────────────────
-                          if (_errorMessage != null) ...[
-                            _ErrorBanner(message: _errorMessage!),
-                            const SizedBox(height: 16),
-                          ],
-
-                          // ── Success banner ────────────────────────────────
-                          if (_isSaved) ...[
-                            const _SuccessBanner(),
-                            const SizedBox(height: 16),
-                          ],
-
-                          // ── Save button ───────────────────────────────────
-                          SizedBox(
-                            width: double.infinity,
-                            height: 50,
-                            child: FilledButton(
-                              onPressed: _isLoading ? null : _save,
-                              style: FilledButton.styleFrom(
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(14),
-                                ),
-                              ),
-                              child: _isLoading
-                                  ? const SizedBox(
-                                      width: 20,
-                                      height: 20,
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 2.5,
-                                        color: Colors.white,
-                                      ),
-                                    )
-                                  : const Text(
-                                      'Save Changes',
-                                      style: TextStyle(
-                                        fontSize: 15,
-                                        fontWeight: FontWeight.w700,
-                                      ),
-                                    ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
+          // ── Header ───────────────────────────────────────────────────────
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 8, 8, 0),
+            child: Row(
+              children: [
+                const Text(
+                  'Edit Profile',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.textPrimary,
                   ),
                 ),
-              );
-            },
-          );
-        },
+                const Spacer(),
+                IconButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  icon: const Icon(Icons.close_rounded),
+                  color: AppColors.textSecondary,
+                ),
+              ],
+            ),
+          ),
+
+          // ── Scrollable body ───────────────────────────────────────────────
+          Flexible(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
+              child: profileAsync.when(
+                loading: () => const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 48),
+                  child: Center(child: CircularProgressIndicator()),
+                ),
+                error: (_, _) => const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 48),
+                  child: Center(child: Text('Could not load profile data')),
+                ),
+                data: (profile) {
+                  if (_nameCtrl.text.isEmpty && profile.fullName.isNotEmpty) {
+                    _prefill(profile);
+                  }
+                  return Form(
+                    key: _formKey,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        const SizedBox(height: 8),
+
+                        // ── Avatar ──────────────────────────────────────────
+                        _AvatarPicker(profile: profile),
+
+                        const SizedBox(height: 28),
+
+                        // ── Full Name ───────────────────────────────────────
+                        _SectionLabel('Personal Information'),
+                        const SizedBox(height: 10),
+
+                        TextFormField(
+                          controller: _nameCtrl,
+                          keyboardType: TextInputType.name,
+                          textCapitalization: TextCapitalization.words,
+                          decoration: _dec(
+                            label: 'Full Name',
+                            hint: 'Enter your full name',
+                            icon: Icons.person_outline_rounded,
+                          ),
+                          validator: (v) {
+                            if (v == null || v.trim().isEmpty) {
+                              return 'Full name is required';
+                            }
+                            if (v.trim().length < 2) {
+                              return 'Name must be at least 2 characters';
+                            }
+                            return null;
+                          },
+                        ),
+
+                        const SizedBox(height: 14),
+
+                        // ── Mobile (read-only) ──────────────────────────────
+                        TextFormField(
+                          controller: _phoneCtrl,
+                          readOnly: true,
+                          decoration: _dec(
+                            label: 'Mobile Number',
+                            hint: '',
+                            icon: Icons.phone_outlined,
+                          ).copyWith(
+                            filled: true,
+                            fillColor: AppColors.surfaceVariant,
+                            suffixIcon: const Icon(
+                              Icons.lock_outline_rounded,
+                              size: 16,
+                              color: AppColors.textHint,
+                            ),
+                          ),
+                          style: const TextStyle(color: AppColors.textSecondary),
+                        ),
+
+                        const SizedBox(height: 14),
+
+                        // ── Email ───────────────────────────────────────────
+                        TextFormField(
+                          controller: _emailCtrl,
+                          keyboardType: TextInputType.emailAddress,
+                          decoration: _dec(
+                            label: 'Email Address',
+                            hint: 'Enter your email (optional)',
+                            icon: Icons.email_outlined,
+                          ),
+                          validator: (v) {
+                            if (v == null || v.trim().isEmpty) return null;
+                            final emailRegex =
+                                RegExp(r'^[\w\.-]+@[\w\.-]+\.\w{2,}$');
+                            if (!emailRegex.hasMatch(v.trim())) {
+                              return 'Enter a valid email address';
+                            }
+                            return null;
+                          },
+                        ),
+
+                        const SizedBox(height: 24),
+
+                        if (_errorMessage != null) ...[
+                          _ErrorBanner(message: _errorMessage!),
+                          const SizedBox(height: 14),
+                        ],
+                        if (_isSaved) ...[
+                          const _SuccessBanner(),
+                          const SizedBox(height: 14),
+                        ],
+
+                        // ── Save button ─────────────────────────────────────
+                        SizedBox(
+                          width: double.infinity,
+                          height: 50,
+                          child: FilledButton(
+                            onPressed: _isLoading ? null : _save,
+                            style: FilledButton.styleFrom(
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(14),
+                              ),
+                            ),
+                            child: _isLoading
+                                ? const SizedBox(
+                                    width: 20,
+                                    height: 20,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2.5,
+                                      color: Colors.white,
+                                    ),
+                                  )
+                                : const Text(
+                                    'Save Changes',
+                                    style: TextStyle(
+                                      fontSize: 15,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
 
-  InputDecoration _inputDecoration({
+  InputDecoration _dec({
     required String label,
     required String hint,
     required IconData icon,
@@ -284,12 +318,13 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
       ),
       filled: true,
       fillColor: AppColors.surface,
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      contentPadding:
+          const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
     );
   }
 }
 
-// ── Avatar picker ─────────────────────────────────────────────────────────────
+// ── Avatar picker ──────────────────────────────────────────────────────────────
 
 class _AvatarPicker extends ConsumerStatefulWidget {
   final ProfileModel profile;
@@ -358,13 +393,13 @@ class _AvatarPickerState extends ConsumerState<_AvatarPicker> {
       alignment: Alignment.bottomRight,
       children: [
         Container(
-          width: 100,
-          height: 100,
+          width: 90,
+          height: 90,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
             color: AppColors.primaryLight,
-            border:
-                Border.all(color: AppColors.primary.withAlpha(60), width: 2.5),
+            border: Border.all(
+                color: AppColors.primary.withAlpha(60), width: 2.5),
           ),
           child: ClipOval(
             child: imageUrl != null && imageUrl.isNotEmpty
@@ -375,7 +410,7 @@ class _AvatarPickerState extends ConsumerState<_AvatarPicker> {
                       child: Text(
                         widget.profile.initials,
                         style: const TextStyle(
-                          fontSize: 36,
+                          fontSize: 32,
                           fontWeight: FontWeight.w700,
                           color: AppColors.primary,
                         ),
@@ -386,7 +421,7 @@ class _AvatarPickerState extends ConsumerState<_AvatarPicker> {
                     child: Text(
                       widget.profile.initials,
                       style: const TextStyle(
-                        fontSize: 36,
+                        fontSize: 32,
                         fontWeight: FontWeight.w700,
                         color: AppColors.primary,
                       ),
@@ -397,23 +432,20 @@ class _AvatarPickerState extends ConsumerState<_AvatarPicker> {
         Clickable(
           onTap: _uploading ? null : _pick,
           child: Container(
-            padding: const EdgeInsets.all(7),
+            padding: const EdgeInsets.all(6),
             decoration: const BoxDecoration(
               color: AppColors.primary,
               shape: BoxShape.circle,
             ),
             child: _uploading
                 ? const SizedBox(
-                    width: 16,
-                    height: 16,
+                    width: 15,
+                    height: 15,
                     child: CircularProgressIndicator(
                         strokeWidth: 2, color: Colors.white),
                   )
-                : const Icon(
-                    Icons.camera_alt_rounded,
-                    size: 16,
-                    color: Colors.white,
-                  ),
+                : const Icon(Icons.camera_alt_rounded,
+                    size: 15, color: Colors.white),
           ),
         ),
       ],
@@ -421,7 +453,7 @@ class _AvatarPickerState extends ConsumerState<_AvatarPicker> {
   }
 }
 
-// ── Section label ─────────────────────────────────────────────────────────────
+// ── Section label ──────────────────────────────────────────────────────────────
 
 class _SectionLabel extends StatelessWidget {
   final String text;
@@ -443,7 +475,7 @@ class _SectionLabel extends StatelessWidget {
   }
 }
 
-// ── Success banner ────────────────────────────────────────────────────────────
+// ── Success banner ─────────────────────────────────────────────────────────────
 
 class _SuccessBanner extends StatelessWidget {
   const _SuccessBanner();
@@ -459,12 +491,14 @@ class _SuccessBanner extends StatelessWidget {
       ),
       child: const Row(
         children: [
-          Icon(Icons.check_circle_rounded, color: AppColors.success, size: 18),
+          Icon(Icons.check_circle_rounded,
+              color: AppColors.success, size: 18),
           SizedBox(width: 10),
           Expanded(
             child: Text(
               'Profile updated successfully!',
-              style: TextStyle(color: AppColors.success, fontWeight: FontWeight.w600),
+              style: TextStyle(
+                  color: AppColors.success, fontWeight: FontWeight.w600),
             ),
           ),
         ],
@@ -473,7 +507,7 @@ class _SuccessBanner extends StatelessWidget {
   }
 }
 
-// ── Error banner ──────────────────────────────────────────────────────────────
+// ── Error banner ───────────────────────────────────────────────────────────────
 
 class _ErrorBanner extends StatelessWidget {
   final String message;
@@ -490,12 +524,14 @@ class _ErrorBanner extends StatelessWidget {
       ),
       child: Row(
         children: [
-          const Icon(Icons.error_outline_rounded, color: AppColors.error, size: 18),
+          const Icon(Icons.error_outline_rounded,
+              color: AppColors.error, size: 18),
           const SizedBox(width: 10),
           Expanded(
             child: Text(
               message,
-              style: const TextStyle(color: AppColors.error, fontWeight: FontWeight.w600),
+              style: const TextStyle(
+                  color: AppColors.error, fontWeight: FontWeight.w600),
             ),
           ),
         ],

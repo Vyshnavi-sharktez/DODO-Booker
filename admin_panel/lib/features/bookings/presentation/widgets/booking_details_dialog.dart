@@ -106,6 +106,19 @@ class _BookingDetailsDialogState extends ConsumerState<BookingDetailsDialog> {
   bool _isDownloadingInvoice = false;
 
   @override
+  void initState() {
+    super.initState();
+    // Trigger a background refresh so the dialog always shows the latest
+    // booking data (including updated items/GST) rather than the snapshot
+    // that was passed in via widget.booking at the time the row was tapped.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        ref.read(bookingsNotifierProvider.notifier).refresh();
+      }
+    });
+  }
+
+  @override
   void dispose() {
     for (final c in _otpControllers) {
       c.dispose();
@@ -2055,6 +2068,8 @@ class _MapPickerModalState extends State<_MapPickerModal> {
   bool _searching = false;
   bool _showResults = false;
   Timer? _debounce;
+  Timer? _reverseDebounce;
+  bool _isProgrammaticMove = false;
 
   @override
   void initState() {
@@ -2073,6 +2088,7 @@ class _MapPickerModalState extends State<_MapPickerModal> {
   @override
   void dispose() {
     _debounce?.cancel();
+    _reverseDebounce?.cancel();
     _searchCtrl.dispose();
     super.dispose();
   }
@@ -2121,8 +2137,31 @@ class _MapPickerModalState extends State<_MapPickerModal> {
       _searchResults = [];
       _searchCtrl.text = result.displayName;
     });
+    _isProgrammaticMove = true;
+    _reverseDebounce?.cancel();
     try {
       _mapController.move(newCenter, 15);
+    } catch (_) {}
+    Future.delayed(const Duration(milliseconds: 600), () {
+      if (mounted) _isProgrammaticMove = false;
+    });
+  }
+
+  Future<void> _reverseGeocodeForSearch(LatLng point) async {
+    if (!mounted || _showResults) return;
+    try {
+      final addr = await NominatimService().reverseGeocode(
+        point.latitude,
+        point.longitude,
+      );
+      if (!mounted || _showResults) return;
+      final parts = <String>[
+        if (addr.line1 != null && addr.line1!.isNotEmpty) addr.line1!,
+        if (addr.city != null && addr.city!.isNotEmpty) addr.city!,
+      ];
+      if (parts.isNotEmpty) {
+        setState(() => _searchCtrl.text = parts.join(', '));
+      }
     } catch (_) {}
   }
 
@@ -2200,6 +2239,13 @@ class _MapPickerModalState extends State<_MapPickerModal> {
                           _selectedLatLng = camera.center;
                           _currentZoom = camera.zoom;
                         });
+                        if (!_isProgrammaticMove && !_showResults) {
+                          _reverseDebounce?.cancel();
+                          _reverseDebounce = Timer(
+                            const Duration(milliseconds: 800),
+                            () => _reverseGeocodeForSearch(_selectedLatLng),
+                          );
+                        }
                       },
                     ),
                     children: [

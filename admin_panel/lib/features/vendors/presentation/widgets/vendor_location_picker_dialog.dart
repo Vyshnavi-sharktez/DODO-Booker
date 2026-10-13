@@ -11,12 +11,16 @@ class VendorLocationPickerResult {
   final double longitude;
   final String? city;
   final String? address;
+  final String? state;
+  final String? pincode;
 
   const VendorLocationPickerResult({
     required this.latitude,
     required this.longitude,
     this.city,
     this.address,
+    this.state,
+    this.pincode,
   });
 }
 
@@ -50,6 +54,8 @@ class _VendorLocationPickerDialogState
   bool _searching = false;
   bool _showResults = false;
   Timer? _debounce;
+  Timer? _reverseDebounce;
+  bool _isProgrammaticMove = false;
 
   @override
   void initState() {
@@ -69,6 +75,7 @@ class _VendorLocationPickerDialogState
   @override
   void dispose() {
     _debounce?.cancel();
+    _reverseDebounce?.cancel();
     _searchCtrl.dispose();
     super.dispose();
   }
@@ -117,8 +124,31 @@ class _VendorLocationPickerDialogState
       _searchResults = [];
       _searchCtrl.text = result.displayName;
     });
+    _isProgrammaticMove = true;
+    _reverseDebounce?.cancel();
     try {
       _mapController.move(newCenter, 15);
+    } catch (_) {}
+    Future.delayed(const Duration(milliseconds: 600), () {
+      if (mounted) _isProgrammaticMove = false;
+    });
+  }
+
+  Future<void> _reverseGeocodeForSearch(LatLng point) async {
+    if (!mounted || _showResults) return;
+    try {
+      final addr = await NominatimService().reverseGeocode(
+        point.latitude,
+        point.longitude,
+      );
+      if (!mounted || _showResults) return;
+      final parts = <String>[
+        if (addr.line1 != null && addr.line1!.isNotEmpty) addr.line1!,
+        if (addr.city != null && addr.city!.isNotEmpty) addr.city!,
+      ];
+      if (parts.isNotEmpty) {
+        setState(() => _searchCtrl.text = parts.join(', '));
+      }
     } catch (_) {}
   }
 
@@ -151,6 +181,8 @@ class _VendorLocationPickerDialogState
         longitude: _selectedLatLng.longitude,
         city: addr.city,
         address: addr.line1,
+        state: addr.state,
+        pincode: addr.pincode,
       ));
     } catch (_) {
       if (!mounted) return;
@@ -219,6 +251,13 @@ class _VendorLocationPickerDialogState
                           _selectedLatLng = camera.center;
                           _currentZoom = camera.zoom;
                         });
+                        if (!_isProgrammaticMove && !_showResults) {
+                          _reverseDebounce?.cancel();
+                          _reverseDebounce = Timer(
+                            const Duration(milliseconds: 800),
+                            () => _reverseGeocodeForSearch(_selectedLatLng),
+                          );
+                        }
                       },
                     ),
                     children: [

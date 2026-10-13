@@ -647,7 +647,7 @@ class BookingsRepository {
   }
 
   Future<void> deleteBooking(String id) async {
-    await _supabase.from('bookings').delete().eq('id', id);
+    await _supabase.rpc('admin_delete_booking', params: {'p_booking_id': id});
   }
 
   // ── Phase 4 Dispatch Engine Methods ─────────────────────────────────────────

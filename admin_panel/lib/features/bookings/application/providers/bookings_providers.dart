@@ -1,3 +1,6 @@
+import 'dart:async';
+
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../auth/application/providers/auth_provider.dart';
 import '../../data/bookings_repository.dart';
@@ -83,8 +86,22 @@ final bookingsRepositoryProvider = Provider<BookingsRepository>((ref) {
 class BookingsNotifier extends StateNotifier<AsyncValue<List<Booking>>> {
   final BookingsRepository _repo;
 
+  // True while a create/edit mutation owns the state update.
+  // Realtime-triggered refresh() calls are suppressed during this window
+  // to prevent a concurrent fetch from overwriting the optimistic update
+  // with a snapshot that was taken before all booking_items were inserted.
+  bool _mutating = false;
+
   BookingsNotifier(this._repo) : super(const AsyncValue.loading()) {
     _load();
+  }
+
+  // Deduplicates a booking list by id, keeping the first occurrence.
+  // Prevents duplicates that arise when both the optimistic update and a
+  // concurrent realtime refresh insert the same booking into state.
+  static List<Booking> _dedupe(List<Booking> list) {
+    final seen = <String>{};
+    return list.where((b) => seen.add(b.id)).toList();
   }
 
   Future<void> _load() async {
@@ -94,8 +111,17 @@ class BookingsNotifier extends StateNotifier<AsyncValue<List<Booking>>> {
 
   // Silent re-fetch: keeps existing data visible while re-querying.
   // The initial _load() still shows the spinner; refresh() does not.
+  // Suppressed during active mutations to avoid overwriting an optimistic
+  // update with a snapshot taken before booking_items were fully inserted.
   Future<void> refresh() async {
-    state = await AsyncValue.guard(_repo.fetchBookings);
+    if (_mutating) return;
+    try {
+      final fetched = await _repo.fetchBookings();
+      if (!_mutating) state = AsyncValue.data(_dedupe(fetched));
+    } catch (e, st) {
+      // Keep existing state on background refresh errors — don't flash error.
+      debugPrint('[Bookings] refresh error: $e\n$st');
+    }
   }
 
   Future<void> updateBookingAssignment(
@@ -189,22 +215,30 @@ class BookingsNotifier extends StateNotifier<AsyncValue<List<Booking>>> {
     double taxAmount = 0.0,
     String? couponCode,
   }) async {
-    final created = await _repo.createBooking(
-      customerId: customerId,
-      serviceDate: serviceDate,
-      address: address,
-      notes: notes,
-      scheduledTime: scheduledTime,
-      latitude: latitude,
-      longitude: longitude,
-      items: items,
-      addons: addons,
-      discountAmount: discountAmount,
-      taxAmount: taxAmount,
-      couponCode: couponCode,
-    );
-    final current = state.valueOrNull ?? [];
-    state = AsyncValue.data([created, ...current]);
+    _mutating = true;
+    try {
+      final created = await _repo.createBooking(
+        customerId: customerId,
+        serviceDate: serviceDate,
+        address: address,
+        notes: notes,
+        scheduledTime: scheduledTime,
+        latitude: latitude,
+        longitude: longitude,
+        items: items,
+        addons: addons,
+        discountAmount: discountAmount,
+        taxAmount: taxAmount,
+        couponCode: couponCode,
+      );
+      final current = state.valueOrNull ?? [];
+      state = AsyncValue.data(_dedupe([created, ...current]));
+    } finally {
+      _mutating = false;
+      // After mutation completes, do a real refresh so booking_items are fully
+      // loaded (realtime events during _mutating=true were suppressed).
+      unawaited(refresh());
+    }
   }
 
   Future<void> updateBookingFull({
@@ -222,26 +256,32 @@ class BookingsNotifier extends StateNotifier<AsyncValue<List<Booking>>> {
     double taxAmount = 0.0,
     String? couponCode,
   }) async {
-    final updated = await _repo.updateBookingFull(
-      id: id,
-      serviceDate: serviceDate,
-      address: address,
-      status: status,
-      notes: notes,
-      scheduledTime: scheduledTime,
-      latitude: latitude,
-      longitude: longitude,
-      items: items,
-      addons: addons,
-      discountAmount: discountAmount,
-      taxAmount: taxAmount,
-      couponCode: couponCode,
-    );
-    final current = state.valueOrNull;
-    if (current != null) {
-      state = AsyncValue.data(
-        current.map((b) => b.id == id ? updated : b).toList(),
+    _mutating = true;
+    try {
+      final updated = await _repo.updateBookingFull(
+        id: id,
+        serviceDate: serviceDate,
+        address: address,
+        status: status,
+        notes: notes,
+        scheduledTime: scheduledTime,
+        latitude: latitude,
+        longitude: longitude,
+        items: items,
+        addons: addons,
+        discountAmount: discountAmount,
+        taxAmount: taxAmount,
+        couponCode: couponCode,
       );
+      final current = state.valueOrNull;
+      if (current != null) {
+        state = AsyncValue.data(
+          current.map((b) => b.id == id ? updated : b).toList(),
+        );
+      }
+    } finally {
+      _mutating = false;
+      unawaited(refresh());
     }
   }
 

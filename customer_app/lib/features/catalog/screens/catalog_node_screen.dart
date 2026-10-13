@@ -29,99 +29,11 @@ import '../utils/catalog_launcher.dart';
 import '../widgets/catalog_unavailability_widgets.dart';
 import 'category_explorer_screen.dart';
 
-void _showCategoryConflictDialog(BuildContext context) {
-  showDialog<void>(
-    context: context,
-    builder: (ctx) => Dialog(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-      insetPadding: const EdgeInsets.symmetric(horizontal: 40, vertical: 40),
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 360),
-        child: Stack(
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(24, 32, 24, 24),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Container(
-                    width: 60,
-                    height: 60,
-                    decoration: const BoxDecoration(
-                      color: Color(0xFFFEF3C7),
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Center(
-                      child: Text(
-                        '!',
-                        style: TextStyle(
-                          fontSize: 28,
-                          fontWeight: FontWeight.w800,
-                          color: Color(0xFFD97706),
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  const Text(
-                    'Different Category Service',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: 17,
-                      fontWeight: FontWeight.w700,
-                      color: Color(0xFF1A1A1A),
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  const Text(
-                    "Sorry, you can't book services from different categories in the same booking. "
-                    'Please complete this booking first or remove the existing service.',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: 13,
-                      color: Color(0xFF888888),
-                      height: 1.55,
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton(
-                      onPressed: () => Navigator.of(ctx).pop(),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFFFBBF24),
-                        foregroundColor: const Color(0xFF1A1A1A),
-                        elevation: 0,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(100),
-                        ),
-                        padding:
-                            const EdgeInsets.symmetric(vertical: 14),
-                      ),
-                      child: const Text(
-                        'OK',
-                        style: TextStyle(
-                            fontSize: 15, fontWeight: FontWeight.w600),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            Positioned(
-              top: 8,
-              right: 8,
-              child: GestureDetector(
-                onTap: () => Navigator.of(ctx).pop(),
-                child: const Padding(
-                  padding: EdgeInsets.all(4),
-                  child: Icon(Icons.close, size: 18, color: Color(0xFF999999)),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
+void _showNewCartStartedSnackBar(BuildContext context) {
+  ScaffoldMessenger.of(context).showSnackBar(
+    const SnackBar(
+      content: Text('New cart started — previous cart saved'),
+      duration: Duration(seconds: 3),
     ),
   );
 }
@@ -384,7 +296,7 @@ class _CatalogNodeScreenState extends ConsumerState<CatalogNodeScreen> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                // Sheet header: drag handle centred, X close at far right
+                // Sheet header: drag handle centred, heart + X close at far right
                 Padding(
                   padding: const EdgeInsets.fromLTRB(0, 8, 12, 8),
                   child: Row(
@@ -399,24 +311,41 @@ class _CatalogNodeScreenState extends ConsumerState<CatalogNodeScreen> {
                         ),
                       ),
                       Expanded(
-                        child: Align(
-                          alignment: Alignment.centerRight,
-                          child: GestureDetector(
-                            onTap: () => Navigator.of(context).maybePop(),
-                            child: Container(
-                              width: 36,
-                              height: 36,
-                              decoration: BoxDecoration(
-                                color: AppColors.surfaceVariant,
-                                shape: BoxShape.circle,
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.end,
+                          children: [
+                            if (node.isLeafBookable) ...[
+                              Container(
+                                width: 36,
+                                height: 36,
+                                decoration: BoxDecoration(
+                                  color: AppColors.surfaceVariant,
+                                  shape: BoxShape.circle,
+                                ),
+                                child: Center(
+                                  child: HeartButton(
+                                      serviceId: node.id, mini: true),
+                                ),
                               ),
-                              child: const Icon(
-                                Icons.close_rounded,
-                                size: 18,
-                                color: _kInk,
+                              const SizedBox(width: 8),
+                            ],
+                            GestureDetector(
+                              onTap: () => Navigator.of(context).maybePop(),
+                              child: Container(
+                                width: 36,
+                                height: 36,
+                                decoration: BoxDecoration(
+                                  color: AppColors.surfaceVariant,
+                                  shape: BoxShape.circle,
+                                ),
+                                child: const Icon(
+                                  Icons.close_rounded,
+                                  size: 18,
+                                  color: _kInk,
+                                ),
                               ),
                             ),
-                          ),
+                          ],
                         ),
                       ),
                     ],
@@ -2505,12 +2434,12 @@ class _NodeBookingBar extends ConsumerWidget {
       );
       return;
     }
-    final bool added;
+    final CartAddResult result;
     if (attrOptionPrice != null) {
       // Attribute service: embed addons in unitPrice so totalPrice = attrPrice + addonsTotal.
       // Addons still passed separately for cart display breakdown.
       final selAddons = buildSelectedAddons(addOns, selectedAddonIds);
-      added = ref.read(cartProvider.notifier).addToCart(
+      result = ref.read(cartProvider.notifier).addToCart(
             node,
             unitPriceOverride: attrOptionPrice! + totalAddonsPrice(selAddons),
             originalUnitPrice: attrOptionOriginalPrice,
@@ -2522,7 +2451,7 @@ class _NodeBookingBar extends ConsumerWidget {
             quantity: attrQty,
           );
     } else if (amcPlan != null) {
-      added = ref.read(cartProvider.notifier).addToCart(
+      result = ref.read(cartProvider.notifier).addToCart(
             node,
             priceAdjustment: 0.0,
             parentNodeId: parentNodeId,
@@ -2533,7 +2462,7 @@ class _NodeBookingBar extends ConsumerWidget {
     } else {
       // Normal service: unitPriceOverride = discounted base + attr adj + addons.
       final selAddons = buildSelectedAddons(addOns, selectedAddonIds);
-      added = ref.read(cartProvider.notifier).addToCart(
+      result = ref.read(cartProvider.notifier).addToCart(
             node,
             unitPriceOverride: (node.finalPrice ?? node.basePrice ?? 0.0) +
                 priceAdjustment +
@@ -2544,7 +2473,7 @@ class _NodeBookingBar extends ConsumerWidget {
             rootCategoryId: rootCategoryId,
           );
     }
-    if (!added) _showCategoryConflictDialog(context);
+    if (result == CartAddResult.newCartStarted) _showNewCartStartedSnackBar(context);
   }
 
   @override
@@ -2794,11 +2723,11 @@ class _WebScaffold extends ConsumerWidget {
         );
         return;
       }
-      final bool added;
+      final CartAddResult result;
       if (selectedAttrPrice != null) {
         // Attribute service: embed addons in unitPrice so totalPrice = attrPrice + addonsTotal.
         // Addons still passed separately for cart display breakdown.
-        added = ref.read(cartProvider.notifier).addToCart(
+        result = ref.read(cartProvider.notifier).addToCart(
               node,
               unitPriceOverride: selectedAttrPrice! + addonsTotal,
               originalUnitPrice: selectedAttrOriginalPrice,
@@ -2810,7 +2739,7 @@ class _WebScaffold extends ConsumerWidget {
               quantity: effectiveAttrQty,
             );
       } else if (selectedAmcPlan != null) {
-        added = ref.read(cartProvider.notifier).addToCart(
+        result = ref.read(cartProvider.notifier).addToCart(
               node,
               priceAdjustment: 0.0,
               parentNodeId: parentNodeId,
@@ -2820,7 +2749,7 @@ class _WebScaffold extends ConsumerWidget {
             );
       } else {
         // Normal service: unitPriceOverride = discounted base + attr adj + addons.
-        added = ref.read(cartProvider.notifier).addToCart(
+        result = ref.read(cartProvider.notifier).addToCart(
               node,
               unitPriceOverride: (node.finalPrice ?? node.basePrice ?? 0.0) +
                   priceAdjustment +
@@ -2831,7 +2760,7 @@ class _WebScaffold extends ConsumerWidget {
               rootCategoryId: rootCategoryId,
             );
       }
-      if (!added) _showCategoryConflictDialog(context);
+      if (result == CartAddResult.newCartStarted) _showNewCartStartedSnackBar(context);
     }
 
     final screenH = MediaQuery.sizeOf(context).height;

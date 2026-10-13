@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/admin_search_bar.dart';
+import '../../../../core/widgets/pagination_bar.dart';
 import '../../application/providers/vendor_service_requests_providers.dart';
 import '../../domain/models/vendor_service_request.dart';
 import '../widgets/service_request_detail_dialog.dart';
@@ -101,6 +102,8 @@ class _ServiceRequestsTab extends ConsumerStatefulWidget {
 class _ServiceRequestsTabState extends ConsumerState<_ServiceRequestsTab> {
   String _filter = 'all';
   String _searchQuery = '';
+  int _page = 1;
+  static const int _pageSize = 10;
 
   List<VendorServiceRequest> _applyFilters(List<VendorServiceRequest> all) {
     var list = all.toList();
@@ -134,7 +137,7 @@ class _ServiceRequestsTabState extends ConsumerState<_ServiceRequestsTab> {
       children: [
         AdminSearchBar(
           hintText: 'Search by service or vendor name…',
-          onChanged: (q) => setState(() => _searchQuery = q.toLowerCase()),
+          onChanged: (q) => setState(() { _searchQuery = q.toLowerCase(); _page = 1; }),
         ),
         const SizedBox(height: 12),
         _FilterChips(
@@ -155,7 +158,7 @@ class _ServiceRequestsTabState extends ConsumerState<_ServiceRequestsTab> {
               'rejected': all.where((r) => r.isRejected).length,
             },
           ),
-          onSelect: (f) => setState(() => _filter = f),
+          onSelect: (f) => setState(() { _filter = f; _page = 1; }),
         ),
         const SizedBox(height: 16),
         Expanded(
@@ -172,7 +175,18 @@ class _ServiceRequestsTabState extends ConsumerState<_ServiceRequestsTab> {
                     query: _searchQuery,
                     emptyLabel: 'No service requests yet');
               }
-              return _ServiceTable(list: list, onDetail: _openDetail);
+              final paged = list.skip((_page - 1) * _pageSize).take(_pageSize).toList();
+              return Column(
+                children: [
+                  Expanded(child: _ServiceTable(list: paged, onDetail: _openDetail)),
+                  PaginationBar(
+                    totalItems: list.length,
+                    currentPage: _page,
+                    pageSize: _pageSize,
+                    onPageChanged: (p) => setState(() => _page = p),
+                  ),
+                ],
+              );
             },
           ),
         ),
