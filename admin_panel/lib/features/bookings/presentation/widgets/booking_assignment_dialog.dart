@@ -16,7 +16,6 @@ import '../../domain/models/booking.dart';
 import '../../domain/services/vendor_assignment_service.dart';
 import '../../application/providers/bookings_providers.dart';
 import '../../application/providers/dispatch_providers.dart';
-import '../../domain/models/booking_assignment_record.dart';
 
 final _dateFmt = DateFormat('dd MMM yyyy');
 final _isoDateFmt = DateFormat('yyyy-MM-dd');

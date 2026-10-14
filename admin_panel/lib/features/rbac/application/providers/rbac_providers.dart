@@ -124,6 +124,27 @@ class RbacAdminUsersNotifier
     await _repo.updateAdminUser(id, fullName: fullName, isActive: isActive);
     await _load();
   }
+
+  Future<void> createAdminUser({
+    required String fullName,
+    required String email,
+    String? phone,
+    String? address,
+    double? latitude,
+    double? longitude,
+    String? roleId,
+  }) async {
+    await _repo.createAdminUserViaEdge(
+      fullName: fullName,
+      email: email,
+      phone: phone,
+      address: address,
+      latitude: latitude,
+      longitude: longitude,
+      roleId: roleId,
+    );
+    await _load();
+  }
 }
 
 final rbacAdminUsersNotifierProvider = StateNotifierProvider<

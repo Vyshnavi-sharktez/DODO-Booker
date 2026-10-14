@@ -24,7 +24,6 @@ import '../../profile/utils/profile_launcher.dart';
 const double _kSidebarWidth    = 280.0;
 const double _kCartPanelWidth  = 300.0;
 const double _kBreakpoint      = 900.0;
-const double _kContentMaxWidth = 1280.0;
 const Color  _kBorderColor     = Color(0xFFE5E5E5);
 const Color  _kBgRight         = Color(0xFFF7F7F7);
 const Color  _kTextDark        = Color(0xFF111111);
@@ -452,24 +451,6 @@ class _SidebarRowState extends State<_SidebarRow> {
   }
 }
 
-class _MoreCategoriesRow extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(12, 14, 12, 0),
-      child: Row(
-        children: [
-          const SizedBox(width: 26),
-          const SizedBox(width: 10),
-          Text(
-            'More Categories',
-            style: GoogleFonts.inter(fontSize: 13, color: _kTextMuted),
-          ),
-        ],
-      ),
-    );
-  }
-}
 
 // ── Mobile category pill row ─────────────────────────────────────────────────
 

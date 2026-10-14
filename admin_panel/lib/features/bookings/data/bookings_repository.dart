@@ -6,7 +6,6 @@ import '../domain/models/booking.dart';
 import '../domain/models/booking_addon.dart';
 import '../domain/models/booking_assignment_record.dart';
 import '../domain/models/dispatch_settings.dart';
-import '../../vendors/domain/models/vendor.dart';
 
 String _generateOtp() => (100000 + Random().nextInt(900000)).toString();
 

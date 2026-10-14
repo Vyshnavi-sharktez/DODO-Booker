@@ -5,7 +5,6 @@ import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/admin_search_bar.dart';
 import '../../../bookings/application/providers/bookings_providers.dart';
 import '../../../bookings/application/providers/dispatch_providers.dart';
-import '../../../bookings/domain/models/booking.dart';
 import '../../../bookings/domain/models/booking_assignment_record.dart';
 import '../../../vendor_tiers/application/providers/vendor_tiers_providers.dart';
 import '../../../vendor_tiers/domain/models/vendor_tier.dart';

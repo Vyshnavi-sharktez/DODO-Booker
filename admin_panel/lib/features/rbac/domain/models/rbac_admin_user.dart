@@ -3,6 +3,10 @@ class RbacAdminUser {
   final String userId;
   final String fullName;
   final String email;
+  final String? phone;
+  final String? address;
+  final double? latitude;
+  final double? longitude;
   final bool isSuperAdmin;
   final bool isActive;
   final List<String> roleIds;
@@ -15,6 +19,10 @@ class RbacAdminUser {
     required this.userId,
     required this.fullName,
     required this.email,
+    this.phone,
+    this.address,
+    this.latitude,
+    this.longitude,
     required this.isSuperAdmin,
     required this.isActive,
     this.roleIds = const [],
@@ -31,11 +39,13 @@ class RbacAdminUser {
       userId: map['auth_user_id'] as String? ?? '',
       fullName: map['full_name'] as String? ?? '',
       email: map['email'] as String? ?? '',
+      phone: map['phone'] as String?,
+      address: map['address'] as String?,
+      latitude: (map['latitude'] as num?)?.toDouble(),
+      longitude: (map['longitude'] as num?)?.toDouble(),
       isSuperAdmin: map['is_super_admin'] as bool? ?? false,
       isActive: map['is_active'] as bool? ?? true,
-      roleIds: userRoles
-          .map((r) => r['role_id'] as String)
-          .toList(),
+      roleIds: userRoles.map((r) => r['role_id'] as String).toList(),
       roleNames: userRoles
           .map((r) {
             final role = r['roles'] as Map<String, dynamic>?;
@@ -59,12 +69,18 @@ class RbacAdminUser {
     List<String>? roleIds,
     List<String>? roleNames,
     String? fullName,
+    String? phone,
+    String? address,
   }) {
     return RbacAdminUser(
       id: id,
       userId: userId,
       fullName: fullName ?? this.fullName,
       email: email,
+      phone: phone ?? this.phone,
+      address: address ?? this.address,
+      latitude: latitude,
+      longitude: longitude,
       isSuperAdmin: isSuperAdmin,
       isActive: isActive ?? this.isActive,
       roleIds: roleIds ?? this.roleIds,

@@ -16,22 +16,6 @@ final _currency = NumberFormat.currency(symbol: '₹', decimalDigits: 2);
 final _dateFmt = DateFormat('dd MMM yyyy');
 final _dateTimeFmt = DateFormat('dd MMM yyyy, hh:mm a');
 
-const _statusConfig = <String, (String, Color, Color)>{
-  'pending': ('Pending', Color(0xFFDD6B20), Color(0xFFFEEBC8)),
-  'assigned': ('Assigned', Color(0xFF3182CE), Color(0xFFEBF8FF)),
-  'assigned_to_dodo_team': (
-    'DODO Assigned',
-    Color(0xFF6B46C1),
-    Color(0xFFF3E8FF),
-  ),
-  'accepted': ('Accepted', Color(0xFF2C7A7B), Color(0xFFE6FFFA)),
-  'on_the_way': ('On The Way', Color(0xFF4A6FA5), Color(0xFFEBF4FF)),
-  'arrived': ('Arrived', Color(0xFF6B46C1), Color(0xFFF3E8FF)),
-  'in_progress': ('In Progress', Color(0xFF805AD5), Color(0xFFFAF5FF)),
-  'completed': ('Completed', Color(0xFF38A169), Color(0xFFF0FFF4)),
-  'rejected': ('Rejected', Color(0xFFC05621), Color(0xFFFEEBC8)),
-  'cancelled': ('Cancelled', Color(0xFFE53E3E), Color(0xFFFFF5F5)),
-};
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 

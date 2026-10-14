@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import '../../../core/constants/app_colors.dart';
 import '../../../core/utils/icon_registry.dart';
 import '../../../core/utils/service_image_registry.dart';
 import '../../../core/widgets/highlighted_text.dart';

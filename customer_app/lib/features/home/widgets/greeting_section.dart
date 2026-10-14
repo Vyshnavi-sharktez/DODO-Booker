@@ -16,7 +16,6 @@ class GreetingSection extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final cs = Theme.of(context).colorScheme;
     final isAuth = ref.watch(isAuthenticatedProvider);
 
     String firstName = '';

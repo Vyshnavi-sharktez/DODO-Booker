@@ -148,4 +148,33 @@ class RbacRepository {
               .toList(),
         );
   }
+
+  Future<void> createAdminUserViaEdge({
+    required String fullName,
+    required String email,
+    String? phone,
+    String? address,
+    double? latitude,
+    double? longitude,
+    String? roleId,
+  }) async {
+    final response = await _supabase.functions.invoke(
+      'create-admin-user',
+      body: {
+        'full_name': fullName,
+        'email': email,
+        if (phone != null && phone.isNotEmpty) 'phone': phone,
+        if (address != null && address.isNotEmpty) 'address': address,
+        if (latitude != null) 'latitude': latitude,
+        if (longitude != null) 'longitude': longitude,
+        if (roleId != null) 'role_id': roleId,
+      },
+    );
+
+    if (response.status != 200) {
+      final body = response.data;
+      final msg = (body is Map ? body['error'] : null) ?? 'Failed to create admin user';
+      throw Exception(msg);
+    }
+  }
 }

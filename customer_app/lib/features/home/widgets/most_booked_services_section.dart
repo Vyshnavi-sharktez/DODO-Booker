@@ -342,8 +342,6 @@ class _CardInfo extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final hasDesc = service.description != null &&
-        service.description!.trim().isNotEmpty;
     final hasRating = service.rating > 0;
 
     return ColoredBox(
