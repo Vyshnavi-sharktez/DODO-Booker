@@ -21,6 +21,7 @@ import '../../catalog/services/catalog_service.dart';
 import '../../../models/addon_model.dart';
 import '../models/cart_item.dart';
 import '../providers/cart_provider.dart';
+import '../providers/global_cart_addons_provider.dart';
 import '../services/checkout_service.dart';
 import '../widgets/min_order_card.dart';
 import '../widgets/payment_selection_sheet.dart';
@@ -161,12 +162,12 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     }
   }
 
-  Future<String?> _selectPaymentMethod() {
+  Future<String?> _selectPaymentMethod({bool isAmc = false}) {
     return showModalBottomSheet<String>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => const PaymentSelectionSheet(),
+      builder: (_) => PaymentSelectionSheet(isAmc: isAmc),
     );
   }
 
@@ -241,7 +242,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     }
 
     // ── Payment method selection ─────────────────────────────────────────────
-    final paymentMethod = await _selectPaymentMethod();
+    final paymentMethod = await _selectPaymentMethod(isAmc: items.any((i) => i.isAmc));
     debugPrint('[DODO][Razorpay][TRACE] payment selected: paymentMethod=$paymentMethod');
     if (!mounted || paymentMethod == null) {
       debugPrint('[DODO][Razorpay][TRACE] ✗ paymentMethod is null or unmounted — returning early');
@@ -298,6 +299,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         preferredVendorId: _selectedPreferredVendorId,
         preferredVendorFeeAmount: _preferredVendorFeeAmount > 0 ? _preferredVendorFeeAmount : null,
         paymentMethod: paymentMethod,
+        globalAddonsTotal: ref.read(globalAddonsTotalProvider),
       );
       debugPrint('[DODO][Checkout] ✓ createCartBooking returned — id=${booking.id}');
 

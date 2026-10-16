@@ -125,7 +125,7 @@ class RbacAdminUsersNotifier
     await _load();
   }
 
-  Future<void> createAdminUser({
+  Future<String> createAdminUser({
     required String fullName,
     required String email,
     String? phone,
@@ -134,7 +134,7 @@ class RbacAdminUsersNotifier
     double? longitude,
     String? roleId,
   }) async {
-    await _repo.createAdminUserViaEdge(
+    final tempPassword = await _repo.createAdminUserViaEdge(
       fullName: fullName,
       email: email,
       phone: phone,
@@ -144,6 +144,7 @@ class RbacAdminUsersNotifier
       roleId: roleId,
     );
     await _load();
+    return tempPassword;
   }
 }
 

@@ -11,6 +11,7 @@ import 'vendor_location_picker_dialog.dart';
 
 const _statusOptions = [
   ('pending', 'Pending'),
+  ('approved', 'Approved'),
   ('active', 'Active'),
   ('inactive', 'Inactive'),
   ('suspended', 'Suspended'),

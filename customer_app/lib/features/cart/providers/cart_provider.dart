@@ -11,6 +11,7 @@ import '../../../features/vendor_custom_service/models/vendor_custom_service_mod
 import '../../../models/addon_model.dart';
 import '../services/cart_sync_service.dart';
 import 'saved_carts_provider.dart';
+import 'global_cart_addons_provider.dart';
 
 /// Composite key for merging cart items by catalog occurrence (serviceId + parentNodeId).
 String _cartMergeKey(String serviceId, String? parentNodeId) =>
@@ -231,11 +232,15 @@ class CartNotifier extends StateNotifier<List<CartItem>> {
 
   /// Adds [service] to the active cart and returns the result.
   ///
-  /// When [rootCategoryId] differs from the root category of the existing cart
-  /// items, the current cart is automatically saved to [savedCartsProvider] and
-  /// a fresh cart is started for the new category. Returns
-  /// [CartAddResult.newCartStarted] in that case so the caller can notify the
-  /// user. All other cases return [CartAddResult.added].
+  /// Each top-level category owns its own saved cart. When the incoming item
+  /// belongs to a different [rootCategoryId] than the current active cart:
+  ///  1. The active cart is saved under its own category in [savedCartsProvider].
+  ///  2. Any previously saved cart for the target category is restored as the
+  ///     new active cart (so returning to a category never loses prior items).
+  ///  3. The new item is appended to that restored (or fresh) cart.
+  ///
+  /// Returns [CartAddResult.newCartStarted] when the active cart was switched,
+  /// [CartAddResult.added] otherwise.
   CartAddResult addToCart(
     CatalogNodeModel service, {
     double priceAdjustment = 0.0,
@@ -254,32 +259,30 @@ class CartNotifier extends StateNotifier<List<CartItem>> {
   }) {
     debugPrint('[DODO][CartSync][1] addToCart() entered — serviceId=${service.id} name=${service.name} parentNodeId=$parentNodeId isAmc=${amcPlan != null}');
 
-    bool startedNewCart = false;
+    bool cartSwitched = false;
 
-    // Root category conflict: save the current cart and start fresh so the
-    // customer never loses their previous selection.
+    // ── Category-aware cart separation ────────────────────────────────────────
+    // When the new item belongs to a different root category than the active
+    // cart, persist the active cart and restore the saved cart for the target
+    // category (or start with an empty cart if none was saved yet).
     if (rootCategoryId != null && state.isNotEmpty) {
-      final hasConflict = state.any(
-        (item) =>
-            item.rootCategoryId != null &&
-            item.rootCategoryId != rootCategoryId,
-      );
-      if (hasConflict) {
-        final activeRootId = state
-            .where((i) => i.rootCategoryId != null)
-            .map((i) => i.rootCategoryId!)
-            .firstOrNull;
-        if (activeRootId != null) {
-          _ref.read(savedCartsProvider.notifier).saveCart(activeRootId, state);
-          // Cap at 2 total carts: evict the oldest inactive saved cart if needed.
-          _ref.read(savedCartsProvider.notifier).trimToOne();
-        }
-        state = [];
-        _save();
-        unawaited(_sync.clearAll());
-        startedNewCart = true;
+      final activeRootId = state
+          .where((i) => i.rootCategoryId != null)
+          .map((i) => i.rootCategoryId!)
+          .firstOrNull;
+
+      if (activeRootId != null && activeRootId != rootCategoryId) {
+        _ref.read(savedCartsProvider.notifier).saveCart(activeRootId, state);
+        final restored =
+            _ref.read(savedCartsProvider.notifier).takeCart(rootCategoryId);
+        state = restored ?? [];
+        _ref
+            .read(globalCartAddonsProvider.notifier)
+            .swapForCategory(activeRootId, rootCategoryId);
+        cartSwitched = true;
       }
     }
+
     final isAmc = amcPlan != null;
     final unitPrice = isAmc
         ? amcPlan.finalPrice * amcQuantity
@@ -303,7 +306,9 @@ class CartNotifier extends StateNotifier<List<CartItem>> {
         existing.bookingId,
         quantity ?? (existing.quantity + 1),
       );
-      return startedNewCart ? CartAddResult.newCartStarted : CartAddResult.added;
+      // After a cart switch the full new state must be synced to remote.
+      if (cartSwitched) unawaited(_syncActiveToRemote());
+      return cartSwitched ? CartAddResult.newCartStarted : CartAddResult.added;
     }
 
     final bookingId = '${service.id}_${DateTime.now().millisecondsSinceEpoch}';
@@ -338,8 +343,14 @@ class CartNotifier extends StateNotifier<List<CartItem>> {
     );
     state = [...state, newItem];
     _save();
-    unawaited(_sync.upsertItem(newItem));
-    return startedNewCart ? CartAddResult.newCartStarted : CartAddResult.added;
+    // After a cart switch sync the full new state (restored items + new item).
+    // Otherwise just upsert the single new item for efficiency.
+    if (cartSwitched) {
+      unawaited(_syncActiveToRemote());
+    } else {
+      unawaited(_sync.upsertItem(newItem));
+    }
+    return cartSwitched ? CartAddResult.newCartStarted : CartAddResult.added;
   }
 
   void removeFromCart(String bookingId) {
@@ -559,6 +570,9 @@ class CartNotifier extends StateNotifier<List<CartItem>> {
           .firstOrNull;
       if (activeRootId != null) {
         _ref.read(savedCartsProvider.notifier).saveCart(activeRootId, state);
+        _ref
+            .read(globalCartAddonsProvider.notifier)
+            .swapForCategory(activeRootId, rootCategoryId);
       }
     }
 
@@ -582,6 +596,7 @@ class CartNotifier extends StateNotifier<List<CartItem>> {
     state = [];
     _save();
     unawaited(_sync.clearAll());
+    _ref.read(globalCartAddonsProvider.notifier).clear();
   }
 
   /// Replaces the entire cart with a single item. Used by "Schedule Next Visit"
@@ -601,7 +616,10 @@ final cartItemCountProvider = Provider<int>((ref) {
 });
 
 final cartSubtotalProvider = Provider<double>((ref) {
-  return ref.watch(cartProvider).fold(0.0, (sum, item) => sum + item.totalPrice);
+  final itemsTotal =
+      ref.watch(cartProvider).fold(0.0, (sum, item) => sum + item.totalPrice);
+  final globalTotal = ref.watch(globalAddonsTotalProvider);
+  return itemsTotal + globalTotal;
 });
 
 /// Platform-wide minimum order amount, live-updated via Supabase Realtime.

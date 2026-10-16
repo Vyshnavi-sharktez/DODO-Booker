@@ -60,6 +60,10 @@ const Map<String, String> kSettingDefaults = {
   'support_auto_close_enabled': 'false',
   'support_auto_close_idle_hours': '24',
 
+  // Restore Bin
+  'deleted_bookings_retention_value': '30',
+  'deleted_bookings_retention_unit': 'days',
+
   // Subscription
   'subscription_enabled': 'false',
   'subscription_require_active': 'false',

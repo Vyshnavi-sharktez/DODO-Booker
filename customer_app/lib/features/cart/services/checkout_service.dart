@@ -41,6 +41,7 @@ class CheckoutService {
     double? preferredVendorFeeAmount,
     String paymentMethod = 'cash',
     String paymentStatus = 'pending',
+    double globalAddonsTotal = 0.0,
   }) async {
     assert(items.isNotEmpty, 'Cannot create a booking with an empty cart');
     debugPrint('[DODO][Checkout] createCartBooking started — ${items.length} item(s)');
@@ -49,7 +50,8 @@ class CheckoutService {
     final customerId = await _getCustomerId();
     debugPrint('[DODO][Checkout] customer_id=$customerId');
 
-    final subtotal = items.fold(0.0, (sum, i) => sum + i.totalPrice);
+    final subtotal =
+        items.fold(0.0, (sum, i) => sum + i.totalPrice) + globalAddonsTotal;
     final tax = taxAmount;
     final surge = surgeAmount;
     final pvFee = preferredVendorFeeAmount ?? 0.0;
@@ -206,6 +208,14 @@ class CheckoutService {
           (i) => i!.isAmc,
           orElse: () => null,
         );
+
+    // AMC bookings must be paid online; COD is not permitted.
+    if (amcItem != null && (paymentMethod == 'cash' || paymentMethod == 'cod')) {
+      throw Exception(
+        'Cash on Delivery is not available for AMC bookings. Please select online payment.',
+      );
+    }
+
     String? amcContractId;
     int amcVisitNumber = 1;
     if (amcItem != null) {

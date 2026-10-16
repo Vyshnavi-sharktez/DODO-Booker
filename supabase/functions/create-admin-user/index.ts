@@ -3,7 +3,7 @@ import { createClient } from "@supabase/supabase-js";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, apikey, content-type",
+  "Access-Control-Allow-Headers": "authorization, apikey, content-type, x-client-info",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
@@ -12,6 +12,14 @@ function json(body: unknown, status = 200): Response {
     status,
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
+}
+
+// Generates a 14-character cryptographically random temporary password.
+// Uses a character set that avoids visually ambiguous characters (0/O, 1/l/I).
+function generateTempPassword(): string {
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789!@#";
+  const bytes = crypto.getRandomValues(new Uint8Array(14));
+  return Array.from(bytes, (b) => chars[b % chars.length]).join("");
 }
 
 Deno.serve(async (req) => {
@@ -88,20 +96,29 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Send invitation email — the new admin sets their own password via the link.
-    const { data: inviteData, error: inviteError } =
-      await adminClient.auth.admin.inviteUserByEmail(normalizedEmail, {
-        data: { full_name: full_name.trim() },
+    // Create the auth user directly with a generated temporary password.
+    // Using createUser (not inviteUserByEmail) because:
+    //   1. inviteUserByEmail requires SMTP to be configured.
+    //   2. inviteUserByEmail applies stricter email validation in GoTrue v2.197+,
+    //      rejecting role-prefixed addresses (admin@, info@, support@, etc.).
+    //   3. createUser accepts any syntactically valid email.
+    const tempPassword = generateTempPassword();
+    const { data: authData, error: authError } =
+      await adminClient.auth.admin.createUser({
+        email: normalizedEmail,
+        password: tempPassword,
+        email_confirm: true,
+        user_metadata: { full_name: full_name.trim() },
       });
 
-    if (inviteError || !inviteData?.user) {
+    if (authError || !authData?.user) {
       return json(
-        { error: inviteError?.message ?? "Failed to send invitation" },
+        { error: authError?.message ?? "Failed to create auth account" },
         500
       );
     }
 
-    const authUserId = inviteData.user.id;
+    const authUserId = authData.user.id;
 
     // Insert admin_users profile row
     const profileRow: Record<string, unknown> = {
@@ -123,7 +140,7 @@ Deno.serve(async (req) => {
       .single();
 
     if (insertError || !adminRow) {
-      // Rollback: revoke the invitation so the auth user is cleaned up
+      // Rollback: delete the auth user so no orphaned account is left
       await adminClient.auth.admin.deleteUser(authUserId);
       return json(
         { error: insertError?.message ?? "Failed to create admin profile" },
@@ -143,7 +160,11 @@ Deno.serve(async (req) => {
       }
     }
 
-    return json({ success: true, admin_user_id: adminRow.id });
+    return json({
+      success: true,
+      admin_user_id: adminRow.id,
+      temp_password: tempPassword,
+    });
   } catch (err) {
     console.error("create-admin-user error:", err);
     return json({ error: String(err) }, 500);

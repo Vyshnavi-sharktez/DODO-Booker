@@ -85,11 +85,13 @@ class _AmcData {
 class BookingDetailsDialog extends ConsumerStatefulWidget {
   final Booking booking;
   final VoidCallback? onAssign;
+  final bool allowAssign;
 
   const BookingDetailsDialog({
     super.key,
     required this.booking,
     this.onAssign,
+    this.allowAssign = true,
   });
 
   @override
@@ -391,6 +393,7 @@ void _triggerAssign(Booking booking) {
                                     _CustomerCard(
                                       customer: bookingCustomer,
                                       customerId: booking.customerId,
+                                      fallbackName: booking.customerName,
                                       onViewProfile: () {
                                         Navigator.of(context).pop();
                                         context.push(
@@ -404,7 +407,9 @@ void _triggerAssign(Booking booking) {
                                       booking: booking,
                                       vendorNameResolved: vendorNameResolved,
                                       teamName: team?.teamName,
-                                      onAssign: () => _triggerAssign(booking),
+                                      onAssign: widget.allowAssign
+                                          ? () => _triggerAssign(booking)
+                                          : null,
                                     ),
                                   ],
                                 ),
@@ -490,6 +495,7 @@ void _triggerAssign(Booking booking) {
                           _CustomerCard(
                             customer: bookingCustomer,
                             customerId: booking.customerId,
+                            fallbackName: booking.customerName,
                             onViewProfile: () {
                               Navigator.of(context).pop();
                               context.push(
@@ -750,19 +756,21 @@ class _BadgePill extends StatelessWidget {
 class _CustomerCard extends StatelessWidget {
   final Customer? customer;
   final String customerId;
+  final String? fallbackName;
   final VoidCallback onViewProfile;
 
   const _CustomerCard({
     required this.customer,
     required this.customerId,
     required this.onViewProfile,
+    this.fallbackName,
   });
 
   @override
   Widget build(BuildContext context) {
     final name = customer?.fullName.isNotEmpty == true
         ? customer!.fullName
-        : 'Customer';
+        : (fallbackName?.isNotEmpty == true ? fallbackName! : 'Customer');
     final initial = name.isNotEmpty ? name[0].toUpperCase() : 'C';
 
     final truncatedId = customerId.length > 24
@@ -1175,13 +1183,13 @@ class _AssignedToCard extends StatelessWidget {
   final Booking booking;
   final String vendorNameResolved;
   final String? teamName;
-  final VoidCallback onAssign;
+  final VoidCallback? onAssign;
 
   const _AssignedToCard({
     required this.booking,
     required this.vendorNameResolved,
     required this.teamName,
-    required this.onAssign,
+    this.onAssign,
   });
 
   @override
@@ -1258,7 +1266,7 @@ class _AssignedToCard extends StatelessWidget {
                       fontWeight: FontWeight.w500,
                     ),
                   ),
-                  if (!isCancelled) ...[
+                  if (!isCancelled && onAssign != null) ...[
                     const SizedBox(height: 4),
                     GestureDetector(
                       onTap: onAssign,
@@ -1336,7 +1344,7 @@ class _AssignedToCard extends StatelessWidget {
                       ],
                     ),
                   ),
-                  if (!isCancelled)
+                  if (!isCancelled && onAssign != null)
                     OutlinedButton.icon(
                       onPressed: onAssign,
                       icon: const Icon(Icons.swap_horiz_rounded, size: 14),

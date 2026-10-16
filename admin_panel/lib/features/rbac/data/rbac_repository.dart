@@ -149,7 +149,9 @@ class RbacRepository {
         );
   }
 
-  Future<void> createAdminUserViaEdge({
+  /// Creates an admin user via the edge function.
+  /// Returns the temporary password generated for the new account.
+  Future<String> createAdminUserViaEdge({
     required String fullName,
     required String email,
     String? phone,
@@ -173,8 +175,16 @@ class RbacRepository {
 
     if (response.status != 200) {
       final body = response.data;
-      final msg = (body is Map ? body['error'] : null) ?? 'Failed to create admin user';
+      final msg = (body is Map ? body['error'] : null) as String? ??
+          'Failed to create admin user';
       throw Exception(msg);
     }
+
+    final body = response.data;
+    final tempPassword = (body is Map ? body['temp_password'] : null) as String?;
+    if (tempPassword == null || tempPassword.isEmpty) {
+      throw Exception('Account created but temporary password was not returned');
+    }
+    return tempPassword;
   }
 }

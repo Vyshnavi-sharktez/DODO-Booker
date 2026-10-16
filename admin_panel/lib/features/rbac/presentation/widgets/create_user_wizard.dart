@@ -149,6 +149,12 @@ class _CreateUserWizardState extends ConsumerState<CreateUserWizard> {
 
   // ── Save ────────────────────────────────────────────────────────────────────
 
+  String _friendlyError(Object e) {
+    final s = e.toString();
+    const prefix = 'Exception: ';
+    return s.startsWith(prefix) ? s.substring(prefix.length) : s;
+  }
+
   Future<void> _save() async {
     setState(() {
       _saving = true;
@@ -156,20 +162,27 @@ class _CreateUserWizardState extends ConsumerState<CreateUserWizard> {
     });
     try {
       if (_userType == 'admin') {
-        await _saveAdmin();
+        final tempPassword = await _saveAdmin();
+        if (mounted) {
+          await _showTempPasswordDialog(
+            email: _email.text.trim(),
+            tempPassword: tempPassword,
+          );
+          if (mounted) Navigator.of(context).pop(true);
+        }
       } else {
         await _saveVendor();
+        if (mounted) Navigator.of(context).pop(true);
       }
-      if (mounted) Navigator.of(context).pop(true);
     } catch (e) {
-      if (mounted) setState(() => _saveError = e.toString());
+      if (mounted) setState(() => _saveError = _friendlyError(e));
     } finally {
       if (mounted) setState(() => _saving = false);
     }
   }
 
-  Future<void> _saveAdmin() async {
-    await ref.read(rbacAdminUsersNotifierProvider.notifier).createAdminUser(
+  Future<String> _saveAdmin() async {
+    return ref.read(rbacAdminUsersNotifierProvider.notifier).createAdminUser(
           fullName: _fullName.text.trim(),
           email: _email.text.trim(),
           phone: _phone.text.trim().isEmpty ? null : '+91${_phone.text.trim()}',
@@ -178,6 +191,20 @@ class _CreateUserWizardState extends ConsumerState<CreateUserWizard> {
           longitude: _longitude,
           roleId: _selectedRoleId,
         );
+  }
+
+  Future<void> _showTempPasswordDialog({
+    required String email,
+    required String tempPassword,
+  }) async {
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => _TempPasswordDialog(
+        email: email,
+        tempPassword: tempPassword,
+      ),
+    );
   }
 
   Future<void> _saveVendor() async {
@@ -742,7 +769,7 @@ class _AdminDetailsStep extends ConsumerWidget {
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
-                  'An invitation email will be sent. The admin sets their own password via the link.',
+                  'A temporary password will be generated. Share it securely with the new admin — they can change it after their first login.',
                   style: TextStyle(
                       fontSize: 12, color: AppColors.textSecondary),
                 ),
@@ -1012,6 +1039,113 @@ class _DocTile extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+// ── Temp-password dialog ──────────────────────────────────────────────────────
+
+class _TempPasswordDialog extends StatelessWidget {
+  const _TempPasswordDialog({
+    required this.email,
+    required this.tempPassword,
+  });
+
+  final String email;
+  final String tempPassword;
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      title: Row(
+        children: [
+          Icon(Icons.check_circle_rounded,
+              color: AppColors.success, size: 22),
+          const SizedBox(width: 8),
+          const Text('Admin Account Created'),
+        ],
+      ),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Share this temporary password securely with the new admin. '
+            'They will be prompted to change it after their first login.',
+            style: TextStyle(
+                fontSize: 13, color: AppColors.textSecondary),
+          ),
+          const SizedBox(height: 16),
+          _LabeledValue(label: 'Email', value: email),
+          const SizedBox(height: 10),
+          _LabeledValue(
+            label: 'Temporary Password',
+            value: tempPassword,
+            monospace: true,
+          ),
+        ],
+      ),
+      actions: [
+        FilledButton.icon(
+          icon: const Icon(Icons.copy_rounded, size: 16),
+          label: const Text('Copy Password & Close'),
+          style: FilledButton.styleFrom(
+              backgroundColor: AppColors.primary),
+          onPressed: () {
+            Clipboard.setData(ClipboardData(text: tempPassword));
+            Navigator.of(context).pop();
+          },
+        ),
+      ],
+    );
+  }
+}
+
+class _LabeledValue extends StatelessWidget {
+  const _LabeledValue({
+    required this.label,
+    required this.value,
+    this.monospace = false,
+  });
+
+  final String label;
+  final String value;
+  final bool monospace;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              color: AppColors.textSecondary),
+        ),
+        const SizedBox(height: 4),
+        Container(
+          width: double.infinity,
+          padding:
+              const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          decoration: BoxDecoration(
+            color: AppColors.background,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: AppColors.border),
+          ),
+          child: SelectableText(
+            value,
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              fontFamily: monospace ? 'monospace' : null,
+              letterSpacing: monospace ? 1.2 : null,
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

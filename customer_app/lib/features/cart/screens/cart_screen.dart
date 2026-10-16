@@ -19,6 +19,10 @@ import '../../home/services/home_providers.dart';
 import '../../tax/models/tax_settings_model.dart';
 import '../../tax/providers/tax_provider.dart';
 import 'checkout_screen.dart';
+import '../../../models/addon_model.dart';
+import '../../category/services/category_providers.dart';
+import '../../service/widgets/service_addon_section.dart';
+import '../providers/global_cart_addons_provider.dart';
 
 // ── Cart-page recommendation provider ─────────────────────────────────────────
 //
@@ -147,6 +151,8 @@ class _CartScreenState extends ConsumerState<CartScreen> {
                                   child: _CartItemCard(item: item),
                                 )),
                             const SizedBox(height: 8),
+                            const _GlobalAddonsSection(),
+                            const SizedBox(height: 8),
                             _CartSummaryCard(items: items, subtotal: subtotal),
                             const _CartRecommendations(),
                             // Padding so the sticky bar doesn't overlap the last row
@@ -213,6 +219,8 @@ class _ModalBody extends ConsumerWidget {
                           padding: const EdgeInsets.only(bottom: 12),
                           child: _CartItemCard(item: item),
                         )),
+                    const SizedBox(height: 8),
+                    const _GlobalAddonsSection(),
                     const SizedBox(height: 8),
                     _CartSummaryCard(items: items, subtotal: subtotal),
                     const _CartRecommendations(),
@@ -534,6 +542,11 @@ class _CartItemCardState extends ConsumerState<_CartItemCard> {
             ),
           ),
 
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            child: _CartAddonInline(item: item),
+          ),
+
           // ── Expanded breakdown ──────────────────────────────────────
           if (_expanded) ...[
             const Divider(color: AppColors.divider, height: 0, thickness: 0.8),
@@ -761,6 +774,7 @@ class _CartItemCardState extends ConsumerState<_CartItemCard> {
               ],
             ),
             const SizedBox(height: 12),
+            _CartAddonInline(item: item),
             const Divider(color: AppColors.divider, height: 0, thickness: 0.8),
             const SizedBox(height: 12),
             Row(
@@ -794,6 +808,582 @@ class _CartItemCardState extends ConsumerState<_CartItemCard> {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+// ── Cart item add-ons (inline summary + edit sheet) ───────────────────────────
+
+class _CartAddonInline extends ConsumerWidget {
+  final CartItem item;
+
+  const _CartAddonInline({required this.item});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    if (item.isAmc || item.isCustomService) return const SizedBox.shrink();
+
+    final addonsAsync = ref.watch(nodeAddonsProvider(item.serviceId));
+
+    return addonsAsync.when(
+      data: (addOns) {
+        // Only show per-item section for non-global addons.
+        final nonGlobal = addOns.where((a) => !a.isGlobal).toList();
+        if (nonGlobal.isEmpty) return const SizedBox.shrink();
+        return _CartAddonSummary(item: item, addOns: nonGlobal);
+      },
+      loading: () => const SizedBox.shrink(),
+      error: (_, _) => const SizedBox.shrink(),
+    );
+  }
+}
+
+class _CartAddonSummary extends ConsumerWidget {
+  final CartItem item;
+  final List<AddOnModel> addOns;
+
+  const _CartAddonSummary({required this.item, required this.addOns});
+
+  Map<String, SelectedAddon> get _selectedMap =>
+      {for (final a in item.addons) a.addonId: a};
+
+  void _toggle(WidgetRef ref, AddOnModel addon, bool isCurrentlySelected) {
+    final map = Map<String, SelectedAddon>.from(_selectedMap);
+    if (isCurrentlySelected) {
+      map.remove(addon.id);
+    } else {
+      map[addon.id] = SelectedAddon(
+        addonId: addon.id,
+        addonName: addon.name,
+        addonPrice: addon.finalPrice,
+        originalAddonPrice: addon.hasDiscount ? addon.price : null,
+        quantity: 1,
+      );
+    }
+    _update(ref, map.values.toList());
+  }
+
+  void _setQty(WidgetRef ref, String addonId, int newQty) {
+    final map = Map<String, SelectedAddon>.from(_selectedMap);
+    if (newQty <= 0) {
+      map.remove(addonId);
+    } else {
+      final existing = map[addonId];
+      if (existing != null) map[addonId] = existing.copyWith(quantity: newQty);
+    }
+    _update(ref, map.values.toList());
+  }
+
+  void _update(WidgetRef ref, List<SelectedAddon> newAddons) {
+    final basePrice = item.unitPrice - totalAddonsPrice(item.addons);
+    ref.read(cartProvider.notifier).updateAddons(
+          item.bookingId,
+          newAddons,
+          basePrice + totalAddonsPrice(newAddons),
+        );
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final tt = Theme.of(context).textTheme;
+    final selectedMap = _selectedMap;
+    final selectedCount = selectedMap.length;
+
+    return Padding(
+      padding: const EdgeInsets.only(left: 4),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Divider(color: AppColors.divider, height: 16, thickness: 0.8),
+          Row(
+            children: [
+              Text(
+                'Add-ons',
+                style: tt.titleSmall?.copyWith(
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.textPrimary,
+                ),
+              ),
+              if (selectedCount > 0) ...[
+                const SizedBox(width: 6),
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: Colors.black,
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Text(
+                    '$selectedCount selected',
+                    style: const TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w700,
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ),
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: addOns.map((addon) {
+              final selectedAddon = selectedMap[addon.id];
+              final isSelected = selectedAddon != null;
+              final qty = selectedAddon?.quantity ?? 1;
+
+              if (isSelected) {
+                return Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    GestureDetector(
+                      onTap: () => _toggle(ref, addon, true),
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 180),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: Colors.black,
+                          borderRadius: BorderRadius.circular(8),
+                          border:
+                              Border.all(color: Colors.black, width: 1.2),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.check_rounded,
+                                size: 13, color: Colors.white),
+                            const SizedBox(width: 5),
+                            Text(
+                              addon.name,
+                              style: const TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                                color: Colors.white,
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                            Text(
+                              '+₹${(addon.finalPrice * qty).toInt()}',
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w500,
+                                color: Colors.white.withAlpha(180),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    _AddonQtyStepper(
+                      qty: qty,
+                      onDecrement: () =>
+                          _setQty(ref, addon.id, qty - 1),
+                      onIncrement: () =>
+                          _setQty(ref, addon.id, qty + 1),
+                    ),
+                  ],
+                );
+              }
+
+              return GestureDetector(
+                onTap: () => _toggle(ref, addon, false),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 180),
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 12, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: AppColors.surface,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                        color: AppColors.border, width: 1.2),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        addon.name,
+                        style: const TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.textPrimary,
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        '+₹${addon.finalPrice.toInt()}',
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500,
+                          color: AppColors.textSecondary,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            }).toList(),
+          ),
+          const SizedBox(height: 12),
+        ],
+      ),
+    );
+  }
+}
+
+class _CartAddonSheet extends ConsumerStatefulWidget {
+  final CartItem item;
+  final List<AddOnModel> addOns;
+
+  const _CartAddonSheet({required this.item, required this.addOns});
+
+  @override
+  ConsumerState<_CartAddonSheet> createState() => _CartAddonSheetState();
+}
+
+class _CartAddonSheetState extends ConsumerState<_CartAddonSheet> {
+  late Set<String> _selectedIds;
+  late double _basePrice;
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedIds = widget.item.addons.map((a) => a.addonId).toSet();
+    _basePrice = widget.item.unitPrice - totalAddonsPrice(widget.item.addons);
+  }
+
+  void _onToggle(String addonId, bool selected) {
+    setState(() {
+      if (selected) {
+        _selectedIds.add(addonId);
+      } else {
+        _selectedIds.remove(addonId);
+      }
+    });
+    final newAddons = buildSelectedAddons(widget.addOns, _selectedIds);
+    ref.read(cartProvider.notifier).updateAddons(
+          widget.item.bookingId,
+          newAddons,
+          _basePrice + totalAddonsPrice(newAddons),
+        );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final tt = Theme.of(context).textTheme;
+    return SafeArea(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        widget.item.serviceName,
+                        style: tt.titleSmall
+                            ?.copyWith(fontWeight: FontWeight.w700),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        'Tap to add or remove',
+                        style:
+                            tt.bodySmall?.copyWith(color: AppColors.textHint),
+                      ),
+                    ],
+                  ),
+                ),
+                GestureDetector(
+                  onTap: () => Navigator.of(context).pop(),
+                  child: const Padding(
+                    padding: EdgeInsets.only(left: 12),
+                    child: Icon(
+                      Icons.close_rounded,
+                      size: 22,
+                      color: AppColors.textHint,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          ServiceAddonSection(
+            addOns: widget.addOns,
+            selectedIds: _selectedIds,
+            onToggle: _onToggle,
+          ),
+          const SizedBox(height: 8),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Global add-ons section (shown once per cart) ──────────────────────────────
+
+class _GlobalAddonsSection extends ConsumerWidget {
+  const _GlobalAddonsSection();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final globalState = ref.watch(globalCartAddonsProvider);
+    final items = ref.watch(cartProvider);
+
+    // Find the first non-AMC, non-custom service to load available global addons.
+    final firstServiceId = items
+        .where((i) => !i.isAmc && !i.isCustomService)
+        .map((i) => i.serviceId)
+        .firstOrNull;
+    if (firstServiceId == null) return const SizedBox.shrink();
+
+    final addonsAsync = ref.watch(nodeAddonsProvider(firstServiceId));
+    return addonsAsync.when(
+      data: (allAddOns) {
+        final globalAddOns = allAddOns.where((a) => a.isGlobal).toList();
+        if (globalAddOns.isEmpty) return const SizedBox.shrink();
+        return _GlobalAddonsSectionContent(
+          globalAddOns: globalAddOns,
+          globalState: globalState,
+        );
+      },
+      loading: () => const SizedBox.shrink(),
+      error: (_, _) => const SizedBox.shrink(),
+    );
+  }
+}
+
+class _GlobalAddonsSectionContent extends ConsumerWidget {
+  final List<AddOnModel> globalAddOns;
+  final Map<String, SelectedAddon> globalState;
+
+  const _GlobalAddonsSectionContent({
+    required this.globalAddOns,
+    required this.globalState,
+  });
+
+  void _setQty(WidgetRef ref, String addonId, int newQty) {
+    ref.read(globalCartAddonsProvider.notifier).setQuantity(addonId, newQty);
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final tt = Theme.of(context).textTheme;
+    final notifier = ref.read(globalCartAddonsProvider.notifier);
+    final selectedCount = globalState.length;
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.border, width: 0.8),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withAlpha(6),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Text(
+                'Global Add-ons',
+                style: tt.titleSmall?.copyWith(fontWeight: FontWeight.w700),
+              ),
+              if (selectedCount > 0) ...[
+                const SizedBox(width: 6),
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: Colors.black,
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Text(
+                    '$selectedCount selected',
+                    style: const TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w700,
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Applied once to your entire cart',
+            style: tt.labelSmall?.copyWith(color: AppColors.textHint),
+          ),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: globalAddOns.map((addon) {
+              final selectedAddon = globalState[addon.id];
+              final isSelected = selectedAddon != null;
+              final qty = selectedAddon?.quantity ?? 1;
+
+              if (isSelected) {
+                return Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    GestureDetector(
+                      onTap: () => notifier.toggle(addon),
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 180),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: Colors.black,
+                          borderRadius: BorderRadius.circular(8),
+                          border:
+                              Border.all(color: Colors.black, width: 1.2),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.check_rounded,
+                                size: 13, color: Colors.white),
+                            const SizedBox(width: 5),
+                            Text(
+                              addon.name,
+                              style: const TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                                color: Colors.white,
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                            Text(
+                              '+₹${(addon.finalPrice * qty).toInt()}',
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w500,
+                                color: Colors.white.withAlpha(180),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    _AddonQtyStepper(
+                      qty: qty,
+                      onDecrement: () => _setQty(ref, addon.id, qty - 1),
+                      onIncrement: () => _setQty(ref, addon.id, qty + 1),
+                    ),
+                  ],
+                );
+              }
+
+              return GestureDetector(
+                onTap: () => notifier.toggle(addon),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 180),
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 12, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: AppColors.surface,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                        color: AppColors.border, width: 1.2),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        addon.name,
+                        style: const TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.textPrimary,
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        '+₹${addon.finalPrice.toInt()}',
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500,
+                          color: AppColors.textSecondary,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            }).toList(),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Compact qty stepper for add-ons ──────────────────────────────────────────
+
+class _AddonQtyStepper extends StatelessWidget {
+  final int qty;
+  final VoidCallback onDecrement;
+  final VoidCallback onIncrement;
+
+  const _AddonQtyStepper({
+    required this.qty,
+    required this.onDecrement,
+    required this.onIncrement,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        border: Border.all(color: AppColors.border),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Clickable(
+            onTap: onDecrement,
+            child: const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+              child: Icon(Icons.remove_rounded, size: 13, color: AppColors.primary),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+            child: Text(
+              '$qty',
+              style: const TextStyle(
+                  fontSize: 13, fontWeight: FontWeight.w700),
+            ),
+          ),
+          Clickable(
+            onTap: onIncrement,
+            child: const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+              child: Icon(Icons.add_rounded, size: 13, color: AppColors.primary),
+            ),
+          ),
+        ],
       ),
     );
   }

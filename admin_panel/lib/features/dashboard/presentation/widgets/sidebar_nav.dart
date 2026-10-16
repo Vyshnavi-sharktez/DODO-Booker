@@ -78,6 +78,12 @@ const _kNavGroups = <_NavGroup>[
         requiredPermission: 'settings.manage',
       ),
       _NavItem(
+        label: 'Add-ons',
+        icon: Icons.extension_rounded,
+        route: '/dashboard/addons',
+        requiredPermission: 'category.view',
+      ),
+      _NavItem(
         label: 'AMC Plans',
         icon: Icons.auto_mode_rounded,
         route: '/dashboard/amc-plans',
@@ -112,6 +118,12 @@ const _kNavGroups = <_NavGroup>[
         icon: Icons.shield_rounded,
         route: '/dashboard/warranty-claims',
         requiredPermission: 'booking.view',
+      ),
+      _NavItem(
+        label: 'Restore Bin',
+        icon: Icons.restore_from_trash_rounded,
+        route: '/dashboard/restore-bin',
+        requiredPermission: 'booking.delete',
       ),
     ],
   ),

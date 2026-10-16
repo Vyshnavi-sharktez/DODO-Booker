@@ -4,6 +4,7 @@ class ServiceAddon {
   final String? description;
   final double price;
   final bool isActive;
+  final bool isGlobal;
   final String? serviceId;
   final DateTime? createdAt;
   final String discountType;
@@ -15,6 +16,7 @@ class ServiceAddon {
     this.description,
     required this.price,
     required this.isActive,
+    this.isGlobal = false,
     this.serviceId,
     this.createdAt,
     this.discountType = 'percentage',
@@ -37,6 +39,7 @@ class ServiceAddon {
       description: map['description'] as String?,
       price: (map['price'] as num?)?.toDouble() ?? 0.0,
       isActive: map['is_active'] as bool? ?? true,
+      isGlobal: map['is_global'] as bool? ?? false,
       serviceId: map['service_id'] as String?,
       createdAt: map['created_at'] != null
           ? DateTime.tryParse(map['created_at'] as String)
@@ -51,6 +54,7 @@ class ServiceAddon {
     String? description,
     double? price,
     bool? isActive,
+    bool? isGlobal,
     Object? serviceId = _sentinel,
     String? discountType,
     double? discountValue,
@@ -61,6 +65,7 @@ class ServiceAddon {
       description: description ?? this.description,
       price: price ?? this.price,
       isActive: isActive ?? this.isActive,
+      isGlobal: isGlobal ?? this.isGlobal,
       serviceId: serviceId == _sentinel
           ? this.serviceId
           : serviceId as String?,

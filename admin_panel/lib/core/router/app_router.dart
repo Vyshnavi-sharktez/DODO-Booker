@@ -51,6 +51,8 @@ import '../../features/refunds/presentation/pages/refund_requests_page.dart';
 import '../../features/support/presentation/pages/support_inbox_page.dart';
 import '../../features/availability_blocks/presentation/pages/availability_blocks_page.dart';
 import '../../features/broadcast_notifications/presentation/pages/broadcast_notifications_page.dart';
+import '../../features/bookings/presentation/pages/restore_bin_page.dart';
+import '../../features/service_addons/presentation/pages/addons_page.dart';
 import '../../shared/pages/unauthorized_page.dart';
 import '../rbac/permission_guard.dart';
 
@@ -425,6 +427,13 @@ final routerProvider = Provider<GoRouter>((ref) {
             ),
           ),
           GoRoute(
+            path: '/dashboard/addons',
+            name: 'addons',
+            pageBuilder: (context, state) => const NoTransitionPage(
+              child: AddonsPage(),
+            ),
+          ),
+          GoRoute(
             path: '/dashboard/amc-plans',
             name: 'amcPlans',
             pageBuilder: (context, state) => const NoTransitionPage(
@@ -478,6 +487,13 @@ final routerProvider = Provider<GoRouter>((ref) {
             name: 'broadcastNotifications',
             pageBuilder: (context, state) => const NoTransitionPage(
               child: BroadcastNotificationsPage(),
+            ),
+          ),
+          GoRoute(
+            path: '/dashboard/restore-bin',
+            name: 'restoreBin',
+            pageBuilder: (context, state) => const NoTransitionPage(
+              child: RestoreBinPage(),
             ),
           ),
         ],

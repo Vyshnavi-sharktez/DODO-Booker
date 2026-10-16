@@ -12,6 +12,7 @@ import '../../../models/service_attribute_model.dart';
 import '../../../models/addon_model.dart';
 import '../../cart/models/cart_item.dart';
 import '../../cart/providers/cart_provider.dart';
+import '../../cart/providers/global_cart_addons_provider.dart';
 import '../../cart/utils/cart_launcher.dart';
 import '../../category/services/category_providers.dart';
 import '../../reviews/widgets/service_reviews_section.dart';
@@ -100,7 +101,8 @@ class CatalogNodeScreen extends ConsumerStatefulWidget {
 class _CatalogNodeScreenState extends ConsumerState<CatalogNodeScreen> {
   final Map<String, String> _selections = {};
   double _priceAdjustment = 0.0;
-  final Set<String> _selectedAddonIds = {};
+  // Non-global addon quantities: addonId → qty (presence = selected).
+  final Map<String, int> _addonQuantities = {};
   AmcPlanModel? _selectedAmcPlan;
   // Tracks the explicitly chosen attribute variant (null = auto-select first on load).
   String? _selectedAttrId;
@@ -132,11 +134,24 @@ class _CatalogNodeScreenState extends ConsumerState<CatalogNodeScreen> {
   }
 
   void _onAddonToggled(String addonId, bool selected) {
+    // Routing for global addons happens inside _InlineAddonCards /
+    // _WebAddonsGrid via globalCartAddonsProvider. This callback handles
+    // non-global addons only.
     setState(() {
       if (selected) {
-        _selectedAddonIds.add(addonId);
+        _addonQuantities[addonId] = _addonQuantities[addonId] ?? 1;
       } else {
-        _selectedAddonIds.remove(addonId);
+        _addonQuantities.remove(addonId);
+      }
+    });
+  }
+
+  void _onAddonQtyChanged(String addonId, int qty) {
+    setState(() {
+      if (qty <= 0) {
+        _addonQuantities.remove(addonId);
+      } else {
+        _addonQuantities[addonId] = qty;
       }
     });
   }
@@ -201,8 +216,22 @@ class _CatalogNodeScreenState extends ConsumerState<CatalogNodeScreen> {
         node.relAvailabilityStatus != 'unavailable' &&
         node.relAvailabilityStatus != 'hidden';
 
+    // Effective addon quantities: non-global from local state, global from provider.
+    final globalAddonState = ref.watch(globalCartAddonsProvider);
+    final effectiveQuantities = <String, int>{
+      ..._addonQuantities,
+      ...globalAddonState.map((k, v) => MapEntry(k, v.quantity)),
+    };
+    final effectiveSelectedIds = effectiveQuantities.keys.toSet();
+
+    // addonsTotal for booking-bar price: only non-global addons (global are cart-wide).
+    final nonGlobalAddOns = addOns.where((a) => !a.isGlobal).toList();
     final addonsTotal = totalAddonsPrice(
-      buildSelectedAddons(addOns, _selectedAddonIds),
+      buildSelectedAddons(
+        nonGlobalAddOns,
+        _addonQuantities.keys.toSet(),
+        quantities: _addonQuantities,
+      ),
     );
     // Flat-model attribute variants: auto-select first on load.
     final attrEntries = attrs.where((a) => a.options.isNotEmpty).toList();
@@ -260,15 +289,17 @@ class _CatalogNodeScreenState extends ConsumerState<CatalogNodeScreen> {
         parentNodeId: widget.parentNodeId,
         rootCategoryId: effectiveRootId,
         selections: _selections,
-        selectedAddonIds: _selectedAddonIds,
+        selectedAddonIds: effectiveSelectedIds,
+        addonQuantities: effectiveQuantities,
         selectedAmcPlan: _selectedAmcPlan,
         onOptionSelected: _onOptionSelected,
         onAddonToggled: _onAddonToggled,
+        onAddonQtyChanged: _onAddonQtyChanged,
         onAmcPlanSelected: (plan) => setState(() => _selectedAmcPlan = plan),
         effectiveAttrId: effectiveAttrId,
         onAttrSelected: (id) => setState(() {
           _selectedAttrId = id;
-          _selectedAddonIds.clear();
+          _addonQuantities.clear();
         }),
         selectedAttrPrice: selectedAttrPrice,
         selectedAttrOriginalPrice: selectedAttrOriginalPrice,
@@ -413,7 +444,7 @@ class _CatalogNodeScreenState extends ConsumerState<CatalogNodeScreen> {
                             selectedAttrId: effectiveAttrId,
                             onAttrSelected: (id) => setState(() {
                               _selectedAttrId = id;
-                              _selectedAddonIds.clear();
+                              _addonQuantities.clear();
                             }),
                             quantities: _quantities,
                             onQtyChanged: _setQty,
@@ -440,8 +471,10 @@ class _CatalogNodeScreenState extends ConsumerState<CatalogNodeScreen> {
                           ),
                           _InlineAddonCards(
                             addOns: addOns,
-                            selectedIds: _selectedAddonIds,
+                            selectedIds: effectiveSelectedIds,
+                            quantities: effectiveQuantities,
                             onToggle: _onAddonToggled,
+                            onQtyChanged: _onAddonQtyChanged,
                             isWeb: false,
                           ),
                         ],
@@ -584,7 +617,8 @@ class _CatalogNodeScreenState extends ConsumerState<CatalogNodeScreen> {
                           attrs: attrs,
                           selections: _selections,
                           addOns: addOns,
-                          selectedAddonIds: _selectedAddonIds,
+                          selectedAddonIds: _addonQuantities.keys.toSet(),
+                          addonQuantities: _addonQuantities,
                           amcPlan: _selectedAmcPlan,
                           amcQuantity: 1,
                           attrOptionPrice: selectedAttrPrice,
@@ -688,7 +722,7 @@ class _CatalogNodeScreenState extends ConsumerState<CatalogNodeScreen> {
                     selectedAttrId: effectiveAttrId,
                     onAttrSelected: (id) => setState(() {
                       _selectedAttrId = id;
-                      _selectedAddonIds.clear();
+                      _addonQuantities.clear();
                     }),
                     quantities: _quantities,
                     onQtyChanged: _setQty,
@@ -716,8 +750,10 @@ class _CatalogNodeScreenState extends ConsumerState<CatalogNodeScreen> {
                   ),
                   _InlineAddonCards(
                     addOns: addOns,
-                    selectedIds: _selectedAddonIds,
+                    selectedIds: effectiveSelectedIds,
+                    quantities: effectiveQuantities,
                     onToggle: _onAddonToggled,
+                    onQtyChanged: _onAddonQtyChanged,
                     isWeb: false,
                   ),
                 ],
@@ -853,7 +889,8 @@ class _CatalogNodeScreenState extends ConsumerState<CatalogNodeScreen> {
                     attrs: attrs,
                     selections: _selections,
                     addOns: addOns,
-                    selectedAddonIds: _selectedAddonIds,
+                    selectedAddonIds: _addonQuantities.keys.toSet(),
+                    addonQuantities: _addonQuantities,
                     amcPlan: _selectedAmcPlan,
                     amcQuantity: 1,
                     attrOptionPrice: selectedAttrPrice,
@@ -1267,35 +1304,56 @@ class _SectionHeaderRow extends StatelessWidget {
 // Web: 4-column grid with thumbnail-left design
 // ═══════════════════════════════════════════════════════════════════════════════
 
-class _InlineAddonCards extends StatelessWidget {
+class _InlineAddonCards extends ConsumerWidget {
   const _InlineAddonCards({
     required this.addOns,
     required this.selectedIds,
+    required this.quantities,
     required this.onToggle,
+    required this.onQtyChanged,
     required this.isWeb,
   });
 
   final List<AddOnModel> addOns;
   final Set<String> selectedIds;
+  // Unified qty map: non-global from parent, global from globalCartAddonsProvider.
+  final Map<String, int> quantities;
   final void Function(String, bool) onToggle;
+  final void Function(String, int) onQtyChanged;
   final bool isWeb;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     if (isWeb) {
       return Column(
         children: addOns
             .map((a) => _AddonWebRow(
                   addOn: a,
                   isSelected: selectedIds.contains(a.id),
-                  onToggle: (sel) => onToggle(a.id, sel),
+                  quantity: quantities[a.id] ?? 1,
+                  onToggle: (sel) {
+                    if (a.isGlobal) {
+                      ref.read(globalCartAddonsProvider.notifier).toggle(a);
+                    } else {
+                      onToggle(a.id, sel);
+                    }
+                  },
+                  onQtyChanged: (qty) {
+                    if (a.isGlobal) {
+                      ref
+                          .read(globalCartAddonsProvider.notifier)
+                          .setQuantity(a.id, qty);
+                    } else {
+                      onQtyChanged(a.id, qty);
+                    }
+                  },
                 ))
             .toList(),
       );
     }
 
     return HorizontalCarousel(
-      height: 210,
+      height: 230,
       itemCount: addOns.length,
       scrollStep: 3 * (160.0 + 12.0),
       padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -1304,24 +1362,44 @@ class _InlineAddonCards extends StatelessWidget {
         child: _AddonMobileCard(
           addOn: addOns[i],
           isSelected: selectedIds.contains(addOns[i].id),
-          onToggle: (sel) => onToggle(addOns[i].id, sel),
+          quantity: quantities[addOns[i].id] ?? 1,
+          onToggle: (sel) {
+            if (addOns[i].isGlobal) {
+              ref.read(globalCartAddonsProvider.notifier).toggle(addOns[i]);
+            } else {
+              onToggle(addOns[i].id, sel);
+            }
+          },
+          onQtyChanged: (qty) {
+            if (addOns[i].isGlobal) {
+              ref
+                  .read(globalCartAddonsProvider.notifier)
+                  .setQuantity(addOns[i].id, qty);
+            } else {
+              onQtyChanged(addOns[i].id, qty);
+            }
+          },
         ),
       ),
     );
   }
 }
 
-// Mobile add-on card: 110px wide, image top
+// Mobile add-on card: 160px wide, image top
 class _AddonMobileCard extends StatefulWidget {
   const _AddonMobileCard({
     required this.addOn,
     required this.isSelected,
+    required this.quantity,
     required this.onToggle,
+    required this.onQtyChanged,
   });
 
   final AddOnModel addOn;
   final bool isSelected;
+  final int quantity;
   final ValueChanged<bool> onToggle;
+  final ValueChanged<int> onQtyChanged;
 
   @override
   State<_AddonMobileCard> createState() => _AddonMobileCardState();
@@ -1331,122 +1409,199 @@ class _AddonMobileCardState extends State<_AddonMobileCard> {
   @override
   Widget build(BuildContext context) {
     final sel = widget.isSelected;
+    final qty = widget.quantity;
     return MouseRegion(
       cursor: SystemMouseCursors.click,
       child: GestureDetector(
-      onTap: () => widget.onToggle(!sel),
-      child: SizedBox(
-        width: 160,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Image area
-            AnimatedContainer(
-              duration: const Duration(milliseconds: 150),
-              height: 120,
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(10),
-                border: sel
-                    ? Border.all(color: _kGold, width: 1.5)
-                    : Border.all(color: _kBorder, width: 0.8),
-                color: sel
-                    ? const Color(0xFFFDF2D9)
-                    : const Color(0xFFEAE3D4),
-                gradient: sel
-                    ? null
-                    : const LinearGradient(
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                        colors: [Color(0xFFF1ECE1), Color(0xFFEAE3D4)],
-                      ),
+        onTap: () => widget.onToggle(!sel),
+        child: SizedBox(
+          width: 160,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Image area
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 150),
+                height: 120,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(10),
+                  border: sel
+                      ? Border.all(color: _kGold, width: 1.5)
+                      : Border.all(color: _kBorder, width: 0.8),
+                  color: sel
+                      ? const Color(0xFFFDF2D9)
+                      : const Color(0xFFEAE3D4),
+                  gradient: sel
+                      ? null
+                      : const LinearGradient(
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                          colors: [Color(0xFFF1ECE1), Color(0xFFEAE3D4)],
+                        ),
+                ),
+                child: sel
+                    ? const Center(
+                        child: Icon(Icons.check_rounded,
+                            color: _kGold, size: 28))
+                    : null,
               ),
-              child: sel
-                  ? const Center(
-                      child: Icon(Icons.check_rounded,
-                          color: _kGold, size: 28))
-                  : null,
-            ),
-            const SizedBox(height: 6),
+              const SizedBox(height: 6),
 
-            // Name
-            Text(
-              widget.addOn.name,
-              style: const TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600,
-                  color: _kInk,
-                  height: 1.3),
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-            ),
-            const SizedBox(height: 4),
+              // Name
+              Text(
+                widget.addOn.name,
+                style: const TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: _kInk,
+                    height: 1.3),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+              const SizedBox(height: 4),
 
-            // Price + toggle button
-            Row(
-              children: [
-                Text(
-                  '₹${widget.addOn.finalPrice.toInt()}',
-                  style: const TextStyle(fontSize: 11, color: _kMuted),
-                ),
-                if (widget.addOn.hasDiscount) ...[
-                  const SizedBox(width: 4),
-                  Text(
-                    '₹${widget.addOn.price.toInt()}',
-                    style: const TextStyle(
-                      fontSize: 10,
-                      color: _kMuted2,
-                      decoration: TextDecoration.lineThrough,
-                      decorationColor: _kMuted2,
+              // Price + toggle/qty row
+              if (sel)
+                Row(
+                  children: [
+                    Text(
+                      '₹${(widget.addOn.finalPrice * qty).toInt()}',
+                      style: const TextStyle(fontSize: 11, color: _kMuted),
                     ),
-                  ),
-                ],
-                const Spacer(),
-                MouseRegion(
-                  cursor: SystemMouseCursors.click,
-                  child: GestureDetector(
-                  onTap: () => widget.onToggle(!sel),
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 150),
-                    width: 20,
-                    height: 20,
-                    decoration: BoxDecoration(
-                      color: sel ? _kGold : const Color(0xFFECE7DE),
-                      shape: BoxShape.circle,
+                    const Spacer(),
+                    _MiniQtyStepper(
+                      qty: qty,
+                      onDecrement: () => widget.onQtyChanged(qty - 1),
+                      onIncrement: () => widget.onQtyChanged(qty + 1),
                     ),
-                    child: Center(
-                      child: Icon(
-                        sel ? Icons.check_rounded : Icons.add_rounded,
-                        size: 12,
-                        color: sel ? Colors.white : _kInk,
+                  ],
+                )
+              else
+                Row(
+                  children: [
+                    Text(
+                      '₹${widget.addOn.finalPrice.toInt()}',
+                      style: const TextStyle(fontSize: 11, color: _kMuted),
+                    ),
+                    if (widget.addOn.hasDiscount) ...[
+                      const SizedBox(width: 4),
+                      Text(
+                        '₹${widget.addOn.price.toInt()}',
+                        style: const TextStyle(
+                          fontSize: 10,
+                          color: _kMuted2,
+                          decoration: TextDecoration.lineThrough,
+                          decorationColor: _kMuted2,
+                        ),
+                      ),
+                    ],
+                    const Spacer(),
+                    MouseRegion(
+                      cursor: SystemMouseCursors.click,
+                      child: GestureDetector(
+                        onTap: () => widget.onToggle(true),
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 150),
+                          width: 20,
+                          height: 20,
+                          decoration: const BoxDecoration(
+                            color: Color(0xFFECE7DE),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Center(
+                            child: Icon(Icons.add_rounded,
+                                size: 12, color: _kInk),
+                          ),
+                        ),
                       ),
                     ),
-                  ),
+                  ],
                 ),
-                ),
-              ],
-            ),
-          ],
+            ],
+          ),
         ),
       ),
-    ),
     );
   }
 }
 
-// Web add-on row: [thumbnail 44px | name+price | "+" button]
+// Compact inline qty stepper for catalog node cards
+class _MiniQtyStepper extends StatelessWidget {
+  final int qty;
+  final VoidCallback onDecrement;
+  final VoidCallback onIncrement;
+
+  const _MiniQtyStepper({
+    required this.qty,
+    required this.onDecrement,
+    required this.onIncrement,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        GestureDetector(
+          onTap: onDecrement,
+          child: Container(
+            width: 18,
+            height: 18,
+            decoration: BoxDecoration(
+              color: _kGold.withAlpha(30),
+              shape: BoxShape.circle,
+            ),
+            child: const Center(
+              child: Icon(Icons.remove_rounded, size: 10, color: _kGold),
+            ),
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 5),
+          child: Text(
+            '$qty',
+            style: const TextStyle(
+                fontSize: 11, fontWeight: FontWeight.w700, color: _kInk),
+          ),
+        ),
+        GestureDetector(
+          onTap: onIncrement,
+          child: Container(
+            width: 18,
+            height: 18,
+            decoration: BoxDecoration(
+              color: _kGold.withAlpha(30),
+              shape: BoxShape.circle,
+            ),
+            child: const Center(
+              child: Icon(Icons.add_rounded, size: 10, color: _kGold),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// Web add-on row: [thumbnail 44px | name+price | qty controls / "+" button]
 class _AddonWebRow extends StatelessWidget {
   const _AddonWebRow({
     required this.addOn,
     required this.isSelected,
+    required this.quantity,
     required this.onToggle,
+    required this.onQtyChanged,
   });
 
   final AddOnModel addOn;
   final bool isSelected;
+  final int quantity;
   final ValueChanged<bool> onToggle;
+  final ValueChanged<int> onQtyChanged;
 
   @override
   Widget build(BuildContext context) {
+    final qty = quantity;
     return Padding(
       padding: const EdgeInsets.only(bottom: 14),
       child: Row(
@@ -1488,36 +1643,43 @@ class _AddonWebRow extends StatelessWidget {
                       decorationColor: _kMuted2,
                     ),
                   ),
-                Text('₹${addOn.finalPrice.toInt()}',
-                    style: const TextStyle(fontSize: 12, color: _kMuted)),
+                Text(
+                  isSelected
+                      ? '₹${(addOn.finalPrice * qty).toInt()}'
+                      : '₹${addOn.finalPrice.toInt()}',
+                  style: const TextStyle(fontSize: 12, color: _kMuted),
+                ),
               ],
             ),
           ),
           const SizedBox(width: 10),
 
-          // "+" button
-          MouseRegion(
-            cursor: SystemMouseCursors.click,
-            child: GestureDetector(
-            onTap: () => onToggle(!isSelected),
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 150),
-              width: 22,
-              height: 22,
-              decoration: BoxDecoration(
-                color: isSelected ? _kGold : const Color(0xFFECE7DE),
-                shape: BoxShape.circle,
-              ),
-              child: Center(
-                child: Icon(
-                  isSelected ? Icons.check_rounded : Icons.add_rounded,
-                  size: 13,
-                  color: isSelected ? Colors.white : _kInk,
+          // Qty stepper when selected, "+" circle when not
+          if (isSelected)
+            _MiniQtyStepper(
+              qty: qty,
+              onDecrement: () => onQtyChanged(qty - 1),
+              onIncrement: () => onQtyChanged(qty + 1),
+            )
+          else
+            MouseRegion(
+              cursor: SystemMouseCursors.click,
+              child: GestureDetector(
+                onTap: () => onToggle(true),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 150),
+                  width: 22,
+                  height: 22,
+                  decoration: const BoxDecoration(
+                    color: Color(0xFFECE7DE),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Center(
+                    child: Icon(Icons.add_rounded, size: 13, color: _kInk),
+                  ),
                 ),
               ),
             ),
-          ),
-          ),
         ],
       ),
     );
@@ -2396,6 +2558,7 @@ class _NodeBookingBar extends ConsumerWidget {
     required this.selections,
     required this.addOns,
     required this.selectedAddonIds,
+    this.addonQuantities = const {},
     this.amcPlan,
     this.amcQuantity = 1,
     this.attrOptionPrice,
@@ -2413,7 +2576,9 @@ class _NodeBookingBar extends ConsumerWidget {
   final List<ServiceAttributeModel> attrs;
   final Map<String, String> selections;
   final List<AddOnModel> addOns;
+  // Non-global selected addon IDs only (global addons tracked separately).
   final Set<String> selectedAddonIds;
+  final Map<String, int> addonQuantities;
   final AmcPlanModel? amcPlan;
   final int amcQuantity;
   // Non-null when the service has attribute variants and one is selected.
@@ -2434,11 +2599,12 @@ class _NodeBookingBar extends ConsumerWidget {
       );
       return;
     }
+    // Only non-global addons go into the cart item.
+    final nonGlobalAddOns = addOns.where((a) => !a.isGlobal).toList();
     final CartAddResult result;
     if (attrOptionPrice != null) {
-      // Attribute service: embed addons in unitPrice so totalPrice = attrPrice + addonsTotal.
-      // Addons still passed separately for cart display breakdown.
-      final selAddons = buildSelectedAddons(addOns, selectedAddonIds);
+      final selAddons = buildSelectedAddons(nonGlobalAddOns, selectedAddonIds,
+          quantities: addonQuantities);
       result = ref.read(cartProvider.notifier).addToCart(
             node,
             unitPriceOverride: attrOptionPrice! + totalAddonsPrice(selAddons),
@@ -2460,8 +2626,9 @@ class _NodeBookingBar extends ConsumerWidget {
             amcQuantity: amcQuantity,
           );
     } else {
-      // Normal service: unitPriceOverride = discounted base + attr adj + addons.
-      final selAddons = buildSelectedAddons(addOns, selectedAddonIds);
+      // Normal service: unitPriceOverride = discounted base + attr adj + non-global addons.
+      final selAddons = buildSelectedAddons(nonGlobalAddOns, selectedAddonIds,
+          quantities: addonQuantities);
       result = ref.read(cartProvider.notifier).addToCart(
             node,
             unitPriceOverride: (node.finalPrice ?? node.basePrice ?? 0.0) +
@@ -2493,8 +2660,7 @@ class _NodeBookingBar extends ConsumerWidget {
                   i.parentNodeId == parentNodeId))
           .firstOrNull;
     } else if (attrOptionPrice != null) {
-      // Attr service: effectiveBase = attrOptionPrice (addons embedded in unitPrice,
-      // so item.effectiveBase = unitPrice - addonsTotal = attrOptionPrice).
+      // Attr service: effectiveBase = attrOptionPrice; selectedAddonIds = non-global only.
       cartItem = findMatchingCartItem(
         cartItems,
         serviceId: node.id,
@@ -2621,9 +2787,11 @@ class _WebScaffold extends ConsumerWidget {
     this.rootCategoryId,
     required this.selections,
     required this.selectedAddonIds,
+    required this.addonQuantities,
     required this.selectedAmcPlan,
     required this.onOptionSelected,
     required this.onAddonToggled,
+    required this.onAddonQtyChanged,
     required this.onAmcPlanSelected,
     this.effectiveAttrId,
     this.onAttrSelected,
@@ -2655,10 +2823,12 @@ class _WebScaffold extends ConsumerWidget {
   final String? rootCategoryId;
   final Map<String, String> selections;
   final Set<String> selectedAddonIds;
+  final Map<String, int> addonQuantities;
   final AmcPlanModel? selectedAmcPlan;
   final void Function(String, String, List<ServiceAttributeModel>)
       onOptionSelected;
   final void Function(String, bool) onAddonToggled;
+  final void Function(String, int) onAddonQtyChanged;
   final void Function(AmcPlanModel?) onAmcPlanSelected;
   final String? effectiveAttrId;
   final void Function(String)? onAttrSelected;
@@ -2676,7 +2846,14 @@ class _WebScaffold extends ConsumerWidget {
 
     // Cart matching: for attr services match by unitPrice = selectedAttrPrice;
     // for normal services use the full effectiveBasePrice match.
-    final selectedAddons = buildSelectedAddons(addOns, selectedAddonIds);
+    // Only non-global addons are stored in cart items.
+    final nonGlobalAddonIds =
+        selectedAddonIds.where((id) => addOns.any((a) => a.id == id && !a.isGlobal)).toSet();
+    final nonGlobalQuantities = Map.fromEntries(
+        addonQuantities.entries.where((e) => nonGlobalAddonIds.contains(e.key)));
+    final selectedAddons = buildSelectedAddons(
+        addOns.where((a) => !a.isGlobal).toList(), nonGlobalAddonIds,
+        quantities: nonGlobalQuantities);
     final CartItem? cartItem;
     if (selectedAmcPlan != null) {
       cartItem = cart
@@ -2695,7 +2872,7 @@ class _WebScaffold extends ConsumerWidget {
         cart,
         serviceId: node.id,
         isAmc: false,
-        addonIds: selectedAddonIds,
+        addonIds: nonGlobalAddonIds,
         effectiveBasePrice: selectedAttrPrice!,
         parentNodeId: parentNodeId,
       );
@@ -2704,7 +2881,7 @@ class _WebScaffold extends ConsumerWidget {
         cart,
         serviceId: node.id,
         isAmc: false,
-        addonIds: selectedAddonIds,
+        addonIds: nonGlobalAddonIds,
         effectiveBasePrice: (node.finalPrice ?? node.basePrice ?? 0.0) + priceAdjustment,
         parentNodeId: parentNodeId,
       );
@@ -2725,8 +2902,7 @@ class _WebScaffold extends ConsumerWidget {
       }
       final CartAddResult result;
       if (selectedAttrPrice != null) {
-        // Attribute service: embed addons in unitPrice so totalPrice = attrPrice + addonsTotal.
-        // Addons still passed separately for cart display breakdown.
+        // Attribute service: embed non-global addons in unitPrice only.
         result = ref.read(cartProvider.notifier).addToCart(
               node,
               unitPriceOverride: selectedAttrPrice! + addonsTotal,
@@ -2789,7 +2965,7 @@ class _WebScaffold extends ConsumerWidget {
           onAttrSelected: onAttrSelected ?? (_) {},
           horizontalPadding: 28,
           quantities: quantities,
-          onQtyChanged: onQtyChanged ?? (_, __) {},
+          onQtyChanged: onQtyChanged ?? (_, _) {},
         ),
 
       if (node.isLeafBookable && addOns.isNotEmpty)
@@ -2809,7 +2985,9 @@ class _WebScaffold extends ConsumerWidget {
               _WebAddonsGrid(
                 addOns: addOns,
                 selectedIds: selectedAddonIds,
+                quantities: addonQuantities,
                 onToggle: onAddonToggled,
+                onQtyChanged: onAddonQtyChanged,
               ),
             ],
           ),
@@ -3218,19 +3396,23 @@ class _WebStepBtn extends StatelessWidget {
 
 // ── Web 4-column add-ons grid ─────────────────────────────────────────────────
 
-class _WebAddonsGrid extends StatelessWidget {
+class _WebAddonsGrid extends ConsumerWidget {
   const _WebAddonsGrid({
     required this.addOns,
     required this.selectedIds,
+    required this.quantities,
     required this.onToggle,
+    required this.onQtyChanged,
   });
 
   final List<AddOnModel> addOns;
   final Set<String> selectedIds;
+  final Map<String, int> quantities;
   final void Function(String, bool) onToggle;
+  final void Function(String, int) onQtyChanged;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     return LayoutBuilder(builder: (_, constraints) {
       const cols = 4;
       const gap = 16.0;
@@ -3250,6 +3432,7 @@ class _WebAddonsGrid extends StatelessWidget {
               children: row.asMap().entries.map((e) {
                 final a = e.value;
                 final isSelected = selectedIds.contains(a.id);
+                final qty = quantities[a.id] ?? 1;
                 return [
                   SizedBox(
                     width: itemW,
@@ -3286,10 +3469,14 @@ class _WebAddonsGrid extends StatelessWidget {
                                 crossAxisAlignment: CrossAxisAlignment.baseline,
                                 textBaseline: TextBaseline.alphabetic,
                                 children: [
-                                  Text('₹${a.finalPrice.toInt()}',
-                                      style: const TextStyle(
-                                          fontSize: 12, color: _kMuted)),
-                                  if (a.hasDiscount) ...[
+                                  Text(
+                                    isSelected
+                                        ? '₹${(a.finalPrice * qty).toInt()}'
+                                        : '₹${a.finalPrice.toInt()}',
+                                    style: const TextStyle(
+                                        fontSize: 12, color: _kMuted),
+                                  ),
+                                  if (a.hasDiscount && !isSelected) ...[
                                     const SizedBox(width: 5),
                                     Text('₹${a.price.toInt()}',
                                         style: const TextStyle(
@@ -3306,32 +3493,56 @@ class _WebAddonsGrid extends StatelessWidget {
                           ),
                         ),
                         const SizedBox(width: 8),
-                        MouseRegion(
-                          cursor: SystemMouseCursors.click,
-                          child: GestureDetector(
-                          onTap: () => onToggle(a.id, !isSelected),
-                          child: AnimatedContainer(
-                            duration: const Duration(milliseconds: 150),
-                            width: 22,
-                            height: 22,
-                            decoration: BoxDecoration(
-                              color: isSelected
-                                  ? _kGold
-                                  : const Color(0xFFECE7DE),
-                              shape: BoxShape.circle,
-                            ),
-                            child: Center(
-                              child: Icon(
-                                isSelected
-                                    ? Icons.check_rounded
-                                    : Icons.add_rounded,
-                                size: 13,
-                                color: isSelected ? Colors.white : _kInk,
+                        if (isSelected)
+                          _MiniQtyStepper(
+                            qty: qty,
+                            onDecrement: () {
+                              if (a.isGlobal) {
+                                ref
+                                    .read(globalCartAddonsProvider.notifier)
+                                    .setQuantity(a.id, qty - 1);
+                              } else {
+                                onQtyChanged(a.id, qty - 1);
+                              }
+                            },
+                            onIncrement: () {
+                              if (a.isGlobal) {
+                                ref
+                                    .read(globalCartAddonsProvider.notifier)
+                                    .setQuantity(a.id, qty + 1);
+                              } else {
+                                onQtyChanged(a.id, qty + 1);
+                              }
+                            },
+                          )
+                        else
+                          MouseRegion(
+                            cursor: SystemMouseCursors.click,
+                            child: GestureDetector(
+                              onTap: () {
+                                if (a.isGlobal) {
+                                  ref
+                                      .read(globalCartAddonsProvider.notifier)
+                                      .toggle(a);
+                                } else {
+                                  onToggle(a.id, true);
+                                }
+                              },
+                              child: AnimatedContainer(
+                                duration: const Duration(milliseconds: 150),
+                                width: 22,
+                                height: 22,
+                                decoration: const BoxDecoration(
+                                  color: Color(0xFFECE7DE),
+                                  shape: BoxShape.circle,
+                                ),
+                                child: const Center(
+                                  child: Icon(Icons.add_rounded,
+                                      size: 13, color: _kInk),
+                                ),
                               ),
                             ),
                           ),
-                        ),
-                        ),
                       ],
                     ),
                   ),
