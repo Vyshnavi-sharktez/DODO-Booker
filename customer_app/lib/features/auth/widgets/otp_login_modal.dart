@@ -41,14 +41,14 @@ class _OtpLoginModalState extends ConsumerState<OtpLoginModal> {
     });
     try {
       final fullPhone = '${PhoneInputField.dialCode}${_ctrl.text.trim()}';
-      await ref.read(authServiceProvider).checkPhone(fullPhone);
+      await ref.read(authServiceProvider).sendOtp(fullPhone);
       if (!mounted) return;
       Navigator.of(context).pop(fullPhone);
     } catch (e) {
       if (!mounted) return;
       setState(() {
         _isLoading = false;
-        _error = 'This number is not registered. Please try again.';
+        _error = e.toString().replaceFirst('Exception: ', '');
       });
     }
   }

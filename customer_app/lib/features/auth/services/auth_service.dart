@@ -8,211 +8,127 @@ class AuthService {
   static const _customerIdKey = 'dodo_customer_id';
   final SupabaseClient _client = Supabase.instance.client;
 
-  // ── Phone check ────────────────────────────────────────────────────────────
+  // ── OTP ────────────────────────────────────────────────────────────────────
 
-  /// Checks that [phone] exists in dev_auth. Throws if not registered.
-  Future<void> checkPhone(String phone) async {
-    final row = await _client
-        .from('dev_auth')
-        .select('phone')
-        .eq('phone', phone)
-        .maybeSingle();
-
-    if (row == null) {
-      throw Exception('This number is not registered.');
-    }
+  /// Sends a real SMS OTP to [phone] via Supabase Phone Auth (Twilio).
+  Future<void> sendOtp(String phone) async {
+    await _client.auth.signInWithOtp(phone: phone);
+    debugPrint('[DODO][Auth] OTP sent to $phone');
   }
 
-  // ── OTP verification ───────────────────────────────────────────────────────
-
-  /// Validates [otp] against dev_auth for [phone]. Persists session on success.
-  /// Also ensures a customer record exists in the customers table.
+  /// Verifies [otp] via Supabase, links the auth user to a customer record,
+  /// persists session keys, and registers the FCM token.
   Future<void> verifyOtp(String phone, String otp) async {
-    final row = await _client
-        .from('dev_auth')
-        .select('phone')
-        .eq('phone', phone)
-        .eq('otp', otp)
-        .maybeSingle();
+    await _client.auth.verifyOTP(
+      phone: phone,
+      token: otp,
+      type: OtpType.sms,
+    );
+    debugPrint('[DODO][Auth] OTP verified for $phone');
 
-    if (row == null) {
-      throw Exception('Invalid OTP. Please try again.');
-    }
-
+    final customerId = await _ensureCustomerLinked(phone);
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_phoneKey, phone);
-    debugPrint('[DODO][Auth] Login Success');
+    await prefs.setString(_customerIdKey, customerId);
+    debugPrint('[DODO][Auth] Login Success customer=$customerId');
 
-    // Ensure customer record exists, then register FCM token.
     try {
-      final customerId = await _ensureCustomerExists(phone);
-      await prefs.setString(_customerIdKey, customerId);
       await CustomerFcmService.initialize(customerId, phone);
     } catch (e) {
-      debugPrint('[DODO][Customer] Warning: could not sync customer record after login');
+      debugPrint('[DODO][Customer] Warning: FCM register failed: $e');
     }
   }
 
   // ── Customer record ────────────────────────────────────────────────────────
 
-  /// Checks if a customer exists for [phone]; inserts a placeholder row if not.
-  /// Returns the customer UUID in both cases.
-  Future<String> _ensureCustomerExists(String phone) async {
-    final existing = await _client
-        .from('customers')
-        .select('id')
-        .eq('phone', phone)
-        .maybeSingle();
-
-    if (existing != null) {
-      debugPrint('[DODO][Customer] Customer found: id=${existing['id']}');
-      return existing['id'] as String;
-    }
-
-    debugPrint('[DODO][Customer] Creating customer');
-    final created = await _client
-        .from('customers')
-        .insert({
-          'phone': phone,
-          'full_name': '',
-          'email': '',
-          'is_active': true,
-        })
-        .select('id')
-        .single();
-    debugPrint('[DODO][Customer] Customer created successfully: id=${created['id']}');
-    return created['id'] as String;
-  }
-
-  /// Updates the customers row for [phone] with name + email.
-  /// Falls back to insert if the row doesn't exist yet (edge case).
-  Future<void> _syncCustomerProfile({
-    required String phone,
-    required String fullName,
-    required String email,
-  }) async {
-    final updated = await _client
-        .from('customers')
-        .update({'full_name': fullName, 'email': email})
-        .eq('phone', phone)
-        .select('id');
-
-    final updatedList = updated as List;
-
-    if (updatedList.isEmpty) {
-      // Customer row is missing — create it now as a fallback.
-      debugPrint('[DODO][Customer] Customer not found during profile sync — creating');
-      final created = await _client
-          .from('customers')
-          .insert({
-            'phone': phone,
-            'full_name': fullName,
-            'email': email,
-            'is_active': true,
-          })
-          .select('id, phone')
-          .single();
-      debugPrint('[DODO][Customer] Customer created successfully: id=${created['id']}');
-    } else {
-      final id = (updatedList.first as Map<String, dynamic>)['id'];
-      debugPrint('[DODO][Customer] Customer updated successfully: id=$id');
-    }
+  /// Calls the ensure_customer_linked RPC which links the current auth user to
+  /// their customer row (or creates one) and returns the customer UUID.
+  Future<String> _ensureCustomerLinked(String phone) async {
+    final result = await _client.rpc(
+      'ensure_customer_linked',
+      params: {'p_phone': phone},
+    );
+    if (result == null) throw Exception('Could not link customer account');
+    return result as String;
   }
 
   // ── Session ────────────────────────────────────────────────────────────────
 
-  /// Returns true if a session phone is stored locally.
+  /// Returns true if there is a valid Supabase session or a persisted phone key.
   Future<bool> isAuthenticated() async {
+    if (_client.auth.currentSession != null) return true;
     final prefs = await SharedPreferences.getInstance();
     return prefs.getString(_phoneKey) != null;
   }
 
-  /// Returns the locally stored phone, or null if not signed in.
+  /// Returns the current phone from the Supabase session or SharedPreferences.
   Future<String?> currentPhone() async {
+    final phone = _client.auth.currentUser?.phone;
+    if (phone != null && phone.isNotEmpty) return phone;
     final prefs = await SharedPreferences.getInstance();
     return prefs.getString(_phoneKey);
   }
 
   // ── Profile ────────────────────────────────────────────────────────────────
 
-  /// Reads profile_complete from dev_auth for the current session phone.
+  /// Reads profile_complete from customers; falls back to dev_auth for legacy users.
   Future<bool> isProfileComplete() async {
     final phone = await currentPhone();
     if (phone == null) return false;
     final row = await _client
+        .from('customers')
+        .select('profile_complete')
+        .eq('phone', phone)
+        .maybeSingle();
+    if (row != null) return row['profile_complete'] as bool? ?? false;
+    // Legacy: user exists only in dev_auth (pre-migration session)
+    final legacy = await _client
         .from('dev_auth')
         .select('profile_complete')
         .eq('phone', phone)
-        .single();
-    return row['profile_complete'] as bool? ?? false;
+        .maybeSingle();
+    return legacy?['profile_complete'] as bool? ?? false;
   }
 
-  /// Updates full_name + email in dev_auth AND customers; sets profile_complete = true.
+  /// Updates full_name + email in customers and sets profile_complete = true.
+  /// Also writes to dev_auth for users that still have a legacy row there.
   Future<void> updateProfile({
     required String fullName,
     required String email,
   }) async {
     debugPrint('[DODO][Profile] updateProfile called');
-
     final phone = await currentPhone();
-    debugPrint('[DODO][Profile] Current phone: $phone');
-    debugPrint('[DODO][Profile] Name: $fullName');
-    debugPrint('[DODO][Profile] Email: $email');
+    if (phone == null) throw Exception('Not authenticated.');
 
-    if (phone == null) {
-      debugPrint('[DODO][Profile] Supabase update failed: no session phone in SharedPreferences');
-      throw Exception('Not authenticated.');
+    final updated = await _client
+        .from('customers')
+        .update({
+          'full_name': fullName,
+          'email': email,
+          'profile_complete': true,
+        })
+        .eq('phone', phone)
+        .select('id');
+
+    if ((updated as List).isEmpty) {
+      throw Exception(
+          'Profile update failed: customer row not found for phone $phone');
     }
+    debugPrint('[DODO][Auth] Profile Completed');
 
+    // Best-effort: keep dev_auth in sync for existing legacy rows
     try {
-      // ── 1. Update dev_auth ─────────────────────────────────────────────────
-      final updated = await _client
-          .from('dev_auth')
-          .update({
-            'full_name': fullName,
-            'email': email,
-            'profile_complete': true,
-          })
-          .eq('phone', phone)
-          .select();
-
-      debugPrint('[DODO][Profile] Supabase update raw response: $updated');
-
-      if ((updated as List).isEmpty) {
-        debugPrint(
-          '[DODO][Profile] Supabase update failed: 0 rows updated — '
-          'phone=$phone not found in dev_auth or RLS blocked write',
-        );
-        throw Exception(
-          'Profile update failed: no matching row in dev_auth for phone $phone',
-        );
-      }
-
-      // Verify by re-reading the row.
-      final verified = await _client
-          .from('dev_auth')
-          .select('phone, full_name, email, profile_complete')
-          .eq('phone', phone)
-          .single();
-      debugPrint('[DODO][Profile] Supabase update success — verified row: $verified');
-      debugPrint('[DODO][Auth] Profile Completed');
-
-      // ── 2. Sync customers table ────────────────────────────────────────────
-      await _syncCustomerProfile(
-        phone: phone,
-        fullName: fullName,
-        email: email,
-      );
-    } catch (e) {
-      debugPrint('[DODO][Profile] Supabase update failed: $e');
-      rethrow;
-    }
+      await _client.from('dev_auth').update({
+        'full_name': fullName,
+        'email': email,
+        'profile_complete': true,
+      }).eq('phone', phone);
+    } catch (_) {}
   }
 
   // ── Session restore ────────────────────────────────────────────────────────
 
-  /// Called on app startup to re-register the FCM token for an existing session.
-  /// No-ops when no session exists or customerId is absent (legacy sessions).
+  /// Re-registers the FCM token for an existing session on app startup.
   Future<void> initFcmIfSessionExists() async {
     final prefs = await SharedPreferences.getInstance();
     final phone = prefs.getString(_phoneKey);
@@ -225,7 +141,7 @@ class AuthService {
 
   // ── Sign out ───────────────────────────────────────────────────────────────
 
-  /// Clears the local session.
+  /// Signs out from Supabase, clears FCM token, and removes SharedPreferences keys.
   Future<void> signOut() async {
     final prefs = await SharedPreferences.getInstance();
     final phone = prefs.getString(_phoneKey);
@@ -235,6 +151,9 @@ class AuthService {
         await CustomerFcmService.clearToken(customerId, phone);
       } catch (_) {}
     }
+    try {
+      await _client.auth.signOut();
+    } catch (_) {}
     await prefs.remove(_phoneKey);
     await prefs.remove(_customerIdKey);
   }

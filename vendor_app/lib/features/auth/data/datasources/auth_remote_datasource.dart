@@ -7,62 +7,66 @@ class AuthRemoteDatasource {
 
   static const _phoneKey = 'dodo_vendor_phone';
 
-  // ── Phone check ──────────────────────────────────────────────────────────────
-  // Validates that the phone is registered in vendor_dev_auth.
-  // OTP is pre-seeded in the table — no SMS is sent.
+  // ── Phone check + OTP send ───────────────────────────────────────────────
 
+  /// Verifies the phone is registered as a vendor/team member via RPC,
+  /// then sends a real SMS OTP via Supabase Phone Auth (Twilio).
   Future<void> checkPhone(String phone) async {
-    final row = await _client
-        .from('vendor_dev_auth')
-        .select('phone')
-        .eq('phone', phone)
-        .maybeSingle();
-
-    if (row == null) throw Exception('This number is not registered as a vendor.');
+    final registered = await _client.rpc(
+          'check_vendor_phone',
+          params: {'p_phone': phone},
+        ) as bool? ??
+        false;
+    if (!registered) {
+      throw Exception('This number is not registered as a vendor.');
+    }
+    await _client.auth.signInWithOtp(phone: phone);
   }
 
-  // ── OTP verification ─────────────────────────────────────────────────────────
-  // Matches phone + otp against vendor_dev_auth row.
+  // ── OTP verification ─────────────────────────────────────────────────────
 
   Future<void> verifyOtp({
     required String phone,
     required String otp,
   }) async {
-    final row = await _client
-        .from('vendor_dev_auth')
-        .select('phone')
-        .eq('phone', phone)
-        .eq('otp', otp)
-        .maybeSingle();
-    if (row == null) throw Exception('Invalid OTP. Please try again.');
+    await _client.auth.verifyOTP(
+      phone: phone,
+      token: otp,
+      type: OtpType.sms,
+    );
   }
 
-  // ── Vendor profile ───────────────────────────────────────────────────────────
-  // Fetches the vendor row from the vendors table by phone.
+  // ── Vendor/team profile ──────────────────────────────────────────────────
 
   Future<Map<String, dynamic>?> getVendorByPhone(String phone) async {
-    final rows = await _client
-        .from('vendors')
-        .select()
-        .eq('phone', phone)
-        .limit(1);
+    final rows =
+        await _client.from('vendors').select().eq('phone', phone).limit(1);
     return rows.isEmpty ? null : rows.first;
   }
 
-  /// Checks if the phone belongs to a DODO Team (supervisor phone).
   Future<Map<String, dynamic>?> getDodoTeamByPhone(String phone) async {
-    final rows = await _client
-        .from('dodo_teams')
-        .select()
-        .eq('phone', phone)
-        .limit(1);
+    final rows =
+        await _client.from('dodo_teams').select().eq('phone', phone).limit(1);
     return rows.isEmpty ? null : rows.first;
   }
 
-  // ── Session ──────────────────────────────────────────────────────────────────
-  // Session = phone number stored in SharedPreferences (mirrors Customer App).
+  // ── Auth user linking ────────────────────────────────────────────────────
 
+  /// Calls ensure_vendor_linked RPC to write auth_user_id into the vendors row.
+  /// No-ops for dodo_team members (they have no vendors row).
+  Future<void> linkVendor(String phone) async {
+    try {
+      await _client
+          .rpc('ensure_vendor_linked', params: {'p_phone': phone});
+    } catch (_) {}
+  }
+
+  // ── Session ──────────────────────────────────────────────────────────────
+
+  /// Returns phone from the active Supabase session, or SharedPreferences fallback.
   Future<String?> getSavedPhone() async {
+    final phone = _client.auth.currentUser?.phone;
+    if (phone != null && phone.isNotEmpty) return phone;
     final prefs = await SharedPreferences.getInstance();
     return prefs.getString(_phoneKey);
   }
@@ -72,7 +76,11 @@ class AuthRemoteDatasource {
     await prefs.setString(_phoneKey, phone);
   }
 
+  /// Signs out from Supabase and removes the cached phone from SharedPreferences.
   Future<void> clearSession() async {
+    try {
+      await _client.auth.signOut();
+    } catch (_) {}
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_phoneKey);
   }

@@ -49,7 +49,7 @@ class BookingsRepository {
     try {
       final data = await _supabase
           .from('booking_addons')
-          .select('booking_id, addon_id, addon_name, addon_price')
+          .select('booking_id, addon_id, addon_name, addon_price, quantity, is_global')
           .inFilter('booking_id', bookingIds);
       final result = <String, List<BookingAddon>>{};
       for (final row in data as List<dynamic>) {
@@ -105,7 +105,7 @@ class BookingsRepository {
         .eq('id', id)
         .maybeSingle();
     if (data == null) return null;
-    final booking = Booking.fromMap(data as Map<String, dynamic>);
+    final booking = Booking.fromMap(data);
     final addonMap = await _fetchAddonsByBookingId([id]);
     return _mergeAddons([booking], addonMap).first;
   }
@@ -327,7 +327,7 @@ class BookingsRepository {
     double? latitude,
     double? longitude,
     required List<({String serviceId, String? customName, String? customCategoryName, int quantity, double unitPrice})> items,
-    List<({String addonId, String addonName, double addonPrice})> addons =
+    List<({String addonId, String addonName, double addonPrice, int quantity, bool isGlobal})> addons =
         const [],
     double discountAmount = 0.0,
     double taxAmount = 0.0,
@@ -335,7 +335,7 @@ class BookingsRepository {
   }) async {
     final serviceTotal =
         items.fold(0.0, (sum, e) => sum + e.unitPrice * e.quantity);
-    final addonsTotal = addons.fold(0.0, (sum, a) => sum + a.addonPrice);
+    final addonsTotal = addons.fold(0.0, (sum, a) => sum + a.addonPrice * a.quantity);
     final subtotal = serviceTotal + addonsTotal;
     final total = (subtotal - discountAmount + taxAmount).clamp(0.0, double.infinity);
 
@@ -433,6 +433,8 @@ class BookingsRepository {
                     'addon_id': a.addonId,
                     'addon_name': a.addonName,
                     'addon_price': a.addonPrice,
+                    'quantity': a.quantity,
+                    'is_global': a.isGlobal,
                   })
               .toList(),
         );
@@ -441,6 +443,8 @@ class BookingsRepository {
                   addonId: a.addonId,
                   name: a.addonName,
                   price: a.addonPrice,
+                  quantity: a.quantity,
+                  isGlobal: a.isGlobal,
                 ))
             .toList();
       } catch (e) {
@@ -466,14 +470,14 @@ class BookingsRepository {
     double? latitude,
     double? longitude,
     required List<({String serviceId, String? customName, String? customCategoryName, int quantity, double unitPrice})> items,
-    List<({String addonId, String addonName, double addonPrice})> addons = const [],
+    List<({String addonId, String addonName, double addonPrice, int quantity, bool isGlobal})> addons = const [],
     double discountAmount = 0.0,
     double taxAmount = 0.0,
     String? couponCode,
   }) async {
     final serviceTotal =
         items.fold(0.0, (sum, e) => sum + e.unitPrice * e.quantity);
-    final addonsTotal = addons.fold(0.0, (sum, a) => sum + a.addonPrice);
+    final addonsTotal = addons.fold(0.0, (sum, a) => sum + a.addonPrice * a.quantity);
     final subtotal = serviceTotal + addonsTotal;
     final total =
         (subtotal - discountAmount + taxAmount).clamp(0.0, double.infinity);
@@ -546,6 +550,8 @@ class BookingsRepository {
                     'addon_id': a.addonId,
                     'addon_name': a.addonName,
                     'addon_price': a.addonPrice,
+                    'quantity': a.quantity,
+                    'is_global': a.isGlobal,
                   })
               .toList(),
         );
@@ -554,6 +560,8 @@ class BookingsRepository {
                   addonId: a.addonId,
                   name: a.addonName,
                   price: a.addonPrice,
+                  quantity: a.quantity,
+                  isGlobal: a.isGlobal,
                 ))
             .toList();
       }

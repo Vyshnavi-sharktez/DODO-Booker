@@ -294,9 +294,21 @@ const _kNavGroups = <_NavGroup>[
         requiredPermission: 'settings.manage',
       ),
       _NavItem(
+        label: 'WhatsApp Link',
+        icon: Icons.chat_rounded,
+        route: '/dashboard/whatsapp-config',
+        requiredPermission: 'settings.manage',
+      ),
+      _NavItem(
         label: 'Push Notifications',
         icon: Icons.notifications_active_rounded,
         route: '/dashboard/push-config',
+        requiredPermission: 'settings.manage',
+      ),
+      _NavItem(
+        label: 'SMS / OTP',
+        icon: Icons.sms_rounded,
+        route: '/dashboard/sms-config',
         requiredPermission: 'settings.manage',
       ),
       _NavItem(

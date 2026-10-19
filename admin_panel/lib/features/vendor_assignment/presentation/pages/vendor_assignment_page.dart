@@ -943,13 +943,14 @@ class _BookingAssignRow extends StatelessWidget {
                     ),
                   ),
                 ),
-                IconButton(
-                  onPressed: onHistory,
-                  icon: const Icon(Icons.history_rounded, size: 15),
-                  tooltip: 'History',
-                  color: AppColors.textSecondary,
-                  visualDensity: VisualDensity.compact,
-                ),
+                if (b.dispatchStatus != 'idle')
+                  IconButton(
+                    onPressed: onHistory,
+                    icon: const Icon(Icons.history_rounded, size: 15),
+                    tooltip: 'History',
+                    color: AppColors.textSecondary,
+                    visualDensity: VisualDensity.compact,
+                  ),
               ],
             ),
           ),

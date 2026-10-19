@@ -51,7 +51,7 @@ class ServiceAddonsRepository {
           'price': price,
           'is_active': isActive,
           'is_global': isGlobal,
-          if (serviceId != null) 'service_id': serviceId,
+          'service_id': serviceId,
           'discount_type': discountType,
           'discount_value': discountValue,
         })
@@ -101,6 +101,18 @@ class ServiceAddonsRepository {
   }
 
   // ── Node-level addon assignment (catalog_node_addons junction) ───────────────
+
+  Future<List<ServiceAddon>> fetchGlobalAddons() async {
+    final data = await _supabase
+        .from('addons')
+        .select()
+        .eq('is_global', true)
+        .eq('is_active', true)
+        .order('created_at', ascending: true);
+    return (data as List<dynamic>)
+        .map((r) => ServiceAddon.fromMap(r as Map<String, dynamic>))
+        .toList();
+  }
 
   Future<List<ServiceAddon>> fetchNodeAddons(String nodeId) async {
     final data = await _supabase

@@ -12,13 +12,14 @@ class AuthRepositoryImpl implements IAuthRepository {
   Future<void> signInWithOtp(String phone) =>
       _datasource.checkPhone(phone);
 
-  @override 
+  @override
   Future<VendorUser> verifyOtp({
     required String phone,
     required String token,
   }) async {
     await _datasource.verifyOtp(phone: phone, otp: token);
     await _datasource.savePhone(phone);
+    await _datasource.linkVendor(phone);
     return _resolveUser(phone);
   }
 

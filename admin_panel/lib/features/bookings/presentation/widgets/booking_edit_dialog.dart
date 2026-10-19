@@ -93,6 +93,15 @@ class _BookingEditDialogState extends ConsumerState<BookingEditDialog> {
   Coupon? _appliedCoupon;
   String? _couponError;
   bool _couponApplied = false;
+  // Preserved from booking.discountAmount / booking.couponCode; used as fallback
+  // when the coupon object cannot be found in the current coupons list.
+  String? _initialCouponCode;
+  double _initialDiscountAmount = 0.0;
+
+  // Global add-ons (booking-level, not per-service)
+  List<ServiceAddon> _globalAddons = [];
+  Map<String, int> _globalAddonQtys = {}; // addon id → quantity (absent = 0)
+  bool _globalAddonsLoading = true;
 
   bool _saving = false;
   bool _submitted = false;
@@ -106,6 +115,11 @@ class _BookingEditDialogState extends ConsumerState<BookingEditDialog> {
     _addressCtrl.text = b.address ?? '';
     _notesCtrl.text = b.notes ?? '';
     _couponCtrl.text = b.couponCode ?? '';
+    _initialCouponCode = b.couponCode;
+    _initialDiscountAmount = b.discountAmount;
+    if (b.couponCode != null && b.couponCode!.isNotEmpty) {
+      _couponApplied = true;
+    }
     _status = b.status;
     _serviceDate = b.serviceDate;
     _scheduledTime = b.scheduledTime;
@@ -141,6 +155,14 @@ class _BookingEditDialogState extends ConsumerState<BookingEditDialog> {
               quantity: i.quantity,
             ))
         .toList();
+
+    // Attempt to look up the coupon object after the first frame so providers are ready.
+    if (_initialCouponCode != null && _initialCouponCode!.isNotEmpty) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _tryAutoApplyCoupon());
+    }
+
+    // Fetch global add-ons and restore saved quantities from the booking.
+    WidgetsBinding.instance.addPostFrameCallback((_) => _initGlobalAddons());
   }
 
   @override
@@ -260,6 +282,40 @@ class _BookingEditDialogState extends ConsumerState<BookingEditDialog> {
     return ids.toList();
   }
 
+  Future<void> _initGlobalAddons() async {
+    if (!mounted) return;
+    try {
+      final repo = ref.read(serviceAddonsRepositoryProvider);
+      final globals = await repo.fetchGlobalAddons();
+      if (!mounted) return;
+      final globalIds = {for (final a in globals) a.id};
+      final qtys = <String, int>{};
+      for (final ba in widget.booking.addons) {
+        if (ba.isGlobal || globalIds.contains(ba.addonId)) {
+          qtys[ba.addonId] = ba.quantity;
+        }
+      }
+      setState(() {
+        _globalAddons = globals;
+        _globalAddonQtys = qtys;
+        _globalAddonsLoading = false;
+      });
+    } catch (_) {
+      if (mounted) setState(() => _globalAddonsLoading = false);
+    }
+  }
+
+  double _globalAddonsTotal() {
+    double total = 0.0;
+    for (final entry in _globalAddonQtys.entries) {
+      final qty = entry.value;
+      if (qty <= 0) continue;
+      final addon = _globalAddons.where((a) => a.id == entry.key).firstOrNull;
+      if (addon != null) total += addon.price * qty;
+    }
+    return total;
+  }
+
   double _computeSubtotal() {
     double total = 0.0;
     for (final key in _itemKeys) {
@@ -269,6 +325,7 @@ class _BookingEditDialogState extends ConsumerState<BookingEditDialog> {
     for (final ci in _customItems) {
       total += ci.price * ci.quantity;
     }
+    total += _globalAddonsTotal();
     return total;
   }
 
@@ -626,6 +683,34 @@ class _BookingEditDialogState extends ConsumerState<BookingEditDialog> {
 
   // ── Coupon ────────────────────────────────────────────────────────────────────
 
+  // Returns the effective discount: computed when a coupon object is applied,
+  // or the booking's stored amount when the coupon code exists but the object
+  // hasn't loaded (or was deleted).
+  double _effectiveDiscount(double subtotal) {
+    if (_appliedCoupon != null) return _computeDiscount(subtotal, _appliedCoupon);
+    if (_couponApplied && _initialDiscountAmount > 0) return _initialDiscountAmount;
+    return 0.0;
+  }
+
+  String? get _effectiveCouponCode =>
+      _appliedCoupon?.code ?? (_couponApplied ? _initialCouponCode : null);
+
+  // Attempts to look up the booking's coupon from the loaded list.
+  // Called once after the coupons provider is available.
+  void _tryAutoApplyCoupon() {
+    if (!mounted || _appliedCoupon != null || _initialCouponCode == null) return;
+    final async = ref.read(couponsNotifierProvider);
+    if (async.isLoading) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _tryAutoApplyCoupon());
+      return;
+    }
+    final coupons = async.valueOrNull ?? [];
+    final found = coupons
+        .where((c) => c.code.toUpperCase() == _initialCouponCode!.toUpperCase())
+        .firstOrNull;
+    if (found != null && mounted) setState(() => _appliedCoupon = found);
+  }
+
   void _applyCoupon() {
     final code = _couponCtrl.text.trim().toUpperCase();
     if (code.isEmpty) return;
@@ -664,6 +749,8 @@ class _BookingEditDialogState extends ConsumerState<BookingEditDialog> {
       _appliedCoupon = null;
       _couponError = null;
       _couponApplied = false;
+      _initialCouponCode = null;
+      _initialDiscountAmount = 0.0;
       _couponCtrl.clear();
     });
   }
@@ -702,7 +789,7 @@ class _BookingEditDialogState extends ConsumerState<BookingEditDialog> {
       double unitPrice,
     })>[];
     final allAddons =
-        <({String addonId, String addonName, double addonPrice})>[];
+        <({String addonId, String addonName, double addonPrice, int quantity, bool isGlobal})>[];
 
     for (int i = 0; i < _itemKeys.length; i++) {
       final data = _itemKeys[i].currentState?.buildItemData();
@@ -720,8 +807,25 @@ class _BookingEditDialogState extends ConsumerState<BookingEditDialog> {
             addonId: addon.id,
             addonName: addon.name,
             addonPrice: addon.price,
+            quantity: 1,
+            isGlobal: false,
           ));
         }
+      }
+    }
+
+    // Global add-ons (booking-level, charged once with their quantity)
+    for (final entry in _globalAddonQtys.entries) {
+      if (entry.value <= 0) continue;
+      final addon = _globalAddons.where((a) => a.id == entry.key).firstOrNull;
+      if (addon != null) {
+        allAddons.add((
+          addonId: addon.id,
+          addonName: addon.name,
+          addonPrice: addon.price,
+          quantity: entry.value,
+          isGlobal: true,
+        ));
       }
     }
 
@@ -737,7 +841,7 @@ class _BookingEditDialogState extends ConsumerState<BookingEditDialog> {
     }
 
     final subtotal = _computeSubtotal();
-    final discAmt = _computeDiscount(subtotal, _appliedCoupon);
+    final discAmt = _effectiveDiscount(subtotal);
     final taxable = subtotal - discAmt;
     final taxAmt = tax.isEnabled
         ? (tax.taxType == 'percentage'
@@ -762,7 +866,7 @@ class _BookingEditDialogState extends ConsumerState<BookingEditDialog> {
             addons: allAddons,
             discountAmount: discAmt,
             taxAmount: taxAmt,
-            couponCode: _appliedCoupon?.code,
+            couponCode: _effectiveCouponCode,
           );
       if (mounted) {
         Navigator.of(context).pop();
@@ -797,7 +901,7 @@ class _BookingEditDialogState extends ConsumerState<BookingEditDialog> {
     final teams = ref.watch(dodoTeamsNotifierProvider).valueOrNull ?? [];
 
     final subtotal = _computeSubtotal();
-    final discAmt = _computeDiscount(subtotal, _appliedCoupon);
+    final discAmt = _effectiveDiscount(subtotal);
     final taxable = subtotal - discAmt;
     final taxAmt = tax.isEnabled
         ? (tax.taxType == 'percentage'
@@ -926,6 +1030,54 @@ class _BookingEditDialogState extends ConsumerState<BookingEditDialog> {
                           onChanged: () => setState(() {}),
                         ),
                       ],
+
+                      // ── Global Add-ons ─────────────────────────────────────
+                      if (!_globalAddonsLoading && _globalAddons.isNotEmpty) ...[
+                        const SizedBox(height: 20),
+                        const Text(
+                          'Global Add-ons',
+                          style: TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.textPrimary,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 14, vertical: 10),
+                          decoration: BoxDecoration(
+                            color: AppColors.background,
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(color: AppColors.border),
+                          ),
+                          child: Column(
+                            children: [
+                              for (final addon in _globalAddons) ...[
+                                if (addon != _globalAddons.first)
+                                  const Divider(height: 16),
+                                _GlobalAddonRow(
+                                  addon: addon,
+                                  qty: _globalAddonQtys[addon.id] ?? 0,
+                                  onDecrement: () => setState(() {
+                                    final q = _globalAddonQtys[addon.id] ?? 0;
+                                    if (q <= 1) {
+                                      _globalAddonQtys.remove(addon.id);
+                                    } else {
+                                      _globalAddonQtys[addon.id] = q - 1;
+                                    }
+                                  }),
+                                  onIncrement: () => setState(() {
+                                    _globalAddonQtys[addon.id] =
+                                        (_globalAddonQtys[addon.id] ?? 0) + 1;
+                                  }),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
+                      ],
+
                       const SizedBox(height: 20),
 
                       // ── Address ────────────────────────────────────────────
@@ -1176,7 +1328,7 @@ class _BookingEditDialogState extends ConsumerState<BookingEditDialog> {
                       _EditSummaryBox(
                         subtotal: subtotal,
                         discountAmount: discAmt,
-                        couponCode: _appliedCoupon?.code,
+                        couponCode: _effectiveCouponCode,
                         taxLabel: tax.isEnabled
                             ? (tax.taxType == 'percentage'
                                 ? '${tax.taxName} (${tax.taxValue.toInt()}%)'
@@ -1379,11 +1531,11 @@ class _EditItemRowState extends ConsumerState<_EditItemRow> {
   Future<void> _fetchAddons(String nodeId,
       {Set<String> preSelectIds = const {}}) async {
     try {
-      final addons =
-          await ref.read(serviceAddonsRepositoryProvider).fetchNodeAddons(nodeId);
+      final repo = ref.read(serviceAddonsRepositoryProvider);
+      final nodeAddons = await repo.fetchNodeAddons(nodeId);
       if (mounted) {
         setState(() {
-          _nodeAddons = addons.where((a) => a.isActive).toList();
+          _nodeAddons = nodeAddons.where((a) => a.isActive).toList();
           _selectedAddonIds = preSelectIds.isNotEmpty
               ? _nodeAddons
                   .where((a) => preSelectIds.contains(a.id))
@@ -2217,6 +2369,97 @@ class _CartQtyBtn extends StatelessWidget {
           color: enabled ? AppColors.primary : AppColors.textSecondary,
         ),
       ),
+    );
+  }
+}
+
+// ── Global Addon Row ──────────────────────────────────────────────────────────
+
+class _GlobalAddonRow extends StatelessWidget {
+  const _GlobalAddonRow({
+    required this.addon,
+    required this.qty,
+    required this.onDecrement,
+    required this.onIncrement,
+  });
+
+  final ServiceAddon addon;
+  final int qty;
+  final VoidCallback onDecrement;
+  final VoidCallback onIncrement;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                addon.name,
+                style: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.textPrimary,
+                ),
+              ),
+              Text(
+                '${_priceFmtEdit.format(addon.price)} each',
+                style: const TextStyle(
+                  fontSize: 11,
+                  color: AppColors.textSecondary,
+                ),
+              ),
+            ],
+          ),
+        ),
+        if (qty == 0)
+          FilledButton.icon(
+            onPressed: onIncrement,
+            icon: const Icon(Icons.add_rounded, size: 14),
+            label: const Text('Add'),
+            style: FilledButton.styleFrom(
+              backgroundColor: AppColors.primary,
+              visualDensity: VisualDensity.compact,
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              textStyle: const TextStyle(
+                  fontSize: 12, fontWeight: FontWeight.w600),
+            ),
+          )
+        else ...[
+          _QtyButtonEdit(
+            icon: Icons.remove_rounded,
+            onTap: onDecrement,
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            child: Text(
+              '$qty',
+              style: const TextStyle(
+                  fontSize: 15, fontWeight: FontWeight.w700),
+            ),
+          ),
+          _QtyButtonEdit(
+            icon: Icons.add_rounded,
+            onTap: onIncrement,
+          ),
+          const SizedBox(width: 12),
+          SizedBox(
+            width: 60,
+            child: Text(
+              _priceFmtEdit.format(addon.price * qty),
+              textAlign: TextAlign.end,
+              style: const TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: AppColors.primary,
+              ),
+            ),
+          ),
+        ],
+      ],
     );
   }
 }

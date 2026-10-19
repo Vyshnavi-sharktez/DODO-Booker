@@ -45,8 +45,9 @@ final _amcLastVendorProvider = FutureProvider.autoDispose
       .not('vendor_id', 'is', null)
       .order('otp_verified_at', ascending: false)
       .limit(1);
-  if ((rows as List).isEmpty) return null;
-  final row = rows.first as Map<String, dynamic>;
+  final rowList = rows as List;
+  if (rowList.isEmpty) return null;
+  final row = rowList.first as Map<String, dynamic>;
   final vid = row['vendor_id'] as String?;
   if (vid == null || vid.isEmpty) return null;
   return (
@@ -171,9 +172,7 @@ class _BookingAssignmentDialogState
   late _AssigneeType _assigneeType;
   late String _vendorId;
   late String _dodoTeamId;
-  late DateTime? _serviceDate;
-  bool _isDefaultDate = false;
-  DateTime? _preferredDate;
+  late DateTime _serviceDate;
   bool _saving = false;
   bool _showAllVendors = false;
   bool _showAllTeams = false;
@@ -197,23 +196,17 @@ class _BookingAssignmentDialogState
     _notesCtrl = TextEditingController(text: widget.booking.notes ?? '');
     _vendorId = widget.booking.vendorId;
     _dodoTeamId = widget.booking.dodoTeamId;
-    _serviceDate = widget.booking.serviceDate;
-    _preferredDate = widget.preferredDate;
     _assigneeType = switch (widget.booking.assignmentType) {
       'DODO Team' => _AssigneeType.team,
       'Unassigned' => _AssigneeType.unassigned,
       _ => _AssigneeType.vendor,
     };
 
-    // For AMC bookings with no service date, pre-populate from the booking's
-    // planned_due_date (computed from contract start + service interval).
-    if (widget.booking.isAmc && widget.booking.serviceDate == null) {
-      final planned = widget.booking.plannedDueDate;
-      if (planned != null) {
-        _serviceDate = planned;
-        _isDefaultDate = true;
-      }
-    }
+    // Determine service date: use existing date, or planned AMC date, or today.
+    // The date is passed to the backend but is no longer shown as a UI field.
+    _serviceDate = widget.booking.serviceDate ??
+        widget.booking.plannedDueDate ??
+        DateTime.now();
 
     // Always fetch fresh vendor data & latest wallet balances on opening assignment dialog
     Future.microtask(() {
@@ -225,21 +218,6 @@ class _BookingAssignmentDialogState
   void dispose() {
     _notesCtrl.dispose();
     super.dispose();
-  }
-
-  Future<void> _pickDate() async {
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: _serviceDate ?? DateTime.now(),
-      firstDate: DateTime(2020),
-      lastDate: DateTime(2030),
-    );
-    if (picked != null) {
-      setState(() {
-        _serviceDate = picked;
-        _isDefaultDate = false;
-      });
-    }
   }
 
   void _clearWalletError() {
@@ -472,7 +450,7 @@ class _BookingAssignmentDialogState
         );
       },
       loading: () => const SizedBox.shrink(),
-      error: (_, __) => const SizedBox.shrink(),
+      error: (_, _) => const SizedBox.shrink(),
     );
   }
 
@@ -482,12 +460,6 @@ class _BookingAssignmentDialogState
       'vendorId=$_vendorId, serviceDate=$_serviceDate',
     );
     if (!_formKey.currentState!.validate()) return;
-    if (_serviceDate == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please select a service date')),
-      );
-      return;
-    }
     if (_assigneeType == _AssigneeType.vendor && _vendorId.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please select a vendor')),
@@ -513,7 +485,7 @@ class _BookingAssignmentDialogState
         assignmentType: assignmentType,
         vendorId: _assigneeType == _AssigneeType.vendor ? _vendorId : null,
         dodoTeamId: _assigneeType == _AssigneeType.team ? _dodoTeamId : null,
-        serviceDate: _serviceDate!,
+        serviceDate: _serviceDate,
         notes: _notesCtrl.text.trim().isEmpty ? null : _notesCtrl.text.trim(),
       );
       if (mounted) Navigator.of(context).pop();
@@ -561,13 +533,9 @@ class _BookingAssignmentDialogState
 
     // One query for the whole date — no per-vendor round trip.
     // Shows Available while loading; updates to Busy once query resolves.
-    final busyKey = _serviceDate == null
-        ? null
-        : '${_isoDateFmt.format(_serviceDate!)}|${widget.booking.id}';
-    final busyVendorIds = busyKey == null
-        ? const <String>{}
-        : ref.watch(_vendorBusyProvider(busyKey)).valueOrNull ??
-            const <String>{};
+    final busyKey = '${_isoDateFmt.format(_serviceDate)}|${widget.booking.id}';
+    final busyVendorIds =
+        ref.watch(_vendorBusyProvider(busyKey)).valueOrNull ?? const <String>{};
 
     // COD enforcement: mirror check_vendor_cod_eligibility settings logic.
     // subscription_enabled + subscription_require_active must both be true,
@@ -744,58 +712,6 @@ class _BookingAssignmentDialogState
 
                       const SizedBox(height: 20),
 
-                      InkWell(
-                        onTap: _saving ? null : _pickDate,
-                        borderRadius: BorderRadius.circular(8),
-                        child: InputDecorator(
-                          decoration: InputDecoration(
-                            labelText: 'Service Date *',
-                            prefixIcon:
-                                const Icon(Icons.calendar_today_rounded),
-                            helperText: _isDefaultDate
-                                ? 'Default from AMC Schedule'
-                                : null,
-                            helperStyle: const TextStyle(
-                              color: AppColors.primary,
-                              fontSize: 11,
-                              fontWeight: FontWeight.w500,
-                            ),
-                            suffixIcon: const Icon(
-                                Icons.edit_calendar_rounded,
-                                size: 18,
-                                color: AppColors.textSecondary),
-                          ),
-                          child: Text(
-                            _serviceDate != null
-                                ? _dateFmt.format(_serviceDate!)
-                                : 'Select date',
-                            style: TextStyle(
-                              fontSize: 14,
-                              color: _serviceDate != null
-                                  ? AppColors.textPrimary
-                                  : AppColors.textSecondary,
-                            ),
-                          ),
-                        ),
-                      ),
-                      if (_preferredDate != null) ...[
-                        const SizedBox(height: 8),
-                        Row(
-                          children: [
-                            const Icon(Icons.event_available_rounded,
-                                size: 14,
-                                color: AppColors.textSecondary),
-                            const SizedBox(width: 6),
-                            Text(
-                              'Customer Preferred Date:  ${_dateFmt.format(_preferredDate!)}',
-                              style: const TextStyle(
-                                fontSize: 12,
-                                color: AppColors.textSecondary,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
                       if (widget.booking.isAmc &&
                           widget.booking.amcQuantity > 1) ...[
                         const SizedBox(height: 8),

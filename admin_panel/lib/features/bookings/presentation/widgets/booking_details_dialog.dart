@@ -637,18 +637,14 @@ void _triggerAssign(Booking booking) {
 
 class _CardContainer extends StatelessWidget {
   final Widget child;
-  final EdgeInsetsGeometry? padding;
 
-  const _CardContainer({
-    required this.child,
-    this.padding,
-  });
+  const _CardContainer({required this.child});
 
   @override
   Widget build(BuildContext context) {
     return Container(
       width: double.infinity,
-      padding: padding ?? const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: _cardBg,
         borderRadius: BorderRadius.circular(12),
@@ -693,7 +689,7 @@ class _SectionHeader extends StatelessWidget {
             ),
           ),
         ),
-        if (trailing != null) trailing!,
+        ?trailing,
       ],
     );
   }
@@ -907,7 +903,10 @@ class _ServicesCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final totalServicesCount = booking.items.length + booking.addons.length;
+    final serviceAddons = booking.addons.where((a) => !a.isGlobal).toList();
+    final globalAddons = booking.addons.where((a) => a.isGlobal).toList();
+    final totalServicesCount =
+        booking.items.length + booking.addons.length;
 
     return _CardContainer(
       child: Column(
@@ -930,8 +929,24 @@ class _ServicesCard extends StatelessWidget {
           // Main Service Items
           ...booking.items.map((item) => _ServiceRow(item: item)),
 
-          // Add-on Items
-          ...booking.addons.map((addon) => _AddonRow(addon: addon)),
+          // Service-specific Add-on Items
+          ...serviceAddons.map((addon) => _AddonRow(addon: addon)),
+
+          // Global Add-on Items (shown in a labelled sub-section)
+          if (globalAddons.isNotEmpty) ...[
+            const Padding(
+              padding: EdgeInsets.only(bottom: 10),
+              child: Text(
+                'Global Add-ons',
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w700,
+                  color: _navyDark,
+                ),
+              ),
+            ),
+            ...globalAddons.map((addon) => _AddonRow(addon: addon)),
+          ],
 
           const SizedBox(height: 16),
 
@@ -1089,30 +1104,22 @@ class _AddonRow extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  '${addon.name} (Add-on)',
+                  addon.name,
                   style: const TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.w700,
                     color: _navyDark,
                   ),
                 ),
-                const SizedBox(height: 2),
-                const Text(
-                  'Home Cleaning > Add-on',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: _textSecondary,
-                  ),
-                ),
                 const SizedBox(height: 4),
-                const Row(
+                Row(
                   children: [
-                    Icon(Icons.assignment_outlined,
+                    const Icon(Icons.assignment_outlined,
                         size: 13, color: _textSecondary),
-                    SizedBox(width: 4),
+                    const SizedBox(width: 4),
                     Text(
-                      'Qty: 1',
-                      style: TextStyle(
+                      'Qty: ${addon.quantity}',
+                      style: const TextStyle(
                         fontSize: 12,
                         color: _textSecondary,
                       ),
@@ -1124,7 +1131,7 @@ class _AddonRow extends StatelessWidget {
           ),
           const SizedBox(width: 12),
           Text(
-            _currency.format(addon.price),
+            _currency.format(addon.price * addon.quantity),
             style: const TextStyle(
               fontSize: 14,
               fontWeight: FontWeight.w700,
@@ -1619,7 +1626,7 @@ class _AddressChangeDialogState extends State<_AddressChangeDialog> {
   double? _longitude;
 
   bool _saving = false;
-  bool _isLocating = false;
+  final bool _isLocating = false;
   String? _error;
 
   bool get _hasCoordinates => _latitude != null && _longitude != null;
@@ -2763,7 +2770,7 @@ class _CancelledPaymentRefundSectionState
                     child: CircularProgressIndicator(strokeWidth: 2)),
               ),
             ),
-            error: (_, __) => const Text('Could not load refund details.',
+            error: (_, _) => const Text('Could not load refund details.',
                 style: TextStyle(
                     fontSize: 12,
                     color: _textSecondary,
@@ -2959,7 +2966,7 @@ class _PaymentReconciliationSection extends ConsumerWidget {
                 ),
               ),
             ),
-            error: (_, __) => const Padding(
+            error: (_, _) => const Padding(
               padding: EdgeInsets.symmetric(vertical: 4),
               child: Text(
                 'Could not load gateway payment details.',
@@ -3365,7 +3372,7 @@ class _PhotoRow extends StatelessWidget {
           child: ListView.separated(
             scrollDirection: Axis.horizontal,
             itemCount: photos.length,
-            separatorBuilder: (_, __) => const SizedBox(width: 8),
+            separatorBuilder: (_, _) => const SizedBox(width: 8),
             itemBuilder: (_, i) {
               final url = photos[i]['image_url'] as String;
               final isVideo = photos[i]['media_type'] == 'video';
@@ -3403,7 +3410,7 @@ class _PhotoRow extends StatelessWidget {
                   width: 80,
                   height: 80,
                   fit: BoxFit.cover,
-                  errorBuilder: (_, __, ___) => Container(
+                  errorBuilder: (_, _, _) => Container(
                     width: 80,
                     height: 80,
                     color: const Color(0xFFF1F5F9),

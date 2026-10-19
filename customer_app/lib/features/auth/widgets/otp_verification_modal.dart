@@ -114,12 +114,11 @@ class _OtpVerificationModalState extends ConsumerState<OtpVerificationModal> {
   Future<void> _resend() async {
     setState(() => _error = null);
     try {
-      // Re-validates phone existence; OTP is pre-stored in dev_auth.
-      await ref.read(authServiceProvider).checkPhone(widget.phone);
+      await ref.read(authServiceProvider).sendOtp(widget.phone);
       _startTimer();
     } catch (e) {
       if (!mounted) return;
-      setState(() => _error = 'Could not verify your number. Please try again.');
+      setState(() => _error = 'Could not resend OTP. Please try again.');
     }
   }
 

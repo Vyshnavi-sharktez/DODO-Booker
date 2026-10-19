@@ -2225,7 +2225,6 @@ class _Cell extends StatelessWidget {
   final String text;
   final double width;
   final bool header;
-  final bool bold;
   final TextAlign align;
   final EdgeInsets padding;
 
@@ -2233,7 +2232,6 @@ class _Cell extends StatelessWidget {
     this.text, {
     required this.width,
     this.header = false,
-    this.bold = false,
     this.align = TextAlign.left,
     this.padding = EdgeInsets.zero,
   });
@@ -2250,7 +2248,7 @@ class _Cell extends StatelessWidget {
         : TextStyle(
             fontSize: 13,
             color: AppColors.textPrimary,
-            fontWeight: bold ? FontWeight.w600 : FontWeight.w400,
+            fontWeight: FontWeight.w400,
           );
 
     return SizedBox(
