@@ -1206,17 +1206,25 @@ class _DesktopListCard extends ConsumerWidget {
                   width: 100,
                   height: 100,
                   color: const Color(0xFFF3EDE0),
-                  child: Image.network(
-                    imageUrl,
-                    fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) => Center(
-                      child: Icon(
-                        IconRegistry.resolve(node.iconKey, node.name),
-                        size: 32,
-                        color: _kTextMuted,
-                      ),
-                    ),
-                  ),
+                  child: imageUrl != null
+                      ? Image.network(
+                          imageUrl,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) => Center(
+                            child: Icon(
+                              IconRegistry.resolve(node.iconKey, node.name),
+                              size: 32,
+                              color: _kTextMuted,
+                            ),
+                          ),
+                        )
+                      : Center(
+                          child: Icon(
+                            IconRegistry.resolve(node.iconKey, node.name),
+                            size: 32,
+                            color: _kTextMuted,
+                          ),
+                        ),
                 ),
               ),
               const SizedBox(width: 12),
@@ -1427,17 +1435,25 @@ class _DesktopListCard extends ConsumerWidget {
           Container(
             width: 280,
             color: const Color(0xFFF3EDE0),
-            child: Image.network(
-              imageUrl,
-              fit: BoxFit.cover,
-              errorBuilder: (_, __, ___) => Center(
-                child: Icon(
-                  IconRegistry.resolve(node.iconKey, node.name),
-                  size: 52,
-                  color: _kTextMuted,
-                ),
-              ),
-            ),
+            child: imageUrl != null
+                ? Image.network(
+                    imageUrl,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) => Center(
+                      child: Icon(
+                        IconRegistry.resolve(node.iconKey, node.name),
+                        size: 52,
+                        color: _kTextMuted,
+                      ),
+                    ),
+                  )
+                : Center(
+                    child: Icon(
+                      IconRegistry.resolve(node.iconKey, node.name),
+                      size: 52,
+                      color: _kTextMuted,
+                    ),
+                  ),
           ),
 
           // ── Content panel (right) ─────────────────────────────────────
@@ -1827,20 +1843,31 @@ class _CardImage extends StatelessWidget {
       borderRadius: const BorderRadius.vertical(top: Radius.circular(15)),
       child: SizedBox(
         height: 148,
-        child: Image.network(
-          url,
-          fit: BoxFit.cover,
-          errorBuilder: (_, _, _) => Container(
-            color: const Color(0xFFEFEFEF),
-            child: Center(
-              child: Icon(
-                IconRegistry.resolve(node.iconKey, node.name),
-                size: 36,
-                color: _kTextMuted,
+        child: url != null
+            ? Image.network(
+                url,
+                fit: BoxFit.cover,
+                errorBuilder: (_, _, _) => Container(
+                  color: const Color(0xFFEFEFEF),
+                  child: Center(
+                    child: Icon(
+                      IconRegistry.resolve(node.iconKey, node.name),
+                      size: 36,
+                      color: _kTextMuted,
+                    ),
+                  ),
+                ),
+              )
+            : Container(
+                color: const Color(0xFFEFEFEF),
+                child: Center(
+                  child: Icon(
+                    IconRegistry.resolve(node.iconKey, node.name),
+                    size: 36,
+                    color: _kTextMuted,
+                  ),
+                ),
               ),
-            ),
-          ),
-        ),
       ),
     );
   }
@@ -2180,17 +2207,25 @@ class _MobileCategoryGridItem extends StatelessWidget {
                 aspectRatio: 1.0,
                 child: Container(
                   color: const Color(0xFFF3EDE0),
-                  child: Image.network(
-                    imageUrl,
-                    fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) => Center(
-                      child: Icon(
-                        IconRegistry.resolve(node.iconKey, node.name),
-                        size: 28,
-                        color: _kTextMuted,
-                      ),
-                    ),
-                  ),
+                  child: imageUrl != null
+                      ? Image.network(
+                          imageUrl,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) => Center(
+                            child: Icon(
+                              IconRegistry.resolve(node.iconKey, node.name),
+                              size: 28,
+                              color: _kTextMuted,
+                            ),
+                          ),
+                        )
+                      : Center(
+                          child: Icon(
+                            IconRegistry.resolve(node.iconKey, node.name),
+                            size: 28,
+                            color: _kTextMuted,
+                          ),
+                        ),
                 ),
               ),
             ),

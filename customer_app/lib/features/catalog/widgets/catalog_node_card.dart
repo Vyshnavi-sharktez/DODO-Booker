@@ -92,17 +92,25 @@ class _CardImage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final url = ServiceImageRegistry.resolve(node.imageUrl, node.name);
-    return Stack(
-      fit: StackFit.expand,
-      children: [
-        Image.network(
-          url,
-          fit: BoxFit.cover,
-          width: double.infinity,
-          height: double.infinity,
-          loadingBuilder: (_, child, p) =>
-              p == null ? child : const ColoredBox(color: Color(0xFFEEEEEE)),
-          errorBuilder: (_, _, _) => Container(
+    Widget imageWidget() => url != null
+        ? Image.network(
+            url,
+            fit: BoxFit.cover,
+            width: double.infinity,
+            height: double.infinity,
+            loadingBuilder: (_, child, p) =>
+                p == null ? child : const ColoredBox(color: Color(0xFFEEEEEE)),
+            errorBuilder: (_, _, _) => Container(
+              color: AppColors.goldLight,
+              alignment: Alignment.center,
+              child: const Icon(
+                Icons.home_repair_service_rounded,
+                size: 32,
+                color: AppColors.gold,
+              ),
+            ),
+          )
+        : Container(
             color: AppColors.goldLight,
             alignment: Alignment.center,
             child: const Icon(
@@ -110,8 +118,11 @@ class _CardImage extends StatelessWidget {
               size: 32,
               color: AppColors.gold,
             ),
-          ),
-        ),
+          );
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        imageWidget(),
         if (node.isLeafBookable)
           Positioned(
             top: 4,

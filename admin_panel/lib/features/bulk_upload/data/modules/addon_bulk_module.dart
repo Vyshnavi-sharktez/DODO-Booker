@@ -37,7 +37,9 @@ Optional columns:
   is_active   : TRUE or FALSE (default TRUE)
 
 Duplicate handling:
-  An add-on with the same name (case-insensitive) is SKIPPED.
+  An add-on with the same name (case-insensitive) and identical fields is SKIPPED.
+  If the name matches but any field differs, the existing record is UPDATED.
+  Duplicate names within the uploaded file are SKIPPED after the first occurrence.
 
 Notes:
   - Column headers in row 1 must not be changed.
@@ -49,9 +51,11 @@ Notes:
   @override
   Future<List<BulkRow>> validateRows(List<Map<String, String?>> rawRows) async {
     final client = Supabase.instance.client;
-    final existingNames = await _loadExistingAddonNames(client);
+    final existing = await _loadExistingAddons(client);
 
     final result = <BulkRow>[];
+    final seenNames = <String>{};
+
     for (var i = 0; i < rawRows.length; i++) {
       final row = rawRows[i];
       final rowNum = i + 2;
@@ -77,14 +81,40 @@ Notes:
         continue;
       }
 
-      if (existingNames.contains(addonName.toLowerCase())) {
+      final nameLower = addonName.toLowerCase();
+
+      // Within-upload duplicate.
+      if (seenNames.contains(nameLower)) {
         result.add(BulkRow(
           rowNumber: rowNum,
           raw: row,
           status: RowStatus.skipped,
-          skipReason: 'Add-on "$addonName" already exists',
+          skipReason: 'Duplicate name in this upload: "$addonName"',
           displayLabel: addonName,
         ));
+        continue;
+      }
+      seenNames.add(nameLower);
+
+      final existingAddon = existing[nameLower];
+      if (existingAddon != null) {
+        if (_addonFieldsChanged(row, existingAddon)) {
+          result.add(BulkRow(
+            rowNumber: rowNum,
+            raw: row,
+            status: RowStatus.updatePending,
+            displayLabel: addonName,
+            existingId: existingAddon['id'] as String,
+          ));
+        } else {
+          result.add(BulkRow(
+            rowNumber: rowNum,
+            raw: row,
+            status: RowStatus.skipped,
+            skipReason: 'Already exists, no changes: "$addonName"',
+            displayLabel: addonName,
+          ));
+        }
         continue;
       }
 
@@ -104,6 +134,7 @@ Notes:
     final client = Supabase.instance.client;
 
     int created = 0;
+    int updated = 0;
     final failures = <({int row, String reason})>[];
 
     for (final br in validRows) {
@@ -112,15 +143,24 @@ Notes:
         final isActive = _parseBool(row['is_active'], defaultVal: true);
         final description = (row['description'] ?? '').trim();
         final price = double.parse((row['price'] ?? '').trim());
+        final name = (row['addon_name'] ?? '').trim();
 
-        await client.from('addons').insert({
-          'name': (row['addon_name'] ?? '').trim(),
-          'price': price,
-          'is_active': isActive,
-          if (description.isNotEmpty) 'description': description,
-        });
-
-        created++;
+        if (br.status == RowStatus.updatePending) {
+          await client.from('addons').update({
+            'price': price,
+            'is_active': isActive,
+            'description': description.isNotEmpty ? description : null,
+          }).eq('id', br.existingId!);
+          updated++;
+        } else {
+          await client.from('addons').insert({
+            'name': name,
+            'price': price,
+            'is_active': isActive,
+            if (description.isNotEmpty) 'description': description,
+          });
+          created++;
+        }
       } catch (e) {
         failures.add((row: br.rowNumber, reason: e.toString()));
       }
@@ -128,6 +168,7 @@ Notes:
 
     return ImportResult(
       created: created,
+      updated: updated,
       skipped: 0,
       failed: failures.length,
       failures: failures,
@@ -136,11 +177,32 @@ Notes:
 
   // ── Helpers ───────────────────────────────────────────────────────────────────
 
-  Future<Set<String>> _loadExistingAddonNames(SupabaseClient client) async {
-    final rows = await client.from('addons').select('name');
+  /// Returns a map keyed by lowercase addon name → full row including `id`.
+  Future<Map<String, Map<String, dynamic>>> _loadExistingAddons(
+      SupabaseClient client) async {
+    final rows =
+        await client.from('addons').select('id, name, price, description, is_active');
     return {
-      for (final r in rows as List) (r['name'] as String).toLowerCase(),
+      for (final r in rows as List)
+        (r['name'] as String).toLowerCase():
+            Map<String, dynamic>.from(r as Map),
     };
+  }
+
+  bool _addonFieldsChanged(
+      Map<String, String?> row, Map<String, dynamic> existing) {
+    final newPrice = double.tryParse((row['price'] ?? '').trim());
+    final dbPrice = (existing['price'] as num?)?.toDouble();
+    if (newPrice != dbPrice) return true;
+
+    final newActive = _parseBool(row['is_active'], defaultVal: true);
+    if ((existing['is_active'] as bool? ?? true) != newActive) return true;
+
+    final newDesc = (row['description'] ?? '').trim();
+    final dbDesc = ((existing['description'] as String?) ?? '').trim();
+    if (newDesc != dbDesc) return true;
+
+    return false;
   }
 
   bool _parseBool(String? val, {required bool defaultVal}) {

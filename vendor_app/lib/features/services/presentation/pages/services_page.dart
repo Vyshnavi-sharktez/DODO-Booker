@@ -2494,8 +2494,13 @@ class _CustomServiceRowState extends ConsumerState<_CustomServiceRow> {
     final newPrice = double.tryParse(priceCtrl.text.trim());
     if (newPrice == null || newPrice <= 0) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Enter a valid price.')),
+        showDialog<void>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            title: const Text('Invalid Price'),
+            content: const Text('Please enter a valid price greater than zero.'),
+            actions: [FilledButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('OK'))],
+          ),
         );
       }
       return;
@@ -2838,8 +2843,13 @@ class _CustomServiceNarrowCardState
     final newPrice = double.tryParse(priceCtrl.text.trim());
     if (newPrice == null || newPrice <= 0) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Enter a valid price.')),
+        showDialog<void>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            title: const Text('Invalid Price'),
+            content: const Text('Please enter a valid price greater than zero.'),
+            actions: [FilledButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('OK'))],
+          ),
         );
       }
       return;
@@ -4007,8 +4017,13 @@ class _CreateServiceDialogState extends ConsumerState<_CreateServiceDialog> {
   Future<void> _submit() async {
     final name = _nameCtrl.text.trim();
     if (name.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Service name is required.')),
+      showDialog<void>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Name Required'),
+          content: const Text('Please enter a name for your custom service.'),
+          actions: [FilledButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('OK'))],
+        ),
       );
       return;
     }
@@ -4038,11 +4053,14 @@ class _CreateServiceDialogState extends ConsumerState<_CreateServiceDialog> {
       final sub = ref.read(mySubscriptionProvider).valueOrNull;
       if (sub?.plan?.isMaxCustomServicesEnabled == false) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-            content: Text(
-                'Custom service creation is not included in your plan.'),
-            backgroundColor: AppColors.error,
-          ));
+          showDialog<void>(
+            context: context,
+            builder: (ctx) => AlertDialog(
+              title: const Text('Plan Restriction'),
+              content: const Text('Custom service creation is not included in your current plan.'),
+              actions: [FilledButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('OK'))],
+            ),
+          );
         }
         return;
       }
@@ -4053,10 +4071,14 @@ class _CreateServiceDialogState extends ConsumerState<_CreateServiceDialog> {
             requests.where((r) => r.isActiveCustomService).length;
         if (usedCount >= limit) {
           if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-              content: Text('Custom service limit ($limit) reached.'),
-              backgroundColor: AppColors.error,
-            ));
+            showDialog<void>(
+              context: context,
+              builder: (ctx) => AlertDialog(
+                title: const Text('Service Limit Reached'),
+                content: Text('You have reached the custom service limit ($limit) for your plan.'),
+                actions: [FilledButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('OK'))],
+              ),
+            );
           }
           return;
         }

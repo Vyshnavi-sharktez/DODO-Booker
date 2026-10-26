@@ -134,14 +134,19 @@ Deno.serve(async (req: Request) => {
   if (!callerAdmin) return json({ error: "Forbidden" }, 403);
 
   // ── 3. Parse body ──────────────────────────────────────────────────────────
-  let body: { provider?: string; test_phone?: string };
+  let body: {
+    provider?: string;
+    test_phone?: string;
+    mock?: boolean;
+    mock_outcome?: string;
+  };
   try {
     body = await req.json();
   } catch {
     return json({ error: "Invalid JSON body" }, 400);
   }
 
-  const { provider, test_phone } = body;
+  const { provider, test_phone, mock = false, mock_outcome = "success" } = body;
   if (!provider || !test_phone) {
     return json({ error: "provider and test_phone are required" }, 400);
   }
@@ -161,6 +166,30 @@ Deno.serve(async (req: Request) => {
     .single();
 
   if (cfgErr || !cfg) return json({ error: "Provider configuration not found" }, 404);
+
+  // ── Mock mode ───────────────────────────────────────────────────────────────
+  // Config row was loaded above to confirm the provider exists.
+  // Enabled state, API URL, Vault secret, and the real provider API are all
+  // intentionally bypassed — no real SMS is sent.
+  if (mock) {
+    if (mock_outcome === "failure") {
+      return json(
+        {
+          success: false,
+          simulated: true,
+          http_status: 500,
+          provider_response: { message: "Simulated delivery failure — no real SMS was sent" },
+        },
+        422,
+      );
+    }
+    return json({
+      success: true,
+      simulated: true,
+      provider_response: { message: "Simulated — no real SMS was sent" },
+    });
+  }
+
   if (!cfg.is_enabled) {
     return json(
       { error: "Provider is disabled — enable it and save before testing" },
@@ -222,6 +251,17 @@ Deno.serve(async (req: Request) => {
     responseData = JSON.parse(responseText);
   } catch {
     responseData = { raw: responseText };
+  }
+
+  // MSG91 OTP API always returns HTTP 200, even on rejection — check body
+  if (provider === "msg91") {
+    const r = responseData as Record<string, unknown>;
+    if (r?.type === "error") {
+      const msg = String(r.message ?? "unknown error");
+      console.error(`[sms-test] MSG91 rejected: ${msg} | template_id: ${extra.template_id ?? "(not set)"}`);
+      return json({ success: false, http_status: apiRes.status, provider_response: responseData }, 422);
+    }
+    console.log(`[sms-test] MSG91 accepted | template_id: ${extra.template_id ?? "(not set)"}`);
   }
 
   if (apiRes.ok) {

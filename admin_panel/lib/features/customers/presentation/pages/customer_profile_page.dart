@@ -178,12 +178,12 @@ class _ProfileHeader extends ConsumerWidget {
                     spacing: 16,
                     runSpacing: 4,
                     children: [
+                      if (c.customerNumber != null)
+                        _InfoChip(Icons.tag_rounded, c.customerNumber!),
                       if (c.phone.isNotEmpty)
                         _InfoChip(Icons.phone_rounded, c.phone),
                       if (c.email.isNotEmpty)
                         _InfoChip(Icons.email_rounded, c.email),
-                      _InfoChip(Icons.fingerprint_rounded,
-                          'ID: ${c.id.substring(0, 8)}…'),
                       if (c.createdAt != null)
                         _InfoChip(Icons.calendar_today_rounded,
                             'Joined ${_dateFmt.format(c.createdAt!)}'),

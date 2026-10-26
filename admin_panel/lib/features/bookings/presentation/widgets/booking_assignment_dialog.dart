@@ -1071,7 +1071,8 @@ class _BookingAssignmentDialogState
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _buildAutoDispatchBanner(),
-        _buildAssignmentHistorySection(),
+        if (widget.booking.dispatchStatus != 'idle')
+          _buildAssignmentHistorySection(),
         ?codBanner,
         if (codBanner != null) const SizedBox(height: 12),
         ?assignmentBanner,

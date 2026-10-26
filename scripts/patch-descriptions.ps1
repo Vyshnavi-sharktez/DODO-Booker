@@ -1,5 +1,9 @@
 $baseUrl = "https://qspilpbvcldgelgwwrdr.supabase.co/rest/v1/catalog_nodes"
-$key     = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFzcGlscGJ2Y2xkZ2VsZ3d3cmRyIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4MDg4Mjk2NiwiZXhwIjoyMDk2NDU4OTY2fQ.UveKRbIFF28Wg7Gs7PcsMAMVojEqFI2BwfGlH1XRiR4"
+$key     = $env:SUPABASE_SERVICE_ROLE_KEY
+if (-not $key) {
+    Write-Error "SUPABASE_SERVICE_ROLE_KEY environment variable is not set. Set it before running this script."
+    exit 1
+}
 
 $headers = @{
     "apikey"        = $key

@@ -71,6 +71,14 @@ class RestoreBinRepository {
     return Booking.fromMap(data as Map<String, dynamic>);
   }
 
+  Future<Map<String, dynamic>> permanentlyDeleteBooking(String bookingId) async {
+    final result = await _supabase.rpc(
+      'admin_permanently_delete_booking',
+      params: {'p_booking_id': bookingId},
+    );
+    return result as Map<String, dynamic>;
+  }
+
   Future<void> saveRetentionSettings(int value, String unit) async {
     await _supabase.from('settings').upsert([
       {'setting_key': 'deleted_bookings_retention_value', 'setting_value': value.toString()},

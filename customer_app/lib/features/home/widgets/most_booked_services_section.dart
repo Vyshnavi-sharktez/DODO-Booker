@@ -308,16 +308,18 @@ class _CardImage extends StatelessWidget {
       child: AnimatedScale(
         scale: hovered ? 1.05 : 1.0,
         duration: const Duration(milliseconds: 220),
-        child: Image.network(
-          url,
-          fit: BoxFit.cover,
-          width: double.infinity,
-          height: double.infinity,
-          loadingBuilder: (_, child, p) =>
-              p == null ? child : const ColoredBox(color: Color(0xFFEEEEEE)),
-          errorBuilder: (_, _, _) =>
-              const ColoredBox(color: Color(0xFFF0F0F0)),
-        ),
+        child: url != null
+            ? Image.network(
+                url,
+                fit: BoxFit.cover,
+                width: double.infinity,
+                height: double.infinity,
+                loadingBuilder: (_, child, p) =>
+                    p == null ? child : const ColoredBox(color: Color(0xFFEEEEEE)),
+                errorBuilder: (_, _, _) =>
+                    const ColoredBox(color: Color(0xFFF0F0F0)),
+              )
+            : const ColoredBox(color: Color(0xFFF0F0F0)),
       ),
     );
   }

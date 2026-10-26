@@ -1,4 +1,4 @@
-import 'dart:async';
+﻿import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -943,23 +943,51 @@ class _CreateBookingDialogState extends ConsumerState<CreateBookingDialog> {
 
   Future<void> _submit(TaxSettingsConfig tax) async {
     if (_selectedCustomer == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please select a customer')),
+      await showDialog<void>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          title: const Text('Customer Required'),
+          content: const Text('Please select a customer before creating the booking.'),
+          actions: [
+            FilledButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('OK')),
+          ],
+        ),
       );
       return;
     }
     if (!_formKey.currentState!.validate()) return;
     if (_serviceDate == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please select a service date')),
+      await showDialog<void>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12)),
+          title: const Text('Date Required'),
+          content: const Text('Please select a service date before creating the booking.'),
+          actions: [
+            FilledButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: const Text('OK'),
+            ),
+          ],
+        ),
       );
       return;
     }
 
     // Must have at least one item (catalog or custom)
     if (_itemKeys.isEmpty && _customItemKeys.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please add at least one item')),
+      await showDialog<void>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          title: const Text('No Items Added'),
+          content: const Text('Please add at least one service item before creating the booking.'),
+          actions: [
+            FilledButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('OK')),
+          ],
+        ),
       );
       return;
     }
@@ -977,9 +1005,15 @@ class _CreateBookingDialogState extends ConsumerState<CreateBookingDialog> {
     for (int i = 0; i < _itemKeys.length; i++) {
       final data = _itemKeys[i].currentState?.buildItemData();
       if (data == null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Item ${i + 1}: Please select a service to continue'),
+        await showDialog<void>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            title: const Text('Incomplete Item'),
+            content: Text('Item ${i + 1}: Please select a service to continue.'),
+            actions: [
+              FilledButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('OK')),
+            ],
           ),
         );
         return;
@@ -1011,14 +1045,30 @@ class _CreateBookingDialogState extends ConsumerState<CreateBookingDialog> {
       final price = state.price;
       final qty = state.quantity;
       if (name.isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Custom item ${i + 1}: Product name required')),
+        await showDialog<void>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            title: const Text('Name Required'),
+            content: Text('Custom item ${i + 1}: Please enter a product name.'),
+            actions: [
+              FilledButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('OK')),
+            ],
+          ),
         );
         return;
       }
       if (price <= 0) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Custom item ${i + 1}: Valid price required')),
+        await showDialog<void>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            title: const Text('Invalid Price'),
+            content: Text('Custom item ${i + 1}: Please enter a valid price greater than zero.'),
+            actions: [
+              FilledButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('OK')),
+            ],
+          ),
         );
         return;
       }
@@ -1070,10 +1120,15 @@ class _CreateBookingDialogState extends ConsumerState<CreateBookingDialog> {
       if (mounted) Navigator.of(context).pop();
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error: $e'),
-            backgroundColor: AppColors.error,
+        await showDialog<void>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            title: const Text('Booking Failed'),
+            content: Text('$e'),
+            actions: [
+              FilledButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('OK')),
+            ],
           ),
         );
       }
@@ -1540,7 +1595,7 @@ class _SummaryBox extends StatelessWidget {
               label: couponCode != null
                   ? 'Discount ($couponCode)'
                   : 'Discount',
-              value: 'âˆ’${_priceFmt.format(discountAmount)}',
+              value: '-${_priceFmt.format(discountAmount)}',
               valueColor: AppColors.success,
             ),
           ],

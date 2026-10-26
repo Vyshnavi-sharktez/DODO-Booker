@@ -90,7 +90,16 @@ class RouterNotifier extends ChangeNotifier {
     final bool isOnResetPage = location == '/reset-password';
 
     if (!isLoggedIn && !isOnLoginPage && !isOnResetPage) return '/login';
-    if (isLoggedIn && isOnLoginPage) return '/dashboard';
+
+    if (isLoggedIn && isOnLoginPage) {
+      final adminAsync = _ref.read(adminUserProvider);
+      // Admin user check still in flight — hold on login page until resolved.
+      if (adminAsync.isLoading) return null;
+      // Resolved to null: inactive admin (signOut already fired) or unknown.
+      // Stay on login so AuthNotifier's error message is visible.
+      if (adminAsync.valueOrNull == null) return null;
+      return '/dashboard';
+    }
     // Never redirect away from /reset-password (recovery session is active).
 
     // Permission check for protected routes (skip for dashboard and unauthorized).

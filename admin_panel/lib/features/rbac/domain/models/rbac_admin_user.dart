@@ -13,6 +13,7 @@ class RbacAdminUser {
   final List<String> roleNames;
   final DateTime? lastLoginAt;
   final DateTime? createdAt;
+  final String? adminNumber;
 
   const RbacAdminUser({
     required this.id,
@@ -29,6 +30,7 @@ class RbacAdminUser {
     this.roleNames = const [],
     this.lastLoginAt,
     this.createdAt,
+    this.adminNumber,
   });
 
   factory RbacAdminUser.fromMap(Map<String, dynamic> map) {
@@ -59,6 +61,7 @@ class RbacAdminUser {
       createdAt: map['created_at'] != null
           ? DateTime.tryParse(map['created_at'] as String)
           : null,
+      adminNumber: map['admin_number'] as String?,
     );
   }
 
@@ -71,6 +74,7 @@ class RbacAdminUser {
     String? fullName,
     String? phone,
     String? address,
+    String? adminNumber,
   }) {
     return RbacAdminUser(
       id: id,
@@ -87,6 +91,7 @@ class RbacAdminUser {
       roleNames: roleNames ?? this.roleNames,
       lastLoginAt: lastLoginAt,
       createdAt: createdAt,
+      adminNumber: adminNumber ?? this.adminNumber,
     );
   }
 }

@@ -34,6 +34,9 @@ class CouponsNotifier extends StateNotifier<AsyncValue<List<Coupon>>> {
     required bool isActive,
     required String applicabilityType,
     required List<String> applicableNodeIds,
+    required String customerEligibility,
+    required List<String> selectedCustomerIds,
+    int? maxOrderWiseLimit,
   }) async {
     final created = await _repo.createCoupon(
       code: code,
@@ -48,6 +51,9 @@ class CouponsNotifier extends StateNotifier<AsyncValue<List<Coupon>>> {
       isActive: isActive,
       applicabilityType: applicabilityType,
       applicableNodeIds: applicableNodeIds,
+      customerEligibility: customerEligibility,
+      selectedCustomerIds: selectedCustomerIds,
+      maxOrderWiseLimit: maxOrderWiseLimit,
     );
     final current = state.valueOrNull ?? [];
     state = AsyncValue.data([created, ...current]);
@@ -67,6 +73,9 @@ class CouponsNotifier extends StateNotifier<AsyncValue<List<Coupon>>> {
     required bool isActive,
     required String applicabilityType,
     required List<String> applicableNodeIds,
+    required String customerEligibility,
+    required List<String> selectedCustomerIds,
+    int? maxOrderWiseLimit,
   }) async {
     final updated = await _repo.updateCoupon(
       id,
@@ -82,6 +91,9 @@ class CouponsNotifier extends StateNotifier<AsyncValue<List<Coupon>>> {
       isActive: isActive,
       applicabilityType: applicabilityType,
       applicableNodeIds: applicableNodeIds,
+      customerEligibility: customerEligibility,
+      selectedCustomerIds: selectedCustomerIds,
+      maxOrderWiseLimit: maxOrderWiseLimit,
     );
     final current = state.valueOrNull;
     if (current != null) {

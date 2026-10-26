@@ -60,8 +60,10 @@ class Booking {
   final String customerId;
   final String? customerName;
   final String? customerPhone;
+  final String? customerNumber;
   final String vendorId;
   final String vendorName;
+  final String? vendorNumber;
   final String dodoTeamId;
   final String assignmentType; // 'Unassigned' | 'External Vendor' | 'DODO Team'
   final DateTime? serviceDate;
@@ -119,8 +121,10 @@ class Booking {
     required this.customerId,
     this.customerName,
     this.customerPhone,
+    this.customerNumber,
     required this.vendorId,
     this.vendorName = '',
+    this.vendorNumber,
     this.dodoTeamId = '',
     this.assignmentType = 'Unassigned',
     this.serviceDate,
@@ -200,8 +204,11 @@ class Booking {
     if (dispatchStatus == 'dispatching' || (status == 'assigned' && dispatchStatus != 'accepted')) {
       return ('Waiting for Vendor Acceptance', const Color(0xFFDD6B20), const Color(0xFFFEEBC8));
     }
-    if (status == 'accepted' || (status == 'assigned' && dispatchStatus == 'accepted')) {
+    if (status == 'assigned' && dispatchStatus == 'accepted') {
       return ('Assigned', const Color(0xFF3182CE), const Color(0xFFEBF8FF));
+    }
+    if (status == 'accepted') {
+      return ('Accepted', const Color(0xFF0369A1), const Color(0xFFE0F2FE));
     }
     if (status == 'assigned_to_dodo_team') {
       return ('DODO Assigned', const Color(0xFF6B46C1), const Color(0xFFF3E8FF));
@@ -210,7 +217,7 @@ class Booking {
       'pending'                    => ('Pending', const Color(0xFFDD6B20), const Color(0xFFFEEBC8)),
       'warranty_pending_approval'  => ('Pending Approval', const Color(0xFF744210), const Color(0xFFFEFCBF)),
       'assigned'                   => ('Assigned', const Color(0xFF3182CE), const Color(0xFFEBF8FF)),
-      'accepted'                   => ('Assigned', const Color(0xFF3182CE), const Color(0xFFEBF8FF)),
+      'accepted'                   => ('Accepted', const Color(0xFF2B6CB0), const Color(0xFFBEE3F8)),
       'en_route'                   => ('En Route', const Color(0xFF5C6BC0), const Color(0xFFE8EAF6)),
       'on_the_way'                 => ('On The Way', const Color(0xFF4A6FA5), const Color(0xFFEBF4FF)),
       'arrived'                    => ('Arrived', const Color(0xFF6B46C1), const Color(0xFFF3E8FF)),
@@ -260,8 +267,10 @@ class Booking {
       customerId: map['customer_id'] as String? ?? '',
       customerName: customerData?['full_name'] as String?,
       customerPhone: customerData?['phone'] as String?,
+      customerNumber: customerData?['customer_number'] as String?,
       vendorId: map['vendor_id'] as String? ?? '',
       vendorName: vendorName,
+      vendorNumber: vendorData?['vendor_number'] as String?,
       dodoTeamId: map['dodo_team_id'] as String? ?? '',
       assignmentType: map['assignment_type'] as String? ?? 'Unassigned',
       serviceDate: map['service_date'] != null
@@ -375,13 +384,19 @@ class Booking {
       id: id,
       bookingNumber: bookingNumber,
       customerId: customerId,
+      customerName: customerName,
+      customerPhone: customerPhone,
+      customerNumber: customerNumber,
       vendorId: vendorId ?? this.vendorId,
+      vendorName: vendorName,
+      vendorNumber: vendorNumber,
       dodoTeamId: dodoTeamId ?? this.dodoTeamId,
       assignmentType: assignmentType ?? this.assignmentType,
       serviceDate: serviceDate ?? this.serviceDate,
       status: status ?? this.status,
       dispatchStatus: dispatchStatus ?? this.dispatchStatus,
       subtotal: subtotal,
+      taxAmount: taxAmount,
       discountAmount: discountAmount,
       totalAmount: totalAmount,
       couponCode: couponCode,
@@ -407,9 +422,16 @@ class Booking {
       amcPlanName: amcPlanName,
       amcRecurrenceInterval: amcRecurrenceInterval,
       amcContractId: amcContractId,
+      amcVisitNumber: amcVisitNumber,
       amcVisitsCompleted: amcVisitsCompleted,
       amcTotalVisits: amcTotalVisits,
+      amcContractCreatedAt: amcContractCreatedAt,
+      amcServiceInterval: amcServiceInterval,
+      amcContractStatus: amcContractStatus,
       amcQuantity: amcQuantity,
+      cancellationReason: cancellationReason,
+      cancellationRemarks: cancellationRemarks,
+      cancellationRequestedAt: cancellationRequestedAt,
     );
   }
 }

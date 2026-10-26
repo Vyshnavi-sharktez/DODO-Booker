@@ -64,6 +64,10 @@ const Map<String, String> kSettingDefaults = {
   'deleted_bookings_retention_value': '30',
   'deleted_bookings_retention_unit': 'days',
 
+  // Marketing
+  'abandoned_cart_inactivity_value': '6',
+  'abandoned_cart_inactivity_unit': 'hours',
+
   // Subscription
   'subscription_enabled': 'false',
   'subscription_require_active': 'false',

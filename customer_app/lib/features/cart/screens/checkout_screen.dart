@@ -393,14 +393,17 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
           // Do NOT cancel. Preserve the booking AND the cart.
           debugPrint('[DODO][Razorpay][TRACE] verifyPayment error: $e');
           if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-              content: Text(
-                'Payment verification failed. Your booking is saved — '
-                'contact support if you were charged.',
+            showDialog<void>(
+              context: context,
+              builder: (ctx) => AlertDialog(
+                title: const Text('Verification Failed'),
+                content: const Text(
+                  'Payment verification failed. Your booking has been saved.\n\n'
+                  'If you were charged, please contact support with your booking ID.',
+                ),
+                actions: [FilledButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('OK'))],
               ),
-              backgroundColor: Color(0xFFEA4335),
-              behavior: SnackBarBehavior.floating,
-            ));
+            );
           }
           return;
         }

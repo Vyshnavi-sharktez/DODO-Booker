@@ -1,5 +1,6 @@
 import "@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "@supabase/supabase-js";
+import { Webhook } from "standardwebhooks";
 
 // ── CORS ───────────────────────────────────────────────────────────────────────
 // The Send SMS Hook is called server-to-server by Supabase Auth.
@@ -18,58 +19,6 @@ function json(body: unknown, status = 200): Response {
     status,
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
-}
-
-// ── Hook JWT verification ─────────────────────────────────────────────────────
-// Supabase Auth signs every hook request with an HS256 JWT using the hook
-// signing secret configured in the Dashboard.  The same secret must be stored
-// as the SEND_SMS_HOOK_SECRET project secret so this function can verify it.
-// Ref: https://supabase.com/docs/guides/auth/auth-hooks#http-hooks
-
-async function verifyHookJwt(
-  authHeader: string | null,
-  secret: string,
-): Promise<void> {
-  if (!authHeader?.startsWith("Bearer ")) {
-    throw new Error("Missing or invalid Authorization header");
-  }
-  const token = authHeader.slice(7);
-  const parts = token.split(".");
-  if (parts.length !== 3) throw new Error("Malformed JWT");
-
-  const [headerEnc, payloadEnc, sigEnc] = parts;
-
-  // Import the signing key (HS256 = HMAC-SHA-256).
-  const keyData = new TextEncoder().encode(secret);
-  const key = await crypto.subtle.importKey(
-    "raw",
-    keyData,
-    { name: "HMAC", hash: "SHA-256" },
-    false,
-    ["verify"],
-  );
-
-  // Base64url → binary
-  const b64urlToBytes = (s: string): Uint8Array =>
-    Uint8Array.from(
-      atob(s.replace(/-/g, "+").replace(/_/g, "/")),
-      (c) => c.charCodeAt(0),
-    );
-
-  const sigBytes = b64urlToBytes(sigEnc);
-  const signedInput = new TextEncoder().encode(`${headerEnc}.${payloadEnc}`);
-
-  const valid = await crypto.subtle.verify("HMAC", key, sigBytes, signedInput);
-  if (!valid) throw new Error("Hook JWT signature is invalid");
-
-  // Decode payload and check expiry if present.
-  const payload = JSON.parse(
-    new TextDecoder().decode(b64urlToBytes(payloadEnc)),
-  );
-  const now = Math.floor(Date.now() / 1000);
-  if (typeof payload.exp === "number" && payload.exp < now) {
-    throw new Error("Hook JWT has expired");
-  }
 }
 
 // ── SSRF prevention ───────────────────────────────────────────────────────────
@@ -134,10 +83,22 @@ async function msg91Adapter(args: AdapterArgs): Promise<void> {
     body: JSON.stringify(payload),
   });
 
+  // Read body once — used for both HTTP-level and application-level error detection
+  const resText = await res.text().catch(() => "");
   if (!res.ok) {
-    const body = await res.text().catch(() => "");
-    throw new Error(`MSG91 error ${res.status}: ${body}`);
+    throw new Error(`MSG91 error ${res.status}: ${resText}`);
   }
+
+  // MSG91 OTP API always returns HTTP 200, even on rejection — check body
+  let resJson: Record<string, unknown> | null = null;
+  try { resJson = JSON.parse(resText); } catch { /* non-JSON body */ }
+
+  if (resJson?.type === "error") {
+    const msg = String(resJson.message ?? "unknown error");
+    console.error(`MSG91 rejected OTP delivery: ${msg} | template_id: ${extra.template_id ?? "(not set)"}`);
+    throw new Error(`MSG91 rejected the request: ${msg}`);
+  }
+  console.log(`MSG91 OTP accepted | template_id: ${extra.template_id ?? "(not set)"}`);
 }
 
 async function genericHttpAdapter(args: AdapterArgs): Promise<void> {
@@ -183,34 +144,36 @@ Deno.serve(async (req: Request) => {
     return json({ error: "Method not allowed" }, 405);
   }
 
-  // ── 1. Verify hook JWT ────────────────────────────────────────────────────────
-  // SEND_SMS_HOOK_SECRET must be set as a Supabase project secret BEFORE the
-  // Auth Send SMS Hook is activated in the Dashboard.  If it is absent the
-  // function refuses all requests — it must never run unprotected.
+  // ── 1. Verify Standard Webhooks signature ────────────────────────────────────
+  // Supabase Auth Hooks uses the Standard Webhooks spec: the signature is in
+  // webhook-id / webhook-timestamp / webhook-signature headers, covering the
+  // raw request body. Bearer JWT is NOT used for this hook type.
   const hookSecret = Deno.env.get("SEND_SMS_HOOK_SECRET");
   if (!hookSecret) {
     console.error("SEND_SMS_HOOK_SECRET is not configured");
     return json({ error: "Hook secret not configured" }, 500);
   }
 
+  // Signature covers raw bytes — body must be read as text before verifying.
+  const rawBody = await req.text().catch(() => null);
+  if (rawBody === null) return json({ error: "Failed to read request body" }, 400);
+
+  // Dashboard stores the secret as v1,whsec_<base64>. The standardwebhooks
+  // library expects whsec_<base64>, so strip the v1, version prefix if present.
+  let hookBody: { user?: { phone?: string }; sms?: { otp?: string } };
   try {
-    await verifyHookJwt(req.headers.get("Authorization"), hookSecret);
+    const secret = hookSecret.startsWith("v1,") ? hookSecret.slice(3) : hookSecret;
+    const wh = new Webhook(secret);
+    hookBody = wh.verify(rawBody, Object.fromEntries(req.headers)) as {
+      user?: { phone?: string };
+      sms?: { otp?: string };
+    };
   } catch (e) {
-    console.error("Hook JWT verification failed:", (e as Error).message);
+    console.error("Hook signature verification failed:", (e as Error).message);
     return json({ error: "Unauthorized" }, 401);
   }
 
-  // ── 2. Parse hook body ────────────────────────────────────────────────────────
-  // Supabase Auth Send SMS Hook payload shape:
-  //   { user: { phone: "+91..." }, sms: { otp: "123456" } }
-  // Ref: https://supabase.com/docs/guides/auth/auth-hooks#send-sms-hook
-  let hookBody: { user?: { phone?: string }; sms?: { otp?: string } };
-  try {
-    hookBody = await req.json();
-  } catch {
-    return json({ error: "Invalid JSON body" }, 400);
-  }
-
+  // ── 2. Extract phone and OTP ──────────────────────────────────────────────────
   const phone = hookBody.user?.phone;
   const otp = hookBody.sms?.otp;
   if (!phone || !otp) {

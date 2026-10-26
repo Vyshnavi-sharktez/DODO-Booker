@@ -348,6 +348,28 @@ class _ProfileCard extends StatelessWidget {
               textAlign: TextAlign.center,
             ),
 
+            if (profile.customerNumber != null) ...[
+              const SizedBox(height: 6),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                decoration: BoxDecoration(
+                  color: AppColors.primary.withAlpha(20),
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border.all(
+                      color: AppColors.primary.withAlpha(60), width: 1),
+                ),
+                child: Text(
+                  profile.customerNumber!,
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.primary,
+                    letterSpacing: 0.5,
+                  ),
+                ),
+              ),
+            ],
+
             const SizedBox(height: 6),
 
             if (profile.email != null && profile.email!.isNotEmpty) ...[

@@ -47,7 +47,52 @@ String? findCatalogChild(
   return null;
 }
 
+/// Returns true if any leaf-node field in [row] differs from [existing].
+/// [existing] must contain all leaf fields (loaded by _loadCache).
+bool catalogLeafFieldsChanged(
+  Map<String, String?> row,
+  Map<String, dynamic> existing,
+) {
+  final newBookable = parseCatalogBool(row['is_bookable'], defaultVal: false);
+  if ((existing['is_bookable'] as bool? ?? false) != newBookable) return true;
+
+  final newActive = parseCatalogBool(row['is_active'], defaultVal: true);
+  if ((existing['is_active'] as bool? ?? true) != newActive) return true;
+
+  final newPrice = double.tryParse((row['base_price'] ?? '').trim());
+  final dbPrice = (existing['base_price'] as num?)?.toDouble();
+  if (newPrice != dbPrice) return true;
+
+  final newDuration = int.tryParse((row['estimated_duration'] ?? '').trim());
+  final dbDuration = existing['estimated_duration'] as int?;
+  if (newDuration != dbDuration) return true;
+
+  final newMin = double.tryParse((row['minimum_order_amount'] ?? '').trim());
+  final dbMin = (existing['minimum_order_amount'] as num?)?.toDouble();
+  if (newMin != dbMin) return true;
+
+  // Treat null and empty string as equivalent (import normalises empty → null).
+  final newDesc = (row['description'] ?? '').trim();
+  final dbDesc = ((existing['description'] as String?) ?? '').trim();
+  if (newDesc != dbDesc) return true;
+
+  final newIcon = (row['icon_key'] ?? '').trim();
+  final dbIcon = ((existing['icon_key'] as String?) ?? '').trim();
+  if (newIcon != dbIcon) return true;
+
+  final newSort = int.tryParse((row['sort_order'] ?? '').trim()) ?? 0;
+  final dbSort = existing['sort_order'] as int? ?? 0;
+  if (newSort != dbSort) return true;
+
+  return false;
+}
+
 /// Validates a single catalog row against the in-memory node cache.
+///
+/// [seenPaths] is a mutable set that tracks canonical paths already seen in
+/// this upload batch (case-insensitive). The function adds the current path
+/// to [seenPaths] when a row is not a within-upload duplicate, so repeated
+/// calls with the same set detect duplicates within the uploaded file.
 ///
 /// Does not touch Supabase. The caller is responsible for populating
 /// [childrenOf] and [nodesById] (e.g. from a prior `_loadCache` call or
@@ -57,6 +102,7 @@ BulkRow validateCatalogRow({
   required int rowNumber,
   required Map<String?, List<String>> childrenOf,
   required Map<String, Map<String, dynamic>> nodesById,
+  required Set<String> seenPaths,
 }) {
   final levels = extractCatalogLevels(row);
 
@@ -83,24 +129,52 @@ BulkRow validateCatalogRow({
     }
   }
 
-  // Walk the path to check whether the leaf already exists.
+  // Walk the path; bail out early if any intermediate node is missing (the
+  // leaf cannot possibly exist under an absent parent).
   String? parentId;
+  String? existingLeafId;
   for (var idx = 0; idx < levels.length; idx++) {
     final name = levels[idx];
     final existingId = findCatalogChild(parentId, name, childrenOf, nodesById);
     if (idx == levels.length - 1) {
-      if (existingId != null) {
-        return BulkRow(
-          rowNumber: rowNumber,
-          raw: row,
-          status: RowStatus.skipped,
-          skipReason: 'Node "${levels.join(' > ')}" already exists',
-          displayLabel: levels.last,
-        );
-      }
+      existingLeafId = existingId;
     } else {
+      if (existingId == null) break; // intermediate missing → leaf is new
       parentId = existingId;
     }
+  }
+
+  // Canonical path key for within-upload duplicate detection.
+  final pathKey = levels.map((l) => l.toLowerCase()).join(' > ');
+  if (seenPaths.contains(pathKey)) {
+    return BulkRow(
+      rowNumber: rowNumber,
+      raw: row,
+      status: RowStatus.skipped,
+      skipReason: 'Duplicate path in this upload: "${levels.join(' > ')}"',
+      displayLabel: levels.last,
+    );
+  }
+  seenPaths.add(pathKey);
+
+  if (existingLeafId != null) {
+    final existing = nodesById[existingLeafId]!;
+    if (catalogLeafFieldsChanged(row, existing)) {
+      return BulkRow(
+        rowNumber: rowNumber,
+        raw: row,
+        status: RowStatus.updatePending,
+        displayLabel: levels.last,
+        existingId: existingLeafId,
+      );
+    }
+    return BulkRow(
+      rowNumber: rowNumber,
+      raw: row,
+      status: RowStatus.skipped,
+      skipReason: 'Already exists, no changes: "${levels.join(' > ')}"',
+      displayLabel: levels.last,
+    );
   }
 
   return BulkRow(

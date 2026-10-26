@@ -272,9 +272,17 @@ class CartNotifier extends StateNotifier<List<CartItem>> {
           .firstOrNull;
 
       if (activeRootId != null && activeRootId != rootCategoryId) {
-        _ref.read(savedCartsProvider.notifier).saveCart(activeRootId, state);
-        final restored =
-            _ref.read(savedCartsProvider.notifier).takeCart(rootCategoryId);
+        final savedNotifier = _ref.read(savedCartsProvider.notifier);
+        // Snapshot before save so we know which categories were already saved.
+        final currentSaved = _ref.read(savedCartsProvider);
+        savedNotifier.saveCart(activeRootId, state);
+        // If the incoming category was not already saved, this switch would
+        // produce a 3rd cart. Evict the oldest saved cart first so the total
+        // (1 active + 1 saved) never exceeds 2.
+        if (!currentSaved.containsKey(rootCategoryId)) {
+          savedNotifier.trimToOne();
+        }
+        final restored = savedNotifier.takeCart(rootCategoryId);
         state = restored ?? [];
         _ref
             .read(globalCartAddonsProvider.notifier)

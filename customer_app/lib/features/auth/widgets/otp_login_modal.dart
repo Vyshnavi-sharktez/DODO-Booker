@@ -41,14 +41,14 @@ class _OtpLoginModalState extends ConsumerState<OtpLoginModal> {
     });
     try {
       final fullPhone = '${PhoneInputField.dialCode}${_ctrl.text.trim()}';
-      await ref.read(authServiceProvider).sendOtp(fullPhone);
+      await ref.read(authServiceProvider).checkPhone(fullPhone);
       if (!mounted) return;
       Navigator.of(context).pop(fullPhone);
     } catch (e) {
       if (!mounted) return;
       setState(() {
         _isLoading = false;
-        _error = e.toString().replaceFirst('Exception: ', '');
+        _error = 'Failed to send OTP. Please check your number and try again.';
       });
     }
   }

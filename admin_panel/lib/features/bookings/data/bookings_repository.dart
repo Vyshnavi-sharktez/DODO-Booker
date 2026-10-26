@@ -13,8 +13,8 @@ String _generateOtp() => (100000 + Random().nextInt(900000)).toString();
 // without a recognised FK. Addons are fetched via a separate query.
 const _reviewSelect = '''
   *,
-  vendors(id, business_name),
-  customers!customer_id(full_name, phone),
+  vendors(id, business_name, vendor_number),
+  customers!customer_id(full_name, phone, customer_number),
   customer_reviews!booking_id(id, rating, review_text, created_at),
   booking_items(
     service_id,
@@ -585,7 +585,7 @@ class BookingsRepository {
       'is_admin_booking': true,
       if (latitude != null) 'latitude': latitude,
       if (longitude != null) 'longitude': longitude,
-      if (couponCode != null) 'coupon_code': couponCode,
+      'coupon_code': couponCode,
     }).eq('id', id);
 
     final data = await _supabase

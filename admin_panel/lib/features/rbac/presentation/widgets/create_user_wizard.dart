@@ -226,15 +226,7 @@ class _CreateUserWizardState extends ConsumerState<CreateUserWizard> {
           longitude: _longitude,
         );
 
-    // Register in vendor_dev_auth so the OTP flow works
     final supabase = Supabase.instance.client;
-    try {
-      await supabase.from('vendor_dev_auth').upsert(
-        {'phone': phone, 'otp': '000000'},
-        onConflict: 'phone',
-        ignoreDuplicates: true,
-      );
-    } catch (_) {}
 
     // Upload staged documents (non-fatal)
     if (_docs.isNotEmpty) {

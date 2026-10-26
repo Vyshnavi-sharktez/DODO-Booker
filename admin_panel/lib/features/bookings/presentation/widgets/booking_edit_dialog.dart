@@ -24,7 +24,7 @@ import '../../domain/models/booking_addon.dart';
 import '../../domain/models/booking_item.dart';
 
 final _dateFmt = DateFormat('dd MMM yyyy');
-final _priceFmtEdit = NumberFormat.currency(symbol: '₹', decimalDigits: 0);
+final _priceFmtEdit = NumberFormat.currency(locale: 'en_IN', symbol: '₹', decimalDigits: 0);
 
 final _editTaxSettingsFutureProvider =
     FutureProvider.autoDispose<TaxSettingsConfig>((ref) {
@@ -550,7 +550,7 @@ class _BookingEditDialogState extends ConsumerState<BookingEditDialog> {
   }
 
   Widget _buildSlotPicker() {
-    final hasService = (_firstServiceId() ?? '').isNotEmpty;
+    final hasService = (_firstServiceId() ?? _slotServiceId ?? '').isNotEmpty;
     final hasDate = _serviceDate != null;
     final slotError = _submitted && hasDate && _scheduledTime == null
         ? 'Please select a time slot'
@@ -843,11 +843,13 @@ class _BookingEditDialogState extends ConsumerState<BookingEditDialog> {
     final subtotal = _computeSubtotal();
     final discAmt = _effectiveDiscount(subtotal);
     final taxable = subtotal - discAmt;
+    // When tax is disabled in current settings, preserve the booking's
+    // original tax amount rather than zeroing it out.
     final taxAmt = tax.isEnabled
         ? (tax.taxType == 'percentage'
             ? taxable * tax.taxValue / 100.0
             : tax.taxValue)
-        : 0.0;
+        : widget.booking.taxAmount;
 
     setState(() => _saving = true);
     try {
@@ -907,7 +909,7 @@ class _BookingEditDialogState extends ConsumerState<BookingEditDialog> {
         ? (tax.taxType == 'percentage'
             ? taxable * tax.taxValue / 100.0
             : tax.taxValue)
-        : 0.0;
+        : widget.booking.taxAmount;
     final total = (taxable + taxAmt).clamp(0.0, double.infinity);
 
     final catalogItems = _catalogItems;
@@ -1333,7 +1335,7 @@ class _BookingEditDialogState extends ConsumerState<BookingEditDialog> {
                             ? (tax.taxType == 'percentage'
                                 ? '${tax.taxName} (${tax.taxValue.toInt()}%)'
                                 : tax.taxName)
-                            : null,
+                            : (widget.booking.taxAmount > 0 ? 'Tax (GST)' : null),
                         taxAmount: taxAmt,
                         total: total,
                       ),
@@ -1493,7 +1495,10 @@ class _EditItemRowState extends ConsumerState<_EditItemRow> {
     _subCat = subCat;
     _service = svc;
 
-    if (svc.id.isNotEmpty) _fetchAddons(svc.id, preSelectIds: widget.initAddonIds);
+    if (svc.id.isNotEmpty) {
+      _loadingAddons = true;
+      _fetchAddons(svc.id, preSelectIds: widget.initAddonIds);
+    }
   }
 
   void _onCategoryChanged(CatalogNode? cat) {

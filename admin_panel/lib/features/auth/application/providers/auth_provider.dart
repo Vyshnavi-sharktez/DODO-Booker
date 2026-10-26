@@ -45,9 +45,14 @@ final adminUserProvider = StreamProvider<AdminUser?>((ref) {
     try {
       final user = await repo.fetchAdminUser(session.user.id);
       if (!controller.isClosed) controller.add(user);
+    } on InactiveAdminException {
+      // Admin was deactivated — clear the session so they cannot reach the
+      // dashboard even by navigating directly, then let the router redirect.
+      try { await repo.signOut(); } catch (_) {}
+      if (!controller.isClosed) controller.add(null);
     } catch (_) {
-      // fetchAdminUser throws when no active admin row is found (deactivated
-      // or unknown).  Emit null so the router redirects to /login.
+      // fetchAdminUser throws when no admin row is found or on network error.
+      // Emit null so the router redirects to /login.
       if (!controller.isClosed) controller.add(null);
     }
   }
@@ -95,8 +100,20 @@ class AuthNotifier extends StateNotifier<AsyncValue<void>> {
   Future<void> login({required String email, required String password}) async {
     state = const AsyncValue.loading();
     try {
-      await _repo.signIn(email: email, password: password);
+      final response = await _repo.signIn(email: email, password: password);
+      // Check active status immediately after credential verification —
+      // before the router can redirect to the dashboard.
+      final userId = response.session?.user.id;
+      if (userId != null) {
+        await _repo.fetchAdminUser(userId);
+      }
       state = const AsyncValue.data(null);
+    } on InactiveAdminException {
+      try { await _repo.signOut(); } catch (_) {}
+      state = AsyncValue.error(
+        'Your account is inactive. Please contact the Super Admin for assistance.',
+        StackTrace.current,
+      );
     } on AuthException catch (e, s) {
       state = AsyncValue.error(e.message, s);
     } catch (e, s) {

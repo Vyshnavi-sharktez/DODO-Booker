@@ -353,11 +353,11 @@ class _BookingCardState extends ConsumerState<BookingCard> {
   }
 
   // Called immediately after OTP verification for COD bookings.
-  // Shows the cash confirmation dialog, then completes the booking based on
-  // the vendor's response. Cancel leaves the booking in awaiting_verification.
+  // Shows the cash confirmation dialog. "Cash Collected" completes the booking.
+  // Dismissal leaves the booking in awaiting_verification for later confirmation.
   Future<void> _handleCodCashConfirmationAfterOtp() async {
     if (!mounted) return;
-    final result = await showDialog<Map<String, dynamic>>(
+    final confirmed = await showDialog<bool>(
       context: context,
       barrierDismissible: false,
       builder: (_) => CodCashConfirmationDialog(
@@ -366,20 +366,15 @@ class _BookingCardState extends ConsumerState<BookingCard> {
       ),
     );
 
-    if (result == null || !mounted) {
-      debugPrint('[COD][OTP] Cash dialog cancelled — booking stays in awaiting_verification');
+    if (confirmed != true || !mounted) {
+      debugPrint('[COD][OTP] Cash dialog dismissed — booking stays in awaiting_verification');
       return;
     }
-
-    final cashCollected = result['cashCollected'] as bool;
-    final reason = result['reason'] as String?;
 
     setState(() => _updating = true);
     try {
       await ref.read(bookingsRepositoryProvider).completeCodBookingAfterOtp(
             bookingId: _booking.id,
-            cashCollected: cashCollected,
-            notCollectedReason: reason,
           );
 
       _applyStatusUpdate('completed');
@@ -387,10 +382,8 @@ class _BookingCardState extends ConsumerState<BookingCard> {
       if (mounted) {
         setState(() {
           _localBooking = _booking.copyWith(
-            codCashCollected: cashCollected,
-            codNotCollectedReason: reason,
-            // cashCollected=true → confirmed, cashCollected=false → pending
-            codConfirmedAt: cashCollected ? DateTime.now() : null,
+            codCashCollected: true,
+            codConfirmedAt: DateTime.now(),
           );
         });
       }
@@ -400,11 +393,7 @@ class _BookingCardState extends ConsumerState<BookingCard> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(
-              cashCollected
-                  ? 'Booking $_bookingRef completed and COD cash collection recorded.'
-                  : 'Booking $_bookingRef completed. COD cash collection pending.',
-            ),
+            content: Text('Booking $_bookingRef completed and COD cash collection recorded.'),
             backgroundColor: AppColors.success,
           ),
         );
@@ -456,7 +445,7 @@ class _BookingCardState extends ConsumerState<BookingCard> {
   }
 
   Future<void> _showCodCashConfirmationDialog() async {
-    final result = await showDialog<Map<String, dynamic>>(
+    final confirmed = await showDialog<bool>(
       context: context,
       barrierDismissible: false,
       builder: (_) => CodCashConfirmationDialog(
@@ -465,46 +454,36 @@ class _BookingCardState extends ConsumerState<BookingCard> {
       ),
     );
 
-    if (result != null && mounted) {
-      final cashCollected = result['cashCollected'] as bool;
-      final reason = result['reason'] as String?;
-      final now = DateTime.now();
-      try {
-        await ref.read(bookingsRepositoryProvider).confirmCodCashCollection(
-              bookingId: _booking.id,
-              cashCollected: cashCollected,
-              notCollectedReason: reason,
-            );
-        if (mounted) {
-          setState(() {
-            _localBooking = _booking.copyWith(
-              codCashCollected: cashCollected,
-              codNotCollectedReason: reason,
-              codConfirmedAt: now,
-            );
-          });
-          ref.invalidate(vendorBookingsProvider);
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                cashCollected
-                    ? 'COD cash collection recorded.'
-                    : 'COD cash non-collection reason recorded.',
-              ),
-              backgroundColor: AppColors.success,
-            ),
+    if (confirmed != true || !mounted) return;
+
+    try {
+      await ref.read(bookingsRepositoryProvider).confirmCodCashCollection(
+            bookingId: _booking.id,
           );
-        }
-      } catch (e) {
-        debugPrint('[COD] confirmCodCashCollection ERROR: $e');
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Failed to record cash status: $e'),
-              backgroundColor: AppColors.error,
-            ),
+      if (mounted) {
+        setState(() {
+          _localBooking = _booking.copyWith(
+            codCashCollected: true,
+            codConfirmedAt: DateTime.now(),
           );
-        }
+        });
+        ref.invalidate(vendorBookingsProvider);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('COD cash collection recorded.'),
+            backgroundColor: AppColors.success,
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint('[COD] confirmCodCashCollection ERROR: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to record cash collection: $e'),
+            backgroundColor: AppColors.error,
+          ),
+        );
       }
     }
   }
@@ -1112,18 +1091,14 @@ class _BookingCardState extends ConsumerState<BookingCard> {
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: _booking.codConfirmedAt == null
-                      ? AppColors.warning.withValues(alpha: 0.1)
-                      : (_booking.codCashCollected == true
-                          ? AppColors.success.withValues(alpha: 0.1)
-                          : Colors.orange.shade50),
+                  color: _booking.codCashCollected == true
+                      ? AppColors.success.withValues(alpha: 0.1)
+                      : AppColors.warning.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(8),
                   border: Border.all(
-                    color: _booking.codConfirmedAt == null
-                        ? AppColors.warning.withValues(alpha: 0.4)
-                        : (_booking.codCashCollected == true
-                            ? AppColors.success.withValues(alpha: 0.4)
-                            : Colors.orange.shade300),
+                    color: _booking.codCashCollected == true
+                        ? AppColors.success.withValues(alpha: 0.4)
+                        : AppColors.warning.withValues(alpha: 0.4),
                   ),
                 ),
                 child: Column(
@@ -1132,43 +1107,44 @@ class _BookingCardState extends ConsumerState<BookingCard> {
                     Row(
                       children: [
                         Icon(
-                          _booking.codConfirmedAt == null
-                              ? Icons.pending_actions_rounded
-                              : (_booking.codCashCollected == true
-                                  ? Icons.check_circle_rounded
-                                  : Icons.info_rounded),
+                          _booking.codCashCollected == true
+                              ? Icons.check_circle_rounded
+                              : Icons.pending_actions_rounded,
                           size: 18,
-                          color: _booking.codConfirmedAt == null
-                              ? AppColors.warning
-                              : (_booking.codCashCollected == true
-                                  ? AppColors.success
-                                  : Colors.orange.shade800),
+                          color: _booking.codCashCollected == true
+                              ? AppColors.success
+                              : AppColors.warning,
                         ),
                         const SizedBox(width: 8),
                         Expanded(
                           child: Text(
-                            _booking.codConfirmedAt == null
-                                ? 'COD Cash Collection Pending'
-                                : (_booking.codCashCollected == true
-                                    ? 'COD Cash Collected (₹${_booking.totalAmount.toStringAsFixed(2)})'
-                                    : 'COD Cash Not Collected'),
+                            _booking.codCashCollected == true
+                                ? 'COD Cash Collected (₹${_booking.totalAmount.toStringAsFixed(2)})'
+                                : 'COD Cash Collection Pending',
                             style: TextStyle(
                               fontSize: 13,
                               fontWeight: FontWeight.bold,
-                              color: _booking.codConfirmedAt == null
-                                  ? AppColors.warning
-                                  : (_booking.codCashCollected == true
-                                      ? AppColors.success
-                                      : Colors.orange.shade900),
+                              color: _booking.codCashCollected == true
+                                  ? AppColors.success
+                                  : AppColors.warning,
                             ),
                           ),
                         ),
                       ],
                     ),
-                    if (_booking.codConfirmedAt == null) ...[
+                    if (_booking.codCashCollected == true) ...[
+                      const SizedBox(height: 6),
+                      Text(
+                        'Confirmed on ${DateFormat('dd MMM yyyy, hh:mm a').format(_booking.codConfirmedAt!.toLocal())}',
+                        style: const TextStyle(
+                          fontSize: 11,
+                          color: AppColors.textSecondary,
+                        ),
+                      ),
+                    ] else ...[
                       const SizedBox(height: 8),
                       const Text(
-                        'Please confirm if cash payment was collected from customer.',
+                        'Please confirm once cash payment is collected from the customer.',
                         style: TextStyle(
                           fontSize: 12,
                           color: AppColors.textSecondary,
@@ -1188,28 +1164,6 @@ class _BookingCardState extends ConsumerState<BookingCard> {
                               borderRadius: BorderRadius.circular(6),
                             ),
                           ),
-                        ),
-                      ),
-                    ] else ...[
-                      if (_booking.codCashCollected == false &&
-                          _booking.codNotCollectedReason != null &&
-                          _booking.codNotCollectedReason!.isNotEmpty) ...[
-                        const SizedBox(height: 6),
-                        Text(
-                          'Reason: ${_booking.codNotCollectedReason}',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Colors.orange.shade900,
-                            fontStyle: FontStyle.italic,
-                          ),
-                        ),
-                      ],
-                      const SizedBox(height: 6),
-                      Text(
-                        'Confirmed on ${DateFormat('dd MMM yyyy, hh:mm a').format(_booking.codConfirmedAt!.toLocal())}',
-                        style: const TextStyle(
-                          fontSize: 11,
-                          color: AppColors.textSecondary,
                         ),
                       ),
                     ],
@@ -2027,50 +1981,24 @@ class _CodStatusBanner extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
-    if (booking.codConfirmedAt != null) {
-      final collected = booking.codCashCollected ?? false;
+    if (booking.codCashCollected == true) {
       return Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
         decoration: BoxDecoration(
-          color: (collected ? AppColors.success : AppColors.error)
-              .withValues(alpha: 0.08),
+          color: AppColors.success.withValues(alpha: 0.08),
           borderRadius: BorderRadius.circular(8),
-          border: Border.all(
-            color: (collected ? AppColors.success : AppColors.error)
-                .withValues(alpha: 0.3),
-          ),
+          border: Border.all(color: AppColors.success.withValues(alpha: 0.3)),
         ),
         child: Row(
           children: [
-            Icon(
-              collected
-                  ? Icons.check_circle_outline_rounded
-                  : Icons.cancel_outlined,
-              size: 16,
-              color: collected ? AppColors.success : AppColors.error,
-            ),
+            const Icon(Icons.check_circle_outline_rounded,
+                size: 16, color: AppColors.success),
             const SizedBox(width: 8),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    collected ? 'Cash Collected' : 'Cash Not Collected',
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700,
-                      color: collected ? AppColors.success : AppColors.error,
-                    ),
-                  ),
-                  if (!collected &&
-                      (booking.codNotCollectedReason?.isNotEmpty ?? false))
-                    Text(
-                      booking.codNotCollectedReason!,
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: AppColors.textSecondary,
-                      ),
-                    ),
-                ],
+            Text(
+              'Cash Collected',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: AppColors.success,
+                fontWeight: FontWeight.w700,
               ),
             ),
           ],

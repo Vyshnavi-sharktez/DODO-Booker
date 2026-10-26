@@ -71,7 +71,8 @@ class _CustomersPageState extends ConsumerState<CustomersPage> {
       c.fullName.toLowerCase().contains(q) ||
       c.phone.toLowerCase().contains(q) ||
       c.email.toLowerCase().contains(q) ||
-      c.id.toLowerCase().contains(q);
+      c.id.toLowerCase().contains(q) ||
+      (c.customerNumber?.toLowerCase().contains(q) ?? false);
 
   // ── Actions ────────────────────────────────────────────────────────────────
 
@@ -242,7 +243,48 @@ class _CustomersPageState extends ConsumerState<CustomersPage> {
         );
       }
     } catch (e) {
-      if (mounted) {
+      if (!mounted) return;
+      final msg = e.toString();
+      if (msg.contains('BLOCKING_BOOKINGS') || msg.contains('BLOCKING_REFUNDS')) {
+        final reason = msg.contains('BLOCKING_REFUNDS')
+            ? '"${c.fullName}" has refund requests on record.\n\n'
+              'Deleting would break financial records. '
+              'Would you like to deactivate them instead?'
+            : '"${c.fullName}" has booking history.\n\n'
+              'Deleting would break historical records. '
+              'Would you like to deactivate them instead?';
+        final deactivate = await showDialog<bool>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12)),
+            title: const Text('Cannot Permanently Delete'),
+            content: Text(reason),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(ctx).pop(false),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.of(ctx).pop(true),
+                style: FilledButton.styleFrom(
+                    backgroundColor: AppColors.error),
+                child: const Text('Deactivate'),
+              ),
+            ],
+          ),
+        );
+        if (deactivate == true && mounted) {
+          if (c.isActive) {
+            await _toggleActive(c);
+          } else {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                  content: Text('"${c.fullName}" is already inactive.')),
+            );
+          }
+        }
+      } else {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Delete failed: $e'),
@@ -812,25 +854,48 @@ class _CustomerRow extends StatelessWidget {
                     color: AppColors.textPrimary,
                   ),
                 ),
-                if (c.authUserId == null)
-                  Container(
-                    margin: const EdgeInsets.only(top: 2),
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 5, vertical: 1),
-                    decoration: BoxDecoration(
-                      color: AppColors.primary.withValues(alpha: 0.08),
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                    child: Text(
-                      'Admin Created',
-                      style: TextStyle(
-                        fontSize: 9,
-                        fontWeight: FontWeight.w600,
-                        color: AppColors.primary,
-                        letterSpacing: 0.3,
+                Row(
+                  children: [
+                    if (c.customerNumber != null)
+                      Container(
+                        margin: const EdgeInsets.only(top: 2, right: 4),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 5, vertical: 1),
+                        decoration: BoxDecoration(
+                          color: AppColors.primary.withValues(alpha: 0.08),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: Text(
+                          c.customerNumber!,
+                          style: TextStyle(
+                            fontSize: 9,
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.primary,
+                            letterSpacing: 0.3,
+                          ),
+                        ),
                       ),
-                    ),
-                  ),
+                    if (c.authUserId == null)
+                      Container(
+                        margin: const EdgeInsets.only(top: 2),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 5, vertical: 1),
+                        decoration: BoxDecoration(
+                          color: AppColors.primary.withValues(alpha: 0.08),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: Text(
+                          'Admin Created',
+                          style: TextStyle(
+                            fontSize: 9,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.primary,
+                            letterSpacing: 0.3,
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
               ],
             ),
           ),

@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/theme/app_theme.dart';
+import '../../../auth/application/providers/auth_provider.dart';
 import '../../../vendors/application/providers/vendors_providers.dart';
 import '../../../vendors/domain/models/vendor.dart';
 import '../../../vendors/presentation/widgets/vendor_form_dialog.dart';
+import '../../../vendors/presentation/widgets/vendor_location_picker_dialog.dart';
 import '../../application/providers/rbac_providers.dart';
 import '../../domain/models/rbac_admin_user.dart';
 import '../../domain/models/role.dart';
@@ -46,7 +48,8 @@ class _AdminUsersTabState extends ConsumerState<AdminUsersTab> {
       return u.displayName.toLowerCase().contains(q) ||
           u.email.toLowerCase().contains(q) ||
           u.phone.contains(q) ||
-          u.id.toLowerCase().contains(q);
+          u.id.toLowerCase().contains(q) ||
+          (u.admin?.adminNumber?.toLowerCase().contains(q) ?? false);
     }).toList();
 
     // Sort: admins first, then vendors; alphabetical within groups
@@ -325,7 +328,7 @@ class _TableHeader extends StatelessWidget {
               width: 96,
               child: Text('JOINED', style: style)),
           SizedBox(
-              width: 96,
+              width: 140,
               child: Text('ACTIONS', style: style,
                   textAlign: TextAlign.right)),
         ],
@@ -376,11 +379,40 @@ class _UserRow extends ConsumerWidget {
                 ),
                 const SizedBox(width: 10),
                 Expanded(
-                  child: Text(
-                    user.displayName,
-                    style: const TextStyle(
-                        fontSize: 13, fontWeight: FontWeight.w600),
-                    overflow: TextOverflow.ellipsis,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        user.displayName,
+                        style: const TextStyle(
+                            fontSize: 13, fontWeight: FontWeight.w600),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      if (isAdmin && user.admin?.adminNumber != null) ...[
+                        const SizedBox(height: 2),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 5, vertical: 1),
+                          decoration: BoxDecoration(
+                            color: AppColors.primary.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(4),
+                            border: Border.all(
+                                color: AppColors.primary.withValues(alpha: 0.3),
+                                width: 1),
+                          ),
+                          child: Text(
+                            user.admin!.adminNumber!,
+                            style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w700,
+                              color: AppColors.primary,
+                              letterSpacing: 0.3,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ],
                   ),
                 ),
               ],
@@ -437,18 +469,22 @@ class _UserRow extends ConsumerWidget {
 
           // Actions
           SizedBox(
-            width: 96,
+            width: 140,
             child: Row(
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
                 if (isAdmin && user.admin != null) ...[
-                  if (!user.admin!.isSuperAdmin)
+                  _ActionBtn(
+                    tooltip: 'Edit',
+                    icon: Icons.edit_rounded,
+                    onTap: () => _editAdmin(context, ref, user.admin!),
+                  ),
+                  if (!user.admin!.isSuperAdmin) ...[
                     _ActionBtn(
                       tooltip: 'Assign Roles',
                       icon: Icons.manage_accounts_rounded,
                       onTap: () => _showRoleDialog(context, ref, user.admin!),
                     ),
-                  if (!user.admin!.isSuperAdmin)
                     _ActionBtn(
                       tooltip: user.isActive ? 'Deactivate' : 'Activate',
                       icon: user.isActive
@@ -459,6 +495,13 @@ class _UserRow extends ConsumerWidget {
                           : AppColors.textSecondary,
                       onTap: () => _toggleAdmin(context, ref, user.admin!),
                     ),
+                    _ActionBtn(
+                      tooltip: 'Delete',
+                      icon: Icons.delete_rounded,
+                      color: AppColors.error,
+                      onTap: () => _deleteAdmin(context, ref, user.admin!),
+                    ),
+                  ],
                 ],
                 if (!isAdmin && user.vendor != null) ...[
                   _ActionBtn(
@@ -476,6 +519,12 @@ class _UserRow extends ConsumerWidget {
                         : AppColors.textSecondary,
                     onTap: () => _toggleVendor(context, ref, user.vendor!),
                   ),
+                  _ActionBtn(
+                    tooltip: 'Delete',
+                    icon: Icons.delete_rounded,
+                    color: AppColors.error,
+                    onTap: () => _deleteVendor(context, ref, user.vendor!),
+                  ),
                 ],
               ],
             ),
@@ -483,6 +532,96 @@ class _UserRow extends ConsumerWidget {
         ],
       ),
     );
+  }
+
+  void _editAdmin(
+      BuildContext context, WidgetRef ref, RbacAdminUser admin) {
+    showDialog<void>(
+      context: context,
+      builder: (_) => _AdminEditDialog(admin: admin),
+    );
+  }
+
+  Future<void> _deleteAdmin(
+      BuildContext context, WidgetRef ref, RbacAdminUser admin) async {
+    final me = ref.read(currentAdminUserProvider);
+    if (me?.id == admin.id) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('You cannot delete your own account.'),
+          backgroundColor: AppColors.error,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (_) => _DeleteConfirmDialog(
+        name: admin.displayName,
+        subtitle: 'This will remove the admin account and all role assignments. '
+            'Bookings, vendor profiles, and business data are not affected.',
+      ),
+    );
+    if (confirmed != true || !context.mounted) return;
+    try {
+      await ref
+          .read(rbacAdminUsersNotifierProvider.notifier)
+          .deleteAdminUser(admin.id);
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Admin deleted.'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed: $e'),
+            backgroundColor: AppColors.error,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _deleteVendor(
+      BuildContext context, WidgetRef ref, Vendor vendor) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (_) => _DeleteConfirmDialog(
+        name: vendor.businessName,
+        subtitle: 'This will remove the vendor account from the system.',
+      ),
+    );
+    if (confirmed != true || !context.mounted) return;
+    try {
+      await ref
+          .read(vendorsNotifierProvider.notifier)
+          .deleteVendor(vendor.id);
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Vendor deleted.'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed: $e'),
+            backgroundColor: AppColors.error,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    }
   }
 
   void _showRoleDialog(
@@ -501,6 +640,33 @@ class _UserRow extends ConsumerWidget {
 
   Future<void> _toggleAdmin(
       BuildContext context, WidgetRef ref, RbacAdminUser admin) async {
+    if (admin.isActive) {
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          title: const Text('Deactivate Admin User'),
+          content: Text(
+            'Are you sure you want to deactivate "${admin.fullName}"?\n\n'
+            'They will lose access to the admin panel immediately.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(ctx).pop(true),
+              style:
+                  FilledButton.styleFrom(backgroundColor: AppColors.error),
+              child: const Text('Deactivate'),
+            ),
+          ],
+        ),
+      );
+      if (confirmed != true) return;
+    }
     try {
       await ref
           .read(rbacAdminUsersNotifierProvider.notifier)
@@ -562,6 +728,33 @@ class _UserRow extends ConsumerWidget {
 
   Future<void> _toggleVendor(
       BuildContext context, WidgetRef ref, Vendor vendor) async {
+    if (vendor.isActive) {
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          title: const Text('Deactivate Vendor'),
+          content: Text(
+            'Are you sure you want to deactivate "${vendor.businessName}"?\n\n'
+            'They will no longer be able to receive or accept bookings.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(ctx).pop(true),
+              style:
+                  FilledButton.styleFrom(backgroundColor: AppColors.error),
+              child: const Text('Deactivate'),
+            ),
+          ],
+        ),
+      );
+      if (confirmed != true) return;
+    }
     try {
       await ref
           .read(vendorsNotifierProvider.notifier)
@@ -678,6 +871,339 @@ class _RoleAssignDialogState extends State<_RoleAssignDialog> {
                       strokeWidth: 2, color: Colors.white),
                 )
               : const Text('Save'),
+        ),
+      ],
+    );
+  }
+}
+
+// ── Admin edit dialog ─────────────────────────────────────────────────────────
+
+class _AdminEditDialog extends ConsumerStatefulWidget {
+  const _AdminEditDialog({required this.admin});
+  final RbacAdminUser admin;
+
+  @override
+  ConsumerState<_AdminEditDialog> createState() => _AdminEditDialogState();
+}
+
+class _AdminEditDialogState extends ConsumerState<_AdminEditDialog> {
+  late final TextEditingController _emailCtrl;
+  late final TextEditingController _nameCtrl;
+  late final TextEditingController _phoneCtrl;
+  late final TextEditingController _addressCtrl;
+  double? _latitude;
+  double? _longitude;
+  bool _saving = false;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _emailCtrl = TextEditingController(text: widget.admin.email);
+    _nameCtrl = TextEditingController(text: widget.admin.fullName);
+    _phoneCtrl = TextEditingController(text: widget.admin.phone ?? '');
+    _addressCtrl = TextEditingController(text: widget.admin.address ?? '');
+    _latitude = widget.admin.latitude;
+    _longitude = widget.admin.longitude;
+  }
+
+  @override
+  void dispose() {
+    _emailCtrl.dispose();
+    _nameCtrl.dispose();
+    _phoneCtrl.dispose();
+    _addressCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _pickOnMap() async {
+    final result = await showDialog<VendorLocationPickerResult>(
+      context: context,
+      builder: (_) => VendorLocationPickerDialog(
+        initialLatitude: _latitude,
+        initialLongitude: _longitude,
+      ),
+    );
+    if (result == null || !mounted) return;
+    setState(() {
+      _latitude = result.latitude;
+      _longitude = result.longitude;
+      if (result.address?.isNotEmpty == true) _addressCtrl.text = result.address!;
+    });
+  }
+
+  Future<void> _save() async {
+    final name = _nameCtrl.text.trim();
+    if (name.isEmpty) {
+      setState(() => _error = 'Full name is required.');
+      return;
+    }
+    setState(() {
+      _saving = true;
+      _error = null;
+    });
+    try {
+      final phone = _phoneCtrl.text.trim();
+      final address = _addressCtrl.text.trim();
+      await ref.read(rbacAdminUsersNotifierProvider.notifier).updateAdminUser(
+            widget.admin.id,
+            fullName: name,
+            phone: phone.isNotEmpty ? phone : null,
+            address: address,
+            latitude: address.isNotEmpty ? _latitude : null,
+            longitude: address.isNotEmpty ? _longitude : null,
+          );
+      if (mounted) Navigator.of(context).pop();
+    } catch (e) {
+      if (mounted) setState(() => _error = e.toString());
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: Text('Edit — ${widget.admin.displayName}'),
+      content: SizedBox(
+        width: 440,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Admin ID — read-only sequential ID
+            if (widget.admin.adminNumber != null) ...[
+              Row(
+                children: [
+                  Icon(Icons.tag_rounded,
+                      size: 14, color: AppColors.textSecondary),
+                  const SizedBox(width: 6),
+                  Text(
+                    'Admin ID: ',
+                    style: TextStyle(
+                        fontSize: 12, color: AppColors.textSecondary),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 7, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: AppColors.primary.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(4),
+                      border: Border.all(
+                          color: AppColors.primary.withValues(alpha: 0.3),
+                          width: 1),
+                    ),
+                    child: Text(
+                      widget.admin.adminNumber!,
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.primary,
+                        letterSpacing: 0.4,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+            ],
+            // Email — read-only auth identity
+            TextField(
+              controller: _emailCtrl,
+              readOnly: true,
+              decoration: InputDecoration(
+                labelText: 'Email',
+                prefixIcon: const Icon(Icons.email_rounded),
+                border: const OutlineInputBorder(),
+                filled: true,
+                fillColor: AppColors.background,
+                suffixIcon: Tooltip(
+                  message: 'Email cannot be changed after account creation',
+                  child: Icon(
+                    Icons.lock_outline_rounded,
+                    size: 18,
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _nameCtrl,
+              textCapitalization: TextCapitalization.words,
+              decoration: const InputDecoration(
+                labelText: 'Full Name *',
+                prefixIcon: Icon(Icons.person_rounded),
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _phoneCtrl,
+              keyboardType: TextInputType.phone,
+              decoration: const InputDecoration(
+                labelText: 'Phone',
+                prefixIcon: Icon(Icons.phone_rounded),
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 12),
+            // Address with map picker
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _addressCtrl,
+                    maxLines: 2,
+                    textCapitalization: TextCapitalization.sentences,
+                    onChanged: (_) {
+                      if (_addressCtrl.text.trim().isEmpty) {
+                        setState(() {
+                          _latitude = null;
+                          _longitude = null;
+                        });
+                      }
+                    },
+                    decoration: InputDecoration(
+                      labelText: 'Address',
+                      prefixIcon: const Icon(Icons.location_pin),
+                      border: const OutlineInputBorder(
+                        borderRadius: BorderRadius.only(
+                          topLeft: Radius.circular(8),
+                          bottomLeft: Radius.circular(8),
+                        ),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: const BorderRadius.only(
+                          topLeft: Radius.circular(8),
+                          bottomLeft: Radius.circular(8),
+                        ),
+                        borderSide: BorderSide(color: AppColors.border),
+                      ),
+                      focusedBorder: const OutlineInputBorder(
+                        borderRadius: BorderRadius.only(
+                          topLeft: Radius.circular(8),
+                          bottomLeft: Radius.circular(8),
+                        ),
+                        borderSide:
+                            BorderSide(color: AppColors.primary, width: 2),
+                      ),
+                    ),
+                  ),
+                ),
+                InkWell(
+                  onTap: _saving ? null : _pickOnMap,
+                  child: Container(
+                    height: 56,
+                    padding: const EdgeInsets.symmetric(horizontal: 14),
+                    decoration: BoxDecoration(
+                      color: AppColors.primary,
+                      borderRadius: const BorderRadius.only(
+                        topRight: Radius.circular(8),
+                        bottomRight: Radius.circular(8),
+                      ),
+                      border: Border.all(color: AppColors.primary),
+                    ),
+                    child: const Icon(Icons.map_rounded,
+                        color: Colors.white, size: 20),
+                  ),
+                ),
+              ],
+            ),
+            if (_latitude != null && _longitude != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 6),
+                child: Row(
+                  children: [
+                    Icon(Icons.location_on_rounded,
+                        size: 13, color: AppColors.success),
+                    const SizedBox(width: 4),
+                    Text(
+                      '${_latitude!.toStringAsFixed(5)}, '
+                      '${_longitude!.toStringAsFixed(5)}',
+                      style: TextStyle(
+                          fontSize: 11, color: AppColors.success),
+                    ),
+                  ],
+                ),
+              ),
+            if (_error != null) ...[
+              const SizedBox(height: 10),
+              Text(_error!,
+                  style: TextStyle(color: AppColors.error, fontSize: 12)),
+            ],
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: _saving ? null : () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: _saving ? null : _save,
+          style: FilledButton.styleFrom(backgroundColor: AppColors.primary),
+          child: _saving
+              ? const SizedBox.square(
+                  dimension: 16,
+                  child: CircularProgressIndicator(
+                      strokeWidth: 2, color: Colors.white),
+                )
+              : const Text('Save'),
+        ),
+      ],
+    );
+  }
+}
+
+// ── Delete confirmation dialog ────────────────────────────────────────────────
+
+class _DeleteConfirmDialog extends StatelessWidget {
+  const _DeleteConfirmDialog({required this.name, required this.subtitle});
+  final String name;
+  final String subtitle;
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Confirm Delete'),
+      content: SizedBox(
+        width: 360,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            RichText(
+              text: TextSpan(
+                style: DefaultTextStyle.of(context).style,
+                children: [
+                  const TextSpan(text: 'Delete '),
+                  TextSpan(
+                    text: name,
+                    style: const TextStyle(fontWeight: FontWeight.w700),
+                  ),
+                  const TextSpan(text: '?'),
+                ],
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(subtitle,
+                style: TextStyle(
+                    fontSize: 12, color: AppColors.textSecondary)),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(false),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.of(context).pop(true),
+          style: FilledButton.styleFrom(backgroundColor: AppColors.error),
+          child: const Text('Delete'),
         ),
       ],
     );

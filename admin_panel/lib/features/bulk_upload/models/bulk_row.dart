@@ -1,4 +1,4 @@
-enum RowStatus { valid, skipped, invalid }
+enum RowStatus { valid, updatePending, skipped, invalid }
 
 class BulkRow {
   final int rowNumber;
@@ -7,6 +7,8 @@ class BulkRow {
   final List<String> errors;
   final String? skipReason;
   final String? displayLabel;
+  /// ID of the existing DB record, set only for [RowStatus.updatePending] rows.
+  final String? existingId;
 
   const BulkRow({
     required this.rowNumber,
@@ -15,6 +17,7 @@ class BulkRow {
     this.errors = const [],
     this.skipReason,
     this.displayLabel,
+    this.existingId,
   });
 
   BulkRow copyWith({
@@ -22,6 +25,7 @@ class BulkRow {
     List<String>? errors,
     String? skipReason,
     String? displayLabel,
+    String? existingId,
   }) =>
       BulkRow(
         rowNumber: rowNumber,
@@ -30,17 +34,20 @@ class BulkRow {
         errors: errors ?? this.errors,
         skipReason: skipReason ?? this.skipReason,
         displayLabel: displayLabel ?? this.displayLabel,
+        existingId: existingId ?? this.existingId,
       );
 }
 
 class ImportResult {
   final int created;
+  final int updated;
   final int skipped;
   final int failed;
   final List<({int row, String reason})> failures;
 
   const ImportResult({
     required this.created,
+    this.updated = 0,
     required this.skipped,
     required this.failed,
     required this.failures,

@@ -634,6 +634,7 @@ class _BookingRow extends ConsumerStatefulWidget {
 class _BookingRowState extends ConsumerState<_BookingRow> {
   bool _restoring = false;
   bool _viewing = false;
+  bool _deleting = false;
 
   Future<void> _openView() async {
     setState(() => _viewing = true);
@@ -705,6 +706,57 @@ class _BookingRowState extends ConsumerState<_BookingRow> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Restore failed: $e'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _confirmPermanentDelete() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        title: const Text('Permanently Delete?'),
+        content: Text(
+          'Permanently delete booking #${widget.booking.bookingNumber} from the '
+          'restore bin?\n\nThis cannot be undone.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: FilledButton.styleFrom(backgroundColor: AppColors.error),
+            child: const Text('Delete Forever'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    setState(() => _deleting = true);
+    try {
+      final bookingNumber = await ref
+          .read(deletedBookingsNotifierProvider.notifier)
+          .permanentlyDelete(widget.booking.bookingId);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Booking #$bookingNumber permanently deleted'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _deleting = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Delete failed: $e'),
             backgroundColor: AppColors.error,
           ),
         );
@@ -901,6 +953,22 @@ class _BookingRowState extends ConsumerState<_BookingRow> {
                           textStyle: const TextStyle(fontSize: 12),
                         ),
                       ),
+                    const SizedBox(width: 4),
+                    // Permanent delete
+                    _deleting
+                        ? const SizedBox(
+                            width: 18, height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2))
+                        : IconButton(
+                            icon: const Icon(Icons.delete_forever_rounded,
+                                size: 17),
+                            onPressed: _confirmPermanentDelete,
+                            tooltip: 'Delete permanently',
+                            style: IconButton.styleFrom(
+                              foregroundColor: AppColors.error,
+                              visualDensity: VisualDensity.compact,
+                            ),
+                          ),
                   ],
                 ),
               ),

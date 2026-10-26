@@ -56,9 +56,11 @@ class SmsConfigNotifier
 
   Future<Map<String, dynamic>> sendTestMessage(
     String provider,
-    String testPhone,
-  ) =>
-      _repo.sendTestMessage(provider, testPhone);
+    String testPhone, {
+    bool mock = false,
+    String mockOutcome = 'success',
+  }) =>
+      _repo.sendTestMessage(provider, testPhone, mock: mock, mockOutcome: mockOutcome);
 
   SmsProviderConfig configFor(String provider) {
     return state.valueOrNull

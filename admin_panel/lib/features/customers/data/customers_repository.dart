@@ -117,6 +117,6 @@ class CustomersRepository {
   }
 
   Future<void> deleteCustomer(String id) async {
-    await _supabase.from('customers').delete().eq('id', id);
+    await _supabase.rpc('admin_delete_customer', params: {'p_customer_id': id});
   }
 }

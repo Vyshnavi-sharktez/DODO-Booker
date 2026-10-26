@@ -118,13 +118,42 @@ class _CategoryFormDialogState extends ConsumerState<CategoryFormDialog> {
       }
     }
 
+    final newSortOrder = int.tryParse(_sortOrder.text.trim()) ?? 0;
+    if (widget.existing != null && newSortOrder != widget.existing!.sortOrder) {
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          title: const Text('Change Sort Order'),
+          content: Text(
+            '"${_name.text.trim()}"\n\n'
+            'Current order: ${widget.existing!.sortOrder}\n'
+            'New order: $newSortOrder\n\n'
+            'Are you sure you want to update the sort order?',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(ctx).pop(true),
+              child: const Text('Confirm'),
+            ),
+          ],
+        ),
+      );
+      if (confirmed != true) return;
+    }
+
     setState(() => _saving = true);
     try {
       final categoryId = await widget.onSave(
         name: _name.text.trim(),
         slug: _slug.text.trim(),
         imageUrl: _imageUrl,
-        sortOrder: int.tryParse(_sortOrder.text.trim()) ?? 0,
+        sortOrder: newSortOrder,
         isActive: _isActive,
       );
 

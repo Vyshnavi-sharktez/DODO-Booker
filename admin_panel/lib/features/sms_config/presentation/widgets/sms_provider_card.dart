@@ -84,6 +84,9 @@ class _SmsProviderCardState extends ConsumerState<SmsProviderCard> {
   bool _testing = false;
   String? _testMessage;
   bool _testSuccess = false;
+  bool _testSimulated = false;
+  bool _mockMode = false;
+  String? _activeMockOutcome;
 
   @override
   void initState() {
@@ -190,24 +193,41 @@ class _SmsProviderCardState extends ConsumerState<SmsProviderCard> {
     }
   }
 
-  Future<void> _sendTest() async {
+  Future<void> _sendTest({String mockOutcome = 'success'}) async {
     final phone = _testPhoneCtrl.text.trim();
     if (phone.isEmpty) return;
     setState(() {
       _testing = true;
       _testMessage = null;
+      _testSimulated = false;
+      _activeMockOutcome = _mockMode ? mockOutcome : null;
     });
     try {
       final notifier = ref.read(smsConfigNotifierProvider.notifier);
-      final result = await notifier.sendTestMessage(widget.definition.provider, phone);
+      final result = await notifier.sendTestMessage(
+        widget.definition.provider,
+        phone,
+        mock: _mockMode,
+        mockOutcome: mockOutcome,
+      );
       if (mounted) {
         final success = result['success'] == true;
+        final simulated = result['simulated'] == true;
+        final providerMsg = result['provider_response'] is Map
+            ? (result['provider_response'] as Map)['message']?.toString()
+            : result['provider_response']?.toString();
         setState(() {
           _testing = false;
           _testSuccess = success;
-          _testMessage = success
-              ? 'Test OTP sent successfully. Check your phone for the SMS.'
-              : 'Provider returned an error: ${result['provider_response'] ?? result['error'] ?? 'Unknown error'}';
+          _testSimulated = simulated;
+          _activeMockOutcome = null;
+          _testMessage = simulated
+              ? (success
+                  ? 'Simulated — no real SMS was sent'
+                  : 'Simulated delivery failure — no real SMS was sent')
+              : (success
+                  ? 'Test OTP sent successfully. Check your phone for the SMS.'
+                  : 'Provider returned an error: ${providerMsg ?? result['error'] ?? 'Unknown error'}');
         });
       }
     } catch (e) {
@@ -215,6 +235,8 @@ class _SmsProviderCardState extends ConsumerState<SmsProviderCard> {
         setState(() {
           _testing = false;
           _testSuccess = false;
+          _testSimulated = false;
+          _activeMockOutcome = null;
           _testMessage = e.toString().replaceFirst('Exception: ', '');
         });
       }
@@ -265,6 +287,8 @@ class _SmsProviderCardState extends ConsumerState<SmsProviderCard> {
       _apiKeySet &&
       _testPhoneCtrl.text.trim().isNotEmpty &&
       !_testing;
+
+  bool get _canMockTest => _testPhoneCtrl.text.trim().isNotEmpty && !_testing;
 
   @override
   Widget build(BuildContext context) {
@@ -505,11 +529,11 @@ class _SmsProviderCardState extends ConsumerState<SmsProviderCard> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Row(
+          Row(
             children: [
-              Icon(Icons.science_rounded, size: 15, color: AppColors.textSecondary),
-              SizedBox(width: 6),
-              Text(
+              const Icon(Icons.science_rounded, size: 15, color: AppColors.textSecondary),
+              const SizedBox(width: 6),
+              const Text(
                 'Send Test OTP',
                 style: TextStyle(
                   fontSize: 13,
@@ -517,29 +541,73 @@ class _SmsProviderCardState extends ConsumerState<SmsProviderCard> {
                   color: AppColors.textPrimary,
                 ),
               ),
+              const Spacer(),
+              _buildModeToggle(),
             ],
           ),
           const SizedBox(height: 8),
-          _buildTestPrerequisites(),
+          if (_mockMode)
+            _buildMockInfoBanner()
+          else
+            _buildTestPrerequisites(),
           const SizedBox(height: 12),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: TextFormField(
-                  controller: _testPhoneCtrl,
-                  decoration: const InputDecoration(
-                    labelText: 'Test Phone Number',
-                    hintText: 'Country code + number, e.g. +919876543210',
+          TextFormField(
+            controller: _testPhoneCtrl,
+            decoration: const InputDecoration(
+              labelText: 'Test Phone Number',
+              hintText: 'Country code + number, e.g. +919876543210',
+            ),
+            keyboardType: TextInputType.phone,
+            onChanged: (_) => setState(() {}),
+          ),
+          const SizedBox(height: 10),
+          if (_mockMode)
+            Row(
+              children: [
+                Expanded(
+                  child: FilledButton.icon(
+                    onPressed: _canMockTest ? () => _sendTest(mockOutcome: 'success') : null,
+                    icon: _testing && _activeMockOutcome == 'success'
+                        ? const SizedBox(
+                            width: 15,
+                            height: 15,
+                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                          )
+                        : const Icon(Icons.check_circle_outline_rounded, size: 16),
+                    label: const Text('Simulate Success'),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: AppColors.success,
+                      disabledBackgroundColor: AppColors.border,
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                    ),
                   ),
-                  keyboardType: TextInputType.phone,
-                  onChanged: (_) => setState(() {}),
                 ),
-              ),
-              const SizedBox(width: 12),
-              Padding(
-                padding: const EdgeInsets.only(top: 4),
-                child: FilledButton.icon(
+                const SizedBox(width: 10),
+                Expanded(
+                  child: FilledButton.icon(
+                    onPressed: _canMockTest ? () => _sendTest(mockOutcome: 'failure') : null,
+                    icon: _testing && _activeMockOutcome == 'failure'
+                        ? const SizedBox(
+                            width: 15,
+                            height: 15,
+                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                          )
+                        : const Icon(Icons.error_outline_rounded, size: 16),
+                    label: const Text('Simulate Failure'),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: AppColors.error,
+                      disabledBackgroundColor: AppColors.border,
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                    ),
+                  ),
+                ),
+              ],
+            )
+          else
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                FilledButton.icon(
                   onPressed: _canTest ? _sendTest : null,
                   icon: _testing
                       ? const SizedBox(
@@ -555,51 +623,100 @@ class _SmsProviderCardState extends ConsumerState<SmsProviderCard> {
                   style: FilledButton.styleFrom(
                     backgroundColor: widget.definition.color,
                     disabledBackgroundColor: AppColors.border,
-                    padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+                    padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
                   ),
                 ),
-              ),
-            ],
-          ),
+              ],
+            ),
           if (_testMessage != null) ...[
             const SizedBox(height: 10),
-            Container(
-              padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
-              decoration: BoxDecoration(
-                color: _testSuccess
-                    ? AppColors.success.withValues(alpha: 0.08)
-                    : AppColors.error.withValues(alpha: 0.08),
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(
-                  color: _testSuccess
-                      ? AppColors.success.withValues(alpha: 0.3)
-                      : AppColors.error.withValues(alpha: 0.3),
-                ),
-              ),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Icon(
-                    _testSuccess
-                        ? Icons.check_circle_outline_rounded
-                        : Icons.error_outline_rounded,
-                    size: 15,
-                    color: _testSuccess ? AppColors.success : AppColors.error,
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      _testMessage!,
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: _testSuccess ? AppColors.success : AppColors.error,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
+            _buildResultBanner(),
           ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildModeToggle() {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          'Test Mode',
+          style: TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.w500,
+            color: _mockMode ? AppColors.warning : AppColors.textSecondary,
+          ),
+        ),
+        const SizedBox(width: 2),
+        Transform.scale(
+          scale: 0.75,
+          child: Switch(
+            value: _mockMode,
+            onChanged: (v) => setState(() {
+              _mockMode = v;
+              _testMessage = null;
+              _testSimulated = false;
+            }),
+            activeThumbColor: AppColors.warning,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildMockInfoBanner() {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
+      decoration: BoxDecoration(
+        color: AppColors.warning.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: AppColors.warning.withValues(alpha: 0.3)),
+      ),
+      child: const Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(Icons.info_outline_rounded, size: 14, color: AppColors.warning),
+          SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              'Test Mode — no real SMS will be sent. Simulates the full request path '
+              '(auth, config lookup, edge function) without calling the SMS provider '
+              'or consuming credits. Safe to use with dummy credentials.',
+              style: TextStyle(fontSize: 11, color: AppColors.warning),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildResultBanner() {
+    final color = _testSimulated
+        ? AppColors.warning
+        : (_testSuccess ? AppColors.success : AppColors.error);
+    final icon = _testSimulated
+        ? Icons.info_outline_rounded
+        : (_testSuccess ? Icons.check_circle_outline_rounded : Icons.error_outline_rounded);
+    return Container(
+      padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: color.withValues(alpha: 0.3)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, size: 15, color: color),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              _testMessage!,
+              style: TextStyle(fontSize: 12, color: color),
+            ),
+          ),
         ],
       ),
     );

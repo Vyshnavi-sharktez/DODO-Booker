@@ -54,6 +54,19 @@ class DeletedBookingsNotifier
     return bookingNumber;
   }
 
+  // Returns the booking number on success, throws on failure.
+  Future<String> permanentlyDelete(String bookingId) async {
+    final result = await _repo.permanentlyDeleteBooking(bookingId);
+    final bookingNumber = result['booking_number'] as String? ?? bookingId;
+    final current = state.valueOrNull;
+    if (current != null) {
+      state = AsyncValue.data(
+        current.where((b) => b.bookingId != bookingId).toList(),
+      );
+    }
+    return bookingNumber;
+  }
+
   // Returns purge result map.
   Future<Map<String, dynamic>> purgeExpired() async {
     final result = await _repo.purgeExpiredBookings();

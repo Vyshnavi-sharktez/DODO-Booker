@@ -250,27 +250,18 @@ class BookingsRemoteDatasource {
     return true;
   }
 
-  // Called after the COD cash confirmation dialog in the OTP completion flow.
-  // Sets status=completed and records the cash result atomically.
-  //
-  // cashCollected=true  → cod_confirmed_at is set (collection is final).
-  // cashCollected=false → cod_confirmed_at is left null so the booking
-  //   remains in "COD Cash Collection Pending" state and the vendor/admin
-  //   can confirm collection later via the Confirm Cash Collection button.
+  // Called after the vendor confirms cash collection in the OTP flow.
+  // Sets status=completed and stamps cod_cash_collected+cod_confirmed_at.
+  // Only called when the vendor taps "Cash Collected" — dismissal leaves
+  // the booking in awaiting_verification for later confirmation.
   Future<void> completeCodBookingAfterOtp({
     required String bookingId,
-    required bool cashCollected,
-    String? notCollectedReason,
   }) async {
-    final payload = <String, dynamic>{
+    await _client.from('bookings').update({
       'status': 'completed',
-      'cod_cash_collected': cashCollected,
-      'cod_not_collected_reason': cashCollected ? null : notCollectedReason,
-    };
-    if (cashCollected) {
-      payload['cod_confirmed_at'] = DateTime.now().toUtc().toIso8601String();
-    }
-    await _client.from('bookings').update(payload).eq('id', bookingId);
+      'cod_cash_collected': true,
+      'cod_confirmed_at': DateTime.now().toUtc().toIso8601String(),
+    }).eq('id', bookingId);
   }
 
   Future<void> createAdminNotification({
@@ -326,12 +317,9 @@ class BookingsRemoteDatasource {
 
   Future<void> confirmCodCashCollection({
     required String bookingId,
-    required bool cashCollected,
-    String? notCollectedReason,
   }) async {
     await _client.from('bookings').update({
-      'cod_cash_collected': cashCollected,
-      'cod_not_collected_reason': cashCollected ? null : notCollectedReason,
+      'cod_cash_collected': true,
       'cod_confirmed_at': DateTime.now().toUtc().toIso8601String(),
     }).eq('id', bookingId);
   }

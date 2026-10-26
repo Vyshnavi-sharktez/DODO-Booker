@@ -18,6 +18,11 @@ class Coupon {
   final String applicabilityType;       // 'all' | 'categories' | 'services'
   final List<String> applicableNodeIds; // catalog_node IDs
 
+  // Customer eligibility
+  final String customerEligibility;     // 'all' | 'selected'
+  final List<String> selectedCustomerIds;
+  final int? maxOrderWiseLimit;         // per-customer redemption cap (null = unlimited)
+
   const Coupon({
     required this.id,
     required this.code,
@@ -35,6 +40,9 @@ class Coupon {
     this.updatedAt,
     this.applicabilityType = 'all',
     this.applicableNodeIds = const [],
+    this.customerEligibility = 'all',
+    this.selectedCustomerIds = const [],
+    this.maxOrderWiseLimit,
   });
 
   bool get isExpired {
@@ -76,6 +84,12 @@ class Coupon {
               ?.map((e) => e as String)
               .toList() ??
           const [],
+      customerEligibility: map['customer_eligibility'] as String? ?? 'all',
+      selectedCustomerIds: (map['coupon_customer_restrictions'] as List<dynamic>?)
+              ?.map((e) => (e as Map<String, dynamic>)['customer_id'] as String)
+              .toList() ??
+          const [],
+      maxOrderWiseLimit: map['max_order_wise_limit'] as int?,
     );
   }
 
@@ -93,6 +107,9 @@ class Coupon {
     bool? isActive,
     String? applicabilityType,
     List<String>? applicableNodeIds,
+    String? customerEligibility,
+    List<String>? selectedCustomerIds,
+    int? maxOrderWiseLimit,
   }) {
     return Coupon(
       id: id,
@@ -111,6 +128,9 @@ class Coupon {
       updatedAt: updatedAt,
       applicabilityType: applicabilityType ?? this.applicabilityType,
       applicableNodeIds: applicableNodeIds ?? this.applicableNodeIds,
+      customerEligibility: customerEligibility ?? this.customerEligibility,
+      selectedCustomerIds: selectedCustomerIds ?? this.selectedCustomerIds,
+      maxOrderWiseLimit: maxOrderWiseLimit ?? this.maxOrderWiseLimit,
     );
   }
 }

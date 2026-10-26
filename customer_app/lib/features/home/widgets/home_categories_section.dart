@@ -148,13 +148,25 @@ class _ServiceCardState extends State<_ServiceCard> {
               fit: StackFit.expand,
               children: [
                 // ── Full background image ──────────────────────────────────
-                Image.network(
-                  url,
-                  fit: BoxFit.cover,
-                  loadingBuilder: (_, child, p) => p == null
-                      ? child
-                      : const ColoredBox(color: Color(0xFFECE7DE)),
-                  errorBuilder: (_, _, _) => Container(
+                if (url != null)
+                  Image.network(
+                    url,
+                    fit: BoxFit.cover,
+                    loadingBuilder: (_, child, p) => p == null
+                        ? child
+                        : const ColoredBox(color: Color(0xFFECE7DE)),
+                    errorBuilder: (_, _, _) => Container(
+                      color: const Color(0xFFECE7DE),
+                      alignment: Alignment.center,
+                      child: const Icon(
+                        Icons.home_repair_service_rounded,
+                        size: 40,
+                        color: AppColors.gold,
+                      ),
+                    ),
+                  )
+                else
+                  Container(
                     color: const Color(0xFFECE7DE),
                     alignment: Alignment.center,
                     child: const Icon(
@@ -163,7 +175,6 @@ class _ServiceCardState extends State<_ServiceCard> {
                       color: AppColors.gold,
                     ),
                   ),
-                ),
                 // ── Bottom gradient overlay ────────────────────────────────
                 const DecoratedBox(
                   decoration: BoxDecoration(

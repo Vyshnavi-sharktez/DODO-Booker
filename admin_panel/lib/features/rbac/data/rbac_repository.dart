@@ -116,11 +116,23 @@ class RbacRepository {
   Future<RbacAdminUser> updateAdminUser(
     String id, {
     String? fullName,
+    String? phone,
     bool? isActive,
+    // When address is non-null, all three location fields are written.
+    // Pass address: '' to clear address and coordinates.
+    String? address,
+    double? latitude,
+    double? longitude,
   }) async {
     final updates = <String, dynamic>{};
     if (fullName != null) updates['full_name'] = fullName;
+    if (phone != null) updates['phone'] = phone;
     if (isActive != null) updates['is_active'] = isActive;
+    if (address != null) {
+      updates['address'] = address.isEmpty ? null : address;
+      updates['latitude'] = latitude;
+      updates['longitude'] = longitude;
+    }
 
     final data = await _supabase
         .from('admin_users')
@@ -129,6 +141,14 @@ class RbacRepository {
         .select('*, admin_user_roles(role_id, roles(id, name))')
         .single();
     return RbacAdminUser.fromMap(data);
+  }
+
+  Future<void> deleteAdminUser(String id) async {
+    await _supabase
+        .from('admin_user_roles')
+        .delete()
+        .eq('admin_user_id', id);
+    await _supabase.from('admin_users').delete().eq('id', id);
   }
 
   Future<void> setAdminUserRoles(

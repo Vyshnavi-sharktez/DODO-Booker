@@ -138,22 +138,33 @@ class _ServiceCardState extends State<_ServiceCard> {
                 // ── Image ────────────────────────────────────────────────
                 SizedBox(
                   height: _kImgH,
-                  child: Image.network(
-                    url,
-                    fit: BoxFit.cover,
-                    width: double.infinity,
-                    loadingBuilder: (_, child, p) => p == null
-                        ? child
-                        : const ColoredBox(color: Color(0xFFF1ECE1)),
-                    errorBuilder: (_, _, _) => Container(
-                      color: const Color(0xFFF1ECE1),
-                      alignment: Alignment.center,
-                      child: const Icon(
-                        Icons.home_repair_service_rounded,
-                        size: 32,
-                        color: AppColors.gold,
-                      ),
-                    ),
+                  child: url != null
+                      ? Image.network(
+                          url,
+                          fit: BoxFit.cover,
+                          width: double.infinity,
+                          loadingBuilder: (_, child, p) => p == null
+                              ? child
+                              : const ColoredBox(color: Color(0xFFF1ECE1)),
+                          errorBuilder: (_, _, _) => Container(
+                            color: const Color(0xFFF1ECE1),
+                            alignment: Alignment.center,
+                            child: const Icon(
+                              Icons.home_repair_service_rounded,
+                              size: 32,
+                              color: AppColors.gold,
+                            ),
+                          ),
+                        )
+                      : Container(
+                          color: const Color(0xFFF1ECE1),
+                          alignment: Alignment.center,
+                          child: const Icon(
+                            Icons.home_repair_service_rounded,
+                            size: 32,
+                            color: AppColors.gold,
+                          ),
+                        ),
                   ),
                 ),
                 // ── Label strip ──────────────────────────────────────────

@@ -1,6 +1,10 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../domain/models/admin_user.dart';
 
+class InactiveAdminException implements Exception {
+  const InactiveAdminException();
+}
+
 class AuthRepository {
   final SupabaseClient _supabase;
 
@@ -45,15 +49,17 @@ class AuthRepository {
           .from('admin_users')
           .select()
           .eq('auth_user_id', userId)
-          .eq('is_active', true)
-          .single();
+          .maybeSingle();
     } catch (e) {
       adminError = e;
     }
 
-    if (adminError != null || adminRow == null) {
-      if (adminError != null) throw adminError;
-      throw Exception('No active admin_users row for auth_user_id=$userId');
+    if (adminError != null) throw adminError;
+    if (adminRow == null) {
+      throw Exception('No admin_users row for auth_user_id=$userId');
+    }
+    if ((adminRow['is_active'] as bool? ?? false) == false) {
+      throw const InactiveAdminException();
     }
 
     final adminId = adminRow['id'] as String;
@@ -155,6 +161,7 @@ class AuthRepository {
       isActive: row['is_active'] as bool? ?? false,
       permissions: permissions,
       roleNames: roleNames,
+      adminNumber: row['admin_number'] as String?,
     );
   }
 }

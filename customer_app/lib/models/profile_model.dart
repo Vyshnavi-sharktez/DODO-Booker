@@ -1,5 +1,6 @@
 class ProfileModel {
   final String id;
+  final String? customerNumber;
   final String fullName;
   final String mobileNumber;
   final String? email;
@@ -12,6 +13,7 @@ class ProfileModel {
 
   const ProfileModel({
     required this.id,
+    this.customerNumber,
     required this.fullName,
     required this.mobileNumber,
     this.email,
@@ -34,6 +36,7 @@ class ProfileModel {
   factory ProfileModel.fromJson(Map<String, dynamic> json) {
     return ProfileModel(
       id: json['id'] as String,
+      customerNumber: json['customer_number'] as String?,
       fullName: (json['full_name'] as String?) ?? '',
       mobileNumber: (json['mobile_number'] ?? json['phone'] as String?) ?? '',
       email: json['email'] as String?,
@@ -57,6 +60,7 @@ class ProfileModel {
   }) {
     return ProfileModel(
       id: id,
+      customerNumber: customerNumber,
       fullName: fullName ?? this.fullName,
       mobileNumber: mobileNumber,
       email: email ?? this.email,

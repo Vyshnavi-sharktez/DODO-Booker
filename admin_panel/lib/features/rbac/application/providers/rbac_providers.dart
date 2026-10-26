@@ -119,9 +119,26 @@ class RbacAdminUsersNotifier
   Future<void> updateAdminUser(
     String id, {
     String? fullName,
+    String? phone,
     bool? isActive,
+    String? address,
+    double? latitude,
+    double? longitude,
   }) async {
-    await _repo.updateAdminUser(id, fullName: fullName, isActive: isActive);
+    await _repo.updateAdminUser(
+      id,
+      fullName: fullName,
+      phone: phone,
+      isActive: isActive,
+      address: address,
+      latitude: latitude,
+      longitude: longitude,
+    );
+    await _load();
+  }
+
+  Future<void> deleteAdminUser(String id) async {
+    await _repo.deleteAdminUser(id);
     await _load();
   }
 

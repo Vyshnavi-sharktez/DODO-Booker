@@ -238,12 +238,12 @@ void _triggerAssign(Booking booking) {
     final vendorNameResolved = vendor?.businessName ??
         (booking.vendorName.isNotEmpty
             ? booking.vendorName
-            : _truncateId(booking.vendorId));
+            : booking.vendorNumber ?? '');
 
     final assignedToLabel = switch (booking.assignmentType) {
       'External Vendor' =>
         vendorNameResolved.isNotEmpty ? vendorNameResolved : 'Unassigned',
-      'DODO Team' => team?.teamName ?? _truncateId(booking.dodoTeamId),
+      'DODO Team' => team?.teamName ?? 'DODO Team',
       _ => 'Unassigned',
     };
 
@@ -393,6 +393,7 @@ void _triggerAssign(Booking booking) {
                                     _CustomerCard(
                                       customer: bookingCustomer,
                                       customerId: booking.customerId,
+                                      fallbackCustomerNumber: booking.customerNumber,
                                       fallbackName: booking.customerName,
                                       onViewProfile: () {
                                         Navigator.of(context).pop();
@@ -495,6 +496,7 @@ void _triggerAssign(Booking booking) {
                           _CustomerCard(
                             customer: bookingCustomer,
                             customerId: booking.customerId,
+                            fallbackCustomerNumber: booking.customerNumber,
                             fallbackName: booking.customerName,
                             onViewProfile: () {
                               Navigator.of(context).pop();
@@ -522,7 +524,9 @@ void _triggerAssign(Booking booking) {
                             booking: booking,
                             vendorNameResolved: vendorNameResolved,
                             teamName: team?.teamName,
-                            onAssign: () => _triggerAssign(booking),
+                            onAssign: widget.allowAssign
+                                ? () => _triggerAssign(booking)
+                                : null,
                           ),
                           if (booking.isAmc) ...[
                             const SizedBox(height: 16),
@@ -752,6 +756,7 @@ class _BadgePill extends StatelessWidget {
 class _CustomerCard extends StatelessWidget {
   final Customer? customer;
   final String customerId;
+  final String? fallbackCustomerNumber;
   final String? fallbackName;
   final VoidCallback onViewProfile;
 
@@ -759,6 +764,7 @@ class _CustomerCard extends StatelessWidget {
     required this.customer,
     required this.customerId,
     required this.onViewProfile,
+    this.fallbackCustomerNumber,
     this.fallbackName,
   });
 
@@ -769,9 +775,9 @@ class _CustomerCard extends StatelessWidget {
         : (fallbackName?.isNotEmpty == true ? fallbackName! : 'Customer');
     final initial = name.isNotEmpty ? name[0].toUpperCase() : 'C';
 
-    final truncatedId = customerId.length > 24
-        ? '${customerId.substring(0, 24)}...'
-        : customerId;
+    final resolvedCustomerNumber =
+        customer?.customerNumber ?? fallbackCustomerNumber;
+    final displayId = resolvedCustomerNumber ?? '—';
 
     return _CardContainer(
       child: Column(
@@ -855,7 +861,7 @@ class _CustomerCard extends StatelessWidget {
                         const SizedBox(width: 6),
                         Expanded(
                           child: Text(
-                            'Customer ID: $truncatedId',
+                            'Customer ID: $displayId',
                             style: const TextStyle(
                               fontSize: 13,
                               color: _navyDark,
@@ -863,12 +869,14 @@ class _CustomerCard extends StatelessWidget {
                             overflow: TextOverflow.ellipsis,
                           ),
                         ),
+                        if (resolvedCustomerNumber != null)
                         InkWell(
                           onTap: () {
-                            Clipboard.setData(ClipboardData(text: customerId));
+                            Clipboard.setData(ClipboardData(
+                                text: resolvedCustomerNumber));
                             ScaffoldMessenger.of(context).showSnackBar(
                               const SnackBar(
-                                content: Text('Copied Customer ID to clipboard'),
+                                content: Text('Copied to clipboard'),
                                 duration: Duration(seconds: 2),
                               ),
                             );
@@ -1223,7 +1231,7 @@ class _AssignedToCard extends StatelessWidget {
     final assignedToLabel = switch (booking.assignmentType) {
       'External Vendor' =>
         vendorNameResolved.isNotEmpty ? vendorNameResolved : 'Unassigned',
-      'DODO Team' => teamName ?? _truncateId(booking.dodoTeamId),
+      'DODO Team' => teamName ?? 'DODO Team',
       _ => isCancelled ? 'Cancelled' : 'Unassigned',
     };
 
@@ -1507,6 +1515,14 @@ class _BookingInfoCard extends StatelessWidget {
               bgColor: statusBg,
             ),
           ),
+          if (booking.notes != null && booking.notes!.trim().isNotEmpty) ...[
+            const SizedBox(height: 12),
+            _InfoKeyValRow(
+              icon: Icons.notes_rounded,
+              label: 'Notes',
+              value: booking.notes!.trim(),
+            ),
+          ],
         ],
       ),
     );
@@ -2522,8 +2538,34 @@ class _CodReconciliationCard extends StatelessWidget {
                           ],
                         ),
                       )
-                    : (booking.codConfirmedAt == null
+                    : booking.codCashCollected == true
                         ? Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 10, vertical: 6),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFDCFCE7),
+                              borderRadius: BorderRadius.circular(6),
+                              border:
+                                  Border.all(color: const Color(0xFF86EFAC)),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(Icons.check_circle_rounded,
+                                    size: 14, color: Color(0xFF166534)),
+                                const SizedBox(width: 4),
+                                Text(
+                                  'Cash Collected (${_dateFmt.format(booking.codConfirmedAt!)})',
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    color: Color(0xFF166534),
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          )
+                        : Container(
                             padding: const EdgeInsets.symmetric(
                                 horizontal: 10, vertical: 6),
                             decoration: BoxDecoration(
@@ -2538,80 +2580,7 @@ class _CodReconciliationCard extends StatelessWidget {
                                 fontWeight: FontWeight.bold,
                               ),
                             ),
-                          )
-                        : (booking.codCashCollected == true
-                            ? Container(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 10, vertical: 6),
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFFDCFCE7),
-                                  borderRadius: BorderRadius.circular(6),
-                                  border: Border.all(
-                                      color: const Color(0xFF86EFAC)),
-                                ),
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    const Icon(Icons.check_circle_rounded,
-                                        size: 14, color: Color(0xFF166534)),
-                                    const SizedBox(width: 4),
-                                    Text(
-                                      'Cash Collected (${_dateFmt.format(booking.codConfirmedAt!)})',
-                                      style: const TextStyle(
-                                        fontSize: 12,
-                                        color: Color(0xFF166534),
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              )
-                            : Container(
-                                padding: const EdgeInsets.all(10),
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFFFEE2E2),
-                                  borderRadius: BorderRadius.circular(6),
-                                  border: Border.all(
-                                      color: const Color(0xFFFCA5A5)),
-                                ),
-                                child: Column(
-                                  crossAxisAlignment:
-                                      CrossAxisAlignment.start,
-                                  children: [
-                                    Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        const Icon(Icons.cancel_rounded,
-                                            size: 14,
-                                            color: Color(0xFFDC2626)),
-                                        const SizedBox(width: 4),
-                                        Text(
-                                          'Cash Not Collected (${_dateFmt.format(booking.codConfirmedAt!)})',
-                                          style: const TextStyle(
-                                            fontSize: 12,
-                                            color: Color(0xFFDC2626),
-                                            fontWeight: FontWeight.bold,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                    if (booking.codNotCollectedReason !=
-                                            null &&
-                                        booking.codNotCollectedReason!
-                                            .isNotEmpty) ...[
-                                      const SizedBox(height: 4),
-                                      Text(
-                                        'Reason: ${booking.codNotCollectedReason}',
-                                        style: const TextStyle(
-                                          fontSize: 12,
-                                          color: Color(0xFF991B1B),
-                                          fontStyle: FontStyle.italic,
-                                        ),
-                                      ),
-                                    ],
-                                  ],
-                                ),
-                              ))),
+                          ),
               ),
             ],
           ),

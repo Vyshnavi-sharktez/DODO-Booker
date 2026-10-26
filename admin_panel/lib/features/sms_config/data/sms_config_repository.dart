@@ -46,19 +46,31 @@ class SmsConfigRepository {
 
   Future<Map<String, dynamic>> sendTestMessage(
     String provider,
-    String testPhone,
-  ) async {
-    final response = await _supabase.functions.invoke(
-      'sms-test-message',
-      body: {'provider': provider, 'test_phone': testPhone},
-    );
-    final status = response.status;
-    final data = response.data;
-    if (status >= 400) {
-      final msg = data is Map ? data['error'] as String? : null;
-      throw Exception(msg ?? 'Test message failed (HTTP $status)');
+    String testPhone, {
+    bool mock = false,
+    String mockOutcome = 'success',
+  }) async {
+    try {
+      final response = await _supabase.functions.invoke(
+        'sms-test-message',
+        body: {
+          'provider': provider,
+          'test_phone': testPhone,
+          if (mock) 'mock': true,
+          if (mock) 'mock_outcome': mockOutcome,
+        },
+      );
+      final data = response.data;
+      if (data is Map<String, dynamic>) return data;
+      return {'success': false, 'error': 'Unexpected response'};
+    } on FunctionException catch (e) {
+      // functions_client throws FunctionException for all non-2xx responses;
+      // FunctionResponse is only returned for 2xx. For JSON bodies (simulated
+      // failures, real provider errors) details is the already-decoded Map —
+      // return it so the caller can inspect success/simulated flags normally.
+      final details = e.details;
+      if (details is Map) return Map<String, dynamic>.from(details);
+      throw Exception(details?.toString() ?? 'Test message failed (HTTP ${e.status})');
     }
-    if (data is Map<String, dynamic>) return data;
-    return {'success': false, 'error': 'Unexpected response'};
   }
 }

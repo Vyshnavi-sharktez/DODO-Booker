@@ -7,23 +7,15 @@ class AuthRemoteDatasource {
 
   static const _phoneKey = 'dodo_vendor_phone';
 
-  // ── Phone check + OTP send ───────────────────────────────────────────────
+  // ── Phone check ──────────────────────────────────────────────────────────────
+  // Sends an OTP to any valid mobile number via Supabase Auth phone OTP (MSG91).
 
-  /// Verifies the phone is registered as a vendor/team member via RPC,
-  /// then sends a real SMS OTP via Supabase Phone Auth (Twilio).
   Future<void> checkPhone(String phone) async {
-    final registered = await _client.rpc(
-          'check_vendor_phone',
-          params: {'p_phone': phone},
-        ) as bool? ??
-        false;
-    if (!registered) {
-      throw Exception('This number is not registered as a vendor.');
-    }
-    await _client.auth.signInWithOtp(phone: phone);
+    await _client.auth.signInWithOtp(phone: phone, shouldCreateUser: true);
   }
 
-  // ── OTP verification ─────────────────────────────────────────────────────
+  // ── OTP verification ─────────────────────────────────────────────────────────
+  // Verifies the OTP via Supabase Auth. Throws AuthException on failure.
 
   Future<void> verifyOtp({
     required String phone,
@@ -36,37 +28,43 @@ class AuthRemoteDatasource {
     );
   }
 
-  // ── Vendor/team profile ──────────────────────────────────────────────────
+  // ── Vendor record management ─────────────────────────────────────────────────
+
+  /// Links the current auth user to an existing vendor row, or creates a new
+  /// minimal vendor record if no row exists for [phone].
+  /// Returns the vendor UUID (existing or newly created).
+  /// Throws if the caller is not authenticated.
+  Future<String> ensureVendorCreated(String phone) async {
+    final result = await _client.rpc(
+      'ensure_vendor_created',
+      params: {'p_phone': phone},
+    );
+    return result as String;
+  }
+
+  // ── Vendor profile ───────────────────────────────────────────────────────────
 
   Future<Map<String, dynamic>?> getVendorByPhone(String phone) async {
-    final rows =
-        await _client.from('vendors').select().eq('phone', phone).limit(1);
+    final rows = await _client
+        .from('vendors')
+        .select()
+        .eq('phone', phone)
+        .limit(1);
     return rows.isEmpty ? null : rows.first;
   }
 
   Future<Map<String, dynamic>?> getDodoTeamByPhone(String phone) async {
-    final rows =
-        await _client.from('dodo_teams').select().eq('phone', phone).limit(1);
+    final rows = await _client
+        .from('dodo_teams')
+        .select()
+        .eq('phone', phone)
+        .limit(1);
     return rows.isEmpty ? null : rows.first;
   }
 
-  // ── Auth user linking ────────────────────────────────────────────────────
+  // ── Session ──────────────────────────────────────────────────────────────────
 
-  /// Calls ensure_vendor_linked RPC to write auth_user_id into the vendors row.
-  /// No-ops for dodo_team members (they have no vendors row).
-  Future<void> linkVendor(String phone) async {
-    try {
-      await _client
-          .rpc('ensure_vendor_linked', params: {'p_phone': phone});
-    } catch (_) {}
-  }
-
-  // ── Session ──────────────────────────────────────────────────────────────
-
-  /// Returns phone from the active Supabase session, or SharedPreferences fallback.
   Future<String?> getSavedPhone() async {
-    final phone = _client.auth.currentUser?.phone;
-    if (phone != null && phone.isNotEmpty) return phone;
     final prefs = await SharedPreferences.getInstance();
     return prefs.getString(_phoneKey);
   }
@@ -76,12 +74,11 @@ class AuthRemoteDatasource {
     await prefs.setString(_phoneKey, phone);
   }
 
-  /// Signs out from Supabase and removes the cached phone from SharedPreferences.
   Future<void> clearSession() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_phoneKey);
     try {
       await _client.auth.signOut();
     } catch (_) {}
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove(_phoneKey);
   }
 }

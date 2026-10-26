@@ -215,6 +215,28 @@ class _PageHeader extends StatelessWidget {
                       style: TextStyle(
                           fontSize: 13, color: AppColors.textSecondary),
                     ),
+                  if (vendor.vendorNumber != null) ...[
+                    const SizedBox(height: 4),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: AppColors.primary.withAlpha(20),
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(
+                            color: AppColors.primary.withAlpha(60), width: 1),
+                      ),
+                      child: Text(
+                        vendor.vendorNumber!,
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.primary,
+                          letterSpacing: 0.5,
+                        ),
+                      ),
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -292,6 +314,12 @@ class _OverviewTab extends ConsumerWidget {
           _SectionTitle('Business Details'),
           const SizedBox(height: 12),
           _InfoGrid(children: [
+            if (vendor.vendorNumber != null)
+              _InfoCell(
+                icon: Icons.tag_rounded,
+                label: 'Vendor ID',
+                value: vendor.vendorNumber!,
+              ),
             _InfoCell(
               icon: Icons.toggle_on_rounded,
               label: 'Active',

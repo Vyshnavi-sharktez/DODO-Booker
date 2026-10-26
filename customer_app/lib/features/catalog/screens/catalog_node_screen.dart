@@ -266,7 +266,7 @@ class _CatalogNodeScreenState extends ConsumerState<CatalogNodeScreen> {
     final heroUrl = node.hasChildren
         ? ServiceImageRegistry.resolve(node.imageUrl, node.name)
         : node.imageUrl;
-    final hasHero = node.hasChildren || (heroUrl != null && heroUrl.isNotEmpty);
+    final hasHero = heroUrl != null && heroUrl.isNotEmpty;
 
     // ── Web ──────────────────────────────────────────────────────────────────
     if (isWeb) {
@@ -2328,18 +2328,26 @@ class _ChildListItemState extends State<_ChildListItem> {
               SizedBox(
                 width: 90,
                 height: 90,
-                child: Image.network(
-                  imageUrl,
-                  fit: BoxFit.cover,
-                  loadingBuilder: (_, child, p) => p == null
-                      ? child
-                      : const ColoredBox(color: Color(0xFFEEEEEE)),
-                  errorBuilder: (_, _, _) => Container(
-                    color: AppColors.goldLight,
-                    alignment: Alignment.center,
-                    child: const Icon(Icons.home_repair_service_rounded,
-                        size: 28, color: AppColors.gold),
-                  ),
+                child: imageUrl != null
+                    ? Image.network(
+                        imageUrl,
+                        fit: BoxFit.cover,
+                        loadingBuilder: (_, child, p) => p == null
+                            ? child
+                            : const ColoredBox(color: Color(0xFFEEEEEE)),
+                        errorBuilder: (_, _, _) => Container(
+                          color: AppColors.goldLight,
+                          alignment: Alignment.center,
+                          child: const Icon(Icons.home_repair_service_rounded,
+                              size: 28, color: AppColors.gold),
+                        ),
+                      )
+                    : Container(
+                        color: AppColors.goldLight,
+                        alignment: Alignment.center,
+                        child: const Icon(Icons.home_repair_service_rounded,
+                            size: 28, color: AppColors.gold),
+                      ),
                 ),
               ),
               Expanded(

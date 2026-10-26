@@ -47,7 +47,8 @@ class _VendorsPageState extends ConsumerState<VendorsPage> {
               v.businessName.toLowerCase().contains(q) ||
               (v.ownerName?.toLowerCase().contains(q) ?? false) ||
               v.phone.contains(q) ||
-              v.email.toLowerCase().contains(q))
+              v.email.toLowerCase().contains(q) ||
+              (v.vendorNumber?.toLowerCase().contains(q) ?? false))
           .toList();
     }
     if (_cityFilter != null) {
@@ -159,6 +160,33 @@ class _VendorsPageState extends ConsumerState<VendorsPage> {
   }
 
   Future<void> _toggle(Vendor vendor) async {
+    if (vendor.isActive) {
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          title: const Text('Deactivate Vendor'),
+          content: Text(
+            'Are you sure you want to deactivate "${vendor.businessName}"?\n\n'
+            'They will no longer be able to receive or accept bookings.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(ctx).pop(true),
+              style:
+                  FilledButton.styleFrom(backgroundColor: AppColors.error),
+              child: const Text('Deactivate'),
+            ),
+          ],
+        ),
+      );
+      if (confirmed != true) return;
+    }
     try {
       await ref
           .read(vendorsNotifierProvider.notifier)
@@ -627,6 +655,32 @@ class _VendorRow extends StatelessWidget {
                           ),
                           overflow: TextOverflow.ellipsis,
                         ),
+                      if (vendor.vendorNumber != null) ...[
+                        const SizedBox(height: 3),
+                        GestureDetector(
+                          onTap: onViewDetails,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: AppColors.primary.withAlpha(20),
+                              borderRadius: BorderRadius.circular(4),
+                              border: Border.all(
+                                  color: AppColors.primary.withAlpha(60),
+                                  width: 1),
+                            ),
+                            child: Text(
+                              vendor.vendorNumber!,
+                              style: TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.w700,
+                                color: AppColors.primary,
+                                letterSpacing: 0.4,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
                     ],
                   ),
                 ),

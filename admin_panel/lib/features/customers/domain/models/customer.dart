@@ -8,6 +8,7 @@ class Customer {
   final bool isActive;
   final DateTime? createdAt;
   final DateTime? updatedAt;
+  final String? customerNumber;
 
   const Customer({
     required this.id,
@@ -19,6 +20,7 @@ class Customer {
     required this.isActive,
     this.createdAt,
     this.updatedAt,
+    this.customerNumber,
   });
 
   factory Customer.fromMap(Map<String, dynamic> map) {
@@ -36,6 +38,7 @@ class Customer {
       updatedAt: map['updated_at'] != null
           ? DateTime.tryParse(map['updated_at'] as String)
           : null,
+      customerNumber: map['customer_number'] as String?,
     );
   }
 
@@ -56,6 +59,7 @@ class Customer {
       isActive: isActive ?? this.isActive,
       createdAt: createdAt,
       updatedAt: updatedAt,
+      customerNumber: customerNumber,
     );
   }
 }
