@@ -176,14 +176,6 @@ class _CatalogNodeConfigDialogState extends ConsumerState<CatalogNodeConfigDialo
   // Refund Period override
   final _refundPeriodCtrl = TextEditingController();
 
-  // Content tab — direct catalog_nodes fields
-  List<String> _includedItems = [];
-  List<String> _excludedItems = [];
-  bool _addingIncluded = false;
-  bool _addingExcluded = false;
-  final _newIncludedCtrl = TextEditingController();
-  final _newExcludedCtrl = TextEditingController();
-
   // Before & After tab — direct catalog_nodes field
   List<Map<String, String>> _beforeAfterPairs = [];
   bool _addingPair = false;
@@ -214,7 +206,7 @@ class _CatalogNodeConfigDialogState extends ConsumerState<CatalogNodeConfigDialo
   ];
   static const _tabLabels = [
     'Tax', 'Loyalty', 'Scheduling', 'Platform Commission', 'Surge Fee', 'Preferred Vendors',
-    'Vendor Subscription', 'Refund Period', 'Content', 'Attributes', 'Before & After',
+    'Vendor Subscription', 'Refund Period', 'Attributes', 'Before & After',
   ];
   static const _dayLabels = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
@@ -257,8 +249,6 @@ class _CatalogNodeConfigDialogState extends ConsumerState<CatalogNodeConfigDialo
       ctrl.dispose();
     }
     _refundPeriodCtrl.dispose();
-    _newIncludedCtrl.dispose();
-    _newExcludedCtrl.dispose();
     for (final e in _calEntries) {
       e.dispose();
     }
@@ -363,18 +353,10 @@ class _CatalogNodeConfigDialogState extends ConsumerState<CatalogNodeConfigDialo
       // Load content and before_after directly from catalog_nodes
       final nodeRow = await Supabase.instance.client
           .from('catalog_nodes')
-          .select('included_items, excluded_items, before_after_pairs')
+          .select('before_after_pairs')
           .eq('id', widget.nodeId)
           .maybeSingle();
       if (nodeRow != null) {
-        _includedItems = (nodeRow['included_items'] as List<dynamic>?)
-                ?.map((e) => e.toString())
-                .toList() ??
-            [];
-        _excludedItems = (nodeRow['excluded_items'] as List<dynamic>?)
-                ?.map((e) => e.toString())
-                .toList() ??
-            [];
         _beforeAfterPairs =
             (nodeRow['before_after_pairs'] as List<dynamic>?)?.map((e) {
               final m = e as Map<String, dynamic>;
@@ -998,7 +980,6 @@ class _CatalogNodeConfigDialogState extends ConsumerState<CatalogNodeConfigDialo
                   controller: _tabController,
                   children: [
                     ..._modules.map((m) => _buildModuleTab(m)),
-                    _buildContentTab(),
                     _buildAttributesTab(),
                     _buildBeforeAfterTab(),
                   ],
@@ -2899,33 +2880,6 @@ class _CatalogNodeConfigDialogState extends ConsumerState<CatalogNodeConfigDialo
     );
   }
 
-  // ── Content tab ─────────────────────────────────────────────────────────────
-
-  Future<void> _saveContent() async {
-    setState(() {
-      _saving = true;
-      _error = null;
-    });
-    try {
-      await Supabase.instance.client
-          .from('catalog_nodes')
-          .update({
-            'included_items': _includedItems,
-            'excluded_items': _excludedItems,
-          })
-          .eq('id', widget.nodeId);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Content saved.')),
-        );
-      }
-    } catch (e) {
-      if (mounted) setState(() => _error = e.toString());
-    } finally {
-      if (mounted) setState(() => _saving = false);
-    }
-  }
-
   Future<void> _saveBeforeAfter() async {
     setState(() {
       _saving = true;
@@ -2946,110 +2900,6 @@ class _CatalogNodeConfigDialogState extends ConsumerState<CatalogNodeConfigDialo
     } finally {
       if (mounted) setState(() => _saving = false);
     }
-  }
-
-  Widget _buildContentTab() {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(20),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // What's Included
-          _buildAccentSection(
-            icon: Icons.check_circle_outline_rounded,
-            title: "What's Included",
-            color: const Color(0xFF4CAF50),
-          ),
-          const SizedBox(height: 8),
-          ..._includedItems.asMap().entries.map((e) => _buildItemRow(
-                e.value,
-                () => setState(() => _includedItems.removeAt(e.key)),
-              )),
-          if (_includedItems.isEmpty && !_addingIncluded)
-            _emptyNote('No items yet.'),
-          if (_addingIncluded)
-            _buildInlineItemInput(
-              ctrl: _newIncludedCtrl,
-              onAdd: () {
-                final v = _newIncludedCtrl.text.trim();
-                if (v.isNotEmpty) {
-                  setState(() {
-                    _includedItems.add(v);
-                    _newIncludedCtrl.clear();
-                    _addingIncluded = false;
-                  });
-                }
-              },
-              onCancel: () => setState(() {
-                _addingIncluded = false;
-                _newIncludedCtrl.clear();
-              }),
-            )
-          else
-            _buildAddLink(
-              '+ Add included item',
-              () => setState(() => _addingIncluded = true),
-            ),
-
-          const SizedBox(height: 20),
-
-          // What's Excluded
-          _buildAccentSection(
-            icon: Icons.cancel_outlined,
-            title: "What's Excluded",
-            color: const Color(0xFFF44336),
-          ),
-          const SizedBox(height: 8),
-          ..._excludedItems.asMap().entries.map((e) => _buildItemRow(
-                e.value,
-                () => setState(() => _excludedItems.removeAt(e.key)),
-              )),
-          if (_excludedItems.isEmpty && !_addingExcluded)
-            _emptyNote('No items yet.'),
-          if (_addingExcluded)
-            _buildInlineItemInput(
-              ctrl: _newExcludedCtrl,
-              onAdd: () {
-                final v = _newExcludedCtrl.text.trim();
-                if (v.isNotEmpty) {
-                  setState(() {
-                    _excludedItems.add(v);
-                    _newExcludedCtrl.clear();
-                    _addingExcluded = false;
-                  });
-                }
-              },
-              onCancel: () => setState(() {
-                _addingExcluded = false;
-                _newExcludedCtrl.clear();
-              }),
-            )
-          else
-            _buildAddLink(
-              '+ Add excluded item',
-              () => setState(() => _addingExcluded = true),
-            ),
-
-          const SizedBox(height: 24),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.end,
-            children: [
-              FilledButton(
-                onPressed: _saving ? null : _saveContent,
-                child: _saving
-                    ? const SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: CircularProgressIndicator(
-                            strokeWidth: 2, color: Colors.white),
-                      )
-                    : const Text('Save'),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
   }
 
   // ── Attributes tab ──────────────────────────────────────────────────────────
@@ -3324,53 +3174,6 @@ class _CatalogNodeConfigDialogState extends ConsumerState<CatalogNodeConfigDialo
                 fontWeight: FontWeight.w600,
                 color: AppColors.textPrimary),
           ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildItemRow(String text, VoidCallback onRemove) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 6),
-      child: Row(
-        children: [
-          const Icon(Icons.drag_indicator_rounded,
-              size: 16, color: AppColors.textSecondary),
-          const SizedBox(width: 6),
-          Expanded(
-            child: Text(text,
-                style: const TextStyle(
-                    fontSize: 13, color: AppColors.textPrimary)),
-          ),
-          GestureDetector(
-            onTap: onRemove,
-            child: const Icon(Icons.close_rounded,
-                size: 16, color: AppColors.error),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildInlineItemInput({
-    required TextEditingController ctrl,
-    required VoidCallback onAdd,
-    required VoidCallback onCancel,
-  }) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 6),
-      child: Row(
-        children: [
-          Expanded(
-            child: TextField(
-              controller: ctrl,
-              autofocus: true,
-              decoration: _inputDeco('Enter item...'),
-            ),
-          ),
-          const SizedBox(width: 8),
-          TextButton(onPressed: onAdd, child: const Text('Add')),
-          TextButton(onPressed: onCancel, child: const Text('Cancel')),
         ],
       ),
     );

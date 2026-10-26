@@ -70,19 +70,6 @@ class ServiceInfoSection extends StatelessWidget {
             ],
           ),
 
-          // Description
-          if (service.description != null && service.description!.isNotEmpty) ...[
-            const SizedBox(height: 10),
-            Text(
-              service.description!,
-              style: GoogleFonts.inter(
-                fontSize: 13,
-                color: AppColors.textSecondary,
-                height: 1.55,
-              ),
-            ),
-          ],
-
           const SizedBox(height: 12),
 
           // Price row

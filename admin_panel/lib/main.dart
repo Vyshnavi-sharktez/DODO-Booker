@@ -17,7 +17,11 @@ import 'firebase_options.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+  try {
+    await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+  } catch (e, st) {
+    debugPrint('Firebase.initializeApp warning: $e\n$st');
+  }
 
   await Supabase.initialize(
     url: SupabaseConfig.url,
@@ -61,21 +65,25 @@ class _DodoAdminAppState extends ConsumerState<DodoAdminApp>
   }
 
   void _setupFcmTapListeners() {
-    final router = ref.read(routerProvider);
+    try {
+      final router = ref.read(routerProvider);
 
-    // Cold start (mainly mobile; on web returns null)
-    FirebaseMessaging.instance.getInitialMessage().then((message) {
-      if (message != null && mounted) {
-        AdminNotificationRouter.handleFromPush(router, message.data);
-      }
-    });
+      // Cold start (mainly mobile; on web returns null)
+      FirebaseMessaging.instance.getInitialMessage().then((message) {
+        if (message != null && mounted) {
+          AdminNotificationRouter.handleFromPush(router, message.data);
+        }
+      }).catchError((_) {});
 
-    // Background → foreground
-    FirebaseMessaging.onMessageOpenedApp.listen((message) {
-      if (mounted) {
-        AdminNotificationRouter.handleFromPush(router, message.data);
-      }
-    });
+      // Background → foreground
+      FirebaseMessaging.onMessageOpenedApp.listen((message) {
+        if (mounted) {
+          AdminNotificationRouter.handleFromPush(router, message.data);
+        }
+      });
+    } catch (e) {
+      debugPrint('[FCM] Tap listeners setup bypassed: $e');
+    }
   }
 
   void _listenForegroundMessages() {
