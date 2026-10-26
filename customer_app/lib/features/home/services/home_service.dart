@@ -15,6 +15,7 @@ class PublicReview {
   final int rating;
   final String reviewText;
   final DateTime createdAt;
+  final String? serviceName;
 
   const PublicReview({
     required this.id,
@@ -23,6 +24,7 @@ class PublicReview {
     required this.rating,
     required this.reviewText,
     required this.createdAt,
+    this.serviceName,
   });
 
   String get initials {
@@ -44,6 +46,7 @@ class PublicReview {
         ? cust['profile_image_url'] as String?
         : json['customer_avatar_url'] as String?;
     final firstName = rawName.trim().split(' ').first;
+    final rawService = json['service_name'] as String?;
     return PublicReview(
       id: json['id'] as String,
       customerName: firstName,
@@ -51,6 +54,9 @@ class PublicReview {
       rating: (json['rating'] as num).toInt(),
       reviewText: json['review_text'] as String? ?? '',
       createdAt: DateTime.parse(json['created_at'] as String),
+      serviceName: (rawService != null && rawService.trim().isNotEmpty)
+          ? rawService.trim()
+          : null,
     );
   }
 }

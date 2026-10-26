@@ -43,7 +43,7 @@ class CustomerReviewsSection extends StatelessWidget {
 // ── Horizontal row ────────────────────────────────────────────────────────────
 
 const double _kCardW  = 300.0;
-const double _kCardH  = 210.0;
+const double _kCardH  = 232.0;
 const double _kGap    = 16.0;
 
 class _ReviewRow extends StatelessWidget {
@@ -121,15 +121,31 @@ class _ReviewCard extends StatelessWidget {
               _Avatar(review: review),
               const SizedBox(width: 10),
               Expanded(
-                child: Text(
-                  review.customerName,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: GoogleFonts.poppins(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    color: const Color(0xFF1A1714),
-                  ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      review.customerName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: GoogleFonts.poppins(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: const Color(0xFF1A1714),
+                      ),
+                    ),
+                    if (review.serviceName != null)
+                      Text(
+                        review.serviceName!,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: GoogleFonts.inter(
+                          fontSize: 11,
+                          color: const Color(0xFF8A8480),
+                        ),
+                      ),
+                  ],
                 ),
               ),
             ],

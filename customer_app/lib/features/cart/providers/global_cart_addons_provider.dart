@@ -18,6 +18,7 @@ class GlobalCartAddonsNotifier
 
   Future<void> _load() async {
     final prefs = await SharedPreferences.getInstance();
+    if (!mounted) return;
     final activeRaw = prefs.getString(_activeKey);
     if (activeRaw != null) {
       try {
@@ -51,6 +52,7 @@ class GlobalCartAddonsNotifier
 
   Future<void> _persistActive() async {
     final prefs = await SharedPreferences.getInstance();
+    if (!mounted) return;
     await prefs.setString(
       _activeKey,
       jsonEncode(state.map((k, v) => MapEntry(k, v.toJson()))),
