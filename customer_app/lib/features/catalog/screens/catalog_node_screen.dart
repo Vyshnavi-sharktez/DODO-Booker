@@ -1289,16 +1289,6 @@ class _ServiceContentBlock extends StatelessWidget {
               ),
             ),
 
-          // Description
-          if (node.description?.isNotEmpty == true) ...[
-            Text(
-              node.description!,
-              style: const TextStyle(fontSize: 13, color: _kMuted, height: 1.6),
-            ),
-            const SizedBox(height: 14),
-          ] else
-            const SizedBox(height: 8),
-
           // Price row
           if (node.basePrice != null || startsAtPrice != null)
             Row(
@@ -4543,20 +4533,6 @@ class _WebHeader extends StatelessWidget {
                                 ),
                               ],
                             ],
-                          ),
-                        ),
-                      if (node.description?.isNotEmpty == true)
-                        Padding(
-                          padding: const EdgeInsets.only(bottom: 14),
-                          child: Text(
-                            node.description!,
-                            style: const TextStyle(
-                              fontSize: 13,
-                              color: _kMuted,
-                              height: 1.6,
-                            ),
-                            maxLines: 4,
-                            overflow: TextOverflow.ellipsis,
                           ),
                         ),
                       if (node.basePrice != null || startsAtPrice != null)

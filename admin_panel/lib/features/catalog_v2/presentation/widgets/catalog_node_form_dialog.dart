@@ -72,8 +72,12 @@ class _CatalogNodeFormDialogState extends State<CatalogNodeFormDialog> {
   late bool _isBookable;
   late String _discountType;
   late final TextEditingController _discountValue;
-  late final TextEditingController _includedItems;
-  late final TextEditingController _excludedItems;
+  List<String> _includedItems = [];
+  List<String> _excludedItems = [];
+  bool _addingIncluded = false;
+  bool _addingExcluded = false;
+  late final TextEditingController _newIncludedCtrl;
+  late final TextEditingController _newExcludedCtrl;
   late bool _warrantyEnabled;
   late final TextEditingController _warrantyDays;
   late final TextEditingController _warrantyCovers;
@@ -111,12 +115,10 @@ class _CatalogNodeFormDialogState extends State<CatalogNodeFormDialog> {
           ? e.discountValue.toStringAsFixed(0)
           : '',
     );
-    _includedItems = TextEditingController(
-      text: e?.includedItems.join('\n') ?? '',
-    );
-    _excludedItems = TextEditingController(
-      text: e?.excludedItems.join('\n') ?? '',
-    );
+    _includedItems = List.from(e?.includedItems ?? []);
+    _excludedItems = List.from(e?.excludedItems ?? []);
+    _newIncludedCtrl = TextEditingController();
+    _newExcludedCtrl = TextEditingController();
     _warrantyEnabled = e?.warrantyEnabled ?? false;
     _warrantyDays = TextEditingController(
       text: e?.warrantyDays != null ? e!.warrantyDays!.toString() : '',
@@ -133,8 +135,8 @@ class _CatalogNodeFormDialogState extends State<CatalogNodeFormDialog> {
     _basePrice.dispose();
     _minOrderAmount.dispose();
     _discountValue.dispose();
-    _includedItems.dispose();
-    _excludedItems.dispose();
+    _newIncludedCtrl.dispose();
+    _newExcludedCtrl.dispose();
     _warrantyDays.dispose();
     _warrantyCovers.dispose();
     _warrantyExclusions.dispose();
@@ -176,20 +178,8 @@ class _CatalogNodeFormDialogState extends State<CatalogNodeFormDialog> {
         discountType: _discountType,
         discountValue:
             double.tryParse(_discountValue.text.trim()) ?? 0,
-        includedItems: _isBookable
-            ? _includedItems.text
-                .split('\n')
-                .map((s) => s.trim())
-                .where((s) => s.isNotEmpty)
-                .toList()
-            : const [],
-        excludedItems: _isBookable
-            ? _excludedItems.text
-                .split('\n')
-                .map((s) => s.trim())
-                .where((s) => s.isNotEmpty)
-                .toList()
-            : const [],
+        includedItems: _isBookable ? List.from(_includedItems) : const [],
+        excludedItems: _isBookable ? List.from(_excludedItems) : const [],
         warrantyEnabled: _isBookable ? _warrantyEnabled : false,
         warrantyDays: (_isBookable && _warrantyEnabled && _warrantyDays.text.trim().isNotEmpty)
             ? int.tryParse(_warrantyDays.text.trim())
@@ -628,11 +618,202 @@ class _CatalogNodeFormDialogState extends State<CatalogNodeFormDialog> {
                     maxLines: 4,
                   ),
                 ],
+
+                // ── What's Included / Excluded ───────────────────────────
+                const SizedBox(height: 16),
+                const Divider(),
+                const SizedBox(height: 12),
+                _buildAccentSection(
+                  icon: Icons.check_circle_outline_rounded,
+                  title: "What's Included",
+                  color: const Color(0xFF4CAF50),
+                ),
+                const SizedBox(height: 8),
+                ..._includedItems.asMap().entries.map((entry) => _buildItemRow(
+                      entry.value,
+                      () => setState(() => _includedItems.removeAt(entry.key)),
+                    )),
+                if (_includedItems.isEmpty && !_addingIncluded)
+                  _emptyNote('No items yet.'),
+                if (_addingIncluded)
+                  _buildInlineItemInput(
+                    ctrl: _newIncludedCtrl,
+                    onAdd: () {
+                      final v = _newIncludedCtrl.text.trim();
+                      if (v.isNotEmpty) {
+                        setState(() {
+                          _includedItems.add(v);
+                          _newIncludedCtrl.clear();
+                          _addingIncluded = false;
+                        });
+                      }
+                    },
+                    onCancel: () => setState(() {
+                      _addingIncluded = false;
+                      _newIncludedCtrl.clear();
+                    }),
+                  )
+                else
+                  _buildAddLink(
+                    '+ Add included item',
+                    () => setState(() => _addingIncluded = true),
+                  ),
+
+                const SizedBox(height: 20),
+
+                _buildAccentSection(
+                  icon: Icons.cancel_outlined,
+                  title: "What's Excluded",
+                  color: const Color(0xFFF44336),
+                ),
+                const SizedBox(height: 8),
+                ..._excludedItems.asMap().entries.map((entry) => _buildItemRow(
+                      entry.value,
+                      () => setState(() => _excludedItems.removeAt(entry.key)),
+                    )),
+                if (_excludedItems.isEmpty && !_addingExcluded)
+                  _emptyNote('No items yet.'),
+                if (_addingExcluded)
+                  _buildInlineItemInput(
+                    ctrl: _newExcludedCtrl,
+                    onAdd: () {
+                      final v = _newExcludedCtrl.text.trim();
+                      if (v.isNotEmpty) {
+                        setState(() {
+                          _excludedItems.add(v);
+                          _newExcludedCtrl.clear();
+                          _addingExcluded = false;
+                        });
+                      }
+                    },
+                    onCancel: () => setState(() {
+                      _addingExcluded = false;
+                      _newExcludedCtrl.clear();
+                    }),
+                  )
+                else
+                  _buildAddLink(
+                    '+ Add excluded item',
+                    () => setState(() => _addingExcluded = true),
+                  ),
               ],
             ],
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildAccentSection({
+    required IconData icon,
+    required String title,
+    required Color color,
+  }) {
+    return Container(
+      decoration: BoxDecoration(
+        border: Border(left: BorderSide(color: color, width: 3)),
+      ),
+      padding: const EdgeInsets.only(left: 10),
+      child: Row(
+        children: [
+          Icon(icon, size: 16, color: color),
+          const SizedBox(width: 6),
+          Text(
+            title,
+            style: const TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: AppColors.textPrimary),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildItemRow(String text, VoidCallback onRemove) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Row(
+        children: [
+          const Icon(Icons.drag_indicator_rounded,
+              size: 16, color: AppColors.textSecondary),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text(text,
+                style: const TextStyle(
+                    fontSize: 13, color: AppColors.textPrimary)),
+          ),
+          GestureDetector(
+            onTap: onRemove,
+            child: const Icon(Icons.close_rounded,
+                size: 16, color: AppColors.error),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInlineItemInput({
+    required TextEditingController ctrl,
+    required VoidCallback onAdd,
+    required VoidCallback onCancel,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Row(
+        children: [
+          Expanded(
+            child: TextField(
+              controller: ctrl,
+              autofocus: true,
+              decoration: InputDecoration(
+                hintText: 'Enter item...',
+                isDense: true,
+                contentPadding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide:
+                      const BorderSide(color: AppColors.border, width: 0.8),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide:
+                      const BorderSide(color: AppColors.border, width: 0.8),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          TextButton(onPressed: onAdd, child: const Text('Add')),
+          TextButton(onPressed: onCancel, child: const Text('Cancel')),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAddLink(String label, VoidCallback onTap) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.only(top: 4),
+        child: Text(
+          label,
+          style: const TextStyle(
+              fontSize: 13,
+              color: AppColors.primary,
+              fontWeight: FontWeight.w500),
+        ),
+      ),
+    );
+  }
+
+  Widget _emptyNote(String text) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Text(text,
+          style: const TextStyle(
+              fontSize: 12, color: AppColors.textSecondary)),
     );
   }
 
