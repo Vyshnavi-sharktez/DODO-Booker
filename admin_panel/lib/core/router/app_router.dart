@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -35,6 +34,8 @@ import '../../features/surge_fees/presentation/pages/surge_fee_settings_page.dar
 import '../../features/seo/presentation/pages/seo_management_page.dart';
 import '../../features/landing_page_cms/presentation/pages/landing_page_cms_page.dart';
 import '../../features/payment_config/presentation/pages/payment_config_page.dart';
+import '../../features/whatsapp_config/presentation/pages/whatsapp_config_page.dart';
+import '../../features/sms_config/presentation/pages/sms_config_page.dart';
 import '../../features/push_config/presentation/pages/push_config_page.dart';
 import '../../features/vendor_subscriptions/presentation/pages/vendor_subscriptions_page.dart';
 import '../../features/vendor_tiers/presentation/pages/vendor_tiers_page.dart';
@@ -52,24 +53,10 @@ import '../../features/refunds/presentation/pages/refund_requests_page.dart';
 import '../../features/support/presentation/pages/support_inbox_page.dart';
 import '../../features/availability_blocks/presentation/pages/availability_blocks_page.dart';
 import '../../features/broadcast_notifications/presentation/pages/broadcast_notifications_page.dart';
+import '../../features/bookings/presentation/pages/restore_bin_page.dart';
+import '../../features/service_addons/presentation/pages/addons_page.dart';
 import '../../shared/pages/unauthorized_page.dart';
 import '../rbac/permission_guard.dart';
-
-// ── Router refresh listenable that reacts to Supabase auth events ─────────────
-
-class _GoRouterRefreshStream extends ChangeNotifier {
-  _GoRouterRefreshStream(Stream<dynamic> stream) {
-    notifyListeners();
-    _sub = stream.asBroadcastStream().listen((_) => notifyListeners());
-  }
-  late final StreamSubscription<dynamic> _sub;
-
-  @override
-  void dispose() {
-    _sub.cancel();
-    super.dispose();
-  }
-}
 
 // ── Router notifier — owns redirect logic ─────────────────────────────────────
 
@@ -103,7 +90,16 @@ class RouterNotifier extends ChangeNotifier {
     final bool isOnResetPage = location == '/reset-password';
 
     if (!isLoggedIn && !isOnLoginPage && !isOnResetPage) return '/login';
-    if (isLoggedIn && isOnLoginPage) return '/dashboard';
+
+    if (isLoggedIn && isOnLoginPage) {
+      final adminAsync = _ref.read(adminUserProvider);
+      // Admin user check still in flight — hold on login page until resolved.
+      if (adminAsync.isLoading) return null;
+      // Resolved to null: inactive admin (signOut already fired) or unknown.
+      // Stay on login so AuthNotifier's error message is visible.
+      if (adminAsync.valueOrNull == null) return null;
+      return '/dashboard';
+    }
     // Never redirect away from /reset-password (recovery session is active).
 
     // Permission check for protected routes (skip for dashboard and unauthorized).
@@ -421,10 +417,24 @@ final routerProvider = Provider<GoRouter>((ref) {
             ),
           ),
           GoRoute(
+            path: '/dashboard/whatsapp-config',
+            name: 'whatsappConfig',
+            pageBuilder: (context, state) => const NoTransitionPage(
+              child: WhatsappConfigPage(),
+            ),
+          ),
+          GoRoute(
             path: '/dashboard/push-config',
             name: 'pushConfig',
             pageBuilder: (context, state) => const NoTransitionPage(
               child: PushConfigPage(),
+            ),
+          ),
+          GoRoute(
+            path: '/dashboard/sms-config',
+            name: 'smsConfig',
+            pageBuilder: (context, state) => const NoTransitionPage(
+              child: SmsConfigPage(),
             ),
           ),
           GoRoute(
@@ -439,6 +449,13 @@ final routerProvider = Provider<GoRouter>((ref) {
             name: 'vendorTiers',
             pageBuilder: (context, state) => const NoTransitionPage(
               child: VendorTiersPage(),
+            ),
+          ),
+          GoRoute(
+            path: '/dashboard/addons',
+            name: 'addons',
+            pageBuilder: (context, state) => const NoTransitionPage(
+              child: AddonsPage(),
             ),
           ),
           GoRoute(
@@ -495,6 +512,13 @@ final routerProvider = Provider<GoRouter>((ref) {
             name: 'broadcastNotifications',
             pageBuilder: (context, state) => const NoTransitionPage(
               child: BroadcastNotificationsPage(),
+            ),
+          ),
+          GoRoute(
+            path: '/dashboard/restore-bin',
+            name: 'restoreBin',
+            pageBuilder: (context, state) => const NoTransitionPage(
+              child: RestoreBinPage(),
             ),
           ),
         ],

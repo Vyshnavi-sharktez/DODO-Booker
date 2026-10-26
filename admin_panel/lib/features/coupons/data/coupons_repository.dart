@@ -9,7 +9,7 @@ class CouponsRepository {
   Future<List<Coupon>> fetchCoupons() async {
     final data = await _supabase
         .from('coupons')
-        .select()
+        .select('*, coupon_customer_restrictions(customer_id)')
         .order('created_at', ascending: false);
     return (data as List<dynamic>)
         .map((r) => Coupon.fromMap(r as Map<String, dynamic>))
@@ -29,6 +29,9 @@ class CouponsRepository {
     required bool isActive,
     required String applicabilityType,
     required List<String> applicableNodeIds,
+    required String customerEligibility,
+    required List<String> selectedCustomerIds,
+    int? maxOrderWiseLimit,
   }) async {
     final data = await _supabase
         .from('coupons')
@@ -45,10 +48,19 @@ class CouponsRepository {
           'is_active': isActive,
           'applicability_type': applicabilityType,
           'applicable_node_ids': applicableNodeIds,
+          'customer_eligibility': customerEligibility,
+          'max_order_wise_limit': maxOrderWiseLimit,
         })
         .select()
         .single();
-    return Coupon.fromMap(data);
+    final couponId = data['id'] as String;
+    await _syncCustomerRestrictions(couponId, selectedCustomerIds);
+    return Coupon.fromMap({
+      ...data,
+      'coupon_customer_restrictions': selectedCustomerIds
+          .map((id) => {'customer_id': id})
+          .toList(),
+    });
   }
 
   Future<Coupon> updateCoupon(
@@ -65,6 +77,9 @@ class CouponsRepository {
     required bool isActive,
     required String applicabilityType,
     required List<String> applicableNodeIds,
+    required String customerEligibility,
+    required List<String> selectedCustomerIds,
+    int? maxOrderWiseLimit,
   }) async {
     final data = await _supabase
         .from('coupons')
@@ -81,11 +96,36 @@ class CouponsRepository {
           'is_active': isActive,
           'applicability_type': applicabilityType,
           'applicable_node_ids': applicableNodeIds,
+          'customer_eligibility': customerEligibility,
+          'max_order_wise_limit': maxOrderWiseLimit,
         })
         .eq('id', id)
         .select()
         .single();
-    return Coupon.fromMap(data);
+    await _syncCustomerRestrictions(id, selectedCustomerIds);
+    return Coupon.fromMap({
+      ...data,
+      'coupon_customer_restrictions': selectedCustomerIds
+          .map((cid) => {'customer_id': cid})
+          .toList(),
+    });
+  }
+
+  // Replace all customer restrictions for a coupon with the given list.
+  Future<void> _syncCustomerRestrictions(
+      String couponId, List<String> customerIds) async {
+    await _supabase
+        .from('coupon_customer_restrictions')
+        .delete()
+        .eq('coupon_id', couponId);
+    if (customerIds.isNotEmpty) {
+      await _supabase.from('coupon_customer_restrictions').insert(
+        customerIds.map((cid) => {
+          'coupon_id': couponId,
+          'customer_id': cid,
+        }).toList(),
+      );
+    }
   }
 
   Future<void> deleteCoupon(String id) async {

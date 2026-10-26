@@ -7,6 +7,29 @@ import '../../../bookings/application/providers/bookings_providers.dart';
 import '../../../bookings/domain/models/booking.dart';
 import '../../../bookings/presentation/widgets/booking_assignment_dialog.dart';
 
+// ── Shared helpers ────────────────────────────────────────────────────────────
+
+Future<void> _showAmcErrorDialog(
+  BuildContext context,
+  String title,
+  String message,
+) {
+  return showDialog<void>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      title: Text(title),
+      content: Text(message),
+      actions: [
+        FilledButton(
+          onPressed: () => Navigator.of(ctx).pop(),
+          child: const Text('OK'),
+        ),
+      ],
+    ),
+  );
+}
+
 // ── Date helpers ──────────────────────────────────────────────────────────────
 
 const _kMonths = [
@@ -1641,12 +1664,7 @@ class _CancellationRequestCardState
     } catch (e) {
       if (mounted) {
         setState(() => _approving = false);
-        messenger.showSnackBar(
-          SnackBar(
-            content: Text('Failed to approve: $e'),
-            backgroundColor: AppColors.error,
-          ),
-        );
+        _showAmcErrorDialog(context, 'Approval Failed', 'Failed to approve: $e');
       }
     }
   }
@@ -1749,12 +1767,7 @@ class _CancellationRequestCardState
     } catch (e) {
       if (mounted) {
         setState(() => _rejecting = false);
-        messenger.showSnackBar(
-          SnackBar(
-            content: Text('Failed to reject: $e'),
-            backgroundColor: AppColors.error,
-          ),
-        );
+        _showAmcErrorDialog(context, 'Rejection Failed', 'Failed to reject: $e');
       }
     }
   }
@@ -2095,12 +2108,7 @@ class _PauseRequestCardState extends ConsumerState<_PauseRequestCard> {
     } catch (e) {
       if (mounted) {
         setState(() => _approving = false);
-        messenger.showSnackBar(
-          SnackBar(
-            content: Text('Failed to approve: $e'),
-            backgroundColor: AppColors.error,
-          ),
-        );
+        _showAmcErrorDialog(context, 'Approval Failed', 'Failed to approve: $e');
       }
     }
   }
@@ -2171,12 +2179,7 @@ class _PauseRequestCardState extends ConsumerState<_PauseRequestCard> {
     } catch (e) {
       if (mounted) {
         setState(() => _rejecting = false);
-        messenger.showSnackBar(
-          SnackBar(
-            content: Text('Failed to reject: $e'),
-            backgroundColor: AppColors.error,
-          ),
-        );
+        _showAmcErrorDialog(context, 'Rejection Failed', 'Failed to reject: $e');
       }
     }
   }
@@ -2497,12 +2500,7 @@ class _ResumeRequestCardState extends ConsumerState<_ResumeRequestCard> {
     } catch (e) {
       if (mounted) {
         setState(() => _approving = false);
-        messenger.showSnackBar(
-          SnackBar(
-            content: Text('Failed to approve: $e'),
-            backgroundColor: AppColors.error,
-          ),
-        );
+        _showAmcErrorDialog(context, 'Approval Failed', 'Failed to approve: $e');
       }
     }
   }
@@ -2573,12 +2571,7 @@ class _ResumeRequestCardState extends ConsumerState<_ResumeRequestCard> {
     } catch (e) {
       if (mounted) {
         setState(() => _rejecting = false);
-        messenger.showSnackBar(
-          SnackBar(
-            content: Text('Failed to reject: $e'),
-            backgroundColor: AppColors.error,
-          ),
-        );
+        _showAmcErrorDialog(context, 'Rejection Failed', 'Failed to reject: $e');
       }
     }
   }
@@ -2783,12 +2776,7 @@ class _RequestCardState extends ConsumerState<_RequestCard> {
       if (mounted) widget.onRefresh();
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to reject: $e'),
-            backgroundColor: AppColors.error,
-          ),
-        );
+        _showAmcErrorDialog(context, 'Rejection Failed', 'Failed to reject: $e');
         setState(() => _rejecting = false);
       }
     }
@@ -2812,13 +2800,10 @@ class _RequestCardState extends ConsumerState<_RequestCard> {
       if (contractStatus == 'paused') {
         if (mounted) {
           setState(() => _approving = false);
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text(
-                'Cannot schedule: this AMC membership is currently paused.',
-              ),
-              backgroundColor: AppColors.error,
-            ),
+          _showAmcErrorDialog(
+            context,
+            'Cannot Schedule',
+            'This AMC membership is currently paused. Approve the resume request first.',
           );
         }
         return;
@@ -2826,13 +2811,10 @@ class _RequestCardState extends ConsumerState<_RequestCard> {
       if (isExpired) {
         if (mounted) {
           setState(() => _approving = false);
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text(
-                'Cannot schedule: this AMC contract has expired.',
-              ),
-              backgroundColor: AppColors.error,
-            ),
+          _showAmcErrorDialog(
+            context,
+            'Cannot Schedule',
+            'This AMC contract has expired.',
           );
         }
         return;
@@ -2850,13 +2832,10 @@ class _RequestCardState extends ConsumerState<_RequestCard> {
       setState(() => _approving = false);
 
       if ((rows as List).isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              'No unscheduled visit found. '
-              'The visit may already have a date assigned.',
-            ),
-          ),
+        _showAmcErrorDialog(
+          context,
+          'No Visit Available',
+          'No unscheduled visit found. The visit may already have a date assigned.',
         );
         return;
       }
@@ -2902,12 +2881,7 @@ class _RequestCardState extends ConsumerState<_RequestCard> {
     } catch (e) {
       if (mounted) {
         setState(() => _approving = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error: $e'),
-            backgroundColor: AppColors.error,
-          ),
-        );
+        _showAmcErrorDialog(context, 'Error', '$e');
       }
     }
   }
@@ -3355,12 +3329,7 @@ class _AmcRequestDetailDialogState
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to reject: $e'),
-            backgroundColor: AppColors.error,
-          ),
-        );
+        _showAmcErrorDialog(context, 'Rejection Failed', 'Failed to reject: $e');
         setState(() => _rejecting = false);
       }
     }
@@ -3384,13 +3353,10 @@ class _AmcRequestDetailDialogState
       if (contractStatus == 'paused') {
         if (mounted) {
           setState(() => _approving = false);
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text(
-                'Cannot schedule: this AMC membership is currently paused.',
-              ),
-              backgroundColor: AppColors.error,
-            ),
+          _showAmcErrorDialog(
+            context,
+            'Cannot Schedule',
+            'This AMC membership is currently paused. Approve the resume request first.',
           );
         }
         return;
@@ -3398,13 +3364,10 @@ class _AmcRequestDetailDialogState
       if (isExpired) {
         if (mounted) {
           setState(() => _approving = false);
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text(
-                'Cannot schedule: this AMC contract has expired.',
-              ),
-              backgroundColor: AppColors.error,
-            ),
+          _showAmcErrorDialog(
+            context,
+            'Cannot Schedule',
+            'This AMC contract has expired.',
           );
         }
         return;
@@ -3422,13 +3385,10 @@ class _AmcRequestDetailDialogState
       setState(() => _approving = false);
 
       if ((rows as List).isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              'No unscheduled visit found. '
-              'The visit may already have a date assigned.',
-            ),
-          ),
+        _showAmcErrorDialog(
+          context,
+          'No Visit Available',
+          'No unscheduled visit found. The visit may already have a date assigned.',
         );
         return;
       }
@@ -3474,12 +3434,7 @@ class _AmcRequestDetailDialogState
     } catch (e) {
       if (mounted) {
         setState(() => _approving = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error: $e'),
-            backgroundColor: AppColors.error,
-          ),
-        );
+        _showAmcErrorDialog(context, 'Error', '$e');
       }
     }
   }

@@ -8,37 +8,41 @@ class AuthRemoteDatasource {
   static const _phoneKey = 'dodo_vendor_phone';
 
   // ── Phone check ──────────────────────────────────────────────────────────────
-  // Validates that the phone is registered in vendor_dev_auth.
-  // OTP is pre-seeded in the table — no SMS is sent.
+  // Sends an OTP to any valid mobile number via Supabase Auth phone OTP (MSG91).
 
   Future<void> checkPhone(String phone) async {
-    final row = await _client
-        .from('vendor_dev_auth')
-        .select('phone')
-        .eq('phone', phone)
-        .maybeSingle();
-
-    if (row == null) throw Exception('This number is not registered as a vendor.');
+    await _client.auth.signInWithOtp(phone: phone, shouldCreateUser: true);
   }
 
   // ── OTP verification ─────────────────────────────────────────────────────────
-  // Matches phone + otp against vendor_dev_auth row.
+  // Verifies the OTP via Supabase Auth. Throws AuthException on failure.
 
   Future<void> verifyOtp({
     required String phone,
     required String otp,
   }) async {
-    final row = await _client
-        .from('vendor_dev_auth')
-        .select('phone')
-        .eq('phone', phone)
-        .eq('otp', otp)
-        .maybeSingle();
-    if (row == null) throw Exception('Invalid OTP. Please try again.');
+    await _client.auth.verifyOTP(
+      phone: phone,
+      token: otp,
+      type: OtpType.sms,
+    );
+  }
+
+  // ── Vendor record management ─────────────────────────────────────────────────
+
+  /// Links the current auth user to an existing vendor row, or creates a new
+  /// minimal vendor record if no row exists for [phone].
+  /// Returns the vendor UUID (existing or newly created).
+  /// Throws if the caller is not authenticated.
+  Future<String> ensureVendorCreated(String phone) async {
+    final result = await _client.rpc(
+      'ensure_vendor_created',
+      params: {'p_phone': phone},
+    );
+    return result as String;
   }
 
   // ── Vendor profile ───────────────────────────────────────────────────────────
-  // Fetches the vendor row from the vendors table by phone.
 
   Future<Map<String, dynamic>?> getVendorByPhone(String phone) async {
     final rows = await _client
@@ -49,7 +53,6 @@ class AuthRemoteDatasource {
     return rows.isEmpty ? null : rows.first;
   }
 
-  /// Checks if the phone belongs to a DODO Team (supervisor phone).
   Future<Map<String, dynamic>?> getDodoTeamByPhone(String phone) async {
     final rows = await _client
         .from('dodo_teams')
@@ -60,7 +63,6 @@ class AuthRemoteDatasource {
   }
 
   // ── Session ──────────────────────────────────────────────────────────────────
-  // Session = phone number stored in SharedPreferences (mirrors Customer App).
 
   Future<String?> getSavedPhone() async {
     final prefs = await SharedPreferences.getInstance();
@@ -75,5 +77,8 @@ class AuthRemoteDatasource {
   Future<void> clearSession() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_phoneKey);
+    try {
+      await _client.auth.signOut();
+    } catch (_) {}
   }
 }

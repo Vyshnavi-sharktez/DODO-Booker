@@ -12,6 +12,7 @@ class CustomerSearchRepository {
 
   static const _select = '''
     id,
+    customer_number,
     full_name,
     phone,
     email,
@@ -46,6 +47,7 @@ class CustomerSearchRepository {
     }
 
     add(map['id'] as String?);
+    add(map['customer_number'] as String?);
     add(map['full_name'] as String?);
     add(map['phone'] as String?);
     add(map['email'] as String?);

@@ -51,7 +51,7 @@ const _statusConfig = <String, (String, Color, Color)>{
   'assigned':               ('Assigned',                       Color(0xFF3182CE), Color(0xFFEBF8FF)),
   'assigned_to_dodo_team':  ('DODO Assigned',                  Color(0xFF6B46C1), Color(0xFFF3E8FF)),
   'no_vendor_accepted':     ('No Vendor Accepted',             Color(0xFFE53E3E), Color(0xFFFFF5F5)),
-  'accepted':               ('Accepted',                       Color(0xFF2C7A7B), Color(0xFFE6FFFA)),
+  'accepted':               ('Accepted',                       Color(0xFF0369A1), Color(0xFFE0F2FE)),
   'on_the_way':             ('On The Way',                     Color(0xFF4A6FA5), Color(0xFFEBF4FF)),
   'arrived':                ('Arrived',                        Color(0xFF6B46C1), Color(0xFFF3E8FF)),
   'in_progress':            ('In Progress',                    Color(0xFF805AD5), Color(0xFFFAF5FF)),
@@ -235,9 +235,8 @@ class _BookingsPageState extends ConsumerState<BookingsPage> {
     final vendors = ref.read(vendorsNotifierProvider).valueOrNull ?? [];
     final match = vendors.where((v) => v.id == vendorId);
     if (match.isEmpty) {
-      return vendorId.length > 8
-          ? '${vendorId.substring(0, 8)}…'
-          : vendorId;
+      debugPrint('[Bookings] vendor not found in list (may be deleted)');
+      return 'Unknown Vendor';
     }
     return match.first.businessName;
   }
@@ -427,6 +426,7 @@ class _BookingsPageState extends ConsumerState<BookingsPage> {
         onAssign: _assignableStatuses.contains(booking.status)
             ? () => _openAssignDialog(booking)
             : null,
+        allowAssign: _assignableStatuses.contains(booking.status),
       ),
     );
   }
@@ -686,10 +686,13 @@ class _BookingsPageState extends ConsumerState<BookingsPage> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
+        showDialog<void>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            title: const Text('Approval Failed'),
             content: Text('Failed to approve cancellation: $e'),
-            backgroundColor: AppColors.error,
+            actions: [FilledButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('OK'))],
           ),
         );
       }
@@ -755,10 +758,13 @@ class _BookingsPageState extends ConsumerState<BookingsPage> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
+        showDialog<void>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            title: const Text('Rejection Failed'),
             content: Text('Failed to reject: $e'),
-            backgroundColor: AppColors.error,
+            actions: [FilledButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('OK'))],
           ),
         );
       }
@@ -846,10 +852,13 @@ class _BookingsPageState extends ConsumerState<BookingsPage> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Cancel failed: $e'),
-            backgroundColor: AppColors.error,
+        showDialog<void>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            title: const Text('Cancel Failed'),
+            content: Text('Failed to cancel booking: $e'),
+            actions: [FilledButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('OK'))],
           ),
         );
       }
@@ -912,10 +921,13 @@ class _BookingsPageState extends ConsumerState<BookingsPage> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
+        showDialog<void>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            title: const Text('Service Start Failed'),
             content: Text('Failed to start service: $e'),
-            backgroundColor: AppColors.error,
+            actions: [FilledButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('OK'))],
           ),
         );
       }
@@ -930,8 +942,8 @@ class _BookingsPageState extends ConsumerState<BookingsPage> {
             RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         title: const Text('Delete Booking'),
         content: Text(
-          'Are you sure you want to delete booking '
-          '"${booking.bookingNumber}"?\n\nThis action cannot be undone.',
+          'Delete booking "${booking.bookingNumber}"?\n\n'
+          'It will be moved to the Restore Bin and can be recovered from there.',
         ),
         actions: [
           TextButton(
@@ -959,10 +971,13 @@ class _BookingsPageState extends ConsumerState<BookingsPage> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Delete failed: $e'),
-            backgroundColor: AppColors.error,
+        showDialog<void>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            title: const Text('Delete Failed'),
+            content: Text('Failed to delete booking: $e'),
+            actions: [FilledButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('OK'))],
           ),
         );
       }
@@ -1881,7 +1896,8 @@ class _BookingRow extends StatelessWidget {
                     tooltip: booking.isUnassigned ? 'Assign' : 'Reassign',
                     visualDensity: VisualDensity.compact,
                   ),
-                if (booking.dispatchStatus != 'idle')
+                if (const {'dispatching', 'accepted', 'exhausted'}
+                    .contains(booking.dispatchStatus))
                   IconButton(
                     onPressed: onHistory,
                     icon: Icon(Icons.history_rounded,
@@ -1992,9 +2008,7 @@ class _AssignedToCell extends StatelessWidget {
     // External Vendor
     final vendor = vendors.where((v) => v.id == vendorId).firstOrNull;
     final resolvedName = vendor?.businessName ??
-        (vendorName.isNotEmpty
-            ? vendorName
-            : (vendorId.length > 8 ? '${vendorId.substring(0, 8)}…' : vendorId));
+        (vendorName.isNotEmpty ? vendorName : 'Unknown Vendor');
 
     return Row(
       mainAxisSize: MainAxisSize.min,
@@ -2153,40 +2167,32 @@ class _StatusBadge extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
               decoration: BoxDecoration(
                 color: booking.status == 'completed'
-                    ? (booking.codConfirmedAt == null
-                        ? const Color(0xFFFEEBC8)
-                        : (booking.codCashCollected == true
-                            ? const Color(0xFFF0FFF4)
-                            : const Color(0xFFFFF5F5)))
+                    ? (booking.codCashCollected == true
+                        ? const Color(0xFFF0FFF4)
+                        : const Color(0xFFFEEBC8))
                     : const Color(0xFFEDF2F7),
                 borderRadius: BorderRadius.circular(4),
                 border: Border.all(
                   color: booking.status == 'completed'
-                      ? (booking.codConfirmedAt == null
-                          ? const Color(0xFFFBD38D)
-                          : (booking.codCashCollected == true
-                              ? const Color(0xFFC6F6D5)
-                              : const Color(0xFFFEB2B2)))
+                      ? (booking.codCashCollected == true
+                          ? const Color(0xFFC6F6D5)
+                          : const Color(0xFFFBD38D))
                       : const Color(0xFFCBD5E0),
                 ),
               ),
               child: Text(
                 booking.status == 'completed'
-                    ? (booking.codConfirmedAt == null
-                        ? 'COD: Pending'
-                        : (booking.codCashCollected == true
-                            ? 'COD: Cash Collected'
-                            : 'COD: Not Collected'))
+                    ? (booking.codCashCollected == true
+                        ? 'COD: Cash Collected'
+                        : 'COD: Pending')
                     : 'COD',
                 style: TextStyle(
                   fontSize: 9,
                   fontWeight: FontWeight.bold,
                   color: booking.status == 'completed'
-                      ? (booking.codConfirmedAt == null
-                          ? const Color(0xFFC05621)
-                          : (booking.codCashCollected == true
-                              ? const Color(0xFF2F855A)
-                              : const Color(0xFFC53030)))
+                      ? (booking.codCashCollected == true
+                          ? const Color(0xFF2F855A)
+                          : const Color(0xFFC05621))
                       : const Color(0xFF4A5568),
                 ),
               ),
@@ -2225,7 +2231,6 @@ class _Cell extends StatelessWidget {
   final String text;
   final double width;
   final bool header;
-  final bool bold;
   final TextAlign align;
   final EdgeInsets padding;
 
@@ -2233,7 +2238,6 @@ class _Cell extends StatelessWidget {
     this.text, {
     required this.width,
     this.header = false,
-    this.bold = false,
     this.align = TextAlign.left,
     this.padding = EdgeInsets.zero,
   });
@@ -2250,7 +2254,7 @@ class _Cell extends StatelessWidget {
         : TextStyle(
             fontSize: 13,
             color: AppColors.textPrimary,
-            fontWeight: bold ? FontWeight.w600 : FontWeight.w400,
+            fontWeight: FontWeight.w400,
           );
 
     return SizedBox(

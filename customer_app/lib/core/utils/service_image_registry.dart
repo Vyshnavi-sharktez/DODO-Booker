@@ -1,8 +1,6 @@
 /// Curated Unsplash fallback image URLs for service categories.
-/// Priority order when resolving a service card image:
-///   1. service.imageUrl  (from DB, set in admin panel)
-///   2. ServiceImageRegistry.fallbackUrl(categoryName)  (keyword match)
-///   3. errorBuilder icon gradient  (if network fails)
+/// resolve / resolveMobile return null when no imageUrl is set in the DB —
+/// callers must show their own placeholder widget in that case.
 class ServiceImageRegistry {
   const ServiceImageRegistry._();
 
@@ -134,16 +132,15 @@ class ServiceImageRegistry {
     return _build(_default);
   }
 
-  /// Returns [imageUrl] if non-null and non-empty, otherwise the
-  /// category-based Unsplash fallback.
-  static String resolve(String? imageUrl, String? categoryName) {
+  /// Returns [imageUrl] if non-null and non-empty, otherwise null.
+  static String? resolve(String? imageUrl, String? categoryName) {
     if (imageUrl != null && imageUrl.isNotEmpty) return imageUrl;
-    return fallbackUrl(categoryName);
+    return null;
   }
 
   /// Mobile-aware resolution: uses [mobileImageUrl] when set,
-  /// falls back to [webImageUrl], then the keyword-based Unsplash fallback.
-  static String resolveMobile(
+  /// falls back to [webImageUrl], then null.
+  static String? resolveMobile(
     String? mobileImageUrl,
     String? webImageUrl,
     String? categoryName,

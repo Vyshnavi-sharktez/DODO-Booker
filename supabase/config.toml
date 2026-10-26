@@ -38,3 +38,27 @@ enabled = true
 verify_jwt = true
 import_map = "./functions/process-razorpay-refund/deno.json"
 entrypoint = "./functions/process-razorpay-refund/index.ts"
+
+[functions.create-admin-user]
+enabled = true
+verify_jwt = false
+import_map = "./functions/create-admin-user/deno.json"
+entrypoint = "./functions/create-admin-user/index.ts"
+
+[functions.whatsapp-test-message]
+enabled = true
+verify_jwt = false
+import_map = "./functions/whatsapp-test-message/deno.json"
+entrypoint = "./functions/whatsapp-test-message/index.ts"
+
+[functions.send-sms]
+enabled = true
+verify_jwt = false
+import_map = "./functions/send-sms/deno.json"
+entrypoint = "./functions/send-sms/index.ts"
+
+[functions.sms-test-message]
+enabled = true
+verify_jwt = false
+import_map = "./functions/sms-test-message/deno.json"
+entrypoint = "./functions/sms-test-message/index.ts"

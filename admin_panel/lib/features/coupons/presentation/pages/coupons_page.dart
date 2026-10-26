@@ -14,7 +14,7 @@ import '../widgets/coupon_form_dialog.dart';
 
 // Minimum table width: sum of all column SizedBox widths (1113) + row horizontal
 // padding (16×2 = 32) = 1145. A small buffer gives 1150.
-const _kMinTableWidth = 1150.0;
+const _kMinTableWidth = 1240.0;
 
 const _discountTypeConfig = <String, (String, Color)>{
   'percentage': ('% Off', Color(0xFF805AD5)),
@@ -88,6 +88,9 @@ class _CouponsPageState extends ConsumerState<CouponsPage> {
           required isActive,
           required applicabilityType,
           required applicableNodeIds,
+          required customerEligibility,
+          required selectedCustomerIds,
+          maxOrderWiseLimit,
         }) async {
           await ref.read(couponsNotifierProvider.notifier).createCoupon(
                 code: code,
@@ -102,6 +105,9 @@ class _CouponsPageState extends ConsumerState<CouponsPage> {
                 isActive: isActive,
                 applicabilityType: applicabilityType,
                 applicableNodeIds: applicableNodeIds,
+                customerEligibility: customerEligibility,
+                selectedCustomerIds: selectedCustomerIds,
+                maxOrderWiseLimit: maxOrderWiseLimit,
               );
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
@@ -132,6 +138,9 @@ class _CouponsPageState extends ConsumerState<CouponsPage> {
           required isActive,
           required applicabilityType,
           required applicableNodeIds,
+          required customerEligibility,
+          required selectedCustomerIds,
+          maxOrderWiseLimit,
         }) async {
           await ref.read(couponsNotifierProvider.notifier).updateCoupon(
                 coupon.id,
@@ -147,6 +156,9 @@ class _CouponsPageState extends ConsumerState<CouponsPage> {
                 isActive: isActive,
                 applicabilityType: applicabilityType,
                 applicableNodeIds: applicableNodeIds,
+                customerEligibility: customerEligibility,
+                selectedCustomerIds: selectedCustomerIds,
+                maxOrderWiseLimit: maxOrderWiseLimit,
               );
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
@@ -603,6 +615,7 @@ class _TableHeader extends StatelessWidget {
           _HCell('Used', width: 55, align: TextAlign.right),
           _HCell('Valid From', width: 100),
           _HCell('Valid To', width: 100),
+          _HCell('Customers', width: 90),
           _HCell('Status', width: 100),
           _HCell('Actions', width: 148, align: TextAlign.center),
         ],
@@ -804,6 +817,18 @@ class _CouponRow extends StatelessWidget {
             ),
           ),
 
+          // Customers eligibility
+          SizedBox(
+            width: 90,
+            child: coupon.customerEligibility == 'selected'
+                ? _EligibilityBadge(count: coupon.selectedCustomerIds.length)
+                : Text(
+                    'Max Order Wise',
+                    style: TextStyle(
+                        fontSize: 12, color: AppColors.textSecondary),
+                  ),
+          ),
+
           // Status
           SizedBox(
             width: 100,
@@ -844,6 +869,36 @@ class _CouponRow extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+// ── Eligibility badge ─────────────────────────────────────────────────────────
+
+class _EligibilityBadge extends StatelessWidget {
+  final int count;
+  const _EligibilityBadge({required this.count});
+
+  @override
+  Widget build(BuildContext context) {
+    return FittedBox(
+      fit: BoxFit.scaleDown,
+      alignment: Alignment.centerLeft,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+        decoration: BoxDecoration(
+          color: const Color(0xFF3182CE).withValues(alpha: 0.1),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Text(
+          '$count selected',
+          style: const TextStyle(
+            fontSize: 11,
+            color: Color(0xFF3182CE),
+            fontWeight: FontWeight.w600,
+          ),
+        ),
       ),
     );
   }

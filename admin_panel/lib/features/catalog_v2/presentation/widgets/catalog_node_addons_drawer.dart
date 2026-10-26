@@ -70,6 +70,7 @@ class _CatalogNodeAddonsDrawerState
           String? description,
           required price,
           required isActive,
+          bool isGlobal = false,
           String discountType = 'percentage',
           double discountValue = 0,
         }) async {
@@ -78,10 +79,13 @@ class _CatalogNodeAddonsDrawerState
             description: description,
             price: price,
             isActive: isActive,
+            isGlobal: isGlobal,
             discountType: discountType,
             discountValue: discountValue,
           );
-          await _repo.assignAddon(widget.nodeId, newAddon.id);
+          if (!isGlobal) {
+            await _repo.assignAddon(widget.nodeId, newAddon.id);
+          }
           ref.invalidate(allAddonsNotifierProvider);
           await _load();
         },
@@ -95,7 +99,10 @@ class _CatalogNodeAddonsDrawerState
     final allAsync = ref.read(allAddonsNotifierProvider);
     final all = allAsync.valueOrNull ?? [];
     final assignedIds = _ownAddons.map((a) => a.id).toSet();
-    final available = all.where((a) => !assignedIds.contains(a.id)).toList();
+    // Exclude global addons — they already apply everywhere without assignment.
+    final available = all
+        .where((a) => !assignedIds.contains(a.id) && !a.isGlobal)
+        .toList();
 
     if (available.isEmpty) {
       _showSnack('All add-ons are already assigned to this node.');
@@ -136,6 +143,7 @@ class _CatalogNodeAddonsDrawerState
           String? description,
           required price,
           required isActive,
+          bool isGlobal = false,
           String discountType = 'percentage',
           double discountValue = 0,
         }) async {
@@ -145,6 +153,7 @@ class _CatalogNodeAddonsDrawerState
             description: description,
             price: price,
             isActive: isActive,
+            isGlobal: isGlobal,
             discountType: discountType,
             discountValue: discountValue,
           );

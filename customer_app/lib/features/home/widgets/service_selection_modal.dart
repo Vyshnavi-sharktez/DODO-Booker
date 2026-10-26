@@ -310,16 +310,18 @@ class _ServiceTileState extends State<_ServiceTile> {
                 child: SizedBox(
                   width: 72,
                   height: 72,
-                  child: Image.network(
-                    imgUrl,
-                    fit: BoxFit.cover,
-                    loadingBuilder: (_, child, p) =>
-                        p == null
-                            ? child
-                            : const ColoredBox(color: Color(0xFFEEEEEE)),
-                    errorBuilder: (context, error, stack) =>
-                        _ThumbnailFallback(name: widget.sub.name),
-                  ),
+                  child: imgUrl != null
+                      ? Image.network(
+                          imgUrl,
+                          fit: BoxFit.cover,
+                          loadingBuilder: (_, child, p) =>
+                              p == null
+                                  ? child
+                                  : const ColoredBox(color: Color(0xFFEEEEEE)),
+                          errorBuilder: (context, error, stack) =>
+                              _ThumbnailFallback(name: widget.sub.name),
+                        )
+                      : _ThumbnailFallback(name: widget.sub.name),
                 ),
               ),
               const SizedBox(width: 14),

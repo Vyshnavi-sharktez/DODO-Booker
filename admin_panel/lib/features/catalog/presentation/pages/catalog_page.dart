@@ -148,10 +148,13 @@ class _CatalogPageState extends ConsumerState<CatalogPage> {
           .countDependents(category.id);
     } catch (_) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content:
-                Text('Unable to validate category deletion. Please try again.'),
+        await showDialog<void>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            title: const Text('Error'),
+            content: const Text('Unable to validate category deletion. Please try again.'),
+            actions: [FilledButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('OK'))],
           ),
         );
       }
@@ -352,10 +355,13 @@ class _CatalogPageState extends ConsumerState<CatalogPage> {
           .countServices(subCategory.id);
     } catch (_) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-                'Unable to validate sub category deletion. Please try again.'),
+        await showDialog<void>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            title: const Text('Error'),
+            content: const Text('Unable to validate sub category deletion. Please try again.'),
+            actions: [FilledButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('OK'))],
           ),
         );
       }
@@ -446,10 +452,13 @@ class _CatalogPageState extends ConsumerState<CatalogPage> {
       }
     } catch (_) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-                'Sub category deletion failed. Please try again.'),
+        await showDialog<void>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            title: const Text('Deletion Failed'),
+            content: const Text('Sub category deletion failed. Please try again.'),
+            actions: [FilledButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('OK'))],
           ),
         );
       }
@@ -585,10 +594,13 @@ class _CatalogPageState extends ConsumerState<CatalogPage> {
           .countAttributes(service.id);
     } catch (_) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-                'Unable to validate service deletion. Please try again.'),
+        await showDialog<void>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            title: const Text('Error'),
+            content: const Text('Unable to validate service deletion. Please try again.'),
+            actions: [FilledButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('OK'))],
           ),
         );
       }
@@ -677,10 +689,13 @@ class _CatalogPageState extends ConsumerState<CatalogPage> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Delete failed: $e'),
-            backgroundColor: AppColors.error,
+        await showDialog<void>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            title: const Text('Deletion Failed'),
+            content: Text('Failed to delete service: $e'),
+            actions: [FilledButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('OK'))],
           ),
         );
       }

@@ -205,10 +205,14 @@ class _CatalogV2PageState extends ConsumerState<CatalogV2Page> {
           .countChildren(node.id);
     } catch (_) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-              content:
-                  Text('Unable to validate deletion. Please try again.')),
+        await showDialog<void>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            title: const Text('Error'),
+            content: const Text('Unable to validate deletion. Please try again.'),
+            actions: [FilledButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('OK'))],
+          ),
         );
       }
       return;
@@ -283,10 +287,14 @@ class _CatalogV2PageState extends ConsumerState<CatalogV2Page> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-              content: Text('Delete failed: $e'),
-              backgroundColor: AppColors.error),
+        showDialog<void>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            title: const Text('Deletion Failed'),
+            content: Text('Failed to delete item: $e'),
+            actions: [FilledButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('OK'))],
+          ),
         );
       }
     }
@@ -300,8 +308,53 @@ class _CatalogV2PageState extends ConsumerState<CatalogV2Page> {
         .moveNode(node.id, parentIdContext, direction);
   }
 
-  void _repositionNode(
-      CatalogNode node, String? parentIdContext, int targetPosition) {
+  Future<void> _repositionNode(
+      CatalogNode node, String? parentIdContext, int targetPosition) async {
+    if (!mounted) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        title: const Text('Move to Position'),
+        content: Text(
+            'Move "${node.name}" to position ${targetPosition + 1}?'),
+        actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+        actions: [
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: () => Navigator.of(ctx).pop(false),
+                  style: OutlinedButton.styleFrom(
+                    minimumSize: const Size.fromHeight(44),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                  ),
+                  child: const Text('Cancel'),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: ElevatedButton(
+                  onPressed: () => Navigator.of(ctx).pop(true),
+                  style: ElevatedButton.styleFrom(
+                    minimumSize: const Size.fromHeight(44),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                  ),
+                  child: const Text('Move'),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
     ref
         .read(catalogNodeNotifierProvider.notifier)
         .repositionNode(node.id, parentIdContext, targetPosition);

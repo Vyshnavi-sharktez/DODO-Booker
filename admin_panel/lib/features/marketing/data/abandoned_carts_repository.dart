@@ -49,8 +49,10 @@ class AbandonedCartsRepository {
 
   const AbandonedCartsRepository(this._supabase);
 
-  /// Customers whose entire cart (max updated_at) is older than 6 hours.
-  Future<List<AbandonedCart>> getAbandonedCarts() async {
+  /// Customers whose entire cart (max updated_at) is older than [inactivityThreshold].
+  Future<List<AbandonedCart>> getAbandonedCarts({
+    Duration inactivityThreshold = const Duration(hours: 6),
+  }) async {
     final data = await _supabase
         .from('cart_items')
         .select(
@@ -75,7 +77,7 @@ class AbandonedCartsRepository {
       );
     }
 
-    final cutoff = DateTime.now().subtract(const Duration(seconds: 5));
+    final cutoff = DateTime.now().subtract(inactivityThreshold);
     final result = <AbandonedCart>[];
 
     for (final entry in grouped.entries) {

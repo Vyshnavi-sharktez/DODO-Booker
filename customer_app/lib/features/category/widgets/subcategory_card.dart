@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import '../../../core/constants/app_colors.dart';
 import '../../../core/widgets/clickable.dart';
 import '../../../core/widgets/highlighted_text.dart';
 import '../../../models/subcategory_model.dart';

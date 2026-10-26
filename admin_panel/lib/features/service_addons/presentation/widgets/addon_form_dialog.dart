@@ -11,6 +11,7 @@ class AddonFormDialog extends ConsumerStatefulWidget {
     String? description,
     required double price,
     required bool isActive,
+    bool isGlobal,
     String discountType,
     double discountValue,
   }) onSave;
@@ -30,6 +31,7 @@ class _AddonFormDialogState extends ConsumerState<AddonFormDialog> {
   late final TextEditingController _name;
   late final TextEditingController _price;
   late bool _isActive;
+  late bool _isGlobal;
   late String _discountType;
   late final TextEditingController _discountValue;
   bool _saving = false;
@@ -43,6 +45,7 @@ class _AddonFormDialogState extends ConsumerState<AddonFormDialog> {
       text: e != null ? e.price.toStringAsFixed(2) : '',
     );
     _isActive = e?.isActive ?? true;
+    _isGlobal = e?.isGlobal ?? false;
     _discountType = e?.discountType ?? 'percentage';
     _discountValue = TextEditingController(
       text: (e != null && e.discountValue > 0)
@@ -67,6 +70,7 @@ class _AddonFormDialogState extends ConsumerState<AddonFormDialog> {
         name: _name.text.trim(),
         price: double.parse(_price.text.trim()),
         isActive: _isActive,
+        isGlobal: _isGlobal,
         discountType: _discountType,
         discountValue: double.tryParse(_discountValue.text.trim()) ?? 0,
       );
@@ -184,6 +188,18 @@ class _AddonFormDialogState extends ConsumerState<AddonFormDialog> {
                         value: _isActive,
                         activeColor: AppColors.success,
                         onChanged: (v) => setState(() => _isActive = v),
+                      ),
+                      const SizedBox(height: 10),
+
+                      // Global toggle
+                      _ToggleRow(
+                        icon: Icons.public_off_outlined,
+                        activeIcon: Icons.public_rounded,
+                        label: 'Global Add-on',
+                        subtitle: 'Show across all service categories',
+                        value: _isGlobal,
+                        activeColor: AppColors.primary,
+                        onChanged: (v) => setState(() => _isGlobal = v),
                       ),
                       const SizedBox(height: 20),
                       const Divider(),

@@ -17,6 +17,9 @@ class CouponModel {
   final List<String> applicableNodeIds;   // catalog_node IDs
   final List<String> applicableNodeNames; // resolved names for display
 
+  // Eligibility threshold: customer must have >= this many qualifying orders
+  final int? maxOrderWiseLimit;
+
   const CouponModel({
     required this.id,
     required this.code,
@@ -33,6 +36,7 @@ class CouponModel {
     this.applicabilityType = 'all',
     this.applicableNodeIds = const [],
     this.applicableNodeNames = const [],
+    this.maxOrderWiseLimit,
   });
 
   factory CouponModel.fromMap(Map<String, dynamic> map) {
@@ -62,6 +66,7 @@ class CouponModel {
               ?.map((e) => e as String)
               .toList() ??
           const [],
+      maxOrderWiseLimit: map['max_order_wise_limit'] as int?,
     );
   }
 
@@ -84,6 +89,7 @@ class CouponModel {
       applicabilityType: applicabilityType,
       applicableNodeIds: applicableNodeIds,
       applicableNodeNames: applicableNodeNames ?? this.applicableNodeNames,
+      maxOrderWiseLimit: maxOrderWiseLimit,
     );
   }
 

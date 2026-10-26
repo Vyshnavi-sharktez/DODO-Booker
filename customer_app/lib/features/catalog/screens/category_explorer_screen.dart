@@ -24,7 +24,6 @@ import '../../profile/utils/profile_launcher.dart';
 const double _kSidebarWidth    = 280.0;
 const double _kCartPanelWidth  = 300.0;
 const double _kBreakpoint      = 900.0;
-const double _kContentMaxWidth = 1280.0;
 const Color  _kBorderColor     = Color(0xFFE5E5E5);
 const Color  _kBgRight         = Color(0xFFF7F7F7);
 const Color  _kTextDark        = Color(0xFF111111);
@@ -452,24 +451,6 @@ class _SidebarRowState extends State<_SidebarRow> {
   }
 }
 
-class _MoreCategoriesRow extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(12, 14, 12, 0),
-      child: Row(
-        children: [
-          const SizedBox(width: 26),
-          const SizedBox(width: 10),
-          Text(
-            'More Categories',
-            style: GoogleFonts.inter(fontSize: 13, color: _kTextMuted),
-          ),
-        ],
-      ),
-    );
-  }
-}
 
 // ── Mobile category pill row ─────────────────────────────────────────────────
 
@@ -1225,17 +1206,25 @@ class _DesktopListCard extends ConsumerWidget {
                   width: 100,
                   height: 100,
                   color: const Color(0xFFF3EDE0),
-                  child: Image.network(
-                    imageUrl,
-                    fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) => Center(
-                      child: Icon(
-                        IconRegistry.resolve(node.iconKey, node.name),
-                        size: 32,
-                        color: _kTextMuted,
-                      ),
-                    ),
-                  ),
+                  child: imageUrl != null
+                      ? Image.network(
+                          imageUrl,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) => Center(
+                            child: Icon(
+                              IconRegistry.resolve(node.iconKey, node.name),
+                              size: 32,
+                              color: _kTextMuted,
+                            ),
+                          ),
+                        )
+                      : Center(
+                          child: Icon(
+                            IconRegistry.resolve(node.iconKey, node.name),
+                            size: 32,
+                            color: _kTextMuted,
+                          ),
+                        ),
                 ),
               ),
               const SizedBox(width: 12),
@@ -1446,17 +1435,25 @@ class _DesktopListCard extends ConsumerWidget {
           Container(
             width: 280,
             color: const Color(0xFFF3EDE0),
-            child: Image.network(
-              imageUrl,
-              fit: BoxFit.cover,
-              errorBuilder: (_, __, ___) => Center(
-                child: Icon(
-                  IconRegistry.resolve(node.iconKey, node.name),
-                  size: 52,
-                  color: _kTextMuted,
-                ),
-              ),
-            ),
+            child: imageUrl != null
+                ? Image.network(
+                    imageUrl,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) => Center(
+                      child: Icon(
+                        IconRegistry.resolve(node.iconKey, node.name),
+                        size: 52,
+                        color: _kTextMuted,
+                      ),
+                    ),
+                  )
+                : Center(
+                    child: Icon(
+                      IconRegistry.resolve(node.iconKey, node.name),
+                      size: 52,
+                      color: _kTextMuted,
+                    ),
+                  ),
           ),
 
           // ── Content panel (right) ─────────────────────────────────────
@@ -1846,20 +1843,31 @@ class _CardImage extends StatelessWidget {
       borderRadius: const BorderRadius.vertical(top: Radius.circular(15)),
       child: SizedBox(
         height: 148,
-        child: Image.network(
-          url,
-          fit: BoxFit.cover,
-          errorBuilder: (_, _, _) => Container(
-            color: const Color(0xFFEFEFEF),
-            child: Center(
-              child: Icon(
-                IconRegistry.resolve(node.iconKey, node.name),
-                size: 36,
-                color: _kTextMuted,
+        child: url != null
+            ? Image.network(
+                url,
+                fit: BoxFit.cover,
+                errorBuilder: (_, _, _) => Container(
+                  color: const Color(0xFFEFEFEF),
+                  child: Center(
+                    child: Icon(
+                      IconRegistry.resolve(node.iconKey, node.name),
+                      size: 36,
+                      color: _kTextMuted,
+                    ),
+                  ),
+                ),
+              )
+            : Container(
+                color: const Color(0xFFEFEFEF),
+                child: Center(
+                  child: Icon(
+                    IconRegistry.resolve(node.iconKey, node.name),
+                    size: 36,
+                    color: _kTextMuted,
+                  ),
+                ),
               ),
-            ),
-          ),
-        ),
       ),
     );
   }
@@ -2199,17 +2207,25 @@ class _MobileCategoryGridItem extends StatelessWidget {
                 aspectRatio: 1.0,
                 child: Container(
                   color: const Color(0xFFF3EDE0),
-                  child: Image.network(
-                    imageUrl,
-                    fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) => Center(
-                      child: Icon(
-                        IconRegistry.resolve(node.iconKey, node.name),
-                        size: 28,
-                        color: _kTextMuted,
-                      ),
-                    ),
-                  ),
+                  child: imageUrl != null
+                      ? Image.network(
+                          imageUrl,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) => Center(
+                            child: Icon(
+                              IconRegistry.resolve(node.iconKey, node.name),
+                              size: 28,
+                              color: _kTextMuted,
+                            ),
+                          ),
+                        )
+                      : Center(
+                          child: Icon(
+                            IconRegistry.resolve(node.iconKey, node.name),
+                            size: 28,
+                            color: _kTextMuted,
+                          ),
+                        ),
                 ),
               ),
             ),

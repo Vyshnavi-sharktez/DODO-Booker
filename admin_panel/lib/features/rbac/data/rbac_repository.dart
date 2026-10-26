@@ -116,11 +116,23 @@ class RbacRepository {
   Future<RbacAdminUser> updateAdminUser(
     String id, {
     String? fullName,
+    String? phone,
     bool? isActive,
+    // When address is non-null, all three location fields are written.
+    // Pass address: '' to clear address and coordinates.
+    String? address,
+    double? latitude,
+    double? longitude,
   }) async {
     final updates = <String, dynamic>{};
     if (fullName != null) updates['full_name'] = fullName;
+    if (phone != null) updates['phone'] = phone;
     if (isActive != null) updates['is_active'] = isActive;
+    if (address != null) {
+      updates['address'] = address.isEmpty ? null : address;
+      updates['latitude'] = latitude;
+      updates['longitude'] = longitude;
+    }
 
     final data = await _supabase
         .from('admin_users')
@@ -129,6 +141,14 @@ class RbacRepository {
         .select('*, admin_user_roles(role_id, roles(id, name))')
         .single();
     return RbacAdminUser.fromMap(data);
+  }
+
+  Future<void> deleteAdminUser(String id) async {
+    await _supabase
+        .from('admin_user_roles')
+        .delete()
+        .eq('admin_user_id', id);
+    await _supabase.from('admin_users').delete().eq('id', id);
   }
 
   Future<void> setAdminUserRoles(
@@ -147,5 +167,44 @@ class RbacRepository {
               .map((rid) => {'admin_user_id': adminUserId, 'role_id': rid})
               .toList(),
         );
+  }
+
+  /// Creates an admin user via the edge function.
+  /// Returns the temporary password generated for the new account.
+  Future<String> createAdminUserViaEdge({
+    required String fullName,
+    required String email,
+    String? phone,
+    String? address,
+    double? latitude,
+    double? longitude,
+    String? roleId,
+  }) async {
+    final response = await _supabase.functions.invoke(
+      'create-admin-user',
+      body: {
+        'full_name': fullName,
+        'email': email,
+        if (phone != null && phone.isNotEmpty) 'phone': phone,
+        if (address != null && address.isNotEmpty) 'address': address,
+        if (latitude != null) 'latitude': latitude,
+        if (longitude != null) 'longitude': longitude,
+        if (roleId != null) 'role_id': roleId,
+      },
+    );
+
+    if (response.status != 200) {
+      final body = response.data;
+      final msg = (body is Map ? body['error'] : null) as String? ??
+          'Failed to create admin user';
+      throw Exception(msg);
+    }
+
+    final body = response.data;
+    final tempPassword = (body is Map ? body['temp_password'] : null) as String?;
+    if (tempPassword == null || tempPassword.isEmpty) {
+      throw Exception('Account created but temporary password was not returned');
+    }
+    return tempPassword;
   }
 }

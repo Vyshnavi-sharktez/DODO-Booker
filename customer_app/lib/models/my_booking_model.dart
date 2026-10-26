@@ -137,6 +137,7 @@ class MyBookingModel {
   final DateTime? serviceDate;
   final String? cancelledBy;
   final String? cancellationReason;
+  final String? bookingNotes;
 
   const MyBookingModel({
     required this.id,
@@ -174,6 +175,7 @@ class MyBookingModel {
     this.serviceDate,
     this.cancelledBy,
     this.cancellationReason,
+    this.bookingNotes,
   });
 
   String get displayBookingNumber {
@@ -356,6 +358,7 @@ class MyBookingModel {
           : null,
       cancelledBy: json['cancelled_by'] as String?,
       cancellationReason: json['cancellation_reason'] as String?,
+      bookingNotes: notes,
     );
   }
 

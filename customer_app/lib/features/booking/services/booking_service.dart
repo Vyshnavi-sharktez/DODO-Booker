@@ -218,7 +218,7 @@ class BookingService {
       return [];
     }
 
-    return await _buildSlots(dateStr, serviceId, scheduleCfg!, vendorId: vendorId);
+    return await _buildSlots(dateStr, serviceId, scheduleCfg, vendorId: vendorId);
   }
 
   /// Shared slot-generation logic used by both scoped and fallback paths.

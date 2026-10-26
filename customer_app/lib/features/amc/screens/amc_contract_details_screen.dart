@@ -350,10 +350,16 @@ class _AmcContractDetailsScreenState
                   'Request submitted. Admin will contact you to confirm.')),
         );
       } else {
-        messenger.showSnackBar(
-          const SnackBar(
-              content: Text('A scheduling request is already pending.')),
-        );
+        if (mounted) {
+          showDialog<void>(
+            context: context,
+            builder: (ctx) => AlertDialog(
+              title: const Text('Request Pending'),
+              content: const Text('A scheduling request is already pending. Please wait for admin to process it.'),
+              actions: [FilledButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('OK'))],
+            ),
+          );
+        }
       }
     } catch (e) {
       if (mounted) {
@@ -1229,9 +1235,12 @@ class _AmcContractDetailsScreenState
       }
       if (!mounted) return;
       if (plans.isEmpty) {
-        messenger.showSnackBar(
-          const SnackBar(
-            content: Text('No AMC plans available for this service.'),
+        showDialog<void>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            title: const Text('No Plans Available'),
+            content: const Text('No AMC plans are currently available for this service.'),
+            actions: [FilledButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('OK'))],
           ),
         );
         return;

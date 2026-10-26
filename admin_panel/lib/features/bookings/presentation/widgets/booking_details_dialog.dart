@@ -85,11 +85,13 @@ class _AmcData {
 class BookingDetailsDialog extends ConsumerStatefulWidget {
   final Booking booking;
   final VoidCallback? onAssign;
+  final bool allowAssign;
 
   const BookingDetailsDialog({
     super.key,
     required this.booking,
     this.onAssign,
+    this.allowAssign = true,
   });
 
   @override
@@ -236,12 +238,12 @@ void _triggerAssign(Booking booking) {
     final vendorNameResolved = vendor?.businessName ??
         (booking.vendorName.isNotEmpty
             ? booking.vendorName
-            : _truncateId(booking.vendorId));
+            : booking.vendorNumber ?? '');
 
     final assignedToLabel = switch (booking.assignmentType) {
       'External Vendor' =>
         vendorNameResolved.isNotEmpty ? vendorNameResolved : 'Unassigned',
-      'DODO Team' => team?.teamName ?? _truncateId(booking.dodoTeamId),
+      'DODO Team' => team?.teamName ?? 'DODO Team',
       _ => 'Unassigned',
     };
 
@@ -391,6 +393,8 @@ void _triggerAssign(Booking booking) {
                                     _CustomerCard(
                                       customer: bookingCustomer,
                                       customerId: booking.customerId,
+                                      fallbackCustomerNumber: booking.customerNumber,
+                                      fallbackName: booking.customerName,
                                       onViewProfile: () {
                                         Navigator.of(context).pop();
                                         context.push(
@@ -404,7 +408,9 @@ void _triggerAssign(Booking booking) {
                                       booking: booking,
                                       vendorNameResolved: vendorNameResolved,
                                       teamName: team?.teamName,
-                                      onAssign: () => _triggerAssign(booking),
+                                      onAssign: widget.allowAssign
+                                          ? () => _triggerAssign(booking)
+                                          : null,
                                     ),
                                   ],
                                 ),
@@ -490,6 +496,8 @@ void _triggerAssign(Booking booking) {
                           _CustomerCard(
                             customer: bookingCustomer,
                             customerId: booking.customerId,
+                            fallbackCustomerNumber: booking.customerNumber,
+                            fallbackName: booking.customerName,
                             onViewProfile: () {
                               Navigator.of(context).pop();
                               context.push(
@@ -516,7 +524,9 @@ void _triggerAssign(Booking booking) {
                             booking: booking,
                             vendorNameResolved: vendorNameResolved,
                             teamName: team?.teamName,
-                            onAssign: () => _triggerAssign(booking),
+                            onAssign: widget.allowAssign
+                                ? () => _triggerAssign(booking)
+                                : null,
                           ),
                           if (booking.isAmc) ...[
                             const SizedBox(height: 16),
@@ -631,18 +641,14 @@ void _triggerAssign(Booking booking) {
 
 class _CardContainer extends StatelessWidget {
   final Widget child;
-  final EdgeInsetsGeometry? padding;
 
-  const _CardContainer({
-    required this.child,
-    this.padding,
-  });
+  const _CardContainer({required this.child});
 
   @override
   Widget build(BuildContext context) {
     return Container(
       width: double.infinity,
-      padding: padding ?? const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: _cardBg,
         borderRadius: BorderRadius.circular(12),
@@ -687,7 +693,7 @@ class _SectionHeader extends StatelessWidget {
             ),
           ),
         ),
-        if (trailing != null) trailing!,
+        ?trailing,
       ],
     );
   }
@@ -750,24 +756,28 @@ class _BadgePill extends StatelessWidget {
 class _CustomerCard extends StatelessWidget {
   final Customer? customer;
   final String customerId;
+  final String? fallbackCustomerNumber;
+  final String? fallbackName;
   final VoidCallback onViewProfile;
 
   const _CustomerCard({
     required this.customer,
     required this.customerId,
     required this.onViewProfile,
+    this.fallbackCustomerNumber,
+    this.fallbackName,
   });
 
   @override
   Widget build(BuildContext context) {
     final name = customer?.fullName.isNotEmpty == true
         ? customer!.fullName
-        : 'Customer';
+        : (fallbackName?.isNotEmpty == true ? fallbackName! : 'Customer');
     final initial = name.isNotEmpty ? name[0].toUpperCase() : 'C';
 
-    final truncatedId = customerId.length > 24
-        ? '${customerId.substring(0, 24)}...'
-        : customerId;
+    final resolvedCustomerNumber =
+        customer?.customerNumber ?? fallbackCustomerNumber;
+    final displayId = resolvedCustomerNumber ?? '—';
 
     return _CardContainer(
       child: Column(
@@ -851,7 +861,7 @@ class _CustomerCard extends StatelessWidget {
                         const SizedBox(width: 6),
                         Expanded(
                           child: Text(
-                            'Customer ID: $truncatedId',
+                            'Customer ID: $displayId',
                             style: const TextStyle(
                               fontSize: 13,
                               color: _navyDark,
@@ -859,12 +869,14 @@ class _CustomerCard extends StatelessWidget {
                             overflow: TextOverflow.ellipsis,
                           ),
                         ),
+                        if (resolvedCustomerNumber != null)
                         InkWell(
                           onTap: () {
-                            Clipboard.setData(ClipboardData(text: customerId));
+                            Clipboard.setData(ClipboardData(
+                                text: resolvedCustomerNumber));
                             ScaffoldMessenger.of(context).showSnackBar(
                               const SnackBar(
-                                content: Text('Copied Customer ID to clipboard'),
+                                content: Text('Copied to clipboard'),
                                 duration: Duration(seconds: 2),
                               ),
                             );
@@ -899,7 +911,10 @@ class _ServicesCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final totalServicesCount = booking.items.length + booking.addons.length;
+    final serviceAddons = booking.addons.where((a) => !a.isGlobal).toList();
+    final globalAddons = booking.addons.where((a) => a.isGlobal).toList();
+    final totalServicesCount =
+        booking.items.length + booking.addons.length;
 
     return _CardContainer(
       child: Column(
@@ -922,8 +937,24 @@ class _ServicesCard extends StatelessWidget {
           // Main Service Items
           ...booking.items.map((item) => _ServiceRow(item: item)),
 
-          // Add-on Items
-          ...booking.addons.map((addon) => _AddonRow(addon: addon)),
+          // Service-specific Add-on Items
+          ...serviceAddons.map((addon) => _AddonRow(addon: addon)),
+
+          // Global Add-on Items (shown in a labelled sub-section)
+          if (globalAddons.isNotEmpty) ...[
+            const Padding(
+              padding: EdgeInsets.only(bottom: 10),
+              child: Text(
+                'Global Add-ons',
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w700,
+                  color: _navyDark,
+                ),
+              ),
+            ),
+            ...globalAddons.map((addon) => _AddonRow(addon: addon)),
+          ],
 
           const SizedBox(height: 16),
 
@@ -1081,30 +1112,22 @@ class _AddonRow extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  '${addon.name} (Add-on)',
+                  addon.name,
                   style: const TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.w700,
                     color: _navyDark,
                   ),
                 ),
-                const SizedBox(height: 2),
-                const Text(
-                  'Home Cleaning > Add-on',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: _textSecondary,
-                  ),
-                ),
                 const SizedBox(height: 4),
-                const Row(
+                Row(
                   children: [
-                    Icon(Icons.assignment_outlined,
+                    const Icon(Icons.assignment_outlined,
                         size: 13, color: _textSecondary),
-                    SizedBox(width: 4),
+                    const SizedBox(width: 4),
                     Text(
-                      'Qty: 1',
-                      style: TextStyle(
+                      'Qty: ${addon.quantity}',
+                      style: const TextStyle(
                         fontSize: 12,
                         color: _textSecondary,
                       ),
@@ -1116,7 +1139,7 @@ class _AddonRow extends StatelessWidget {
           ),
           const SizedBox(width: 12),
           Text(
-            _currency.format(addon.price),
+            _currency.format(addon.price * addon.quantity),
             style: const TextStyle(
               fontSize: 14,
               fontWeight: FontWeight.w700,
@@ -1175,13 +1198,13 @@ class _AssignedToCard extends StatelessWidget {
   final Booking booking;
   final String vendorNameResolved;
   final String? teamName;
-  final VoidCallback onAssign;
+  final VoidCallback? onAssign;
 
   const _AssignedToCard({
     required this.booking,
     required this.vendorNameResolved,
     required this.teamName,
-    required this.onAssign,
+    this.onAssign,
   });
 
   @override
@@ -1208,7 +1231,7 @@ class _AssignedToCard extends StatelessWidget {
     final assignedToLabel = switch (booking.assignmentType) {
       'External Vendor' =>
         vendorNameResolved.isNotEmpty ? vendorNameResolved : 'Unassigned',
-      'DODO Team' => teamName ?? _truncateId(booking.dodoTeamId),
+      'DODO Team' => teamName ?? 'DODO Team',
       _ => isCancelled ? 'Cancelled' : 'Unassigned',
     };
 
@@ -1258,7 +1281,7 @@ class _AssignedToCard extends StatelessWidget {
                       fontWeight: FontWeight.w500,
                     ),
                   ),
-                  if (!isCancelled) ...[
+                  if (!isCancelled && onAssign != null) ...[
                     const SizedBox(height: 4),
                     GestureDetector(
                       onTap: onAssign,
@@ -1336,7 +1359,7 @@ class _AssignedToCard extends StatelessWidget {
                       ],
                     ),
                   ),
-                  if (!isCancelled)
+                  if (!isCancelled && onAssign != null)
                     OutlinedButton.icon(
                       onPressed: onAssign,
                       icon: const Icon(Icons.swap_horiz_rounded, size: 14),
@@ -1492,6 +1515,14 @@ class _BookingInfoCard extends StatelessWidget {
               bgColor: statusBg,
             ),
           ),
+          if (booking.notes != null && booking.notes!.trim().isNotEmpty) ...[
+            const SizedBox(height: 12),
+            _InfoKeyValRow(
+              icon: Icons.notes_rounded,
+              label: 'Notes',
+              value: booking.notes!.trim(),
+            ),
+          ],
         ],
       ),
     );
@@ -1611,7 +1642,7 @@ class _AddressChangeDialogState extends State<_AddressChangeDialog> {
   double? _longitude;
 
   bool _saving = false;
-  bool _isLocating = false;
+  final bool _isLocating = false;
   String? _error;
 
   bool get _hasCoordinates => _latitude != null && _longitude != null;
@@ -2507,8 +2538,34 @@ class _CodReconciliationCard extends StatelessWidget {
                           ],
                         ),
                       )
-                    : (booking.codConfirmedAt == null
+                    : booking.codCashCollected == true
                         ? Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 10, vertical: 6),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFDCFCE7),
+                              borderRadius: BorderRadius.circular(6),
+                              border:
+                                  Border.all(color: const Color(0xFF86EFAC)),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(Icons.check_circle_rounded,
+                                    size: 14, color: Color(0xFF166534)),
+                                const SizedBox(width: 4),
+                                Text(
+                                  'Cash Collected (${_dateFmt.format(booking.codConfirmedAt!)})',
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    color: Color(0xFF166534),
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          )
+                        : Container(
                             padding: const EdgeInsets.symmetric(
                                 horizontal: 10, vertical: 6),
                             decoration: BoxDecoration(
@@ -2523,80 +2580,7 @@ class _CodReconciliationCard extends StatelessWidget {
                                 fontWeight: FontWeight.bold,
                               ),
                             ),
-                          )
-                        : (booking.codCashCollected == true
-                            ? Container(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 10, vertical: 6),
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFFDCFCE7),
-                                  borderRadius: BorderRadius.circular(6),
-                                  border: Border.all(
-                                      color: const Color(0xFF86EFAC)),
-                                ),
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    const Icon(Icons.check_circle_rounded,
-                                        size: 14, color: Color(0xFF166534)),
-                                    const SizedBox(width: 4),
-                                    Text(
-                                      'Cash Collected (${_dateFmt.format(booking.codConfirmedAt!)})',
-                                      style: const TextStyle(
-                                        fontSize: 12,
-                                        color: Color(0xFF166534),
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              )
-                            : Container(
-                                padding: const EdgeInsets.all(10),
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFFFEE2E2),
-                                  borderRadius: BorderRadius.circular(6),
-                                  border: Border.all(
-                                      color: const Color(0xFFFCA5A5)),
-                                ),
-                                child: Column(
-                                  crossAxisAlignment:
-                                      CrossAxisAlignment.start,
-                                  children: [
-                                    Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        const Icon(Icons.cancel_rounded,
-                                            size: 14,
-                                            color: Color(0xFFDC2626)),
-                                        const SizedBox(width: 4),
-                                        Text(
-                                          'Cash Not Collected (${_dateFmt.format(booking.codConfirmedAt!)})',
-                                          style: const TextStyle(
-                                            fontSize: 12,
-                                            color: Color(0xFFDC2626),
-                                            fontWeight: FontWeight.bold,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                    if (booking.codNotCollectedReason !=
-                                            null &&
-                                        booking.codNotCollectedReason!
-                                            .isNotEmpty) ...[
-                                      const SizedBox(height: 4),
-                                      Text(
-                                        'Reason: ${booking.codNotCollectedReason}',
-                                        style: const TextStyle(
-                                          fontSize: 12,
-                                          color: Color(0xFF991B1B),
-                                          fontStyle: FontStyle.italic,
-                                        ),
-                                      ),
-                                    ],
-                                  ],
-                                ),
-                              ))),
+                          ),
               ),
             ],
           ),
@@ -2755,7 +2739,7 @@ class _CancelledPaymentRefundSectionState
                     child: CircularProgressIndicator(strokeWidth: 2)),
               ),
             ),
-            error: (_, __) => const Text('Could not load refund details.',
+            error: (_, _) => const Text('Could not load refund details.',
                 style: TextStyle(
                     fontSize: 12,
                     color: _textSecondary,
@@ -2951,7 +2935,7 @@ class _PaymentReconciliationSection extends ConsumerWidget {
                 ),
               ),
             ),
-            error: (_, __) => const Padding(
+            error: (_, _) => const Padding(
               padding: EdgeInsets.symmetric(vertical: 4),
               child: Text(
                 'Could not load gateway payment details.',
@@ -3357,7 +3341,7 @@ class _PhotoRow extends StatelessWidget {
           child: ListView.separated(
             scrollDirection: Axis.horizontal,
             itemCount: photos.length,
-            separatorBuilder: (_, __) => const SizedBox(width: 8),
+            separatorBuilder: (_, _) => const SizedBox(width: 8),
             itemBuilder: (_, i) {
               final url = photos[i]['image_url'] as String;
               final isVideo = photos[i]['media_type'] == 'video';
@@ -3395,7 +3379,7 @@ class _PhotoRow extends StatelessWidget {
                   width: 80,
                   height: 80,
                   fit: BoxFit.cover,
-                  errorBuilder: (_, __, ___) => Container(
+                  errorBuilder: (_, _, _) => Container(
                     width: 80,
                     height: 80,
                     color: const Color(0xFFF1F5F9),

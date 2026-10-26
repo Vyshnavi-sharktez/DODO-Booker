@@ -2,7 +2,6 @@
 import '../../catalog/services/catalog_service.dart';
 import '../../catalog/utils/catalog_launcher.dart';
 import '../../../core/constants/app_colors.dart';
-import '../../../core/utils/service_image_registry.dart';
 import '../../../core/widgets/section_header.dart';
 import '../../../models/my_booking_model.dart';
 import '../../bookings/utils/booking_detail_launcher.dart';
@@ -65,9 +64,6 @@ class _BookingCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final (statusColor, statusBg, statusLabel) = _statusMeta;
-    final imageUrl =
-        ServiceImageRegistry.resolve(null, booking.categoryName);
-
     return GestureDetector(
       onTap: () => openBookingDetail(context, booking),
       child: MouseRegion(
@@ -93,20 +89,14 @@ class _BookingCard extends StatelessWidget {
               // ── Service image ─────────────────────────────────────────
               ClipRRect(
                 borderRadius: BorderRadius.circular(10),
-                child: Image.network(
-                  imageUrl,
+                child: Container(
                   width: 64,
                   height: 64,
-                  fit: BoxFit.cover,
-                  errorBuilder: (context, error, stack) => Container(
-                    width: 64,
-                    height: 64,
-                    color: AppColors.surfaceVariant,
-                    child: const Icon(
-                      Icons.home_repair_service_rounded,
-                      size: 24,
-                      color: AppColors.textHint,
-                    ),
+                  color: AppColors.surfaceVariant,
+                  child: const Icon(
+                    Icons.home_repair_service_rounded,
+                    size: 24,
+                    color: AppColors.textHint,
                   ),
                 ),
               ),

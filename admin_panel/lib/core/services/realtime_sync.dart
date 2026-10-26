@@ -13,6 +13,8 @@ import '../../features/notifications/application/providers/notifications_provide
 import '../../features/refunds/application/refund_providers.dart';
 import '../../features/support/application/support_providers.dart';
 import '../../features/vendor_settlement/application/providers/vendor_settlement_providers.dart';
+import '../../features/vendor_subscriptions/application/providers/subscription_providers.dart';
+import '../../features/vendors/application/providers/vendor_detail_providers.dart';
 import '../../features/vendors/application/providers/vendors_providers.dart';
 import '../../features/warranties/application/warranties_providers.dart';
 import '../../features/global_scheduling/application/scheduling_providers.dart';
@@ -46,6 +48,10 @@ import '../../features/global_scheduling/application/scheduling_providers.dart';
 ///   broadcast_notifications INSERT → broadcastNotificationsNotifierProvider.applyRealtimeInsert
 ///   broadcast_notifications UPDATE → broadcastNotificationsNotifierProvider.applyRealtimeUpdate
 ///   broadcast_notifications DELETE → broadcastNotificationsNotifierProvider.applyRealtimeDelete
+///   vendor_subscriptions          → vendorSubscriptionsNotifierProvider.refresh()
+///                                   + subscriptionDashboardProvider.invalidate()
+///   wallet_transactions           → vendorWalletInfoProvider(vendorId).invalidate()
+///                                   + vendorWalletTransactionsProvider(vendorId).invalidate()
 class AdminRealtimeSync {
   final Ref _ref;
   final SupabaseClient _client;
@@ -291,6 +297,20 @@ class AdminRealtimeSync {
           table: 'service_scheduling',
           callback: (_) => _refreshScheduling(),
         )
+        // ── Vendor subscriptions (purchase / status change / expiry) ──────────
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'vendor_subscriptions',
+          callback: (_) => _refreshVendorSubscriptions(),
+        )
+        // ── Vendor wallet transactions (top-up / deductions) ──────────────────
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'wallet_transactions',
+          callback: (p) => _refreshVendorWallet(p),
+        )
         .subscribe((status, error) {
           debugPrint('[DODO][AdminSync] channel status=$status error=$error');
           if (status == RealtimeSubscribeStatus.subscribed) {
@@ -398,6 +418,28 @@ class AdminRealtimeSync {
   void _refreshScheduling() {
     debugPrint('[DODO][AdminSync] scheduling change → bump schedulingRefreshProvider');
     _ref.read(schedulingRefreshProvider.notifier).state++;
+  }
+
+  void _refreshVendorSubscriptions() {
+    debugPrint('[DODO][AdminSync] vendor_subscriptions event → refresh');
+    _ref.read(vendorSubscriptionsNotifierProvider.notifier).refresh();
+    _ref.invalidate(subscriptionDashboardProvider);
+  }
+
+  void _refreshVendorWallet(PostgresChangePayload p) {
+    debugPrint('[DODO][AdminSync] wallet_transactions event → invalidate wallet providers');
+    // Extract vendor_id from the event payload to target only the affected vendor.
+    final vendorId = (p.newRecord['vendor_id'] ?? p.oldRecord['vendor_id']) as String?;
+    if (vendorId != null) {
+      _ref.invalidate(vendorWalletInfoProvider(vendorId));
+      _ref.invalidate(vendorWalletTransactionsProvider(vendorId));
+    } else {
+      // Fallback: invalidate all cached wallet data when vendor_id is unavailable.
+      _ref.invalidate(vendorWalletInfoProvider);
+      _ref.invalidate(vendorWalletTransactionsProvider);
+    }
+    // Also refresh the vendors list so the wallet balance column updates.
+    _ref.read(vendorsNotifierProvider.notifier).refresh();
   }
 
   /// Called by the lifecycle observer on admin panel resume after a long pause.

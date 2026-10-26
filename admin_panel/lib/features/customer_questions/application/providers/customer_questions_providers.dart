@@ -62,10 +62,9 @@ class CustomServiceQuestionsNotifier
     extends StateNotifier<AsyncValue<List<CustomerQuestion>>> {
   final CustomerQuestionsRepository _repo;
   final String _customServiceId;
-  final String _serviceName;
 
   CustomServiceQuestionsNotifier(
-      this._repo, this._customServiceId, this._serviceName)
+      this._repo, this._customServiceId, String _)
       : super(const AsyncValue.loading()) {
     _load();
   }

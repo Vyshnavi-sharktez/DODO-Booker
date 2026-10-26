@@ -1,0 +1,30 @@
+-- ─────────────────────────────────────────────────────────────────────────────
+-- Fix: bookings DELETE events not reaching the customer app via Realtime.
+--
+-- Root cause:
+--   bookings uses REPLICA IDENTITY DEFAULT (only the PK column `id` is tracked
+--   in WAL old_record for DELETE events).  The customer app subscribes to the
+--   personal Realtime channel with a filter `customer_id = <id>`.  For DELETE
+--   events Supabase Realtime matches the filter against old_record — but since
+--   `customer_id` is not present in old_record under DEFAULT identity, the
+--   filter always fails and the event is silently dropped.  The customer's
+--   myBookingsProvider is never invalidated, so deleted bookings remain visible
+--   until the user manually pulls to refresh.
+--
+-- Fix:
+--   REPLICA IDENTITY FULL writes every column into old_record for UPDATE and
+--   DELETE events.  The filter `customer_id = X` then resolves correctly, the
+--   DELETE event reaches the customer's personal channel, and the providers are
+--   invalidated immediately.
+--
+-- Precedent:
+--   The same pattern was applied to support_messages and support_conversations
+--   in migration 20261009000011_support_realtime_policy_fix.sql.
+--
+-- Impact:
+--   Slightly larger WAL entries for bookings UPDATE/DELETE events.  Booking
+--   writes are low-frequency relative to read traffic, so the overhead is
+--   negligible.
+-- ─────────────────────────────────────────────────────────────────────────────
+
+ALTER TABLE public.bookings REPLICA IDENTITY FULL;

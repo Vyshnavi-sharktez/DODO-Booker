@@ -25,13 +25,15 @@ void main() async {
   final savedTheme = prefs.getString('dodo_theme_mode');
   final initialTheme =
       savedTheme == 'dark' ? ThemeMode.dark : ThemeMode.light;
-  final isLoggedIn = prefs.getString('dodo_auth_phone') != null;
-
   await Supabase.initialize(
     url: SupabaseConfig.supabaseUrl,
     // ignore: deprecated_member_use
     anonKey: SupabaseConfig.supabaseAnonKey,
   );
+
+  // Check Supabase session first (restored by initialize), then SharedPreferences fallback
+  final isLoggedIn = Supabase.instance.client.auth.currentSession != null ||
+      prefs.getString('dodo_auth_phone') != null;
 
   runApp(
     ProviderScope(

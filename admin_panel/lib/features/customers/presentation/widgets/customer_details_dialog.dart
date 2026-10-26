@@ -95,6 +95,11 @@ class CustomerDetailsDialog extends StatelessWidget {
                     const SizedBox(height: 20),
 
                     // Fields
+                    if (c.customerNumber != null)
+                      _DetailRow(
+                          icon: Icons.tag_rounded,
+                          label: 'Customer ID',
+                          value: c.customerNumber!),
                     _DetailRow(
                         icon: Icons.badge_rounded,
                         label: 'Full Name',

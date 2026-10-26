@@ -175,6 +175,27 @@ class _ProfileHeaderState extends ConsumerState<ProfileHeader> {
                   ?.copyWith(color: Colors.white70),
             ),
           ],
+          if (profile.vendorNumber != null) ...[
+            const SizedBox(height: 8),
+            Container(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+              decoration: BoxDecoration(
+                color: Colors.white.withAlpha(30),
+                borderRadius: BorderRadius.circular(6),
+                border: Border.all(color: Colors.white54, width: 1),
+              ),
+              child: Text(
+                profile.vendorNumber!,
+                style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  color: Colors.white,
+                  letterSpacing: 0.5,
+                ),
+              ),
+            ),
+          ],
           const SizedBox(height: 12),
           _StatusChip(status: profile.status, isActive: profile.isActive),
         ],

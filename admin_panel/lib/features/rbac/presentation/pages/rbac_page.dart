@@ -109,7 +109,7 @@ class _RbacPageState extends ConsumerState<RbacPage>
                   ),
                   Tab(
                     icon: Icon(Icons.people_rounded, size: 18),
-                    text: 'Admin Users',
+                    text: 'Users',
                     iconMargin: EdgeInsets.only(bottom: 4),
                   ),
                 ],

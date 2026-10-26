@@ -55,6 +55,8 @@ class _BulkUploadDialogState extends State<BulkUploadDialog> {
   BulkUploadModule get _m => widget.module;
 
   int get _validCount => _rows.where((r) => r.status == RowStatus.valid).length;
+  int get _updateCount =>
+      _rows.where((r) => r.status == RowStatus.updatePending).length;
   int get _skipCount => _rows.where((r) => r.status == RowStatus.skipped).length;
   int get _invalidCount =>
       _rows.where((r) => r.status == RowStatus.invalid).length;
@@ -151,7 +153,10 @@ class _BulkUploadDialogState extends State<BulkUploadDialog> {
   Future<void> _confirmImport() async {
     setState(() => _step = _Step.importing);
     try {
-      final validRows = _rows.where((r) => r.status == RowStatus.valid).toList();
+      final validRows = _rows
+          .where((r) =>
+              r.status == RowStatus.valid || r.status == RowStatus.updatePending)
+          .toList();
       final result = await _m.importRows(validRows);
       setState(() {
         _result = result;
@@ -310,7 +315,8 @@ class _BulkUploadDialogState extends State<BulkUploadDialog> {
   // ── Preview ───────────────────────────────────────────────────────────────
 
   Widget _buildPreview() {
-    final canImport = _validCount > 0 && _invalidCount == 0;
+    final totalActionable = _validCount + _updateCount;
+    final canImport = totalActionable > 0 && _invalidCount == 0;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -336,16 +342,23 @@ class _BulkUploadDialogState extends State<BulkUploadDialog> {
               Wrap(
                 spacing: 12,
                 children: [
-                  _Chip(
-                    icon: Icons.check_circle_rounded,
-                    color: AppColors.success,
-                    label: '$_validCount will be created',
-                  ),
+                  if (_validCount > 0)
+                    _Chip(
+                      icon: Icons.check_circle_rounded,
+                      color: AppColors.success,
+                      label: '$_validCount will be created',
+                    ),
+                  if (_updateCount > 0)
+                    _Chip(
+                      icon: Icons.update_rounded,
+                      color: AppColors.primary,
+                      label: '$_updateCount will be updated',
+                    ),
                   if (_skipCount > 0)
                     _Chip(
                       icon: Icons.warning_amber_rounded,
                       color: AppColors.warning,
-                      label: '$_skipCount will skip (duplicates)',
+                      label: '$_skipCount will skip (no changes / duplicates)',
                     ),
                   if (_invalidCount > 0)
                     _Chip(
@@ -395,7 +408,7 @@ class _BulkUploadDialogState extends State<BulkUploadDialog> {
                 icon: const Icon(Icons.publish_rounded, size: 18),
                 label: Text(
                   canImport
-                      ? 'Import $_validCount Row${_validCount == 1 ? '' : 's'}'
+                      ? 'Import $totalActionable Row${totalActionable == 1 ? '' : 's'}'
                       : 'Import',
                 ),
                 style: FilledButton.styleFrom(
@@ -446,11 +459,17 @@ class _BulkUploadDialogState extends State<BulkUploadDialog> {
             color: AppColors.success,
             label: '${r.created} created',
           ),
+          if (r.updated > 0)
+            _ResultRow(
+              icon: Icons.update_rounded,
+              color: AppColors.primary,
+              label: '${r.updated} updated',
+            ),
           if (r.skipped > 0)
             _ResultRow(
               icon: Icons.skip_next_rounded,
               color: AppColors.warning,
-              label: '${r.skipped} skipped (already exist)',
+              label: '${r.skipped} skipped (no changes)',
             ),
           if (r.failed > 0) ...[
             _ResultRow(
@@ -580,6 +599,11 @@ class _RowTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final (icon, color, detail) = switch (row.status) {
       RowStatus.valid => (Icons.check_circle_rounded, AppColors.success, null),
+      RowStatus.updatePending => (
+          Icons.update_rounded,
+          AppColors.primary,
+          'Fields changed — will update',
+        ),
       RowStatus.skipped => (
           Icons.warning_amber_rounded,
           AppColors.warning,

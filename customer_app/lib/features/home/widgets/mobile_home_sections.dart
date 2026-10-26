@@ -677,11 +677,11 @@ class _CategoryGridItem extends StatelessWidget {
                 borderRadius: BorderRadius.circular(14),
               ),
               clipBehavior: Clip.antiAlias,
-              child: imgUrl.isNotEmpty
+              child: (imgUrl?.isNotEmpty ?? false)
                   ? Image.network(
-                      imgUrl,
+                      imgUrl!,
                       fit: BoxFit.cover,
-                      errorBuilder: (_, _, _) =>
+                      errorBuilder: (_, __, ___) =>
                           _CategoryIconFallback(name: node.name),
                       loadingBuilder: (_, child, progress) =>
                           progress == null ? child : _CategoryIconFallback(name: node.name),
@@ -1425,7 +1425,7 @@ class _MobileReviewsSection extends StatelessWidget {
       loading: () => _shell(child: _skeletons()),
       error: (_, __) => const SizedBox.shrink(),
       data: (reviews) => reviews.isEmpty
-          ? _shell(child: _emptyState(context))
+          ? const SizedBox.shrink()
           : _shell(child: _cards(reviews)),
     );
   }
@@ -1444,7 +1444,7 @@ class _MobileReviewsSection extends StatelessWidget {
 
   Widget _cards(List<PublicReview> reviews) {
     return SizedBox(
-      height: 170,
+      height: 192,
       child: ListView.builder(
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -1467,37 +1467,6 @@ class _MobileReviewsSection extends StatelessWidget {
     );
   }
 
-  Widget _emptyState(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 4, 20, 0),
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: const Color(0xFFECE7DE), width: 0.8),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(Icons.star_outline_rounded,
-                size: 28, color: AppColors.gold),
-            const SizedBox(height: 8),
-            Text(
-              'Be the first to share your experience!',
-              style: GoogleFonts.inter(
-                fontSize: 13,
-                color: AppColors.textSecondary,
-                fontWeight: FontWeight.w500,
-              ),
-              textAlign: TextAlign.center,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
 }
 
 class _ReviewCard extends StatelessWidget {
@@ -1586,6 +1555,18 @@ class _ReviewCard extends StatelessWidget {
               ),
             ],
           ),
+          if (review.serviceName != null) ...[
+            const SizedBox(height: 4),
+            Text(
+              review.serviceName!,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: GoogleFonts.inter(
+                fontSize: 11,
+                color: AppColors.textSecondary,
+              ),
+            ),
+          ],
         ],
       ),
     );

@@ -7,6 +7,7 @@ class AdminUser {
   final bool isActive;
   final Set<String> permissions;
   final List<String> roleNames;
+  final String? adminNumber;
 
   const AdminUser({
     required this.id,
@@ -17,6 +18,7 @@ class AdminUser {
     required this.isActive,
     required this.permissions,
     required this.roleNames,
+    this.adminNumber,
   });
 
   // Backward-compat map: old coarse permission keys → granular CRUD keys they imply.
@@ -89,6 +91,7 @@ class AdminUser {
     bool? isActive,
     Set<String>? permissions,
     List<String>? roleNames,
+    String? adminNumber,
   }) {
     return AdminUser(
       id: id ?? this.id,
@@ -99,6 +102,7 @@ class AdminUser {
       isActive: isActive ?? this.isActive,
       permissions: permissions ?? this.permissions,
       roleNames: roleNames ?? this.roleNames,
+      adminNumber: adminNumber ?? this.adminNumber,
     );
   }
 }

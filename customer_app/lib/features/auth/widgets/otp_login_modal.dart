@@ -48,7 +48,7 @@ class _OtpLoginModalState extends ConsumerState<OtpLoginModal> {
       if (!mounted) return;
       setState(() {
         _isLoading = false;
-        _error = 'This number is not registered. Please try again.';
+        _error = 'Failed to send OTP. Please check your number and try again.';
       });
     }
   }

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
@@ -21,6 +23,22 @@ class AbandonedCartsPage extends ConsumerStatefulWidget {
 class _AbandonedCartsPageState extends ConsumerState<AbandonedCartsPage> {
   int _page = 1;
   static const int _pageSize = 10;
+  static const _refreshInterval = Duration(seconds: 60);
+  Timer? _refreshTimer;
+
+  @override
+  void initState() {
+    super.initState();
+    _refreshTimer = Timer.periodic(_refreshInterval, (_) {
+      if (mounted) ref.invalidate(abandonedCartsProvider);
+    });
+  }
+
+  @override
+  void dispose() {
+    _refreshTimer?.cancel();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {

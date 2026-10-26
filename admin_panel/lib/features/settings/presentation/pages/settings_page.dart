@@ -1,6 +1,7 @@
 ﻿import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/theme/app_theme.dart';
+import '../../../auth/application/providers/auth_provider.dart';
 import '../../application/providers/settings_providers.dart';
 import '../widgets/settings_section_card.dart';
 
@@ -427,6 +428,30 @@ class SettingsPage extends ConsumerWidget {
         ),
       ],
     ),
+    SettingSectionDef(
+      id: 'marketing',
+      title: 'Marketing Settings',
+      description: 'Abandoned cart detection and campaign configuration',
+      icon: Icons.campaign_outlined,
+      color: Color(0xFFD69E2E),
+      fields: [
+        SettingFieldDef(
+          key: 'abandoned_cart_inactivity_value',
+          label: 'Abandoned Cart Inactivity Duration',
+          hint: 'Flag carts inactive for this long as abandoned',
+          type: SettingFieldType.integer,
+          min: 1,
+          max: 720,
+        ),
+        SettingFieldDef(
+          key: 'abandoned_cart_inactivity_unit',
+          label: 'Inactivity Unit',
+          hint: 'Time unit for the abandoned-cart threshold',
+          type: SettingFieldType.dropdown,
+          options: ['minutes', 'hours', 'days'],
+        ),
+      ],
+    ),
   ];
 
   @override
@@ -505,12 +530,291 @@ class _SettingsBody extends StatelessWidget {
             );
           }
 
-          return sectionGrid;
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const _ChangePasswordCard(),
+              const SizedBox(height: 24),
+              sectionGrid,
+            ],
+          );
         },
       ),
     );
   }
 }
+
+// ── Change Password card ──────────────────────────────────────────────────────
+
+class _ChangePasswordCard extends ConsumerStatefulWidget {
+  const _ChangePasswordCard();
+
+  @override
+  ConsumerState<_ChangePasswordCard> createState() =>
+      _ChangePasswordCardState();
+}
+
+class _ChangePasswordCardState extends ConsumerState<_ChangePasswordCard> {
+  final _formKey = GlobalKey<FormState>();
+  final _newCtrl = TextEditingController();
+  final _confirmCtrl = TextEditingController();
+  bool _obscureNew = true;
+  bool _obscureConfirm = true;
+  bool _success = false;
+
+  @override
+  void dispose() {
+    _newCtrl.dispose();
+    _confirmCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    if (!(_formKey.currentState?.validate() ?? false)) return;
+    setState(() => _success = false);
+    await ref.read(updatePasswordProvider.notifier).update(_newCtrl.text);
+    final asyncState = ref.read(updatePasswordProvider);
+    if (asyncState is AsyncData && mounted) {
+      setState(() => _success = true);
+      _newCtrl.clear();
+      _confirmCtrl.clear();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final asyncState = ref.watch(updatePasswordProvider);
+    final isLoading = asyncState is AsyncLoading;
+    final errorMsg =
+        asyncState is AsyncError ? asyncState.error.toString() : null;
+
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+        boxShadow: const [
+          BoxShadow(
+              color: Color(0x08000000), blurRadius: 8, offset: Offset(0, 2)),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            padding:
+                const EdgeInsets.symmetric(horizontal: 24, vertical: 18),
+            decoration: const BoxDecoration(
+              border:
+                  Border(bottom: BorderSide(color: Color(0xFFE2E8F0))),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: AppColors.primary.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Icon(Icons.lock_reset_rounded,
+                      color: AppColors.primary, size: 20),
+                ),
+                const SizedBox(width: 14),
+                const Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Change Password',
+                        style: TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.textPrimary)),
+                    SizedBox(height: 2),
+                    Text('Update your admin panel login password',
+                        style: TextStyle(
+                            fontSize: 12,
+                            color: AppColors.textSecondary)),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.all(24),
+            child: Form(
+              key: _formKey,
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final wide = constraints.maxWidth >= 600;
+                  final newField = _PasswordField(
+                    controller: _newCtrl,
+                    label: 'New Password',
+                    obscure: _obscureNew,
+                    onToggle: () =>
+                        setState(() => _obscureNew = !_obscureNew),
+                    validator: (v) {
+                      if (v == null || v.isEmpty) return 'Required';
+                      if (v.length < 8) return 'Minimum 8 characters';
+                      return null;
+                    },
+                  );
+                  final confirmField = _PasswordField(
+                    controller: _confirmCtrl,
+                    label: 'Confirm Password',
+                    obscure: _obscureConfirm,
+                    onToggle: () =>
+                        setState(() => _obscureConfirm = !_obscureConfirm),
+                    validator: (v) {
+                      if (v == null || v.isEmpty) return 'Required';
+                      if (v != _newCtrl.text) return 'Passwords do not match';
+                      return null;
+                    },
+                  );
+
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      if (wide)
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Expanded(child: newField),
+                            const SizedBox(width: 16),
+                            Expanded(child: confirmField),
+                          ],
+                        )
+                      else ...[
+                        newField,
+                        const SizedBox(height: 14),
+                        confirmField,
+                      ],
+                      if (_success) ...[
+                        const SizedBox(height: 14),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 14, vertical: 10),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF38A169)
+                                .withValues(alpha: 0.08),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(
+                                color: const Color(0xFF38A169)
+                                    .withValues(alpha: 0.3)),
+                          ),
+                          child: const Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.check_circle_rounded,
+                                  size: 16, color: Color(0xFF38A169)),
+                              SizedBox(width: 8),
+                              Text('Password updated successfully',
+                                  style: TextStyle(
+                                      fontSize: 13,
+                                      color: Color(0xFF38A169),
+                                      fontWeight: FontWeight.w500)),
+                            ],
+                          ),
+                        ),
+                      ],
+                      if (errorMsg != null) ...[
+                        const SizedBox(height: 14),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 14, vertical: 10),
+                          decoration: BoxDecoration(
+                            color: AppColors.error.withValues(alpha: 0.08),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(
+                                color:
+                                    AppColors.error.withValues(alpha: 0.3)),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(Icons.error_outline_rounded,
+                                  size: 16, color: AppColors.error),
+                              const SizedBox(width: 8),
+                              Flexible(
+                                child: Text(errorMsg,
+                                    style: const TextStyle(
+                                        fontSize: 13,
+                                        color: AppColors.error,
+                                        fontWeight: FontWeight.w500)),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                      const SizedBox(height: 18),
+                      FilledButton.icon(
+                        onPressed: isLoading ? null : _submit,
+                        icon: isLoading
+                            ? const SizedBox.square(
+                                dimension: 16,
+                                child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: Colors.white))
+                            : const Icon(Icons.save_rounded, size: 18),
+                        label: Text(
+                            isLoading ? 'Updating...' : 'Update Password'),
+                        style: FilledButton.styleFrom(
+                          backgroundColor: AppColors.primary,
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 24, vertical: 12),
+                        ),
+                      ),
+                    ],
+                  );
+                },
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PasswordField extends StatelessWidget {
+  const _PasswordField({
+    required this.controller,
+    required this.label,
+    required this.obscure,
+    required this.onToggle,
+    required this.validator,
+  });
+
+  final TextEditingController controller;
+  final String label;
+  final bool obscure;
+  final VoidCallback onToggle;
+  final String? Function(String?) validator;
+
+  @override
+  Widget build(BuildContext context) {
+    return TextFormField(
+      controller: controller,
+      obscureText: obscure,
+      validator: validator,
+      decoration: InputDecoration(
+        labelText: label,
+        border:
+            OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+        suffixIcon: IconButton(
+          icon: Icon(
+              obscure
+                  ? Icons.visibility_off_rounded
+                  : Icons.visibility_rounded,
+              size: 20),
+          onPressed: onToggle,
+        ),
+      ),
+    );
+  }
+}
+
 // â”€â”€ Error view â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class _ErrorView extends StatelessWidget {

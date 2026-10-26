@@ -72,7 +72,9 @@ Optional columns:
   preferred_vendor_fee: Extra fee when selected as preferred vendor (default 0)
 
 Duplicate handling:
-  Rows with a phone number already in the system are SKIPPED (not updated).
+  A vendor with the same phone and identical fields is SKIPPED.
+  If the phone matches but any field differs, the existing record is UPDATED.
+  Duplicate phone numbers within the uploaded file are SKIPPED after the first occurrence.
 
 Notes:
   - Do not edit the column headers in row 1.
@@ -84,11 +86,9 @@ Notes:
   @override
   Future<List<BulkRow>> validateRows(List<Map<String, String?>> rawRows) async {
     final client = Supabase.instance.client;
+    final existing = await _loadExistingVendors(client);
 
-    final existing = await client.from('vendors').select('phone');
-    final existingPhones = {
-      for (final r in existing as List) (r['phone'] as String).trim(),
-    };
+    final seenPhones = <String>{};
 
     return List.generate(rawRows.length, (i) {
       final row = rawRows[i];
@@ -115,12 +115,34 @@ Notes:
         );
       }
 
-      if (existingPhones.contains(phone)) {
+      // Within-upload duplicate.
+      if (seenPhones.contains(phone)) {
         return BulkRow(
           rowNumber: rowNum,
           raw: row,
           status: RowStatus.skipped,
-          skipReason: 'Phone $phone already exists',
+          skipReason: 'Duplicate phone in this upload: $phone',
+          displayLabel: name,
+        );
+      }
+      seenPhones.add(phone);
+
+      final existingVendor = existing[phone];
+      if (existingVendor != null) {
+        if (_vendorFieldsChanged(row, existingVendor)) {
+          return BulkRow(
+            rowNumber: rowNum,
+            raw: row,
+            status: RowStatus.updatePending,
+            displayLabel: name,
+            existingId: existingVendor['id'] as String,
+          );
+        }
+        return BulkRow(
+          rowNumber: rowNum,
+          raw: row,
+          status: RowStatus.skipped,
+          skipReason: 'Already exists, no changes: $phone',
           displayLabel: name,
         );
       }
@@ -136,8 +158,10 @@ Notes:
 
   @override
   Future<ImportResult> importRows(List<BulkRow> validRows) async {
-    final repo = VendorsRepository(Supabase.instance.client);
+    final client = Supabase.instance.client;
+    final repo = VendorsRepository(client);
     int created = 0;
+    int updated = 0;
     final failures = <({int row, String reason})>[];
 
     for (final br in validRows) {
@@ -146,33 +170,41 @@ Notes:
         final isActive = _parseBool(row['is_active'], defaultVal: true);
         final statusRaw = (row['status'] ?? '').trim();
         final status = statusRaw.isEmpty ? 'pending' : statusRaw;
-        final commission =
-            double.tryParse(row['commission_rate'] ?? '') ?? 0.0;
-        final pvFee =
-            double.tryParse(row['preferred_vendor_fee'] ?? '') ?? 0.0;
+        final commission = double.tryParse(row['commission_rate'] ?? '') ?? 0.0;
+        final pvFee = double.tryParse(row['preferred_vendor_fee'] ?? '') ?? 0.0;
         final ownerName = (row['owner_name'] ?? '').trim();
         final address = (row['address'] ?? '').trim();
 
-        // Use the same creation path as the Add Vendor dialog so the
-        // vendor_wallets trigger fires in the correct PostgREST context
-        // (Prefer: return=representation) and RLS is satisfied identically
-        // to normal vendor creation.  A failure here throws before `created`
-        // is incremented, leaving no orphaned vendor row.
-        await repo.createVendor(
-          businessName: (row['business_name'] ?? '').trim(),
-          ownerName: ownerName.isNotEmpty ? ownerName : null,
-          phone: (row['phone'] ?? '').trim(),
-          email: (row['email'] ?? '').trim(),
-          city: (row['city'] ?? '').trim(),
-          address: address.isNotEmpty ? address : null,
-          status: status,
-          isActive: isActive,
-          commissionRate: commission,
-          isPreferredVendor: pvFee > 0,
-          preferredVendorFee: pvFee,
-        );
-
-        created++;
+        if (br.status == RowStatus.updatePending) {
+          await client.from('vendors').update({
+            'business_name': (row['business_name'] ?? '').trim(),
+            'owner_name': ownerName.isNotEmpty ? ownerName : null,
+            'email': (row['email'] ?? '').trim(),
+            'city': (row['city'] ?? '').trim(),
+            'address': address.isNotEmpty ? address : null,
+            'status': status,
+            'is_active': isActive,
+            'commission_rate': commission,
+            'preferred_vendor_fee': pvFee,
+            'is_preferred_vendor': pvFee > 0,
+          }).eq('id', br.existingId!);
+          updated++;
+        } else {
+          await repo.createVendor(
+            businessName: (row['business_name'] ?? '').trim(),
+            ownerName: ownerName.isNotEmpty ? ownerName : null,
+            phone: (row['phone'] ?? '').trim(),
+            email: (row['email'] ?? '').trim(),
+            city: (row['city'] ?? '').trim(),
+            address: address.isNotEmpty ? address : null,
+            status: status,
+            isActive: isActive,
+            commissionRate: commission,
+            isPreferredVendor: pvFee > 0,
+            preferredVendorFee: pvFee,
+          );
+          created++;
+        }
       } catch (e) {
         failures.add((row: br.rowNumber, reason: e.toString()));
       }
@@ -180,10 +212,64 @@ Notes:
 
     return ImportResult(
       created: created,
+      updated: updated,
       skipped: 0,
       failed: failures.length,
       failures: failures,
     );
+  }
+
+  // ── Helpers ───────────────────────────────────────────────────────────────────
+
+  /// Returns a map keyed by phone → full vendor row including `id`.
+  Future<Map<String, Map<String, dynamic>>> _loadExistingVendors(
+      SupabaseClient client) async {
+    final rows = await client.from('vendors').select(
+      'id, phone, business_name, owner_name, email, city, address, '
+      'status, is_active, commission_rate, preferred_vendor_fee',
+    );
+    return {
+      for (final r in rows as List)
+        (r['phone'] as String).trim(): Map<String, dynamic>.from(r as Map),
+    };
+  }
+
+  bool _vendorFieldsChanged(
+      Map<String, String?> row, Map<String, dynamic> existing) {
+    final fields = <String, dynamic>{
+      'business_name': (row['business_name'] ?? '').trim(),
+      'owner_name': (row['owner_name'] ?? '').trim(),
+      'email': (row['email'] ?? '').trim(),
+      'city': (row['city'] ?? '').trim(),
+      'address': (row['address'] ?? '').trim(),
+      'status': (row['status'] ?? '').trim().isEmpty
+          ? 'pending'
+          : (row['status'] ?? '').trim(),
+    };
+
+    // String fields (null == empty).
+    for (final key in ['business_name', 'email', 'city', 'status']) {
+      if (fields[key] != ((existing[key] as String?) ?? '')) return true;
+    }
+    for (final key in ['owner_name', 'address']) {
+      final newVal = fields[key] as String;
+      final dbVal = ((existing[key] as String?) ?? '').trim();
+      if (newVal != dbVal) return true;
+    }
+
+    final newActive = _parseBool(row['is_active'], defaultVal: true);
+    if ((existing['is_active'] as bool? ?? true) != newActive) return true;
+
+    final newCommission = double.tryParse(row['commission_rate'] ?? '') ?? 0.0;
+    final dbCommission = (existing['commission_rate'] as num?)?.toDouble() ?? 0.0;
+    if (newCommission != dbCommission) return true;
+
+    final newPvFee = double.tryParse(row['preferred_vendor_fee'] ?? '') ?? 0.0;
+    final dbPvFee =
+        (existing['preferred_vendor_fee'] as num?)?.toDouble() ?? 0.0;
+    if (newPvFee != dbPvFee) return true;
+
+    return false;
   }
 
   bool _parseBool(String? val, {required bool defaultVal}) {

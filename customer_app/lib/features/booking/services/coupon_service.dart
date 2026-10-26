@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../models/coupon_model.dart';
 
@@ -14,12 +15,44 @@ class CouponService {
         .order('created_at', ascending: false);
 
     final now = DateTime.now();
-    final coupons = (data as List<dynamic>)
+    var coupons = (data as List<dynamic>)
         .map((r) => CouponModel.fromMap(r as Map<String, dynamic>))
         .where((c) => c.validTo == null || c.validTo!.isAfter(now))
         .toList();
 
-    // Resolve applicable node names in a single batch query.
+    // ── Min-order threshold filtering ──────────────────────────────────────
+    // Any coupon with maxOrderWiseLimit set requires the customer to have
+    // at least that many qualifying (non-cancelled/rejected) orders.
+    // Coupons that the customer is ineligible for are hidden entirely.
+    final thresholdCoupons =
+        coupons.where((c) => c.maxOrderWiseLimit != null).toList();
+    if (thresholdCoupons.isNotEmpty) {
+      final prefs = await SharedPreferences.getInstance();
+      final customerId = prefs.getString('dodo_customer_id');
+
+      int orderCount = 0;
+      if (customerId != null) {
+        try {
+          final result = await _client.rpc(
+            'get_customer_order_count',
+            params: {'p_customer_id': customerId},
+          );
+          orderCount = (result as int?) ?? 0;
+        } catch (e) {
+          debugPrint('[DODO][Coupon] Order count fetch failed: $e');
+        }
+      }
+
+      coupons = coupons
+          .where((c) =>
+              c.maxOrderWiseLimit == null || orderCount >= c.maxOrderWiseLimit!)
+          .toList();
+      debugPrint(
+          '[DODO][Coupon] Order count=$orderCount; '
+          '${thresholdCoupons.length} threshold coupon(s) evaluated');
+    }
+
+    // ── Resolve applicable node names in a single batch query ──────────────
     final nodeIds =
         coupons.expand((c) => c.applicableNodeIds).toSet().toList();
 
@@ -58,10 +91,13 @@ class CouponService {
     required double subtotal,
     required List<String> cartNodeIds,
   }) async {
+    final prefs = await SharedPreferences.getInstance();
+    final customerId = prefs.getString('dodo_customer_id');
     final result = await _client.rpc('validate_coupon', params: {
       'p_code': code,
       'p_subtotal': subtotal,
       'p_cart_node_ids': cartNodeIds,
+      if (customerId != null) 'p_customer_id': customerId,
     });
     final map = Map<String, dynamic>.from(result as Map);
     if (map['valid'] != true) {

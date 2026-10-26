@@ -76,6 +76,7 @@ class TopHeader extends ConsumerWidget {
             _UserChip(
               displayName: adminUser.displayName,
               role: adminUser.primaryRole,
+              adminNumber: adminUser.adminNumber,
               onLogout: () =>
                   ref.read(authNotifierProvider.notifier).logout(),
             ),
@@ -597,9 +598,11 @@ class _UserChip extends StatefulWidget {
     required this.displayName,
     required this.role,
     required this.onLogout,
+    this.adminNumber,
   });
   final String displayName;
   final String role;
+  final String? adminNumber;
   final VoidCallback onLogout;
 
   @override
@@ -643,6 +646,29 @@ class _UserChipState extends State<_UserChip> {
                     color: AppColors.textSecondary,
                   ),
                 ),
+                if (widget.adminNumber != null) ...[
+                  const SizedBox(height: 4),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: AppColors.primary.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(4),
+                      border: Border.all(
+                          color: AppColors.primary.withValues(alpha: 0.3),
+                          width: 1),
+                    ),
+                    child: Text(
+                      widget.adminNumber!,
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.primary,
+                        letterSpacing: 0.4,
+                      ),
+                    ),
+                  ),
+                ],
               ],
             ),
           ),

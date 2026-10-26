@@ -14,8 +14,6 @@ abstract class IBookingsRepository {
   Future<bool> verifyCompletionOtp(String bookingId, String otp);
   Future<void> completeCodBookingAfterOtp({
     required String bookingId,
-    required bool cashCollected,
-    String? notCollectedReason,
   });
   Future<void> createAdminNotification({
     required String title,
@@ -32,7 +30,5 @@ abstract class IBookingsRepository {
   });
   Future<void> confirmCodCashCollection({
     required String bookingId,
-    required bool cashCollected,
-    String? notCollectedReason,
   });
 }

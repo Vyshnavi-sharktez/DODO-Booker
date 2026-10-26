@@ -72,7 +72,7 @@ class _CommissionSettingsPageState
       _error = null;
     });
     try {
-      final saved = await ref.read(commissionRepositoryProvider).upsertRule(
+      await ref.read(commissionRepositoryProvider).upsertRule(
             ruleType: 'global',
             commissionType: _commissionType,
             commissionValue: value,

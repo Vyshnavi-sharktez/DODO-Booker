@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../../core/constants/app_colors.dart';
 import '../../../core/utils/icon_registry.dart';
 import '../../../core/widgets/section_header.dart';
 import '../../../models/category_model.dart';

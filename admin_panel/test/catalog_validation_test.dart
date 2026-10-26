@@ -197,6 +197,7 @@ void main() {
         rowNumber: 2,
         childrenOf: empty.childrenOf,
         nodesById: empty.nodesById,
+        seenPaths: {},
       );
       expect(result.status, RowStatus.valid);
       expect(result.displayLabel, 'AC Services');
@@ -215,6 +216,7 @@ void main() {
         rowNumber: 3,
         childrenOf: cache.childrenOf,
         nodesById: cache.nodesById,
+        seenPaths: {},
       );
       expect(result.status, RowStatus.valid);
       expect(result.displayLabel, 'AC Repair');
@@ -226,6 +228,7 @@ void main() {
         rowNumber: 2,
         childrenOf: empty.childrenOf,
         nodesById: empty.nodesById,
+        seenPaths: {},
       );
       expect(result.status, RowStatus.invalid);
       expect(result.errors, isNotEmpty);
@@ -237,6 +240,7 @@ void main() {
         rowNumber: 2,
         childrenOf: empty.childrenOf,
         nodesById: empty.nodesById,
+        seenPaths: {},
       );
       expect(result.status, RowStatus.invalid);
       expect(result.errors.first, contains('base_price'));
@@ -248,6 +252,7 @@ void main() {
         rowNumber: 2,
         childrenOf: empty.childrenOf,
         nodesById: empty.nodesById,
+        seenPaths: {},
       );
       expect(result.status, RowStatus.invalid);
     });
@@ -259,9 +264,10 @@ void main() {
         rowNumber: 2,
         childrenOf: cache.childrenOf,
         nodesById: cache.nodesById,
+        seenPaths: {},
       );
       expect(result.status, RowStatus.skipped);
-      expect(result.skipReason, contains('already exists'));
+      expect(result.skipReason, contains('Already exists'));
     });
 
     test('skipped — deep duplicate path', () {
@@ -275,12 +281,11 @@ void main() {
           'level_1': 'Home Cleaning',
           'level_2': 'Deep Cleaning',
           'level_3': 'Kitchen',
-          'is_bookable': 'TRUE',
-          'base_price': '499',
         }),
         rowNumber: 4,
         childrenOf: cache.childrenOf,
         nodesById: cache.nodesById,
+        seenPaths: {},
       );
       expect(result.status, RowStatus.skipped);
     });
@@ -296,6 +301,7 @@ void main() {
         rowNumber: 3,
         childrenOf: cache.childrenOf,
         nodesById: cache.nodesById,
+        seenPaths: {},
       );
       expect(result.status, RowStatus.valid);
     });
@@ -306,6 +312,7 @@ void main() {
         rowNumber: 2,
         childrenOf: empty.childrenOf,
         nodesById: empty.nodesById,
+        seenPaths: {},
       );
       expect(result.status, RowStatus.valid);
     });
@@ -316,6 +323,7 @@ void main() {
         rowNumber: 2,
         childrenOf: empty.childrenOf,
         nodesById: empty.nodesById,
+        seenPaths: {},
       );
       expect(result.status, RowStatus.valid);
     });
@@ -327,6 +335,7 @@ void main() {
         rowNumber: 2,
         childrenOf: cache.childrenOf,
         nodesById: cache.nodesById,
+        seenPaths: {},
       );
       expect(result.status, RowStatus.skipped);
     });
@@ -337,6 +346,7 @@ void main() {
         rowNumber: 42,
         childrenOf: empty.childrenOf,
         nodesById: empty.nodesById,
+        seenPaths: {},
       );
       expect(result.rowNumber, 42);
     });

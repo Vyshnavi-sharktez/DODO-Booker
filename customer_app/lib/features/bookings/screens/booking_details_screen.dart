@@ -211,8 +211,13 @@ class _BookingDetailsScreenState extends ConsumerState<BookingDetailsScreen> {
       Navigator.of(context).pop();
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to cancel: $e')),
+      showDialog<void>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Cancellation Failed'),
+          content: Text('Could not cancel your booking. Please try again.\n\n$e'),
+          actions: [FilledButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('OK'))],
+        ),
       );
     } finally {
       if (mounted) setState(() => _isCancelling = false);
@@ -524,6 +529,13 @@ class _BookingInfoCard extends StatelessWidget {
           label: 'Booked On',
           value: _createdDate,
         ),
+        if (booking.bookingNotes != null &&
+            booking.bookingNotes!.trim().isNotEmpty)
+          _DetailRow(
+            icon: Icons.notes_rounded,
+            label: 'Notes',
+            value: booking.bookingNotes!.trim(),
+          ),
       ],
     );
   }

@@ -68,7 +68,9 @@ Intermediate nodes:
   non-bookable category with is_active=TRUE.
 
 Duplicate handling:
-  If a node with the exact path already exists, the row is SKIPPED.
+  If a node with the exact path already exists AND all fields match, the row is SKIPPED.
+  If the path exists but any field differs, the existing record is UPDATED.
+  Duplicate rows within the uploaded file are SKIPPED after the first occurrence.
 
 Notes:
   - Column headers in row 1 must not be changed.
@@ -82,13 +84,15 @@ Notes:
 
   Future<void> _loadCache(SupabaseClient client) async {
     debugPrint('[CatalogBulk] _loadCache: querying catalog_nodes + relationships');
-    final nodes = await client.from('catalog_nodes').select('id, name');
+    final nodes = await client.from('catalog_nodes').select(
+      'id, name, is_bookable, is_active, base_price, estimated_duration, '
+      'minimum_order_amount, description, icon_key, sort_order',
+    );
     final rels = await client.from('catalog_node_relationships').select('parent_id, child_id');
     debugPrint('[CatalogBulk] _loadCache: ${(nodes as List).length} nodes, ${(rels as List).length} rels');
 
     final nodesById = <String, Map<String, dynamic>>{};
     for (final n in nodes as List) {
-      // Guard against unexpected nulls in DB response.
       final id = n['id'] as String?;
       if (id == null) {
         debugPrint('[CatalogBulk] Warning: node with null id skipped: $n');
@@ -100,9 +104,6 @@ Notes:
     final allChildIds = <String>{};
     final childrenOf = <String?, List<String>>{};
     for (final r in rels as List) {
-      // parent_id IS nullable here: cast to String? not String.
-      // Any null parent_id means the row was inserted outside the normal flow;
-      // we skip it rather than crashing on the cast.
       final parentId = r['parent_id'] as String?;
       final childId = r['child_id'] as String?;
       if (childId == null) {
@@ -124,7 +125,7 @@ Notes:
   void _addToCache(String? parentId, String nodeId, String name) {
     final nm = _nodesById;
     final cm = _childrenOf;
-    if (nm == null || cm == null) return; // both set by _loadCache before importRows
+    if (nm == null || cm == null) return;
     nm[nodeId] = {'id': nodeId, 'name': name};
     (cm[parentId] ??= []).add(nodeId);
   }
@@ -137,6 +138,8 @@ Notes:
     final client = Supabase.instance.client;
     await _loadCache(client);
 
+    final seenPaths = <String>{};
+
     return List.generate(rawRows.length, (i) {
       final row = rawRows[i];
       final rowNum = i + 2;
@@ -146,6 +149,7 @@ Notes:
         rowNumber: rowNum,
         childrenOf: _childrenOf!,
         nodesById: _nodesById!,
+        seenPaths: seenPaths,
       );
       debugPrint('[CatalogBulk] Row $rowNum — ${result.status.name}: ${result.displayLabel}');
       return result;
@@ -160,13 +164,39 @@ Notes:
     if (_nodesById == null) await _loadCache(client);
 
     int created = 0;
+    int updated = 0;
     final failures = <({int row, String reason})>[];
 
     for (final br in validRows) {
       try {
         final row = br.raw;
         final levels = extractCatalogLevels(row);
+        final isLeafBookable = parseCatalogBool(row['is_bookable'], defaultVal: false);
+        final isLeafActive = parseCatalogBool(row['is_active'], defaultVal: true);
+        final leafBasePrice = double.tryParse(row['base_price'] ?? '');
+        final leafDuration = int.tryParse(row['estimated_duration'] ?? '');
+        final leafMinOrder = double.tryParse(row['minimum_order_amount'] ?? '');
+        final leafDescription = (row['description'] ?? '').trim();
+        final leafIconKey = (row['icon_key'] ?? '').trim();
+        final leafSortOrder = int.tryParse(row['sort_order'] ?? '') ?? 0;
 
+        if (br.status == RowStatus.updatePending) {
+          // Leaf exists — update fields in place.
+          await client.from('catalog_nodes').update({
+            'is_bookable': isLeafBookable,
+            'is_active': isLeafActive,
+            'base_price': leafBasePrice,
+            'estimated_duration': leafDuration,
+            'minimum_order_amount': leafMinOrder,
+            'description': leafDescription.isNotEmpty ? leafDescription : null,
+            'icon_key': leafIconKey.isNotEmpty ? leafIconKey : null,
+            'sort_order': leafSortOrder,
+          }).eq('id', br.existingId!);
+          updated++;
+          continue;
+        }
+
+        // valid: walk path and create any missing nodes.
         String? parentId;
         for (var idx = 0; idx < levels.length; idx++) {
           final name = levels[idx];
@@ -174,37 +204,20 @@ Notes:
 
           var nodeId = findCatalogChild(parentId, name, _childrenOf!, _nodesById!);
           if (nodeId == null) {
-            // Create the node.
             final slug = await _uniqueSlug(client, name);
-            final isBookable = isLeaf &&
-                parseCatalogBool(row['is_bookable'], defaultVal: false);
-            final isActive = parseCatalogBool(row['is_active'], defaultVal: true);
-            final basePrice =
-                isLeaf ? double.tryParse(row['base_price'] ?? '') : null;
-            final duration =
-                isLeaf ? int.tryParse(row['estimated_duration'] ?? '') : null;
-            final minOrder = isLeaf
-                ? double.tryParse(row['minimum_order_amount'] ?? '')
-                : null;
-            final description =
-                isLeaf ? (row['description'] ?? '').trim() : null;
-            final iconKey = isLeaf ? (row['icon_key'] ?? '').trim() : null;
-            final sortOrder =
-                isLeaf ? (int.tryParse(row['sort_order'] ?? '') ?? 0) : 0;
-
             final inserted = await client
                 .from('catalog_nodes')
                 .insert({
                   'name': name,
                   'slug': slug,
-                  'is_bookable': isBookable,
-                  'is_active': isActive,
-                  'sort_order': sortOrder,
-                  'base_price': basePrice,
-                  'estimated_duration': duration,
-                  'minimum_order_amount': minOrder,
-                  'description': description != null && description.isNotEmpty ? description : null,
-                  'icon_key': iconKey != null && iconKey.isNotEmpty ? iconKey : null,
+                  'is_bookable': isLeaf ? isLeafBookable : false,
+                  'is_active': isLeaf ? isLeafActive : true,
+                  'sort_order': isLeaf ? leafSortOrder : 0,
+                  'base_price': isLeaf ? leafBasePrice : null,
+                  'estimated_duration': isLeaf ? leafDuration : null,
+                  'minimum_order_amount': isLeaf ? leafMinOrder : null,
+                  'description': isLeaf && leafDescription.isNotEmpty ? leafDescription : null,
+                  'icon_key': isLeaf && leafIconKey.isNotEmpty ? leafIconKey : null,
                 })
                 .select('id')
                 .single();
@@ -215,7 +228,7 @@ Notes:
               await client.from('catalog_node_relationships').insert({
                 'parent_id': parentId,
                 'child_id': nodeId,
-                'sort_order': sortOrder,
+                'sort_order': isLeaf ? leafSortOrder : 0,
               });
             }
 
@@ -233,6 +246,7 @@ Notes:
 
     return ImportResult(
       created: created,
+      updated: updated,
       skipped: 0,
       failed: failures.length,
       failures: failures,
@@ -365,5 +379,4 @@ Notes:
       suffix++;
     }
   }
-
 }

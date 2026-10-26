@@ -3,8 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/routes/route_names.dart';
-import '../../../../core/widgets/vendor_scaffold.dart';
-import '../../../auth/presentation/providers/auth_controller.dart';
 import '../providers/notifications_provider.dart';
 import '../widgets/notification_tile.dart';
 

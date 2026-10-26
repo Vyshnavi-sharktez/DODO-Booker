@@ -24,6 +24,7 @@ class Vendor {
   final String? tierId;
   final VendorTier? vendorTier;
   final DateTime? tierEvaluatedAt;
+  final String? vendorNumber;
 
   const Vendor({
     required this.id,
@@ -49,6 +50,7 @@ class Vendor {
     this.tierId,
     this.vendorTier,
     this.tierEvaluatedAt,
+    this.vendorNumber,
   });
 
   factory Vendor.fromMap(Map<String, dynamic> map) {
@@ -87,6 +89,7 @@ class Vendor {
       tierEvaluatedAt: map['tier_evaluated_at'] != null
           ? DateTime.tryParse(map['tier_evaluated_at'] as String)
           : null,
+      vendorNumber: map['vendor_number'] as String?,
     );
   }
 
@@ -110,6 +113,7 @@ class Vendor {
     String? tierId,
     VendorTier? vendorTier,
     DateTime? tierEvaluatedAt,
+    String? vendorNumber,
   }) {
     return Vendor(
       id: id,
@@ -134,6 +138,7 @@ class Vendor {
       tierId: tierId ?? this.tierId,
       vendorTier: vendorTier ?? this.vendorTier,
       tierEvaluatedAt: tierEvaluatedAt ?? this.tierEvaluatedAt,
+      vendorNumber: vendorNumber ?? this.vendorNumber,
     );
   }
 }

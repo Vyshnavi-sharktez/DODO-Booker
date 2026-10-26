@@ -154,18 +154,39 @@ class CategoryService {
       return [];
     }
     debugPrint('[DODO][CategoryService] fetchAddonsForNode($nodeId) → SUPABASE');
-    final data = await _db
-        .from('catalog_node_addons')
-        .select('sort_order, addons(*)')
-        .eq('node_id', nodeId)
-        .order('sort_order', ascending: true);
-    return (data as List)
+
+    // Fetch node-specific addons and global addons in parallel.
+    final results = await Future.wait([
+      _db
+          .from('catalog_node_addons')
+          .select('sort_order, addons(*)')
+          .eq('node_id', nodeId)
+          .order('sort_order', ascending: true),
+      _db
+          .from('addons')
+          .select()
+          .eq('is_global', true)
+          .eq('is_active', true)
+          .order('name', ascending: true),
+    ]);
+
+    final nodeAddons = (results[0] as List)
         .where((row) {
           final addon = row['addons'] as Map<String, dynamic>?;
           return addon != null && (addon['is_active'] as bool? ?? false);
         })
-        .map((row) => AddOnModel.fromJson(row['addons'] as Map<String, dynamic>))
+        .map((row) =>
+            AddOnModel.fromJson(row['addons'] as Map<String, dynamic>))
         .toList();
+
+    final nodeAddonIds = nodeAddons.map((a) => a.id).toSet();
+
+    final globalAddons = (results[1] as List)
+        .map((row) => AddOnModel.fromJson(row as Map<String, dynamic>))
+        .where((a) => !nodeAddonIds.contains(a.id))
+        .toList();
+
+    return [...nodeAddons, ...globalAddons];
   }
 
   // ── Service attributes ─────────────────────────────────────────────────────

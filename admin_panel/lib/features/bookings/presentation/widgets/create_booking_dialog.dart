@@ -1,4 +1,4 @@
-import 'dart:async';
+﻿import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -54,6 +54,8 @@ class CreateBookingDialog extends ConsumerStatefulWidget {
       String addonId,
       String addonName,
       double addonPrice,
+      int quantity,
+      bool isGlobal,
     })> addons,
     double discountAmount,
     double taxAmount,
@@ -106,6 +108,17 @@ class _CreateBookingDialogState extends ConsumerState<CreateBookingDialog> {
   Coupon? _appliedCoupon;
   String? _couponError;
   bool _couponApplied = false;
+
+  // Global add-ons (booking-level, not per-service)
+  List<ServiceAddon> _globalAddons = [];
+  final Map<String, int> _globalAddonQtys = {}; // addon id → quantity (absent = 0)
+  bool _globalAddonsLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _initGlobalAddons());
+  }
 
   @override
   void dispose() {
@@ -855,6 +868,35 @@ class _CreateBookingDialogState extends ConsumerState<CreateBookingDialog> {
     }
   }
 
+  // -- Global add-ons ------------------------------------------------------------
+
+  Future<void> _initGlobalAddons() async {
+    if (!mounted) return;
+    try {
+      final globals =
+          await ref.read(serviceAddonsRepositoryProvider).fetchGlobalAddons();
+      if (mounted) {
+        setState(() {
+          _globalAddons = globals;
+          _globalAddonsLoading = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) setState(() => _globalAddonsLoading = false);
+    }
+  }
+
+  double _globalAddonsTotal() {
+    double total = 0.0;
+    for (final entry in _globalAddonQtys.entries) {
+      final qty = entry.value;
+      if (qty <= 0) continue;
+      final addon = _globalAddons.where((a) => a.id == entry.key).firstOrNull;
+      if (addon != null) total += addon.price * qty;
+    }
+    return total;
+  }
+
   // -- Totals computation --------------------------------------------------------
 
   double _computeSubtotal() {
@@ -871,6 +913,7 @@ class _CreateBookingDialogState extends ConsumerState<CreateBookingDialog> {
         total += s.lineTotal;
       }
     }
+    total += _globalAddonsTotal();
     return total;
   }
 
@@ -900,23 +943,51 @@ class _CreateBookingDialogState extends ConsumerState<CreateBookingDialog> {
 
   Future<void> _submit(TaxSettingsConfig tax) async {
     if (_selectedCustomer == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please select a customer')),
+      await showDialog<void>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          title: const Text('Customer Required'),
+          content: const Text('Please select a customer before creating the booking.'),
+          actions: [
+            FilledButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('OK')),
+          ],
+        ),
       );
       return;
     }
     if (!_formKey.currentState!.validate()) return;
     if (_serviceDate == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please select a service date')),
+      await showDialog<void>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12)),
+          title: const Text('Date Required'),
+          content: const Text('Please select a service date before creating the booking.'),
+          actions: [
+            FilledButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: const Text('OK'),
+            ),
+          ],
+        ),
       );
       return;
     }
 
     // Must have at least one item (catalog or custom)
     if (_itemKeys.isEmpty && _customItemKeys.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please add at least one item')),
+      await showDialog<void>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          title: const Text('No Items Added'),
+          content: const Text('Please add at least one service item before creating the booking.'),
+          actions: [
+            FilledButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('OK')),
+          ],
+        ),
       );
       return;
     }
@@ -929,14 +1000,20 @@ class _CreateBookingDialogState extends ConsumerState<CreateBookingDialog> {
       double unitPrice,
     })>[];
     final allAddons =
-        <({String addonId, String addonName, double addonPrice})>[];
+        <({String addonId, String addonName, double addonPrice, int quantity, bool isGlobal})>[];
 
     for (int i = 0; i < _itemKeys.length; i++) {
       final data = _itemKeys[i].currentState?.buildItemData();
       if (data == null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Item ${i + 1}: Please select a service to continue'),
+        await showDialog<void>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            title: const Text('Incomplete Item'),
+            content: Text('Item ${i + 1}: Please select a service to continue.'),
+            actions: [
+              FilledButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('OK')),
+            ],
           ),
         );
         return;
@@ -954,6 +1031,8 @@ class _CreateBookingDialogState extends ConsumerState<CreateBookingDialog> {
             addonId: addon.id,
             addonName: addon.name,
             addonPrice: addon.price,
+            quantity: 1,
+            isGlobal: false,
           ));
         }
       }
@@ -966,14 +1045,30 @@ class _CreateBookingDialogState extends ConsumerState<CreateBookingDialog> {
       final price = state.price;
       final qty = state.quantity;
       if (name.isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Custom item ${i + 1}: Product name required')),
+        await showDialog<void>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            title: const Text('Name Required'),
+            content: Text('Custom item ${i + 1}: Please enter a product name.'),
+            actions: [
+              FilledButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('OK')),
+            ],
+          ),
         );
         return;
       }
       if (price <= 0) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Custom item ${i + 1}: Valid price required')),
+        await showDialog<void>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            title: const Text('Invalid Price'),
+            content: Text('Custom item ${i + 1}: Please enter a valid price greater than zero.'),
+            actions: [
+              FilledButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('OK')),
+            ],
+          ),
         );
         return;
       }
@@ -984,6 +1079,21 @@ class _CreateBookingDialogState extends ConsumerState<CreateBookingDialog> {
         quantity: qty,
         unitPrice: price,
       ));
+    }
+
+    // Global add-ons (booking-level, charged once with their quantity)
+    for (final entry in _globalAddonQtys.entries) {
+      if (entry.value <= 0) continue;
+      final addon = _globalAddons.where((a) => a.id == entry.key).firstOrNull;
+      if (addon != null) {
+        allAddons.add((
+          addonId: addon.id,
+          addonName: addon.name,
+          addonPrice: addon.price,
+          quantity: entry.value,
+          isGlobal: true,
+        ));
+      }
     }
 
     final subtotal = _computeSubtotal();
@@ -1010,10 +1120,15 @@ class _CreateBookingDialogState extends ConsumerState<CreateBookingDialog> {
       if (mounted) Navigator.of(context).pop();
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error: $e'),
-            backgroundColor: AppColors.error,
+        await showDialog<void>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            title: const Text('Booking Failed'),
+            content: Text('$e'),
+            actions: [
+              FilledButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('OK')),
+            ],
           ),
         );
       }
@@ -1137,6 +1252,54 @@ class _CreateBookingDialogState extends ConsumerState<CreateBookingDialog> {
                     onChanged: _onItemChanged,
                   ),
                 ],
+
+                // -- Global Add-ons ------------------------------------------
+                if (!_globalAddonsLoading && _globalAddons.isNotEmpty) ...[
+                  const SizedBox(height: 20),
+                  const Text(
+                    'Global Add-ons',
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.textPrimary,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 14, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: AppColors.background,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: AppColors.border),
+                    ),
+                    child: Column(
+                      children: [
+                        for (final addon in _globalAddons) ...[
+                          if (addon != _globalAddons.first)
+                            const Divider(height: 16),
+                          _GlobalAddonRow(
+                            addon: addon,
+                            qty: _globalAddonQtys[addon.id] ?? 0,
+                            onDecrement: () => setState(() {
+                              final q = _globalAddonQtys[addon.id] ?? 0;
+                              if (q <= 1) {
+                                _globalAddonQtys.remove(addon.id);
+                              } else {
+                                _globalAddonQtys[addon.id] = q - 1;
+                              }
+                            }),
+                            onIncrement: () => setState(() {
+                              _globalAddonQtys[addon.id] =
+                                  (_globalAddonQtys[addon.id] ?? 0) + 1;
+                            }),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ],
+
                 const SizedBox(height: 20),
                 // -- Date + Time Slot ----------------------------------------
                 Row(
@@ -1432,7 +1595,7 @@ class _SummaryBox extends StatelessWidget {
               label: couponCode != null
                   ? 'Discount ($couponCode)'
                   : 'Discount',
-              value: 'âˆ’${_priceFmt.format(discountAmount)}',
+              value: '-${_priceFmt.format(discountAmount)}',
               valueColor: AppColors.success,
             ),
           ],
@@ -2348,6 +2511,97 @@ class _AddonChip extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+// -- Global addon row ----------------------------------------------------------
+
+class _GlobalAddonRow extends StatelessWidget {
+  const _GlobalAddonRow({
+    required this.addon,
+    required this.qty,
+    required this.onDecrement,
+    required this.onIncrement,
+  });
+
+  final ServiceAddon addon;
+  final int qty;
+  final VoidCallback onDecrement;
+  final VoidCallback onIncrement;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                addon.name,
+                style: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.textPrimary,
+                ),
+              ),
+              Text(
+                '${_priceFmt.format(addon.price)} each',
+                style: const TextStyle(
+                  fontSize: 11,
+                  color: AppColors.textSecondary,
+                ),
+              ),
+            ],
+          ),
+        ),
+        if (qty == 0)
+          FilledButton.icon(
+            onPressed: onIncrement,
+            icon: const Icon(Icons.add_rounded, size: 14),
+            label: const Text('Add'),
+            style: FilledButton.styleFrom(
+              backgroundColor: AppColors.primary,
+              visualDensity: VisualDensity.compact,
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              textStyle: const TextStyle(
+                  fontSize: 12, fontWeight: FontWeight.w600),
+            ),
+          )
+        else ...[
+          _QtyButton(
+            icon: Icons.remove_rounded,
+            onTap: onDecrement,
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            child: Text(
+              '$qty',
+              style: const TextStyle(
+                  fontSize: 15, fontWeight: FontWeight.w700),
+            ),
+          ),
+          _QtyButton(
+            icon: Icons.add_rounded,
+            onTap: onIncrement,
+          ),
+          const SizedBox(width: 12),
+          SizedBox(
+            width: 60,
+            child: Text(
+              _priceFmt.format(addon.price * qty),
+              textAlign: TextAlign.end,
+              style: const TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: AppColors.primary,
+              ),
+            ),
+          ),
+        ],
+      ],
     );
   }
 }

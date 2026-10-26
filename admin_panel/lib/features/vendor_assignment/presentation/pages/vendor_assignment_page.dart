@@ -48,9 +48,8 @@ class _VendorAssignmentPageState
         ref.read(customersNotifierProvider).valueOrNull ?? [];
     final match = customers.where((c) => c.id == customerId);
     if (match.isEmpty) {
-      return customerId.length > 8
-          ? '${customerId.substring(0, 8)}…'
-          : customerId;
+      debugPrint('[VendorAssignment] customer not found in list (may be deleted)');
+      return 'Unknown Customer';
     }
     return match.first.fullName.isEmpty
         ? match.first.email
@@ -62,7 +61,8 @@ class _VendorAssignmentPageState
     final vendors = ref.read(vendorsNotifierProvider).valueOrNull ?? [];
     final match = vendors.where((v) => v.id == vendorId);
     if (match.isEmpty) {
-      return vendorId.length > 8 ? '${vendorId.substring(0, 8)}…' : vendorId;
+      debugPrint('[VendorAssignment] vendor not found in list (may be deleted)');
+      return 'Unknown Vendor';
     }
     return match.first.businessName;
   }
@@ -943,13 +943,14 @@ class _BookingAssignRow extends StatelessWidget {
                     ),
                   ),
                 ),
-                IconButton(
-                  onPressed: onHistory,
-                  icon: const Icon(Icons.history_rounded, size: 15),
-                  tooltip: 'History',
-                  color: AppColors.textSecondary,
-                  visualDensity: VisualDensity.compact,
-                ),
+                if (b.dispatchStatus != 'idle')
+                  IconButton(
+                    onPressed: onHistory,
+                    icon: const Icon(Icons.history_rounded, size: 15),
+                    tooltip: 'History',
+                    color: AppColors.textSecondary,
+                    visualDensity: VisualDensity.compact,
+                  ),
               ],
             ),
           ),

@@ -5,7 +5,6 @@ import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/admin_search_bar.dart';
 import '../../../bookings/application/providers/bookings_providers.dart';
 import '../../../bookings/application/providers/dispatch_providers.dart';
-import '../../../bookings/domain/models/booking.dart';
 import '../../../bookings/domain/models/booking_assignment_record.dart';
 import '../../../vendor_tiers/application/providers/vendor_tiers_providers.dart';
 import '../../../vendor_tiers/domain/models/vendor_tier.dart';
@@ -50,7 +49,7 @@ class _DispatchAnalyticsPageState
     for (final r in records) {
       final bNum = _escapeCsv(r.bookingNumber ?? r.bookingId);
       final attempt = r.attemptNumber;
-      final vendorName = _escapeCsv(r.vendor?.businessName ?? 'Vendor #${r.vendorId ?? ''}');
+      final vendorName = _escapeCsv(r.vendor?.businessName ?? 'Unknown Vendor');
       final tierName = _escapeCsv(r.vendorTier?.name ?? 'Tier ${r.tierPriority ?? r.attemptNumber}');
       final assignedAt = _escapeCsv(r.assignedAt.toIso8601String());
       final respondedAt = _escapeCsv(r.respondedAt?.toIso8601String() ?? '');
@@ -544,10 +543,8 @@ class _DispatchAnalyticsPageState
                                 final r = filteredRecords[index];
                                 final (statusLabel, statusColor, statusBg) =
                                     _statusBadgeData(r.status);
-                                final vendorName = r.vendor?.businessName ??
-                                    (r.vendorId != null && r.vendorId!.length > 8
-                                        ? '${r.vendorId!.substring(0, 8)}…'
-                                        : r.vendorId ?? '—');
+                                final vendorName =
+                                    r.vendor?.businessName ?? 'Unknown Vendor';
                                 final tierName = r.vendorTier?.name ??
                                     (r.tierPriority != null
                                         ? 'Tier ${r.tierPriority}'
@@ -1083,7 +1080,7 @@ class _VendorAnalyticsCard extends StatelessWidget {
       final vId = r.vendorId ?? 'unknown';
       final vName = r.vendor?.businessName ??
           vendors.where((v) => v.id == vId).firstOrNull?.businessName ??
-          (vId.length > 8 ? '${vId.substring(0, 8)}…' : vId);
+          'Unknown Vendor';
 
       vendorStats.putIfAbsent(vId, () => {
         'name': vName,

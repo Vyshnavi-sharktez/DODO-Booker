@@ -47,9 +47,12 @@ const Map<String, String> routePermissions = {
   '/seo': 'settings.read',
   '/landing-page': 'settings.read',
   '/payment-config': 'settings.read',
+  '/whatsapp-config': 'settings.read',
   '/push-config': 'settings.read',
+  '/sms-config': 'settings.read',
   '/vendor-subscriptions': 'vendor.read',
   '/vendor-tiers': 'vendor.read',
+  '/addons': 'catalog.read',
   '/amc-plans': 'catalog.read',
   '/amc-scheduling-requests': 'booking.read',
   '/warranty-claims': 'booking.read',
@@ -63,6 +66,7 @@ const Map<String, String> routePermissions = {
   '/refunds': 'refund.view',
   '/support': 'support.read',
   '/notifications': 'notification.read',
+  '/restore-bin': 'booking.delete',
 };
 
 // Dynamic route patterns: a prefix match maps to its module permission.

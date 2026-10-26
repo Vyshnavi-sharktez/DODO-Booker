@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import '../../../core/constants/app_colors.dart';
 import '../../../core/utils/icon_registry.dart';
 import '../../../core/utils/service_image_registry.dart';
 import '../../../core/widgets/highlighted_text.dart';
@@ -82,26 +81,37 @@ class _CategoryCardState extends State<CategoryCard> {
                   child: AnimatedScale(
                     scale: _hovered ? 1.04 : 1.0,
                     duration: const Duration(milliseconds: 160),
-                    child: Image.network(
-                      imageUrl,
-                      fit: BoxFit.cover,
-                      width: double.infinity,
-                      height: double.infinity,
-                      loadingBuilder: (_, child, progress) {
-                        if (progress == null) return child;
-                        return Container(color: _bgColors[idx]);
-                      },
-                      errorBuilder: (_, e, s) => Container(
-                        color: _bgColors[idx],
-                        child: Center(
-                          child: Icon(
-                            IconRegistry.resolve(cat.iconKey, cat.name),
-                            size: 44,
-                            color: _iconColors[idx],
+                    child: imageUrl != null
+                        ? Image.network(
+                            imageUrl,
+                            fit: BoxFit.cover,
+                            width: double.infinity,
+                            height: double.infinity,
+                            loadingBuilder: (_, child, progress) {
+                              if (progress == null) return child;
+                              return Container(color: _bgColors[idx]);
+                            },
+                            errorBuilder: (_, e, s) => Container(
+                              color: _bgColors[idx],
+                              child: Center(
+                                child: Icon(
+                                  IconRegistry.resolve(cat.iconKey, cat.name),
+                                  size: 44,
+                                  color: _iconColors[idx],
+                                ),
+                              ),
+                            ),
+                          )
+                        : Container(
+                            color: _bgColors[idx],
+                            child: Center(
+                              child: Icon(
+                                IconRegistry.resolve(cat.iconKey, cat.name),
+                                size: 44,
+                                color: _iconColors[idx],
+                              ),
+                            ),
                           ),
-                        ),
-                      ),
-                    ),
                   ),
                 ),
                 // ── Info area (42%) ─────────────────────────────────────

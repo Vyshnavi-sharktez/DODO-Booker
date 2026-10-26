@@ -12,13 +12,31 @@ class AuthRepositoryImpl implements IAuthRepository {
   Future<void> signInWithOtp(String phone) =>
       _datasource.checkPhone(phone);
 
-  @override 
+  @override
   Future<VendorUser> verifyOtp({
     required String phone,
     required String token,
   }) async {
+    // 1. Verify OTP via Supabase Auth (throws on invalid/expired OTP)
     await _datasource.verifyOtp(phone: phone, otp: token);
+
+    // 2. Persist session phone
     await _datasource.savePhone(phone);
+
+    // 3. Resolve user — check dodo_teams first (they never get a vendor record)
+    final dodoRow = await _datasource.getDodoTeamByPhone(phone);
+    if (dodoRow != null) {
+      debugPrint('[AUTH] verifyOtp — DODO team user FOUND id=${dodoRow['id']}');
+      return VendorUserModel.fromDodoTeamRow(row: dodoRow, phone: phone);
+    }
+
+    // 4. For vendors (existing or brand-new): ensure_vendor_created links or creates
+    try {
+      await _datasource.ensureVendorCreated(phone);
+    } catch (e) {
+      debugPrint('[AUTH] ensureVendorCreated warning: $e');
+    }
+
     return _resolveUser(phone);
   }
 
@@ -30,7 +48,8 @@ class AuthRepositoryImpl implements IAuthRepository {
     return _resolveUser(phone);
   }
 
-  // Resolves a phone to a VendorUser: checks vendors first, then dodo_teams.
+  // Resolves a phone to a VendorUser: checks vendors then dodo_teams.
+  // Used for session restore — does not create new records.
   Future<VendorUser> _resolveUser(String phone) async {
     final vendorRow = await _datasource.getVendorByPhone(phone);
     if (vendorRow != null) {

@@ -10,11 +10,11 @@ import '../../../features/category/services/category_providers.dart';
 
 // ── Layout constants (standard card, same spec as sub_services) ───────────────
 
-const double _kCardW  = 240.0;
-const double _kImgH   = 170.0;
+const double _kCardW = 240.0;
+const double _kImgH = 170.0;
 const double _kLabelH = 56.0;
-const double _kCardH  = _kImgH + _kLabelH;
-const double _kGap    = 16.0;
+const double _kCardH = _kImgH + _kLabelH;
+const double _kGap = 16.0;
 const double _kRadius = 16.0;
 
 // ── Section ───────────────────────────────────────────────────────────────────
@@ -138,23 +138,33 @@ class _ServiceCardState extends State<_ServiceCard> {
                 // ── Image ────────────────────────────────────────────────
                 SizedBox(
                   height: _kImgH,
-                  child: Image.network(
-                    url,
-                    fit: BoxFit.cover,
-                    width: double.infinity,
-                    loadingBuilder: (_, child, p) => p == null
-                        ? child
-                        : const ColoredBox(color: Color(0xFFF1ECE1)),
-                    errorBuilder: (_, _, _) => Container(
-                      color: const Color(0xFFF1ECE1),
-                      alignment: Alignment.center,
-                      child: const Icon(
-                        Icons.home_repair_service_rounded,
-                        size: 32,
-                        color: AppColors.gold,
-                      ),
-                    ),
-                  ),
+                  child: url != null
+                      ? Image.network(
+                          url,
+                          fit: BoxFit.cover,
+                          width: double.infinity,
+                          loadingBuilder: (_, child, p) => p == null
+                              ? child
+                              : const ColoredBox(color: Color(0xFFF1ECE1)),
+                          errorBuilder: (_, _, _) => Container(
+                            color: const Color(0xFFF1ECE1),
+                            alignment: Alignment.center,
+                            child: const Icon(
+                              Icons.home_repair_service_rounded,
+                              size: 32,
+                              color: AppColors.gold,
+                            ),
+                          ),
+                        )
+                      : Container(
+                          color: const Color(0xFFF1ECE1),
+                          alignment: Alignment.center,
+                          child: const Icon(
+                            Icons.home_repair_service_rounded,
+                            size: 32,
+                            color: AppColors.gold,
+                          ),
+                        ),
                 ),
                 // ── Label strip ──────────────────────────────────────────
                 SizedBox(
@@ -182,12 +192,19 @@ class _ServiceCardState extends State<_ServiceCard> {
                             Consumer(
                               builder: (_, ref, _) {
                                 final attrs =
-                                    ref.watch(serviceAttributesProvider(node.id)).valueOrNull ?? [];
+                                    ref
+                                        .watch(
+                                          serviceAttributesProvider(node.id),
+                                        )
+                                        .valueOrNull ??
+                                    [];
                                 final prices = attrs
                                     .where((a) => a.options.isNotEmpty)
                                     .map((a) => a.options.first.finalPrice);
                                 if (prices.isNotEmpty) {
-                                  final startsAt = prices.reduce((a, b) => a < b ? a : b);
+                                  final startsAt = prices.reduce(
+                                    (a, b) => a < b ? a : b,
+                                  );
                                   return Text(
                                     'Starts at ₹${startsAt.toInt()}',
                                     style: GoogleFonts.inter(
