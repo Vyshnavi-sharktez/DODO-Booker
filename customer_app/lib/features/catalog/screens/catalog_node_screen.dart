@@ -1,4 +1,4 @@
-﻿import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -174,10 +174,14 @@ class _CatalogNodeScreenState extends ConsumerState<CatalogNodeScreen> {
         : <AddOnModel>[];
     final faqs = node.isLeafBookable
         ? (ref
-                .watch(catalogNodeFaqsProvider(
-                    (nodeId: node.id, parentNodeId: widget.parentNodeId)))
-                .valueOrNull ??
-            [])
+                  .watch(
+                    catalogNodeFaqsProvider((
+                      nodeId: node.id,
+                      parentNodeId: widget.parentNodeId,
+                    )),
+                  )
+                  .valueOrNull ??
+              [])
         : <FaqModel>[];
 
     final addresses = ref.watch(addressNotifierProvider).valueOrNull ?? [];
@@ -205,14 +209,16 @@ class _CatalogNodeScreenState extends ConsumerState<CatalogNodeScreen> {
     // relAvailabilityStatus is a permanent floor: a paused relationship must
     // never become bookable regardless of what the async check returns (it
     // might have been called with a different or null parent).
-    final isUnavailable = avail?.status == 'unavailable' ||
+    final isUnavailable =
+        avail?.status == 'unavailable' ||
         node.relAvailabilityStatus == 'unavailable';
-    final isEffectivelyHidden = avail?.status == 'hidden' ||
-        node.relAvailabilityStatus == 'hidden';
+    final isEffectivelyHidden =
+        avail?.status == 'hidden' || node.relAvailabilityStatus == 'hidden';
     // While the async availability check is still in-flight, treat the node
     // as unavailable so the booking bar is not interactive before we know
     // whether the service can actually be booked.
-    final availChecking = availAsync.isLoading &&
+    final availChecking =
+        availAsync.isLoading &&
         node.relAvailabilityStatus != 'unavailable' &&
         node.relAvailabilityStatus != 'hidden';
 
@@ -236,31 +242,34 @@ class _CatalogNodeScreenState extends ConsumerState<CatalogNodeScreen> {
     // Flat-model attribute variants: auto-select first on load.
     final attrEntries = attrs.where((a) => a.options.isNotEmpty).toList();
     final effectiveAttrId =
-        _selectedAttrId ?? (attrEntries.isNotEmpty ? attrEntries.first.id : null);
+        _selectedAttrId ??
+        (attrEntries.isNotEmpty ? attrEntries.first.id : null);
     final selectedAttr = effectiveAttrId != null
         ? attrEntries.where((a) => a.id == effectiveAttrId).firstOrNull
         : null;
     final selectedAttrPrice = selectedAttr?.options.first.finalPrice;
-    final selectedAttrOriginalPrice = (selectedAttr?.options.first.hasDiscount == true)
+    final selectedAttrOriginalPrice =
+        (selectedAttr?.options.first.hasDiscount == true)
         ? selectedAttr?.options.first.priceAdjustment
         : null;
 
     // Lowest attr option price across all variants — used as the static header label.
     final startsAtPrice = attrEntries.isNotEmpty
         ? attrEntries
-            .map((a) => a.options.first.finalPrice)
-            .reduce((a, b) => a < b ? a : b)
+              .map((a) => a.options.first.finalPrice)
+              .reduce((a, b) => a < b ? a : b)
         : null;
 
     // Quantity for the currently-selected variant chip (defaults to 1).
-    final effectiveQty =
-        effectiveAttrId != null ? _qtyFor(effectiveAttrId) : 1;
+    final effectiveQty = effectiveAttrId != null ? _qtyFor(effectiveAttrId) : 1;
 
     final displayPrice = _selectedAmcPlan != null
         ? _selectedAmcPlan!.finalPrice
         : selectedAttrPrice != null
-            ? selectedAttrPrice + addonsTotal
-            : (node.finalPrice ?? node.basePrice ?? 0.0) + _priceAdjustment + addonsTotal;
+        ? selectedAttrPrice + addonsTotal
+        : (node.finalPrice ?? node.basePrice ?? 0.0) +
+              _priceAdjustment +
+              addonsTotal;
     final hasAdjustment = _priceAdjustment > 0 || addonsTotal > 0;
 
     final heroUrl = node.hasChildren
@@ -319,11 +328,9 @@ class _CatalogNodeScreenState extends ConsumerState<CatalogNodeScreen> {
         ),
         child: Material(
           color: _kBg,
-          borderRadius:
-              const BorderRadius.vertical(top: Radius.circular(24)),
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
           child: ClipRRect(
-            borderRadius:
-                const BorderRadius.vertical(top: Radius.circular(24)),
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
@@ -355,7 +362,9 @@ class _CatalogNodeScreenState extends ConsumerState<CatalogNodeScreen> {
                                 ),
                                 child: Center(
                                   child: HeartButton(
-                                      serviceId: node.id, mini: true),
+                                    serviceId: node.id,
+                                    mini: true,
+                                  ),
                                 ),
                               ),
                               const SizedBox(width: 8),
@@ -388,8 +397,7 @@ class _CatalogNodeScreenState extends ConsumerState<CatalogNodeScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        if (hasHero)
-                          _SheetHero(imageUrl: heroUrl!, node: node),
+                        if (hasHero) _SheetHero(imageUrl: heroUrl!, node: node),
                         if (hasHero && node.isLeafBookable)
                           _ServiceContentBlock(
                             node: node,
@@ -399,8 +407,7 @@ class _CatalogNodeScreenState extends ConsumerState<CatalogNodeScreen> {
                           ),
                         if (hasHero && !node.isLeafBookable)
                           Padding(
-                            padding:
-                                const EdgeInsets.fromLTRB(20, 16, 20, 4),
+                            padding: const EdgeInsets.fromLTRB(20, 16, 20, 4),
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
@@ -418,7 +425,9 @@ class _CatalogNodeScreenState extends ConsumerState<CatalogNodeScreen> {
                                     child: Text(
                                       '${node.childrenCount} services available',
                                       style: const TextStyle(
-                                          fontSize: 13, color: _kMuted2),
+                                        fontSize: 13,
+                                        color: _kMuted2,
+                                      ),
                                     ),
                                   ),
                               ],
@@ -428,8 +437,7 @@ class _CatalogNodeScreenState extends ConsumerState<CatalogNodeScreen> {
                           _Breadcrumb(
                             parentName: node.parentName ?? '',
                             nodeName: node.name,
-                            onParentTap: () =>
-                                Navigator.of(context).maybePop(),
+                            onParentTap: () => Navigator.of(context).maybePop(),
                           ),
                           _NodeInfoHeader(
                             node: node,
@@ -454,20 +462,21 @@ class _CatalogNodeScreenState extends ConsumerState<CatalogNodeScreen> {
                               ? CatalogUnavailabilityBanner(
                                   message: isUnavailable
                                       ? (avail?.message ??
-                                          node.relUnavailabilityMessage)
+                                            node.relUnavailabilityMessage)
                                       : null,
                                   isHidden: isEffectivelyHidden,
                                 )
                               : _ChildrenSection(
                                   node: node,
                                   children: children,
-                                  rootCategoryId: effectiveRootId),
+                                  rootCategoryId: effectiveRootId,
+                                ),
                         if (node.isLeafBookable && addOns.isNotEmpty) ...[
                           Padding(
-                            padding:
-                                const EdgeInsets.fromLTRB(20, 24, 20, 12),
-                            child:
-                                _SectionHeaderRow(title: 'Suggested Add-ons'),
+                            padding: const EdgeInsets.fromLTRB(20, 24, 20, 12),
+                            child: _SectionHeaderRow(
+                              title: 'Suggested Add-ons',
+                            ),
                           ),
                           _InlineAddonCards(
                             addOns: addOns,
@@ -492,15 +501,20 @@ class _CatalogNodeScreenState extends ConsumerState<CatalogNodeScreen> {
                                 children: [
                                   Padding(
                                     padding: const EdgeInsets.fromLTRB(
-                                        20, 24, 20, 12),
+                                      20,
+                                      24,
+                                      20,
+                                      12,
+                                    ),
                                     child: _SectionHeaderRow(
-                                        title: 'AMC Plans'),
+                                      title: 'AMC Plans',
+                                    ),
                                   ),
                                   _InlineAmcPlans(
                                     serviceId: node.id,
                                     selectedPlan: _selectedAmcPlan,
-                                    onPlanSelected: (plan) => setState(
-                                        () => _selectedAmcPlan = plan),
+                                    onPlanSelected: (plan) =>
+                                        setState(() => _selectedAmcPlan = plan),
                                     regularPrice: node.basePrice,
                                     isWeb: false,
                                   ),
@@ -526,57 +540,59 @@ class _CatalogNodeScreenState extends ConsumerState<CatalogNodeScreen> {
                             label: 'About this service',
                             isFirst: true,
                             child: Padding(
-                              padding:
-                                  const EdgeInsets.fromLTRB(0, 4, 0, 14),
+                              padding: const EdgeInsets.fromLTRB(0, 4, 0, 14),
                               child: Text(
                                 node.description?.isNotEmpty == true
                                     ? node.description!
                                     : 'No description available.',
                                 style: const TextStyle(
-                                    fontSize: 13,
-                                    color: _kMuted,
-                                    height: 1.6),
+                                  fontSize: 13,
+                                  color: _kMuted,
+                                  height: 1.6,
+                                ),
                               ),
                             ),
                           ),
                           Padding(
-                            padding:
-                                const EdgeInsets.fromLTRB(20, 20, 20, 8),
+                            padding: const EdgeInsets.fromLTRB(20, 20, 20, 8),
                             child: Text(
                               'FAQs',
                               style: GoogleFonts.poppins(
-                                  fontSize: 15,
-                                  fontWeight: FontWeight.w700,
-                                  color: _kInk),
+                                fontSize: 15,
+                                fontWeight: FontWeight.w700,
+                                color: _kInk,
+                              ),
                             ),
                           ),
                           if (faqs.isEmpty) ...[
                             const Padding(
                               padding: EdgeInsets.fromLTRB(20, 0, 20, 4),
-                              child: Text('No FAQs yet.',
-                                  style: TextStyle(
-                                      fontSize: 13, color: _kMuted)),
+                              child: Text(
+                                'No FAQs yet.',
+                                style: TextStyle(fontSize: 13, color: _kMuted),
+                              ),
                             ),
                             Padding(
-                              padding:
-                                  const EdgeInsets.only(left: 20, top: 2),
+                              padding: const EdgeInsets.only(left: 20, top: 2),
                               child: AskQuestionLink(
-                                  serviceId: node.id,
-                                  parentId: widget.parentNodeId),
+                                serviceId: node.id,
+                                parentId: widget.parentNodeId,
+                              ),
                             ),
                             const SizedBox(height: 8),
                           ] else ...[
                             Padding(
-                              padding:
-                                  const EdgeInsets.symmetric(horizontal: 20),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 20,
+                              ),
                               child: FaqSection(faqs: faqs),
                             ),
                             Padding(
-                              padding:
-                                  const EdgeInsets.only(left: 20, top: 6),
+                              padding: const EdgeInsets.only(left: 20, top: 6),
                               child: AskQuestionLink(
-                                  serviceId: node.id,
-                                  parentId: widget.parentNodeId),
+                                serviceId: node.id,
+                                parentId: widget.parentNodeId,
+                              ),
                             ),
                             const SizedBox(height: 8),
                           ],
@@ -586,13 +602,14 @@ class _CatalogNodeScreenState extends ConsumerState<CatalogNodeScreen> {
                                 : 'Reviews',
                             isLast: true,
                             child: ServiceReviewsSection(
-                                serviceId: node.id, showHeader: false),
+                              serviceId: node.id,
+                              showHeader: false,
+                            ),
                           ),
                         ],
                         if (!node.hasChildren && !node.isBookable)
                           const _ComingSoonBanner(),
-                        SizedBox(
-                            height: node.isLeafBookable ? 100 : 40),
+                        SizedBox(height: node.isLeafBookable ? 100 : 40),
                       ],
                     ),
                   ),
@@ -603,7 +620,7 @@ class _CatalogNodeScreenState extends ConsumerState<CatalogNodeScreen> {
                       ? CatalogUnavailabilityBar(
                           message: isUnavailable
                               ? (avail?.message ??
-                                  node.relUnavailabilityMessage)
+                                    node.relUnavailabilityMessage)
                               : null,
                           isChecking: availChecking,
                         )
@@ -649,7 +666,10 @@ class _CatalogNodeScreenState extends ConsumerState<CatalogNodeScreen> {
               title: Text(
                 node.name,
                 style: const TextStyle(
-                    fontWeight: FontWeight.w700, fontSize: 17, color: _kInk),
+                  fontWeight: FontWeight.w700,
+                  fontSize: 17,
+                  color: _kInk,
+                ),
               ),
               backgroundColor: _kBg,
               foregroundColor: _kInk,
@@ -693,9 +713,10 @@ class _CatalogNodeScreenState extends ConsumerState<CatalogNodeScreen> {
                     child: Text(
                       node.name,
                       style: GoogleFonts.poppins(
-                          fontSize: 22,
-                          fontWeight: FontWeight.w700,
-                          color: _kInk),
+                        fontSize: 22,
+                        fontWeight: FontWeight.w700,
+                        color: _kInk,
+                      ),
                     ),
                   ),
 
@@ -733,14 +754,16 @@ class _CatalogNodeScreenState extends ConsumerState<CatalogNodeScreen> {
                   (isUnavailable || isEffectivelyHidden)
                       ? CatalogUnavailabilityBanner(
                           message: isUnavailable
-                              ? (avail?.message ?? node.relUnavailabilityMessage)
+                              ? (avail?.message ??
+                                    node.relUnavailabilityMessage)
                               : null,
                           isHidden: isEffectivelyHidden,
                         )
                       : _ChildrenSection(
                           node: node,
                           children: children,
-                          rootCategoryId: effectiveRootId),
+                          rootCategoryId: effectiveRootId,
+                        ),
 
                 // ── Suggested Add-ons ──────────────────────────────────────
                 if (node.isLeafBookable && addOns.isNotEmpty) ...[
@@ -762,8 +785,9 @@ class _CatalogNodeScreenState extends ConsumerState<CatalogNodeScreen> {
                 if (node.isLeafBookable)
                   Consumer(
                     builder: (ctx, ref, _) {
-                      final plans =
-                          ref.watch(amcPlansProvider(node.id)).valueOrNull;
+                      final plans = ref
+                          .watch(amcPlansProvider(node.id))
+                          .valueOrNull;
                       if (plans == null || plans.isEmpty) {
                         return const SizedBox.shrink();
                       }
@@ -816,27 +840,38 @@ class _CatalogNodeScreenState extends ConsumerState<CatalogNodeScreen> {
                             ? node.description!
                             : 'No description available.',
                         style: const TextStyle(
-                            fontSize: 13, color: _kMuted, height: 1.6),
+                          fontSize: 13,
+                          color: _kMuted,
+                          height: 1.6,
+                        ),
                       ),
                     ),
                   ),
                   Padding(
                     padding: const EdgeInsets.fromLTRB(20, 20, 20, 8),
-                    child: Text('FAQs',
-                        style: GoogleFonts.poppins(
-                            fontSize: 15,
-                            fontWeight: FontWeight.w700,
-                            color: _kInk)),
+                    child: Text(
+                      'FAQs',
+                      style: GoogleFonts.poppins(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
+                        color: _kInk,
+                      ),
+                    ),
                   ),
                   if (faqs.isEmpty) ...[
                     const Padding(
                       padding: EdgeInsets.fromLTRB(20, 0, 20, 4),
-                      child: Text('No FAQs yet.',
-                          style: TextStyle(fontSize: 13, color: _kMuted)),
+                      child: Text(
+                        'No FAQs yet.',
+                        style: TextStyle(fontSize: 13, color: _kMuted),
+                      ),
                     ),
                     Padding(
                       padding: const EdgeInsets.only(left: 20, top: 2),
-                      child: AskQuestionLink(serviceId: node.id, parentId: widget.parentNodeId),
+                      child: AskQuestionLink(
+                        serviceId: node.id,
+                        parentId: widget.parentNodeId,
+                      ),
                     ),
                     const SizedBox(height: 8),
                   ] else ...[
@@ -846,7 +881,10 @@ class _CatalogNodeScreenState extends ConsumerState<CatalogNodeScreen> {
                     ),
                     Padding(
                       padding: const EdgeInsets.only(left: 20, top: 6),
-                      child: AskQuestionLink(serviceId: node.id, parentId: widget.parentNodeId),
+                      child: AskQuestionLink(
+                        serviceId: node.id,
+                        parentId: widget.parentNodeId,
+                      ),
                     ),
                     const SizedBox(height: 8),
                   ],
@@ -855,7 +893,10 @@ class _CatalogNodeScreenState extends ConsumerState<CatalogNodeScreen> {
                         ? 'Reviews (${node.reviewCount})'
                         : 'Reviews',
                     isLast: true,
-                    child: ServiceReviewsSection(serviceId: node.id, showHeader: false),
+                    child: ServiceReviewsSection(
+                      serviceId: node.id,
+                      showHeader: false,
+                    ),
                   ),
                 ],
 
@@ -991,9 +1032,12 @@ class _SheetHero extends StatelessWidget {
                 width: 36,
                 height: 36,
                 decoration: const BoxDecoration(
-                    color: Colors.white, shape: BoxShape.circle),
+                  color: Colors.white,
+                  shape: BoxShape.circle,
+                ),
                 child: Center(
-                    child: HeartButton(serviceId: node.id, mini: true)),
+                  child: HeartButton(serviceId: node.id, mini: true),
+                ),
               ),
             ),
         ],
@@ -1048,9 +1092,12 @@ class _MobileHero extends StatelessWidget {
                 width: 36,
                 height: 36,
                 decoration: const BoxDecoration(
-                    color: Colors.white, shape: BoxShape.circle),
+                  color: Colors.white,
+                  shape: BoxShape.circle,
+                ),
                 child: Center(
-                    child: HeartButton(serviceId: node.id, mini: true)),
+                  child: HeartButton(serviceId: node.id, mini: true),
+                ),
               ),
             ),
 
@@ -1070,15 +1117,19 @@ class _MobileHero extends StatelessWidget {
             bottom: 14,
             right: 16,
             child: Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
+              padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
               decoration: BoxDecoration(
                 color: const Color(0xFF1A1714).withAlpha(166),
                 borderRadius: BorderRadius.circular(100),
               ),
-              child: const Text('1/6',
-                  style: TextStyle(
-                      color: Colors.white, fontSize: 11, height: 1.4)),
+              child: const Text(
+                '1/6',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 11,
+                  height: 1.4,
+                ),
+              ),
             ),
           ),
 
@@ -1091,25 +1142,31 @@ class _MobileHero extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Container(
-                    width: 16,
-                    height: 4,
-                    decoration: BoxDecoration(
-                        color: _kGold,
-                        borderRadius: BorderRadius.circular(100))),
+                  width: 16,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: _kGold,
+                    borderRadius: BorderRadius.circular(100),
+                  ),
+                ),
                 const SizedBox(width: 5),
                 Container(
-                    width: 4,
-                    height: 4,
-                    decoration: BoxDecoration(
-                        color: Colors.white.withAlpha(180),
-                        borderRadius: BorderRadius.circular(100))),
+                  width: 4,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: Colors.white.withAlpha(180),
+                    borderRadius: BorderRadius.circular(100),
+                  ),
+                ),
                 const SizedBox(width: 5),
                 Container(
-                    width: 4,
-                    height: 4,
-                    decoration: BoxDecoration(
-                        color: Colors.white.withAlpha(180),
-                        borderRadius: BorderRadius.circular(100))),
+                  width: 4,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: Colors.white.withAlpha(180),
+                    borderRadius: BorderRadius.circular(100),
+                  ),
+                ),
               ],
             ),
           ),
@@ -1129,15 +1186,17 @@ class _CircleNavBtn extends StatelessWidget {
     return MouseRegion(
       cursor: SystemMouseCursors.click,
       child: GestureDetector(
-      onTap: onTap,
-      child: Container(
-        width: 36,
-        height: 36,
-        decoration: const BoxDecoration(
-            color: Colors.white, shape: BoxShape.circle),
-        child: Icon(icon, size: 18, color: _kInk),
+        onTap: onTap,
+        child: Container(
+          width: 36,
+          height: 36,
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            shape: BoxShape.circle,
+          ),
+          child: Icon(icon, size: 18, color: _kInk),
+        ),
       ),
-    ),
     );
   }
 }
@@ -1170,28 +1229,34 @@ class _ServiceContentBlock extends StatelessWidget {
           // Category badge
           if (node.parentName?.isNotEmpty == true) ...[
             Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
               decoration: BoxDecoration(
-                  color: _kInk,
-                  borderRadius: BorderRadius.circular(100)),
-              child: Text(node.parentName!,
-                  style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 11,
-                      fontWeight: FontWeight.w600,
-                      height: 1.3)),
+                color: _kInk,
+                borderRadius: BorderRadius.circular(100),
+              ),
+              child: Text(
+                node.parentName!,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  height: 1.3,
+                ),
+              ),
             ),
             const SizedBox(height: 10),
           ],
 
           // Title
-          Text(node.name,
-              style: GoogleFonts.poppins(
-                  fontSize: 20,
-                  fontWeight: FontWeight.w700,
-                  color: _kInk,
-                  height: 1.2)),
+          Text(
+            node.name,
+            style: GoogleFonts.poppins(
+              fontSize: 20,
+              fontWeight: FontWeight.w700,
+              color: _kInk,
+              height: 1.2,
+            ),
+          ),
           const SizedBox(height: 6),
 
           // Rating row
@@ -1200,19 +1265,25 @@ class _ServiceContentBlock extends StatelessWidget {
               padding: const EdgeInsets.only(bottom: 6),
               child: Row(
                 children: [
-                  const Text('★',
-                      style: TextStyle(color: _kGold, fontSize: 13)),
+                  const Text(
+                    '★',
+                    style: TextStyle(color: _kGold, fontSize: 13),
+                  ),
                   const SizedBox(width: 4),
-                  Text(node.rating.toStringAsFixed(1),
-                      style: const TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                          color: _kInk)),
+                  Text(
+                    node.rating.toStringAsFixed(1),
+                    style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: _kInk,
+                    ),
+                  ),
                   if (node.reviewCount > 0) ...[
                     const SizedBox(width: 4),
-                    Text('(${node.reviewCount} reviews)',
-                        style: const TextStyle(
-                            fontSize: 13, color: _kMuted2)),
+                    Text(
+                      '(${node.reviewCount} reviews)',
+                      style: const TextStyle(fontSize: 13, color: _kMuted2),
+                    ),
                   ],
                 ],
               ),
@@ -1220,9 +1291,10 @@ class _ServiceContentBlock extends StatelessWidget {
 
           // Description
           if (node.description?.isNotEmpty == true) ...[
-            Text(node.description!,
-                style: const TextStyle(
-                    fontSize: 13, color: _kMuted, height: 1.6)),
+            Text(
+              node.description!,
+              style: const TextStyle(fontSize: 13, color: _kMuted, height: 1.6),
+            ),
             const SizedBox(height: 14),
           ] else
             const SizedBox(height: 8),
@@ -1241,10 +1313,11 @@ class _ServiceContentBlock extends StatelessWidget {
                 Text(
                   '₹${(startsAtPrice ?? displayPrice).toInt()}',
                   style: GoogleFonts.poppins(
-                      fontSize: 22,
-                      fontWeight: FontWeight.w800,
-                      color: _kInk,
-                      height: 1.0),
+                    fontSize: 22,
+                    fontWeight: FontWeight.w800,
+                    color: _kInk,
+                    height: 1.0,
+                  ),
                 ),
                 if (node.hasDiscount && startsAtPrice == null) ...[
                   const SizedBox(width: 8),
@@ -1260,14 +1333,20 @@ class _ServiceContentBlock extends StatelessWidget {
                 ],
                 if (hasAdjustment && startsAtPrice == null) ...[
                   const SizedBox(width: 8),
-                  const Text('incl. add-ons',
-                      style: TextStyle(fontSize: 12, color: _kMuted2)),
+                  const Text(
+                    'incl. add-ons',
+                    style: TextStyle(fontSize: 12, color: _kMuted2),
+                  ),
                 ],
               ],
             ),
           if (node.warrantyEnabled && node.warrantyDays != null) ...[
             const SizedBox(height: 10),
-            WarrantyBadge(warrantyDays: node.warrantyDays!, warrantyCovers: node.warrantyCovers, warrantyExclusions: node.warrantyExclusions),
+            WarrantyBadge(
+              warrantyDays: node.warrantyDays!,
+              warrantyCovers: node.warrantyCovers,
+              warrantyExclusions: node.warrantyExclusions,
+            ),
           ],
           const SizedBox(height: 4),
         ],
@@ -1290,9 +1369,14 @@ class _SectionHeaderRow extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.baseline,
       textBaseline: TextBaseline.alphabetic,
       children: [
-        Text(title,
-            style: GoogleFonts.poppins(
-                fontSize: 15, fontWeight: FontWeight.w700, color: _kInk)),
+        Text(
+          title,
+          style: GoogleFonts.poppins(
+            fontSize: 15,
+            fontWeight: FontWeight.w700,
+            color: _kInk,
+          ),
+        ),
       ],
     );
   }
@@ -1327,27 +1411,29 @@ class _InlineAddonCards extends ConsumerWidget {
     if (isWeb) {
       return Column(
         children: addOns
-            .map((a) => _AddonWebRow(
-                  addOn: a,
-                  isSelected: selectedIds.contains(a.id),
-                  quantity: quantities[a.id] ?? 1,
-                  onToggle: (sel) {
-                    if (a.isGlobal) {
-                      ref.read(globalCartAddonsProvider.notifier).toggle(a);
-                    } else {
-                      onToggle(a.id, sel);
-                    }
-                  },
-                  onQtyChanged: (qty) {
-                    if (a.isGlobal) {
-                      ref
-                          .read(globalCartAddonsProvider.notifier)
-                          .setQuantity(a.id, qty);
-                    } else {
-                      onQtyChanged(a.id, qty);
-                    }
-                  },
-                ))
+            .map(
+              (a) => _AddonWebRow(
+                addOn: a,
+                isSelected: selectedIds.contains(a.id),
+                quantity: quantities[a.id] ?? 1,
+                onToggle: (sel) {
+                  if (a.isGlobal) {
+                    ref.read(globalCartAddonsProvider.notifier).toggle(a);
+                  } else {
+                    onToggle(a.id, sel);
+                  }
+                },
+                onQtyChanged: (qty) {
+                  if (a.isGlobal) {
+                    ref
+                        .read(globalCartAddonsProvider.notifier)
+                        .setQuantity(a.id, qty);
+                  } else {
+                    onQtyChanged(a.id, qty);
+                  }
+                },
+              ),
+            )
             .toList(),
       );
     }
@@ -1441,8 +1527,12 @@ class _AddonMobileCardState extends State<_AddonMobileCard> {
                 ),
                 child: sel
                     ? const Center(
-                        child: Icon(Icons.check_rounded,
-                            color: _kGold, size: 28))
+                        child: Icon(
+                          Icons.check_rounded,
+                          color: _kGold,
+                          size: 28,
+                        ),
+                      )
                     : null,
               ),
               const SizedBox(height: 6),
@@ -1451,10 +1541,11 @@ class _AddonMobileCardState extends State<_AddonMobileCard> {
               Text(
                 widget.addOn.name,
                 style: const TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
-                    color: _kInk,
-                    height: 1.3),
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  color: _kInk,
+                  height: 1.3,
+                ),
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
               ),
@@ -1509,8 +1600,11 @@ class _AddonMobileCardState extends State<_AddonMobileCard> {
                             shape: BoxShape.circle,
                           ),
                           child: const Center(
-                            child: Icon(Icons.add_rounded,
-                                size: 12, color: _kInk),
+                            child: Icon(
+                              Icons.add_rounded,
+                              size: 12,
+                              color: _kInk,
+                            ),
                           ),
                         ),
                       ),
@@ -1561,7 +1655,10 @@ class _MiniQtyStepper extends StatelessWidget {
           child: Text(
             '$qty',
             style: const TextStyle(
-                fontSize: 11, fontWeight: FontWeight.w700, color: _kInk),
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+              color: _kInk,
+            ),
           ),
         ),
         GestureDetector(
@@ -1626,13 +1723,16 @@ class _AddonWebRow extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(addOn.name,
-                    style: const TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        color: _kInk),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis),
+                Text(
+                  addOn.name,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: _kInk,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
                 if (addOn.hasDiscount)
                   Text(
                     '₹${addOn.price.toInt()}',
@@ -1734,12 +1834,10 @@ class _InlineAmcPlans extends ConsumerWidget {
                         plan: plan,
                         isSelected: isSelected,
                         isPopular: isFirst,
-                        onTap: () =>
-                            onPlanSelected(isSelected ? null : plan),
+                        onTap: () => onPlanSelected(isSelected ? null : plan),
                       ),
                     ),
-                    if (plan != plans.take(2).last)
-                      const SizedBox(width: 12),
+                    if (plan != plans.take(2).last) const SizedBox(width: 12),
                   ];
                 })
                 .expand((w) => w)
@@ -1784,135 +1882,155 @@ class _AmcPlanCard extends StatelessWidget {
     return MouseRegion(
       cursor: SystemMouseCursors.click,
       child: GestureDetector(
-      onTap: onTap,
-      child: Stack(
-        clipBehavior: Clip.none,
-        children: [
-          AnimatedContainer(
-            duration: const Duration(milliseconds: 200),
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              color: isSelected ? _kAmcPopularBg : Colors.white,
-              borderRadius: BorderRadius.circular(14),
-              border: isSelected
-                  ? Border.all(color: _kGold, width: 1.5)
-                  : Border.all(color: _kBorder, width: 1),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Space for "Popular" badge
-                if (isPopular) const SizedBox(height: 4),
+        onTap: onTap,
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: isSelected ? _kAmcPopularBg : Colors.white,
+                borderRadius: BorderRadius.circular(14),
+                border: isSelected
+                    ? Border.all(color: _kGold, width: 1.5)
+                    : Border.all(color: _kBorder, width: 1),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Space for "Popular" badge
+                  if (isPopular) const SizedBox(height: 4),
 
-                // Title + selection indicator
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(
-                      child: Text(plan.planName,
-                          style: GoogleFonts.poppins(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w700,
-                              color: _kInk)),
-                    ),
-                    const SizedBox(width: 8),
-                    isSelected
-                        ? Container(
-                            width: 18,
-                            height: 18,
-                            decoration: const BoxDecoration(
-                                color: _kInk, shape: BoxShape.circle),
-                            child: const Icon(Icons.check_rounded,
-                                size: 10, color: Colors.white),
-                          )
-                        : Container(
-                            width: 18,
-                            height: 18,
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              border:
-                                  Border.all(color: _kBorder, width: 1.5),
-                            ),
-                          ),
-                  ],
-                ),
-
-                // Features
-                Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 8),
-                  child: Column(
+                  // Title + selection indicator
+                  Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
-                    children: _features
-                        .map((f) => Text(f,
-                            style: const TextStyle(
-                                fontSize: 11,
-                                color: _kMuted,
-                                height: 1.7)))
-                        .toList(),
-                  ),
-                ),
-
-                // Price
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    if (plan.discountAmount > 0)
-                      Text(
-                        '₹${plan.originalTotal.toInt()}',
-                        style: const TextStyle(
-                          fontSize: 11,
-                          color: _kMuted2,
-                          decoration: TextDecoration.lineThrough,
-                          decorationColor: _kMuted2,
+                    children: [
+                      Expanded(
+                        child: Text(
+                          plan.planName,
+                          style: GoogleFonts.poppins(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                            color: _kInk,
+                          ),
                         ),
                       ),
-                    RichText(
-                      text: TextSpan(
-                        children: [
-                          TextSpan(
-                            text: '₹${plan.finalPrice.toInt()}',
-                            style: GoogleFonts.poppins(
+                      const SizedBox(width: 8),
+                      isSelected
+                          ? Container(
+                              width: 18,
+                              height: 18,
+                              decoration: const BoxDecoration(
+                                color: _kInk,
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(
+                                Icons.check_rounded,
+                                size: 10,
+                                color: Colors.white,
+                              ),
+                            )
+                          : Container(
+                              width: 18,
+                              height: 18,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                border: Border.all(color: _kBorder, width: 1.5),
+                              ),
+                            ),
+                    ],
+                  ),
+
+                  // Features
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: _features
+                          .map(
+                            (f) => Text(
+                              f,
+                              style: const TextStyle(
+                                fontSize: 11,
+                                color: _kMuted,
+                                height: 1.7,
+                              ),
+                            ),
+                          )
+                          .toList(),
+                    ),
+                  ),
+
+                  // Price
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      if (plan.discountAmount > 0)
+                        Text(
+                          '₹${plan.originalTotal.toInt()}',
+                          style: const TextStyle(
+                            fontSize: 11,
+                            color: _kMuted2,
+                            decoration: TextDecoration.lineThrough,
+                            decorationColor: _kMuted2,
+                          ),
+                        ),
+                      RichText(
+                        text: TextSpan(
+                          children: [
+                            TextSpan(
+                              text: '₹${plan.finalPrice.toInt()}',
+                              style: GoogleFonts.poppins(
                                 fontSize: 14,
                                 fontWeight: FontWeight.w700,
-                                color: _kInk),
-                          ),
-                          TextSpan(
-                            text: ' / ${plan.packageDurationLabel}',
-                            style: const TextStyle(
+                                color: _kInk,
+                              ),
+                            ),
+                            TextSpan(
+                              text: ' / ${plan.packageDurationLabel}',
+                              style: const TextStyle(
                                 fontSize: 11,
                                 color: _kMuted2,
-                                fontWeight: FontWeight.w400),
-                          ),
-                        ],
+                                fontWeight: FontWeight.w400,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-
-          // "Popular" badge
-          if (isPopular)
-            Positioned(
-              top: -9,
-              left: 14,
-              child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                decoration: BoxDecoration(
-                    color: _kGold,
-                    borderRadius: BorderRadius.circular(100)),
-                child: const Text('Popular',
-                    style: TextStyle(
-                        fontSize: 9,
-                        fontWeight: FontWeight.w700,
-                        color: _kInk)),
+                    ],
+                  ),
+                ],
               ),
             ),
-        ],
+
+            // "Popular" badge
+            if (isPopular)
+              Positioned(
+                top: -9,
+                left: 14,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 3,
+                  ),
+                  decoration: BoxDecoration(
+                    color: _kGold,
+                    borderRadius: BorderRadius.circular(100),
+                  ),
+                  child: const Text(
+                    'Popular',
+                    style: TextStyle(
+                      fontSize: 9,
+                      fontWeight: FontWeight.w700,
+                      color: _kInk,
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        ),
       ),
-    ),
     );
   }
 }
@@ -1951,38 +2069,46 @@ class _AccordionSectionState extends State<_AccordionSection> {
           MouseRegion(
             cursor: SystemMouseCursors.click,
             child: GestureDetector(
-            onTap: () => setState(() => _open = !_open),
-            behavior: HitTestBehavior.opaque,
-            child: Container(
-              padding: const EdgeInsets.symmetric(vertical: 14),
-              decoration: BoxDecoration(
-                border: Border(
-                  top: const BorderSide(color: _kBorder, width: 1),
-                  bottom: widget.isLast && !_open
-                      ? const BorderSide(color: _kBorder, width: 1)
-                      : BorderSide.none,
+              onTap: () => setState(() => _open = !_open),
+              behavior: HitTestBehavior.opaque,
+              child: Container(
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                decoration: BoxDecoration(
+                  border: Border(
+                    top: const BorderSide(color: _kBorder, width: 1),
+                    bottom: widget.isLast && !_open
+                        ? const BorderSide(color: _kBorder, width: 1)
+                        : BorderSide.none,
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        widget.label,
+                        style: GoogleFonts.poppins(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w700,
+                          color: _kInk,
+                        ),
+                      ),
+                    ),
+                    AnimatedRotation(
+                      turns: _open ? 0.5 : 0.0,
+                      duration: const Duration(milliseconds: 180),
+                      child: const Text(
+                        '⌄',
+                        style: TextStyle(
+                          fontSize: 18,
+                          color: _kMuted2,
+                          height: 1,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Text(widget.label,
-                        style: GoogleFonts.poppins(
-                            fontSize: 15,
-                            fontWeight: FontWeight.w700,
-                            color: _kInk)),
-                  ),
-                  AnimatedRotation(
-                    turns: _open ? 0.5 : 0.0,
-                    duration: const Duration(milliseconds: 180),
-                    child: const Text('⌄',
-                        style: TextStyle(
-                            fontSize: 18, color: _kMuted2, height: 1)),
-                  ),
-                ],
-              ),
             ),
-          ),
           ),
           AnimatedCrossFade(
             alignment: Alignment.topLeft,
@@ -1991,12 +2117,15 @@ class _AccordionSectionState extends State<_AccordionSection> {
               decoration: widget.isLast
                   ? const BoxDecoration(
                       border: Border(
-                          bottom: BorderSide(color: _kBorder, width: 1)))
+                        bottom: BorderSide(color: _kBorder, width: 1),
+                      ),
+                    )
                   : null,
               child: widget.child,
             ),
-            crossFadeState:
-                _open ? CrossFadeState.showSecond : CrossFadeState.showFirst,
+            crossFadeState: _open
+                ? CrossFadeState.showSecond
+                : CrossFadeState.showFirst,
             duration: const Duration(milliseconds: 200),
           ),
         ],
@@ -2068,26 +2197,32 @@ class _Breadcrumb extends StatelessWidget {
           MouseRegion(
             cursor: SystemMouseCursors.click,
             child: GestureDetector(
-            onTap: onParentTap,
-            child: Text(parentName,
+              onTap: onParentTap,
+              child: Text(
+                parentName,
                 style: const TextStyle(
-                    fontSize: 12,
-                    color: _kMuted2,
-                    fontWeight: FontWeight.w500)),
-          ),
+                  fontSize: 12,
+                  color: _kMuted2,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ),
           ),
           const Padding(
             padding: EdgeInsets.symmetric(horizontal: 6),
             child: Icon(Icons.chevron_right_rounded, size: 14, color: _kMuted2),
           ),
           Expanded(
-            child: Text(nodeName,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                    fontSize: 12,
-                    color: _kInk,
-                    fontWeight: FontWeight.w600)),
+            child: Text(
+              nodeName,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                fontSize: 12,
+                color: _kInk,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
           ),
         ],
       ),
@@ -2120,49 +2255,62 @@ class _NodeInfoHeader extends StatelessWidget {
         children: [
           if (node.parentName?.isNotEmpty == true) ...[
             Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
               decoration: BoxDecoration(
-                  color: _kInk,
-                  borderRadius: BorderRadius.circular(100)),
-              child: Text(node.parentName!,
-                  style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 11,
-                      fontWeight: FontWeight.w600)),
+                color: _kInk,
+                borderRadius: BorderRadius.circular(100),
+              ),
+              child: Text(
+                node.parentName!,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
             ),
             const SizedBox(height: 10),
           ],
-          Text(node.name,
-              style: GoogleFonts.poppins(
-                  fontSize: 22,
-                  fontWeight: FontWeight.w700,
-                  color: _kInk,
-                  height: 1.2)),
+          Text(
+            node.name,
+            style: GoogleFonts.poppins(
+              fontSize: 22,
+              fontWeight: FontWeight.w700,
+              color: _kInk,
+              height: 1.2,
+            ),
+          ),
           const SizedBox(height: 8),
           if (node.rating > 0)
             Padding(
               padding: const EdgeInsets.only(bottom: 12),
               child: Row(
                 children: [
-                  const Text('★',
-                      style: TextStyle(color: _kGold, fontSize: 13)),
+                  const Text(
+                    '★',
+                    style: TextStyle(color: _kGold, fontSize: 13),
+                  ),
                   const SizedBox(width: 4),
-                  Text(node.rating.toStringAsFixed(1),
-                      style: const TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                          color: _kInk)),
+                  Text(
+                    node.rating.toStringAsFixed(1),
+                    style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: _kInk,
+                    ),
+                  ),
                   if (node.reviewCount > 0) ...[
                     const SizedBox(width: 4),
-                    Text('(${node.reviewCount})',
-                        style: const TextStyle(
-                            fontSize: 12, color: _kMuted2)),
+                    Text(
+                      '(${node.reviewCount})',
+                      style: const TextStyle(fontSize: 12, color: _kMuted2),
+                    ),
                   ],
                 ],
               ),
             ),
-          if (node.isLeafBookable && (node.basePrice != null || startsAtPrice != null))
+          if (node.isLeafBookable &&
+              (node.basePrice != null || startsAtPrice != null))
             Row(
               crossAxisAlignment: CrossAxisAlignment.baseline,
               textBaseline: TextBaseline.alphabetic,
@@ -2175,10 +2323,11 @@ class _NodeInfoHeader extends StatelessWidget {
                 Text(
                   '₹${(startsAtPrice ?? displayPrice).toInt()}',
                   style: GoogleFonts.poppins(
-                      fontSize: 22,
-                      fontWeight: FontWeight.w800,
-                      color: _kInk,
-                      height: 1.0),
+                    fontSize: 22,
+                    fontWeight: FontWeight.w800,
+                    color: _kInk,
+                    height: 1.0,
+                  ),
                 ),
                 if (node.hasDiscount && startsAtPrice == null) ...[
                   const SizedBox(width: 8),
@@ -2194,14 +2343,20 @@ class _NodeInfoHeader extends StatelessWidget {
                 ],
                 if (hasAdjustment && startsAtPrice == null) ...[
                   const SizedBox(width: 8),
-                  const Text('incl. add-ons',
-                      style: TextStyle(fontSize: 12, color: _kMuted2)),
+                  const Text(
+                    'incl. add-ons',
+                    style: TextStyle(fontSize: 12, color: _kMuted2),
+                  ),
                 ],
               ],
             ),
           if (node.warrantyEnabled && node.warrantyDays != null) ...[
             const SizedBox(height: 10),
-            WarrantyBadge(warrantyDays: node.warrantyDays!, warrantyCovers: node.warrantyCovers, warrantyExclusions: node.warrantyExclusions),
+            WarrantyBadge(
+              warrantyDays: node.warrantyDays!,
+              warrantyCovers: node.warrantyCovers,
+              warrantyExclusions: node.warrantyExclusions,
+            ),
           ],
         ],
       ),
@@ -2233,14 +2388,19 @@ class _ChildrenSection extends StatelessWidget {
           child: Text(
             node.isRoot ? 'All Services' : 'Browse ${node.name}',
             style: GoogleFonts.poppins(
-                fontSize: 17, fontWeight: FontWeight.w700, color: _kInk),
+              fontSize: 17,
+              fontWeight: FontWeight.w700,
+              color: _kInk,
+            ),
           ),
         ),
         if (children.isEmpty)
           const Padding(
             padding: EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-            child: Text('Loading...',
-                style: TextStyle(color: _kMuted2, fontSize: 13)),
+            child: Text(
+              'Loading...',
+              style: TextStyle(color: _kMuted2, fontSize: 13),
+            ),
           )
         else
           ListView.separated(
@@ -2252,11 +2412,12 @@ class _ChildrenSection extends StatelessWidget {
             itemBuilder: (ctx, i) => _ChildListItem(
               node: children[i],
               parentNodeId: node.id,
-              onTap: () =>
-                  openCatalogNode(ctx, children[i],
-                      parentId: node.id,
-                      rootCategoryId:
-                          node.isRoot ? node.id : rootCategoryId),
+              onTap: () => openCatalogNode(
+                ctx,
+                children[i],
+                parentId: node.id,
+                rootCategoryId: node.isRoot ? node.id : rootCategoryId,
+              ),
             ),
           ),
         const SizedBox(height: 8),
@@ -2302,173 +2463,205 @@ class _ChildListItemState extends State<_ChildListItem> {
     return MouseRegion(
       cursor: SystemMouseCursors.click,
       child: GestureDetector(
-      onTap: _navigate,
-      onTapDown: (_) => setState(() => _pressed = true),
-      onTapUp: (_) => setState(() => _pressed = false),
-      onTapCancel: () => setState(() => _pressed = false),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 120),
-        curve: Curves.easeOut,
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: _kBorder, width: 0.8),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withAlpha(_pressed ? 8 : 14),
-              blurRadius: _pressed ? 4 : 12,
-              offset: Offset(0, _pressed ? 1 : 4),
-            ),
-          ],
-        ),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(15),
-          child: Row(
-            children: [
-              SizedBox(
-                width: 90,
-                height: 90,
-                child: imageUrl != null
-                    ? Image.network(
-                        imageUrl,
-                        fit: BoxFit.cover,
-                        loadingBuilder: (_, child, p) => p == null
-                            ? child
-                            : const ColoredBox(color: Color(0xFFEEEEEE)),
-                        errorBuilder: (_, _, _) => Container(
-                          color: AppColors.goldLight,
-                          alignment: Alignment.center,
-                          child: const Icon(Icons.home_repair_service_rounded,
-                              size: 28, color: AppColors.gold),
-                        ),
-                      )
-                    : Container(
-                        color: AppColors.goldLight,
-                        alignment: Alignment.center,
-                        child: const Icon(Icons.home_repair_service_rounded,
-                            size: 28, color: AppColors.gold),
-                      ),
-                ),
-              ),
-              Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 14, vertical: 14),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Text(node.name,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w700,
-                              color: _kInk,
-                              height: 1.3)),
-                      if (node.relAvailabilityStatus == 'unavailable') ...[
-                        const SizedBox(height: 3),
-                        const Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(Icons.pause_circle_outline_rounded,
-                                size: 11, color: Color(0xFFF59E0B)),
-                            SizedBox(width: 3),
-                            Text('Temporarily unavailable',
-                                style: TextStyle(
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.w600,
-                                    color: Color(0xFFF59E0B))),
-                          ],
-                        ),
-                      ],
-                      const SizedBox(height: 6),
-                      Row(
-                        children: [
-                          if (node.isLeafBookable &&
-                              node.basePrice != null) ...[
-                            Text('₹${node.basePrice!.toInt()}',
-                                style: GoogleFonts.poppins(
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w800,
-                                    color: _kInk)),
-                            const SizedBox(width: 4),
-                            const Text('onwards',
-                                style: TextStyle(
-                                    fontSize: 11, color: _kMuted2)),
-                          ] else if (node.hasChildren)
-                            Text(
-                              '${node.childrenCount} ${node.childrenCount == 1 ? 'option' : 'options'}',
-                              style: const TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w500,
-                                  color: _kMuted),
-                            ),
-                          if (node.estimatedDuration != null) ...[
-                            const SizedBox(width: 8),
-                            const Icon(Icons.schedule_rounded,
-                                size: 12, color: _kMuted2),
-                            const SizedBox(width: 2),
-                            Text('${node.estimatedDuration} min',
-                                style: const TextStyle(
-                                    fontSize: 11, color: _kMuted2)),
-                          ],
-                        ],
-                      ),
-                      if (node.isLeafBookable && node.loyaltyEarnEnabled)
-                        Consumer(
-                          builder: (_, ref, _) {
-                            final settings = ref
-                                .watch(loyaltySettingsProvider)
-                                .valueOrNull;
-                            if (settings == null ||
-                                !settings.isEnabled ||
-                                !settings.earnEnabled) {
-                              return const SizedBox.shrink();
-                            }
-                            final cfgAsync = ref.watch(
-                              resolvedLoyaltyConfigProvider((
-                                serviceId: node.id,
-                                parentNodeId:
-                                    widget.parentNodeId ?? node.parentId,
-                              )),
-                            );
-                            if (!cfgAsync.hasValue) {
-                              return const SizedBox.shrink();
-                            }
-                            final pts = computeLoyaltyPoints(
-                              cfgAsync.valueOrNull,
-                              settings,
-                              node.basePrice ?? 0,
-                            );
-                            if (pts <= 0) return const SizedBox.shrink();
-                            return Padding(
-                              padding: const EdgeInsets.only(top: 5),
-                              child: _LoyaltyEarnBadge(points: pts),
-                            );
-                          },
-                        ),
-                    ],
-                  ),
-                ),
-              ),
-              Padding(
-                padding: const EdgeInsets.only(right: 14),
-                child: Container(
-                  width: 32,
-                  height: 32,
-                  decoration: BoxDecoration(
-                      color: AppColors.surfaceVariant,
-                      borderRadius: BorderRadius.circular(10)),
-                  child: const Icon(Icons.chevron_right_rounded,
-                      size: 20, color: _kMuted),
-                ),
+        onTap: _navigate,
+        onTapDown: (_) => setState(() => _pressed = true),
+        onTapUp: (_) => setState(() => _pressed = false),
+        onTapCancel: () => setState(() => _pressed = false),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 120),
+          curve: Curves.easeOut,
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: _kBorder, width: 0.8),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withAlpha(_pressed ? 8 : 14),
+                blurRadius: _pressed ? 4 : 12,
+                offset: Offset(0, _pressed ? 1 : 4),
               ),
             ],
           ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(15),
+            child: Row(
+              children: [
+                SizedBox(
+                  width: 90,
+                  height: 90,
+                  child: imageUrl != null
+                      ? Image.network(
+                          imageUrl,
+                          fit: BoxFit.cover,
+                          loadingBuilder: (_, child, p) => p == null
+                              ? child
+                              : const ColoredBox(color: Color(0xFFEEEEEE)),
+                          errorBuilder: (_, _, _) => Container(
+                            color: AppColors.goldLight,
+                            alignment: Alignment.center,
+                            child: const Icon(
+                              Icons.home_repair_service_rounded,
+                              size: 28,
+                              color: AppColors.gold,
+                            ),
+                          ),
+                        )
+                      : Container(
+                          color: AppColors.goldLight,
+                          alignment: Alignment.center,
+                          child: const Icon(
+                            Icons.home_repair_service_rounded,
+                            size: 28,
+                            color: AppColors.gold,
+                          ),
+                        ),
+                ),
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 14,
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(
+                          node.name,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w700,
+                            color: _kInk,
+                            height: 1.3,
+                          ),
+                        ),
+                        if (node.relAvailabilityStatus == 'unavailable') ...[
+                          const SizedBox(height: 3),
+                          const Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                Icons.pause_circle_outline_rounded,
+                                size: 11,
+                                color: Color(0xFFF59E0B),
+                              ),
+                              SizedBox(width: 3),
+                              Text(
+                                'Temporarily unavailable',
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w600,
+                                  color: Color(0xFFF59E0B),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                        const SizedBox(height: 6),
+                        Row(
+                          children: [
+                            if (node.isLeafBookable &&
+                                node.basePrice != null) ...[
+                              Text(
+                                '₹${node.basePrice!.toInt()}',
+                                style: GoogleFonts.poppins(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w800,
+                                  color: _kInk,
+                                ),
+                              ),
+                              const SizedBox(width: 4),
+                              const Text(
+                                'onwards',
+                                style: TextStyle(fontSize: 11, color: _kMuted2),
+                              ),
+                            ] else if (node.hasChildren)
+                              Text(
+                                '${node.childrenCount} ${node.childrenCount == 1 ? 'option' : 'options'}',
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w500,
+                                  color: _kMuted,
+                                ),
+                              ),
+                            if (node.estimatedDuration != null) ...[
+                              const SizedBox(width: 8),
+                              const Icon(
+                                Icons.schedule_rounded,
+                                size: 12,
+                                color: _kMuted2,
+                              ),
+                              const SizedBox(width: 2),
+                              Text(
+                                '${node.estimatedDuration} min',
+                                style: const TextStyle(
+                                  fontSize: 11,
+                                  color: _kMuted2,
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                        if (node.isLeafBookable && node.loyaltyEarnEnabled)
+                          Consumer(
+                            builder: (_, ref, _) {
+                              final settings = ref
+                                  .watch(loyaltySettingsProvider)
+                                  .valueOrNull;
+                              if (settings == null ||
+                                  !settings.isEnabled ||
+                                  !settings.earnEnabled) {
+                                return const SizedBox.shrink();
+                              }
+                              final cfgAsync = ref.watch(
+                                resolvedLoyaltyConfigProvider((
+                                  serviceId: node.id,
+                                  parentNodeId:
+                                      widget.parentNodeId ?? node.parentId,
+                                )),
+                              );
+                              if (!cfgAsync.hasValue) {
+                                return const SizedBox.shrink();
+                              }
+                              final pts = computeLoyaltyPoints(
+                                cfgAsync.valueOrNull,
+                                settings,
+                                node.basePrice ?? 0,
+                              );
+                              if (pts <= 0) return const SizedBox.shrink();
+                              return Padding(
+                                padding: const EdgeInsets.only(top: 5),
+                                child: _LoyaltyEarnBadge(points: pts),
+                              );
+                            },
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.only(right: 14),
+                  child: Container(
+                    width: 32,
+                    height: 32,
+                    decoration: BoxDecoration(
+                      color: AppColors.surfaceVariant,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Icon(
+                      Icons.chevron_right_rounded,
+                      size: 20,
+                      color: _kMuted,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
         ),
       ),
-    ),
     );
   }
 }
@@ -2491,16 +2684,22 @@ class _LoyaltyEarnBadge extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(Icons.workspace_premium_rounded,
-              size: 10, color: AppColors.gold),
+          const Icon(
+            Icons.workspace_premium_rounded,
+            size: 10,
+            color: AppColors.gold,
+          ),
           const SizedBox(width: 3),
-          Text('Earn $points Loyalty Points',
-              style: const TextStyle(
-                  fontSize: 9,
-                  fontWeight: FontWeight.w700,
-                  color: AppColors.gold,
-                  height: 1.2,
-                  letterSpacing: 0.1)),
+          Text(
+            'Earn $points Loyalty Points',
+            style: const TextStyle(
+              fontSize: 9,
+              fontWeight: FontWeight.w700,
+              color: AppColors.gold,
+              height: 1.2,
+              letterSpacing: 0.1,
+            ),
+          ),
         ],
       ),
     );
@@ -2520,8 +2719,7 @@ class _ComingSoonBanner extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(20, 32, 20, 8),
       child: Container(
         width: double.infinity,
-        padding:
-            const EdgeInsets.symmetric(vertical: 24, horizontal: 20),
+        padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 20),
         decoration: BoxDecoration(
           color: AppColors.goldLight,
           borderRadius: BorderRadius.circular(18),
@@ -2531,17 +2729,19 @@ class _ComingSoonBanner extends StatelessWidget {
           children: [
             Icon(Icons.schedule_rounded, size: 36, color: AppColors.gold),
             SizedBox(height: 12),
-            Text('Coming Soon',
-                style: TextStyle(
-                    fontSize: 17,
-                    fontWeight: FontWeight.w700,
-                    color: _kInk)),
+            Text(
+              'Coming Soon',
+              style: TextStyle(
+                fontSize: 17,
+                fontWeight: FontWeight.w700,
+                color: _kInk,
+              ),
+            ),
             SizedBox(height: 6),
             Text(
               'This service is not yet available for booking.\nCheck back soon.',
               textAlign: TextAlign.center,
-              style:
-                  TextStyle(fontSize: 13, color: _kMuted, height: 1.55),
+              style: TextStyle(fontSize: 13, color: _kMuted, height: 1.55),
             ),
           ],
         ),
@@ -2611,9 +2811,14 @@ class _NodeBookingBar extends ConsumerWidget {
     final nonGlobalAddOns = addOns.where((a) => !a.isGlobal).toList();
     final CartAddResult result;
     if (attrOptionPrice != null) {
-      final selAddons = buildSelectedAddons(nonGlobalAddOns, selectedAddonIds,
-          quantities: addonQuantities);
-      result = ref.read(cartProvider.notifier).addToCart(
+      final selAddons = buildSelectedAddons(
+        nonGlobalAddOns,
+        selectedAddonIds,
+        quantities: addonQuantities,
+      );
+      result = ref
+          .read(cartProvider.notifier)
+          .addToCart(
             node,
             unitPriceOverride: attrOptionPrice! + totalAddonsPrice(selAddons),
             originalUnitPrice: attrOptionOriginalPrice,
@@ -2625,7 +2830,9 @@ class _NodeBookingBar extends ConsumerWidget {
             quantity: attrQty,
           );
     } else if (amcPlan != null) {
-      result = ref.read(cartProvider.notifier).addToCart(
+      result = ref
+          .read(cartProvider.notifier)
+          .addToCart(
             node,
             priceAdjustment: 0.0,
             parentNodeId: parentNodeId,
@@ -2635,11 +2842,17 @@ class _NodeBookingBar extends ConsumerWidget {
           );
     } else {
       // Normal service: unitPriceOverride = discounted base + attr adj + non-global addons.
-      final selAddons = buildSelectedAddons(nonGlobalAddOns, selectedAddonIds,
-          quantities: addonQuantities);
-      result = ref.read(cartProvider.notifier).addToCart(
+      final selAddons = buildSelectedAddons(
+        nonGlobalAddOns,
+        selectedAddonIds,
+        quantities: addonQuantities,
+      );
+      result = ref
+          .read(cartProvider.notifier)
+          .addToCart(
             node,
-            unitPriceOverride: (node.finalPrice ?? node.basePrice ?? 0.0) +
+            unitPriceOverride:
+                (node.finalPrice ?? node.basePrice ?? 0.0) +
                 priceAdjustment +
                 totalAddonsPrice(selAddons),
             originalUnitPrice: node.hasDiscount ? node.basePrice : null,
@@ -2648,7 +2861,8 @@ class _NodeBookingBar extends ConsumerWidget {
             rootCategoryId: rootCategoryId,
           );
     }
-    if (result == CartAddResult.newCartStarted) _showNewCartStartedSnackBar(context);
+    if (result == CartAddResult.newCartStarted)
+      _showNewCartStartedSnackBar(context);
   }
 
   @override
@@ -2659,13 +2873,15 @@ class _NodeBookingBar extends ConsumerWidget {
     final CartItem? cartItem;
     if (amcPlan != null) {
       cartItem = cartItems
-          .where((i) =>
-              i.serviceId == node.id &&
-              i.isAmc &&
-              i.amcPlanId == amcPlan!.id &&
-              (parentNodeId == null ||
-                  i.parentNodeId == null ||
-                  i.parentNodeId == parentNodeId))
+          .where(
+            (i) =>
+                i.serviceId == node.id &&
+                i.isAmc &&
+                i.amcPlanId == amcPlan!.id &&
+                (parentNodeId == null ||
+                    i.parentNodeId == null ||
+                    i.parentNodeId == parentNodeId),
+          )
           .firstOrNull;
     } else if (attrOptionPrice != null) {
       // Attr service: effectiveBase = attrOptionPrice; selectedAddonIds = non-global only.
@@ -2683,7 +2899,8 @@ class _NodeBookingBar extends ConsumerWidget {
         serviceId: node.id,
         isAmc: false,
         addonIds: selectedAddonIds,
-        effectiveBasePrice: (node.finalPrice ?? node.basePrice ?? 0.0) + priceAdjustment,
+        effectiveBasePrice:
+            (node.finalPrice ?? node.basePrice ?? 0.0) + priceAdjustment,
         parentNodeId: parentNodeId,
       );
     }
@@ -2691,7 +2908,11 @@ class _NodeBookingBar extends ConsumerWidget {
 
     return Container(
       padding: EdgeInsets.fromLTRB(
-          20, 14, 20, 14 + MediaQuery.of(context).padding.bottom),
+        20,
+        14,
+        20,
+        14 + MediaQuery.of(context).padding.bottom,
+      ),
       decoration: const BoxDecoration(
         color: Colors.white,
         border: Border(top: BorderSide(color: _kBorder, width: 1)),
@@ -2715,10 +2936,11 @@ class _NodeBookingBar extends ConsumerWidget {
                         ? '₹${(displayPrice * attrQty).toInt()}'
                         : '₹${displayPrice.toInt()}',
                     style: GoogleFonts.poppins(
-                        fontSize: 17,
-                        fontWeight: FontWeight.w800,
-                        color: _kInk,
-                        height: 1.1),
+                      fontSize: 17,
+                      fontWeight: FontWeight.w800,
+                      color: _kInk,
+                      height: 1.1,
+                    ),
                   ),
                   if (node.hasDiscount &&
                       attrOptionPrice == null &&
@@ -2749,15 +2971,17 @@ class _NodeBookingBar extends ConsumerWidget {
                 child: Container(
                   padding: const EdgeInsets.symmetric(vertical: 13),
                   decoration: BoxDecoration(
-                      color: _kInk,
-                      borderRadius: BorderRadius.circular(100)),
+                    color: _kInk,
+                    borderRadius: BorderRadius.circular(100),
+                  ),
                   child: Center(
                     child: Text(
                       inCart ? '🛒  Proceed to Checkout' : '🛒  Add to Cart',
                       style: GoogleFonts.poppins(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                          color: Colors.white),
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.white,
+                      ),
                     ),
                   ),
                 ),
@@ -2834,7 +3058,7 @@ class _WebScaffold extends ConsumerWidget {
   final Map<String, int> addonQuantities;
   final AmcPlanModel? selectedAmcPlan;
   final void Function(String, String, List<ServiceAttributeModel>)
-      onOptionSelected;
+  onOptionSelected;
   final void Function(String, bool) onAddonToggled;
   final void Function(String, int) onAddonQtyChanged;
   final void Function(AmcPlanModel?) onAmcPlanSelected;
@@ -2855,23 +3079,29 @@ class _WebScaffold extends ConsumerWidget {
     // Cart matching: for attr services match by unitPrice = selectedAttrPrice;
     // for normal services use the full effectiveBasePrice match.
     // Only non-global addons are stored in cart items.
-    final nonGlobalAddonIds =
-        selectedAddonIds.where((id) => addOns.any((a) => a.id == id && !a.isGlobal)).toSet();
+    final nonGlobalAddonIds = selectedAddonIds
+        .where((id) => addOns.any((a) => a.id == id && !a.isGlobal))
+        .toSet();
     final nonGlobalQuantities = Map.fromEntries(
-        addonQuantities.entries.where((e) => nonGlobalAddonIds.contains(e.key)));
+      addonQuantities.entries.where((e) => nonGlobalAddonIds.contains(e.key)),
+    );
     final selectedAddons = buildSelectedAddons(
-        addOns.where((a) => !a.isGlobal).toList(), nonGlobalAddonIds,
-        quantities: nonGlobalQuantities);
+      addOns.where((a) => !a.isGlobal).toList(),
+      nonGlobalAddonIds,
+      quantities: nonGlobalQuantities,
+    );
     final CartItem? cartItem;
     if (selectedAmcPlan != null) {
       cartItem = cart
-          .where((i) =>
-              i.serviceId == node.id &&
-              i.isAmc &&
-              i.amcPlanId == selectedAmcPlan!.id &&
-              (parentNodeId == null ||
-                  i.parentNodeId == null ||
-                  i.parentNodeId == parentNodeId))
+          .where(
+            (i) =>
+                i.serviceId == node.id &&
+                i.isAmc &&
+                i.amcPlanId == selectedAmcPlan!.id &&
+                (parentNodeId == null ||
+                    i.parentNodeId == null ||
+                    i.parentNodeId == parentNodeId),
+          )
           .firstOrNull;
     } else if (selectedAttrPrice != null) {
       // Attr service: effectiveBase = selectedAttrPrice (addons embedded in unitPrice,
@@ -2890,7 +3120,8 @@ class _WebScaffold extends ConsumerWidget {
         serviceId: node.id,
         isAmc: false,
         addonIds: nonGlobalAddonIds,
-        effectiveBasePrice: (node.finalPrice ?? node.basePrice ?? 0.0) + priceAdjustment,
+        effectiveBasePrice:
+            (node.finalPrice ?? node.basePrice ?? 0.0) + priceAdjustment,
         parentNodeId: parentNodeId,
       );
     }
@@ -2911,7 +3142,9 @@ class _WebScaffold extends ConsumerWidget {
       final CartAddResult result;
       if (selectedAttrPrice != null) {
         // Attribute service: embed non-global addons in unitPrice only.
-        result = ref.read(cartProvider.notifier).addToCart(
+        result = ref
+            .read(cartProvider.notifier)
+            .addToCart(
               node,
               unitPriceOverride: selectedAttrPrice! + addonsTotal,
               originalUnitPrice: selectedAttrOriginalPrice,
@@ -2923,7 +3156,9 @@ class _WebScaffold extends ConsumerWidget {
               quantity: effectiveAttrQty,
             );
       } else if (selectedAmcPlan != null) {
-        result = ref.read(cartProvider.notifier).addToCart(
+        result = ref
+            .read(cartProvider.notifier)
+            .addToCart(
               node,
               priceAdjustment: 0.0,
               parentNodeId: parentNodeId,
@@ -2933,9 +3168,12 @@ class _WebScaffold extends ConsumerWidget {
             );
       } else {
         // Normal service: unitPriceOverride = discounted base + attr adj + addons.
-        result = ref.read(cartProvider.notifier).addToCart(
+        result = ref
+            .read(cartProvider.notifier)
+            .addToCart(
               node,
-              unitPriceOverride: (node.finalPrice ?? node.basePrice ?? 0.0) +
+              unitPriceOverride:
+                  (node.finalPrice ?? node.basePrice ?? 0.0) +
                   priceAdjustment +
                   addonsTotal,
               originalUnitPrice: node.hasDiscount ? node.basePrice : null,
@@ -2944,7 +3182,8 @@ class _WebScaffold extends ConsumerWidget {
               rootCategoryId: rootCategoryId,
             );
       }
-      if (result == CartAddResult.newCartStarted) _showNewCartStartedSnackBar(context);
+      if (result == CartAddResult.newCartStarted)
+        _showNewCartStartedSnackBar(context);
     }
 
     final screenH = MediaQuery.sizeOf(context).height;
@@ -3009,8 +3248,9 @@ class _WebScaffold extends ConsumerWidget {
             if (node.isLeafBookable)
               Consumer(
                 builder: (ctx, ref, _) {
-                  final plans =
-                      ref.watch(amcPlansProvider(node.id)).valueOrNull;
+                  final plans = ref
+                      .watch(amcPlansProvider(node.id))
+                      .valueOrNull;
                   if (plans == null || plans.isEmpty) {
                     return const SizedBox.shrink();
                   }
@@ -3033,18 +3273,24 @@ class _WebScaffold extends ConsumerWidget {
               ),
 
             if (node.isLeafBookable) ...[
-              Text('About this service',
-                  style: GoogleFonts.poppins(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w700,
-                      color: _kInk)),
+              Text(
+                'About this service',
+                style: GoogleFonts.poppins(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w700,
+                  color: _kInk,
+                ),
+              ),
               const SizedBox(height: 10),
               Text(
                 node.description?.isNotEmpty == true
                     ? node.description!
                     : 'No description available.',
-                style:
-                    const TextStyle(fontSize: 13, color: _kMuted, height: 1.6),
+                style: const TextStyle(
+                  fontSize: 13,
+                  color: _kMuted,
+                  height: 1.6,
+                ),
               ),
               const SizedBox(height: 18),
 
@@ -3058,15 +3304,20 @@ class _WebScaffold extends ConsumerWidget {
               if (node.contentBlocks.isNotEmpty)
                 _ContentBlocksSection(blocks: node.contentBlocks),
 
-              Text('FAQs',
-                  style: GoogleFonts.poppins(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w700,
-                      color: _kInk)),
+              Text(
+                'FAQs',
+                style: GoogleFonts.poppins(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w700,
+                  color: _kInk,
+                ),
+              ),
               const SizedBox(height: 12),
               if (faqs.isEmpty) ...[
-                const Text('No FAQs yet.',
-                    style: TextStyle(fontSize: 13, color: _kMuted)),
+                const Text(
+                  'No FAQs yet.',
+                  style: TextStyle(fontSize: 13, color: _kMuted),
+                ),
                 const SizedBox(height: 6),
                 AskQuestionLink(serviceId: node.id, parentId: parentNodeId),
                 const SizedBox(height: 8),
@@ -3083,9 +3334,10 @@ class _WebScaffold extends ConsumerWidget {
                     ? 'Reviews (${node.reviewCount})'
                     : 'Reviews',
                 style: GoogleFonts.poppins(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w700,
-                    color: _kInk),
+                  fontSize: 15,
+                  fontWeight: FontWeight.w700,
+                  color: _kInk,
+                ),
               ),
               const SizedBox(height: 12),
               ServiceReviewsSection(serviceId: node.id, showHeader: false),
@@ -3103,7 +3355,8 @@ class _WebScaffold extends ConsumerWidget {
                   : _ChildrenSection(
                       node: node,
                       children: children,
-                      rootCategoryId: rootCategoryId),
+                      rootCategoryId: rootCategoryId,
+                    ),
 
             if (!node.hasChildren && !node.isBookable)
               const _ComingSoonBanner(),
@@ -3114,124 +3367,154 @@ class _WebScaffold extends ConsumerWidget {
 
     final footer = node.isLeafBookable
         ? (availChecking || isUnavailable || isEffectivelyHidden)
-            ? CatalogUnavailabilityBar(
-                message: isUnavailable
-                    ? (avail?.message ?? node.relUnavailabilityMessage)
-                    : null,
-                isChecking: availChecking,
-              )
-            : Container(
-            padding:
-                const EdgeInsets.symmetric(horizontal: 28, vertical: 18),
-            decoration: const BoxDecoration(
-              border: Border(top: BorderSide(color: _kBorder)),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                if (inCart && cartItem.addons.isNotEmpty) ...[
-                  ...cartItem.addons.map((a) => Padding(
-                        padding: const EdgeInsets.only(bottom: 4),
-                        child: Row(
-                          children: [
-                            Text('+ ${a.addonName}',
+              ? CatalogUnavailabilityBar(
+                  message: isUnavailable
+                      ? (avail?.message ?? node.relUnavailabilityMessage)
+                      : null,
+                  isChecking: availChecking,
+                )
+              : Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 28,
+                    vertical: 18,
+                  ),
+                  decoration: const BoxDecoration(
+                    border: Border(top: BorderSide(color: _kBorder)),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (inCart && cartItem.addons.isNotEmpty) ...[
+                        ...cartItem.addons.map(
+                          (a) => Padding(
+                            padding: const EdgeInsets.only(bottom: 4),
+                            child: Row(
+                              children: [
+                                Text(
+                                  '+ ${a.addonName}',
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    color: _kMuted,
+                                  ),
+                                ),
+                                const Spacer(),
+                                Text(
+                                  '₹${a.addonPrice.toInt()}',
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    color: _kMuted,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                      ],
+                      Row(
+                        children: [
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                inCart ? 'Total' : 'From',
                                 style: const TextStyle(
-                                    fontSize: 12, color: _kMuted)),
-                            const Spacer(),
-                            Text('₹${a.addonPrice.toInt()}',
-                                style: const TextStyle(
-                                    fontSize: 12, color: _kMuted)),
+                                  fontSize: 11,
+                                  color: _kMuted2,
+                                ),
+                              ),
+                              Text(
+                                selectedAttrPrice != null
+                                    ? '₹${(displayPrice * effectiveAttrQty).toInt()}'
+                                    : '₹${(displayPrice * cartQty).toInt()}',
+                                style: GoogleFonts.poppins(
+                                  fontSize: 20,
+                                  fontWeight: FontWeight.w800,
+                                  color: _kInk,
+                                  height: 1.1,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const Spacer(),
+                          // When variants present, chip stepper handles qty — hide web stepper.
+                          if (inCart && selectedAttrPrice == null) ...[
+                            _WebQtyStepper(
+                              quantity: cartQty,
+                              onDecrement: () => ref
+                                  .read(cartProvider.notifier)
+                                  .updateQuantity(
+                                    cartItem!.bookingId,
+                                    cartQty - 1,
+                                  ),
+                              onIncrement: () => ref
+                                  .read(cartProvider.notifier)
+                                  .updateQuantity(
+                                    cartItem!.bookingId,
+                                    cartQty + 1,
+                                  ),
+                            ),
+                            const SizedBox(width: 12),
                           ],
-                        ),
-                      )),
-                  const SizedBox(height: 10),
-                ],
-                Row(
-                  children: [
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      inCart ? 'Total' : 'From',
-                      style: const TextStyle(fontSize: 11, color: _kMuted2),
-                    ),
-                    Text(
-                      selectedAttrPrice != null
-                          ? '₹${(displayPrice * effectiveAttrQty).toInt()}'
-                          : '₹${(displayPrice * cartQty).toInt()}',
-                      style: GoogleFonts.poppins(
-                          fontSize: 20,
-                          fontWeight: FontWeight.w800,
-                          color: _kInk,
-                          height: 1.1),
-                    ),
-                  ],
-                ),
-                const Spacer(),
-                // When variants present, chip stepper handles qty — hide web stepper.
-                if (inCart && selectedAttrPrice == null) ...[
-                  _WebQtyStepper(
-                    quantity: cartQty,
-                    onDecrement: () => ref
-                        .read(cartProvider.notifier)
-                        .updateQuantity(cartItem!.bookingId, cartQty - 1),
-                    onIncrement: () => ref
-                        .read(cartProvider.notifier)
-                        .updateQuantity(cartItem!.bookingId, cartQty + 1),
-                  ),
-                  const SizedBox(width: 12),
-                ],
-                if (inCart && selectedAttrPrice == null)
-                  MouseRegion(
-                    cursor: SystemMouseCursors.click,
-                    child: GestureDetector(
-                      onTap: () => Navigator.of(context).maybePop(),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 24, vertical: 13),
-                        decoration: BoxDecoration(
-                            color: _kInk,
-                            borderRadius: BorderRadius.circular(100)),
-                        child: Text(
-                          'Done',
-                          style: GoogleFonts.poppins(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w600,
-                              color: Colors.white),
-                        ),
+                          if (inCart && selectedAttrPrice == null)
+                            MouseRegion(
+                              cursor: SystemMouseCursors.click,
+                              child: GestureDetector(
+                                onTap: () => Navigator.of(context).maybePop(),
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 24,
+                                    vertical: 13,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: _kInk,
+                                    borderRadius: BorderRadius.circular(100),
+                                  ),
+                                  child: Text(
+                                    'Done',
+                                    style: GoogleFonts.poppins(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w600,
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            )
+                          else
+                            MouseRegion(
+                              cursor: SystemMouseCursors.click,
+                              child: GestureDetector(
+                                onTap: addToCart,
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 24,
+                                    vertical: 13,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: _kInk,
+                                    borderRadius: BorderRadius.circular(100),
+                                  ),
+                                  child: Text(
+                                    inCart && selectedAttrPrice != null
+                                        ? '🛒  Update Cart'
+                                        : '🛒  Add to Cart',
+                                    style: GoogleFonts.poppins(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w600,
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                        ],
                       ),
-                    ),
-                  )
-                else
-                  MouseRegion(
-                    cursor: SystemMouseCursors.click,
-                    child: GestureDetector(
-                      onTap: addToCart,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 24, vertical: 13),
-                        decoration: BoxDecoration(
-                            color: _kInk,
-                            borderRadius: BorderRadius.circular(100)),
-                        child: Text(
-                          inCart && selectedAttrPrice != null
-                              ? '🛒  Update Cart'
-                              : '🛒  Add to Cart',
-                          style: GoogleFonts.poppins(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w600,
-                              color: Colors.white),
-                        ),
-                      ),
-                    ),
+                    ],
                   ),
-              ],
-            ),
-              ],
-            ),
-          )
+                )
         : null;
 
     if (inModal) {
@@ -3241,10 +3524,14 @@ class _WebScaffold extends ConsumerWidget {
           child: Center(
             child: ConstrainedBox(
               constraints: BoxConstraints(
-                  maxWidth: 920, maxHeight: screenH - 48),
+                maxWidth: 920,
+                maxHeight: screenH - 48,
+              ),
               child: Padding(
                 padding: const EdgeInsets.symmetric(
-                    horizontal: 20, vertical: 20),
+                  horizontal: 20,
+                  vertical: 20,
+                ),
                 child: Stack(
                   children: [
                     Container(
@@ -3295,8 +3582,11 @@ class _WebScaffold extends ConsumerWidget {
                               color: const Color(0xFFF2EFE9),
                               borderRadius: BorderRadius.circular(100),
                             ),
-                            child: const Icon(Icons.close_rounded,
-                                size: 16, color: _kInk),
+                            child: const Icon(
+                              Icons.close_rounded,
+                              size: 16,
+                              color: _kInk,
+                            ),
                           ),
                         ),
                       ),
@@ -3319,17 +3609,15 @@ class _WebScaffold extends ConsumerWidget {
               constraints: const BoxConstraints(maxWidth: 920),
               child: Padding(
                 padding: const EdgeInsets.symmetric(
-                    horizontal: 20, vertical: 24),
+                  horizontal: 20,
+                  vertical: 24,
+                ),
                 child: Container(
                   decoration: cardDecoration,
                   clipBehavior: Clip.antiAlias,
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      header,
-                      ...middleSections,
-                      ?footer,
-                    ],
+                    children: [header, ...middleSections, ?footer],
                   ),
                 ),
               ),
@@ -3370,9 +3658,10 @@ class _WebQtyStepper extends StatelessWidget {
             child: Text(
               '$quantity',
               style: GoogleFonts.poppins(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w700,
-                  color: _kInk),
+                fontSize: 14,
+                fontWeight: FontWeight.w700,
+                color: _kInk,
+              ),
             ),
           ),
           _WebStepBtn(icon: Icons.add_rounded, onTap: onIncrement),
@@ -3421,147 +3710,177 @@ class _WebAddonsGrid extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    return LayoutBuilder(builder: (_, constraints) {
-      const cols = 4;
-      const gap = 16.0;
-      final itemW = (constraints.maxWidth - gap * (cols - 1)) / cols;
+    return LayoutBuilder(
+      builder: (_, constraints) {
+        const cols = 4;
+        const gap = 16.0;
+        final itemW = (constraints.maxWidth - gap * (cols - 1)) / cols;
 
-      final rows = <List<AddOnModel>>[];
-      for (var i = 0; i < addOns.length; i += cols) {
-        rows.add(addOns.sublist(
-            i, i + cols > addOns.length ? addOns.length : i + cols));
-      }
+        final rows = <List<AddOnModel>>[];
+        for (var i = 0; i < addOns.length; i += cols) {
+          rows.add(
+            addOns.sublist(
+              i,
+              i + cols > addOns.length ? addOns.length : i + cols,
+            ),
+          );
+        }
 
-      return Column(
-        children: rows.map((row) {
-          return Padding(
-            padding: const EdgeInsets.only(bottom: 16),
-            child: Row(
-              children: row.asMap().entries.map((e) {
-                final a = e.value;
-                final isSelected = selectedIds.contains(a.id);
-                final qty = quantities[a.id] ?? 1;
-                return [
-                  SizedBox(
-                    width: itemW,
-                    child: Row(
-                      children: [
-                        Container(
-                          width: 44,
-                          height: 44,
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(10),
-                            gradient: const LinearGradient(
-                              begin: Alignment.topLeft,
-                              end: Alignment.bottomRight,
-                              colors: [
-                                Color(0xFFF1ECE1),
-                                Color(0xFFEAE3D4)
-                              ],
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
+        return Column(
+          children: rows.map((row) {
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 16),
+              child: Row(
+                children: row
+                    .asMap()
+                    .entries
+                    .map((e) {
+                      final a = e.value;
+                      final isSelected = selectedIds.contains(a.id);
+                      final qty = quantities[a.id] ?? 1;
+                      return [
+                        SizedBox(
+                          width: itemW,
+                          child: Row(
                             children: [
-                              Text(a.name,
-                                  style: const TextStyle(
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.w600,
-                                      color: _kInk),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis),
-                              Row(
-                                crossAxisAlignment: CrossAxisAlignment.baseline,
-                                textBaseline: TextBaseline.alphabetic,
-                                children: [
-                                  Text(
-                                    isSelected
-                                        ? '₹${(a.finalPrice * qty).toInt()}'
-                                        : '₹${a.finalPrice.toInt()}',
-                                    style: const TextStyle(
-                                        fontSize: 12, color: _kMuted),
+                              Container(
+                                width: 44,
+                                height: 44,
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(10),
+                                  gradient: const LinearGradient(
+                                    begin: Alignment.topLeft,
+                                    end: Alignment.bottomRight,
+                                    colors: [
+                                      Color(0xFFF1ECE1),
+                                      Color(0xFFEAE3D4),
+                                    ],
                                   ),
-                                  if (a.hasDiscount && !isSelected) ...[
-                                    const SizedBox(width: 5),
-                                    Text('₹${a.price.toInt()}',
-                                        style: const TextStyle(
-                                          fontSize: 11,
-                                          color: _kMuted2,
-                                          decoration:
-                                              TextDecoration.lineThrough,
-                                          decorationColor: _kMuted2,
-                                        )),
-                                  ],
-                                ],
+                                ),
                               ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      a.name,
+                                      style: const TextStyle(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w600,
+                                        color: _kInk,
+                                      ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                    Row(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.baseline,
+                                      textBaseline: TextBaseline.alphabetic,
+                                      children: [
+                                        Text(
+                                          isSelected
+                                              ? '₹${(a.finalPrice * qty).toInt()}'
+                                              : '₹${a.finalPrice.toInt()}',
+                                          style: const TextStyle(
+                                            fontSize: 12,
+                                            color: _kMuted,
+                                          ),
+                                        ),
+                                        if (a.hasDiscount && !isSelected) ...[
+                                          const SizedBox(width: 5),
+                                          Text(
+                                            '₹${a.price.toInt()}',
+                                            style: const TextStyle(
+                                              fontSize: 11,
+                                              color: _kMuted2,
+                                              decoration:
+                                                  TextDecoration.lineThrough,
+                                              decorationColor: _kMuted2,
+                                            ),
+                                          ),
+                                        ],
+                                      ],
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              if (isSelected)
+                                _MiniQtyStepper(
+                                  qty: qty,
+                                  onDecrement: () {
+                                    if (a.isGlobal) {
+                                      ref
+                                          .read(
+                                            globalCartAddonsProvider.notifier,
+                                          )
+                                          .setQuantity(a.id, qty - 1);
+                                    } else {
+                                      onQtyChanged(a.id, qty - 1);
+                                    }
+                                  },
+                                  onIncrement: () {
+                                    if (a.isGlobal) {
+                                      ref
+                                          .read(
+                                            globalCartAddonsProvider.notifier,
+                                          )
+                                          .setQuantity(a.id, qty + 1);
+                                    } else {
+                                      onQtyChanged(a.id, qty + 1);
+                                    }
+                                  },
+                                )
+                              else
+                                MouseRegion(
+                                  cursor: SystemMouseCursors.click,
+                                  child: GestureDetector(
+                                    onTap: () {
+                                      if (a.isGlobal) {
+                                        ref
+                                            .read(
+                                              globalCartAddonsProvider.notifier,
+                                            )
+                                            .toggle(a);
+                                      } else {
+                                        onToggle(a.id, true);
+                                      }
+                                    },
+                                    child: AnimatedContainer(
+                                      duration: const Duration(
+                                        milliseconds: 150,
+                                      ),
+                                      width: 22,
+                                      height: 22,
+                                      decoration: const BoxDecoration(
+                                        color: Color(0xFFECE7DE),
+                                        shape: BoxShape.circle,
+                                      ),
+                                      child: const Center(
+                                        child: Icon(
+                                          Icons.add_rounded,
+                                          size: 13,
+                                          color: _kInk,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
                             ],
                           ),
                         ),
-                        const SizedBox(width: 8),
-                        if (isSelected)
-                          _MiniQtyStepper(
-                            qty: qty,
-                            onDecrement: () {
-                              if (a.isGlobal) {
-                                ref
-                                    .read(globalCartAddonsProvider.notifier)
-                                    .setQuantity(a.id, qty - 1);
-                              } else {
-                                onQtyChanged(a.id, qty - 1);
-                              }
-                            },
-                            onIncrement: () {
-                              if (a.isGlobal) {
-                                ref
-                                    .read(globalCartAddonsProvider.notifier)
-                                    .setQuantity(a.id, qty + 1);
-                              } else {
-                                onQtyChanged(a.id, qty + 1);
-                              }
-                            },
-                          )
-                        else
-                          MouseRegion(
-                            cursor: SystemMouseCursors.click,
-                            child: GestureDetector(
-                              onTap: () {
-                                if (a.isGlobal) {
-                                  ref
-                                      .read(globalCartAddonsProvider.notifier)
-                                      .toggle(a);
-                                } else {
-                                  onToggle(a.id, true);
-                                }
-                              },
-                              child: AnimatedContainer(
-                                duration: const Duration(milliseconds: 150),
-                                width: 22,
-                                height: 22,
-                                decoration: const BoxDecoration(
-                                  color: Color(0xFFECE7DE),
-                                  shape: BoxShape.circle,
-                                ),
-                                child: const Center(
-                                  child: Icon(Icons.add_rounded,
-                                      size: 13, color: _kInk),
-                                ),
-                              ),
-                            ),
-                          ),
-                      ],
-                    ),
-                  ),
-                  if (e.key < row.length - 1) const SizedBox(width: gap),
-                ];
-              }).expand((w) => w).toList(),
-            ),
-          );
-        }).toList(),
-      );
-    });
+                        if (e.key < row.length - 1) const SizedBox(width: gap),
+                      ];
+                    })
+                    .expand((w) => w)
+                    .toList(),
+              ),
+            );
+          }).toList(),
+        );
+      },
+    );
   }
 }
 
@@ -3580,9 +3899,14 @@ class _IncludedSection extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text("What's Included",
-              style: GoogleFonts.poppins(
-                  fontSize: 15, fontWeight: FontWeight.w700, color: _kInk)),
+          Text(
+            "What's Included",
+            style: GoogleFonts.poppins(
+              fontSize: 15,
+              fontWeight: FontWeight.w700,
+              color: _kInk,
+            ),
+          ),
           const SizedBox(height: 10),
           ...items.map(
             (item) => Padding(
@@ -3592,14 +3916,22 @@ class _IncludedSection extends StatelessWidget {
                 children: [
                   const Padding(
                     padding: EdgeInsets.only(top: 2),
-                    child: Icon(Icons.check_circle_rounded,
-                        size: 15, color: Color(0xFF22C55E)),
+                    child: Icon(
+                      Icons.check_circle_rounded,
+                      size: 15,
+                      color: Color(0xFF22C55E),
+                    ),
                   ),
                   const SizedBox(width: 10),
                   Expanded(
-                    child: Text(item,
-                        style: const TextStyle(
-                            fontSize: 13, color: _kInk, height: 1.5)),
+                    child: Text(
+                      item,
+                      style: const TextStyle(
+                        fontSize: 13,
+                        color: _kInk,
+                        height: 1.5,
+                      ),
+                    ),
                   ),
                 ],
               ),
@@ -3626,9 +3958,14 @@ class _ExcludedSection extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text("What's Excluded",
-              style: GoogleFonts.poppins(
-                  fontSize: 15, fontWeight: FontWeight.w700, color: _kInk)),
+          Text(
+            "What's Excluded",
+            style: GoogleFonts.poppins(
+              fontSize: 15,
+              fontWeight: FontWeight.w700,
+              color: _kInk,
+            ),
+          ),
           const SizedBox(height: 10),
           ...items.map(
             (item) => Padding(
@@ -3638,14 +3975,22 @@ class _ExcludedSection extends StatelessWidget {
                 children: [
                   const Padding(
                     padding: EdgeInsets.only(top: 2),
-                    child: Icon(Icons.cancel_rounded,
-                        size: 15, color: Color(0xFFEF4444)),
+                    child: Icon(
+                      Icons.cancel_rounded,
+                      size: 15,
+                      color: Color(0xFFEF4444),
+                    ),
                   ),
                   const SizedBox(width: 10),
                   Expanded(
-                    child: Text(item,
-                        style: const TextStyle(
-                            fontSize: 13, color: _kMuted, height: 1.5)),
+                    child: Text(
+                      item,
+                      style: const TextStyle(
+                        fontSize: 13,
+                        color: _kMuted,
+                        height: 1.5,
+                      ),
+                    ),
                   ),
                 ],
               ),
@@ -3672,24 +4017,34 @@ class _BeforeAfterSection extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Before & After',
-              style: GoogleFonts.poppins(
-                  fontSize: 15, fontWeight: FontWeight.w700, color: _kInk)),
+          Text(
+            'Before & After',
+            style: GoogleFonts.poppins(
+              fontSize: 15,
+              fontWeight: FontWeight.w700,
+              color: _kInk,
+            ),
+          ),
           const SizedBox(height: 12),
           ...pairs.map((pair) {
             final beforeUrl = pair['before_url'] ?? '';
             final afterUrl = pair['after_url'] ?? '';
-            if (beforeUrl.isEmpty && afterUrl.isEmpty) return const SizedBox.shrink();
+            if (beforeUrl.isEmpty && afterUrl.isEmpty)
+              return const SizedBox.shrink();
             return Padding(
               padding: const EdgeInsets.only(bottom: 12),
               child: Row(
                 children: [
                   if (beforeUrl.isNotEmpty)
-                    Expanded(child: _BAPhoto(url: beforeUrl, label: 'Before')),
+                    Expanded(
+                      child: _BAPhoto(url: beforeUrl, label: 'Before'),
+                    ),
                   if (beforeUrl.isNotEmpty && afterUrl.isNotEmpty)
                     const SizedBox(width: 8),
                   if (afterUrl.isNotEmpty)
-                    Expanded(child: _BAPhoto(url: afterUrl, label: 'After')),
+                    Expanded(
+                      child: _BAPhoto(url: afterUrl, label: 'After'),
+                    ),
                 ],
               ),
             );
@@ -3717,13 +4072,17 @@ class _BAPhoto extends StatelessWidget {
             child: Image.network(
               url,
               fit: BoxFit.cover,
-              loadingBuilder: (_, child, p) =>
-                  p == null ? child : const ColoredBox(color: Color(0xFFEAE3D4)),
+              loadingBuilder: (_, child, p) => p == null
+                  ? child
+                  : const ColoredBox(color: Color(0xFFEAE3D4)),
               errorBuilder: (_, _, _) => Container(
                 color: const Color(0xFFF1ECE1),
                 alignment: Alignment.center,
-                child: const Icon(Icons.broken_image_outlined,
-                    color: _kMuted2, size: 28),
+                child: const Icon(
+                  Icons.broken_image_outlined,
+                  color: _kMuted2,
+                  size: 28,
+                ),
               ),
             ),
           ),
@@ -3744,10 +4103,11 @@ class _BAPhoto extends StatelessWidget {
                 child: Text(
                   label,
                   style: const TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w700,
-                      color: Colors.white,
-                      letterSpacing: 0.5),
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.white,
+                    letterSpacing: 0.5,
+                  ),
                 ),
               ),
             ),
@@ -3779,16 +4139,16 @@ class _ContentBlocksSection extends StatelessWidget {
     final imageUrl = ((block['image_url'] as String?) ?? '').trim();
 
     Widget imageWidget(String url) => ClipRRect(
-          borderRadius: BorderRadius.circular(12),
-          child: Image.network(
-            url,
-            width: double.infinity,
-            fit: BoxFit.cover,
-            loadingBuilder: (_, child, p) =>
-                p == null ? child : const ColoredBox(color: Color(0xFFEAE3D4)),
-            errorBuilder: (_, _, _) => const SizedBox.shrink(),
-          ),
-        );
+      borderRadius: BorderRadius.circular(12),
+      child: Image.network(
+        url,
+        width: double.infinity,
+        fit: BoxFit.cover,
+        loadingBuilder: (_, child, p) =>
+            p == null ? child : const ColoredBox(color: Color(0xFFEAE3D4)),
+        errorBuilder: (_, _, _) => const SizedBox.shrink(),
+      ),
+    );
 
     Widget? content;
 
@@ -3801,23 +4161,24 @@ class _ContentBlocksSection extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           if (imageUrl.isNotEmpty) imageWidget(imageUrl),
-          if (imageUrl.isNotEmpty && text.isNotEmpty) const SizedBox(height: 10),
+          if (imageUrl.isNotEmpty && text.isNotEmpty)
+            const SizedBox(height: 10),
           if (text.isNotEmpty)
-            Text(text,
-                style:
-                    const TextStyle(fontSize: 13, color: _kMuted, height: 1.6)),
+            Text(
+              text,
+              style: const TextStyle(fontSize: 13, color: _kMuted, height: 1.6),
+            ),
         ],
       );
     } else {
       if (text.isEmpty) return const SizedBox.shrink();
-      content = Text(text,
-          style: const TextStyle(fontSize: 13, color: _kMuted, height: 1.6));
+      content = Text(
+        text,
+        style: const TextStyle(fontSize: 13, color: _kMuted, height: 1.6),
+      );
     }
 
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 16),
-      child: content,
-    );
+    return Padding(padding: const EdgeInsets.only(bottom: 16), child: content);
   }
 }
 
@@ -3920,10 +4281,11 @@ class _VariantChip extends StatelessWidget {
               Text(
                 optionName,
                 style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700,
-                    color: fg,
-                    height: 1.3),
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  color: fg,
+                  height: 1.3,
+                ),
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
               ),
@@ -3937,10 +4299,11 @@ class _VariantChip extends StatelessWidget {
                       Text(
                         '₹${price.toInt()}',
                         style: GoogleFonts.poppins(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w700,
-                            color: fg,
-                            height: 1.2),
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                          color: fg,
+                          height: 1.2,
+                        ),
                       ),
                     if (originalPrice != null) ...[
                       const SizedBox(width: 5),
@@ -3970,10 +4333,11 @@ class _VariantChip extends StatelessWidget {
                     Text(
                       '$quantity',
                       style: GoogleFonts.poppins(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w700,
-                          color: fg,
-                          height: 1.2),
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        color: fg,
+                        height: 1.2,
+                      ),
                     ),
                     _ChipStepBtn(
                       icon: Icons.add_rounded,
@@ -4052,7 +4416,8 @@ class _WebHeader extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(28),
       decoration: const BoxDecoration(
-          border: Border(bottom: BorderSide(color: _kBorder))),
+        border: Border(bottom: BorderSide(color: _kBorder)),
+      ),
       child: Stack(
         children: [
           Row(
@@ -4073,24 +4438,30 @@ class _WebHeader extends StatelessWidget {
                           top: 12,
                           left: 12,
                           child: _CircleNavBtn(
-                              icon: Icons.arrow_back_rounded,
-                              onTap: onClose),
+                            icon: Icons.arrow_back_rounded,
+                            onTap: onClose,
+                          ),
                         ),
                         Positioned(
                           bottom: 10,
                           right: 12,
                           child: Container(
                             padding: const EdgeInsets.symmetric(
-                                horizontal: 8, vertical: 3),
+                              horizontal: 8,
+                              vertical: 3,
+                            ),
                             decoration: BoxDecoration(
                               color: const Color(0xFF1A1714).withAlpha(166),
                               borderRadius: BorderRadius.circular(100),
                             ),
-                            child: const Text('1/6',
-                                style: TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 10,
-                                    height: 1.4)),
+                            child: const Text(
+                              '1/6',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 10,
+                                height: 1.4,
+                              ),
+                            ),
                           ),
                         ),
                       ],
@@ -4115,44 +4486,61 @@ class _WebHeader extends StatelessWidget {
                       if (node.parentName?.isNotEmpty == true) ...[
                         Container(
                           padding: const EdgeInsets.symmetric(
-                              horizontal: 10, vertical: 4),
+                            horizontal: 10,
+                            vertical: 4,
+                          ),
                           decoration: BoxDecoration(
-                              color: _kInk,
-                              borderRadius: BorderRadius.circular(100)),
-                          child: Text(node.parentName!,
-                              style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w600)),
+                            color: _kInk,
+                            borderRadius: BorderRadius.circular(100),
+                          ),
+                          child: Text(
+                            node.parentName!,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
                         ),
                         const SizedBox(height: 10),
                       ],
-                      Text(node.name,
-                          style: GoogleFonts.poppins(
-                              fontSize: 24,
-                              fontWeight: FontWeight.w700,
-                              color: _kInk,
-                              height: 1.2)),
+                      Text(
+                        node.name,
+                        style: GoogleFonts.poppins(
+                          fontSize: 24,
+                          fontWeight: FontWeight.w700,
+                          color: _kInk,
+                          height: 1.2,
+                        ),
+                      ),
                       const SizedBox(height: 8),
                       if (node.rating > 0)
                         Padding(
                           padding: const EdgeInsets.only(bottom: 8),
                           child: Row(
                             children: [
-                              const Text('★',
-                                  style:
-                                      TextStyle(color: _kGold, fontSize: 13)),
+                              const Text(
+                                '★',
+                                style: TextStyle(color: _kGold, fontSize: 13),
+                              ),
                               const SizedBox(width: 4),
-                              Text(node.rating.toStringAsFixed(1),
-                                  style: const TextStyle(
-                                      fontSize: 13,
-                                      fontWeight: FontWeight.w600,
-                                      color: _kInk)),
+                              Text(
+                                node.rating.toStringAsFixed(1),
+                                style: const TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                  color: _kInk,
+                                ),
+                              ),
                               if (node.reviewCount > 0) ...[
                                 const SizedBox(width: 4),
-                                Text('(${node.reviewCount} reviews)',
-                                    style: const TextStyle(
-                                        fontSize: 13, color: _kMuted2)),
+                                Text(
+                                  '(${node.reviewCount} reviews)',
+                                  style: const TextStyle(
+                                    fontSize: 13,
+                                    color: _kMuted2,
+                                  ),
+                                ),
                               ],
                             ],
                           ),
@@ -4160,11 +4548,16 @@ class _WebHeader extends StatelessWidget {
                       if (node.description?.isNotEmpty == true)
                         Padding(
                           padding: const EdgeInsets.only(bottom: 14),
-                          child: Text(node.description!,
-                              style: const TextStyle(
-                                  fontSize: 13, color: _kMuted, height: 1.6),
-                              maxLines: 4,
-                              overflow: TextOverflow.ellipsis),
+                          child: Text(
+                            node.description!,
+                            style: const TextStyle(
+                              fontSize: 13,
+                              color: _kMuted,
+                              height: 1.6,
+                            ),
+                            maxLines: 4,
+                            overflow: TextOverflow.ellipsis,
+                          ),
                         ),
                       if (node.basePrice != null || startsAtPrice != null)
                         Row(
@@ -4174,16 +4567,19 @@ class _WebHeader extends StatelessWidget {
                             Text(
                               startsAtPrice != null ? 'Starts at' : 'From',
                               style: const TextStyle(
-                                  fontSize: 13, color: _kMuted2),
+                                fontSize: 13,
+                                color: _kMuted2,
+                              ),
                             ),
                             const SizedBox(width: 8),
                             Text(
                               '₹${(startsAtPrice ?? displayPrice).toInt()}',
                               style: GoogleFonts.poppins(
-                                  fontSize: 24,
-                                  fontWeight: FontWeight.w800,
-                                  color: _kInk,
-                                  height: 1.0),
+                                fontSize: 24,
+                                fontWeight: FontWeight.w800,
+                                color: _kInk,
+                                height: 1.0,
+                              ),
                             ),
                             if (node.hasDiscount && startsAtPrice == null) ...[
                               const SizedBox(width: 8),
@@ -4199,15 +4595,21 @@ class _WebHeader extends StatelessWidget {
                             ],
                             if (hasAdjustment && startsAtPrice == null) ...[
                               const SizedBox(width: 8),
-                              const Text('incl. add-ons',
-                                  style: TextStyle(
-                                      fontSize: 12, color: _kMuted2)),
+                              const Text(
+                                'incl. add-ons',
+                                style: TextStyle(fontSize: 12, color: _kMuted2),
+                              ),
                             ],
                           ],
                         ),
-                      if (node.warrantyEnabled && node.warrantyDays != null) ...[
+                      if (node.warrantyEnabled &&
+                          node.warrantyDays != null) ...[
                         const SizedBox(height: 10),
-                        WarrantyBadge(warrantyDays: node.warrantyDays!, warrantyCovers: node.warrantyCovers, warrantyExclusions: node.warrantyExclusions),
+                        WarrantyBadge(
+                          warrantyDays: node.warrantyDays!,
+                          warrantyCovers: node.warrantyCovers,
+                          warrantyExclusions: node.warrantyExclusions,
+                        ),
                       ],
                     ],
                   ),
@@ -4228,10 +4630,14 @@ class _WebHeader extends StatelessWidget {
                     width: 34,
                     height: 34,
                     decoration: BoxDecoration(
-                        color: const Color(0xFFF2EFE9),
-                        borderRadius: BorderRadius.circular(100)),
-                    child: const Icon(Icons.close_rounded,
-                        size: 16, color: _kInk),
+                      color: const Color(0xFFF2EFE9),
+                      borderRadius: BorderRadius.circular(100),
+                    ),
+                    child: const Icon(
+                      Icons.close_rounded,
+                      size: 16,
+                      color: _kInk,
+                    ),
                   ),
                 ),
               ),

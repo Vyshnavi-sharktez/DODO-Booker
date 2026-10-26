@@ -10,11 +10,11 @@ import '../../../features/category/services/category_providers.dart';
 
 // ── Layout constants (standard card, same spec as sub_services) ───────────────
 
-const double _kCardW  = 240.0;
-const double _kImgH   = 170.0;
+const double _kCardW = 240.0;
+const double _kImgH = 170.0;
 const double _kLabelH = 56.0;
-const double _kCardH  = _kImgH + _kLabelH;
-const double _kGap    = 16.0;
+const double _kCardH = _kImgH + _kLabelH;
+const double _kGap = 16.0;
 const double _kRadius = 16.0;
 
 // ── Section ───────────────────────────────────────────────────────────────────
@@ -165,7 +165,6 @@ class _ServiceCardState extends State<_ServiceCard> {
                             color: AppColors.gold,
                           ),
                         ),
-                  ),
                 ),
                 // ── Label strip ──────────────────────────────────────────
                 SizedBox(
@@ -193,12 +192,19 @@ class _ServiceCardState extends State<_ServiceCard> {
                             Consumer(
                               builder: (_, ref, _) {
                                 final attrs =
-                                    ref.watch(serviceAttributesProvider(node.id)).valueOrNull ?? [];
+                                    ref
+                                        .watch(
+                                          serviceAttributesProvider(node.id),
+                                        )
+                                        .valueOrNull ??
+                                    [];
                                 final prices = attrs
                                     .where((a) => a.options.isNotEmpty)
                                     .map((a) => a.options.first.finalPrice);
                                 if (prices.isNotEmpty) {
-                                  final startsAt = prices.reduce((a, b) => a < b ? a : b);
+                                  final startsAt = prices.reduce(
+                                    (a, b) => a < b ? a : b,
+                                  );
                                   return Text(
                                     'Starts at ₹${startsAt.toInt()}',
                                     style: GoogleFonts.inter(

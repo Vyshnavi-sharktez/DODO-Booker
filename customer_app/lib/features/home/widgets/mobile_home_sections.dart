@@ -677,11 +677,11 @@ class _CategoryGridItem extends StatelessWidget {
                 borderRadius: BorderRadius.circular(14),
               ),
               clipBehavior: Clip.antiAlias,
-              child: imgUrl.isNotEmpty
+              child: (imgUrl?.isNotEmpty ?? false)
                   ? Image.network(
-                      imgUrl,
+                      imgUrl!,
                       fit: BoxFit.cover,
-                      errorBuilder: (_, _, _) =>
+                      errorBuilder: (_, __, ___) =>
                           _CategoryIconFallback(name: node.name),
                       loadingBuilder: (_, child, progress) =>
                           progress == null ? child : _CategoryIconFallback(name: node.name),

@@ -1973,19 +1973,29 @@ class _RecommendationCard extends StatelessWidget {
                 SizedBox(
                   height: 96,
                   width: double.infinity,
-                  child: Image.network(
-                    imageUrl,
-                    fit: BoxFit.cover,
-                    errorBuilder: (_, _, _) => Container(
-                      color: AppColors.primaryLight,
-                      alignment: Alignment.center,
-                      child: const Icon(
-                        Icons.home_repair_service_rounded,
-                        size: 34,
-                        color: AppColors.primary,
+                  child: imageUrl != null
+                    ? Image.network(
+                        imageUrl,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) => Container(
+                          color: AppColors.primaryLight,
+                          alignment: Alignment.center,
+                          child: const Icon(
+                            Icons.home_repair_service_rounded,
+                            size: 34,
+                            color: AppColors.primary,
+                          ),
+                        ),
+                      )
+                    : Container(
+                        color: AppColors.primaryLight,
+                        alignment: Alignment.center,
+                        child: const Icon(
+                          Icons.home_repair_service_rounded,
+                          size: 34,
+                          color: AppColors.primary,
+                        ),
                       ),
-                    ),
-                  ),
                 ),
 
                 // ── Content ──────────────────────────────────────────────
