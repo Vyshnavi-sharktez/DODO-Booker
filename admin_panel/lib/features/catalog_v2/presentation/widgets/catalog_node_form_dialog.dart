@@ -631,7 +631,8 @@ class _CatalogNodeFormDialogState extends State<CatalogNodeFormDialog> {
                 const SizedBox(height: 8),
                 ..._includedItems.asMap().entries.map((entry) => _buildItemRow(
                       entry.value,
-                      () => setState(() => _includedItems.removeAt(entry.key)),
+                      onRemove: () => setState(() => _includedItems.removeAt(entry.key)),
+                      onEdit: (updated) => setState(() => _includedItems[entry.key] = updated),
                     )),
                 if (_includedItems.isEmpty && !_addingIncluded)
                   _emptyNote('No items yet.'),
@@ -669,7 +670,8 @@ class _CatalogNodeFormDialogState extends State<CatalogNodeFormDialog> {
                 const SizedBox(height: 8),
                 ..._excludedItems.asMap().entries.map((entry) => _buildItemRow(
                       entry.value,
-                      () => setState(() => _excludedItems.removeAt(entry.key)),
+                      onRemove: () => setState(() => _excludedItems.removeAt(entry.key)),
+                      onEdit: (updated) => setState(() => _excludedItems[entry.key] = updated),
                     )),
                 if (_excludedItems.isEmpty && !_addingExcluded)
                   _emptyNote('No items yet.'),
@@ -730,7 +732,11 @@ class _CatalogNodeFormDialogState extends State<CatalogNodeFormDialog> {
     );
   }
 
-  Widget _buildItemRow(String text, VoidCallback onRemove) {
+  Widget _buildItemRow(
+    String text, {
+    required VoidCallback onRemove,
+    required void Function(String updated) onEdit,
+  }) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 6),
       child: Row(
@@ -744,7 +750,104 @@ class _CatalogNodeFormDialogState extends State<CatalogNodeFormDialog> {
                     fontSize: 13, color: AppColors.textPrimary)),
           ),
           GestureDetector(
-            onTap: onRemove,
+            onTap: () async {
+              final ctrl = TextEditingController(text: text);
+              final updated = await showDialog<String>(
+                context: context,
+                builder: (ctx) => Dialog(
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10)),
+                  child: SizedBox(
+                    width: 400,
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 14, 16, 8),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text('Edit item',
+                              style: TextStyle(
+                                  fontSize: 15, fontWeight: FontWeight.w600)),
+                          const SizedBox(height: 10),
+                          TextField(
+                            controller: ctrl,
+                            autofocus: true,
+                            maxLines: null,
+                            decoration: const InputDecoration(
+                              border: OutlineInputBorder(),
+                              isDense: true,
+                              contentPadding: EdgeInsets.symmetric(
+                                  horizontal: 10, vertical: 8),
+                            ),
+                            style: const TextStyle(fontSize: 13),
+                            onSubmitted: (v) => Navigator.of(ctx)
+                                .pop(v.trim().isEmpty ? null : v.trim()),
+                          ),
+                          const SizedBox(height: 10),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.end,
+                            children: [
+                              TextButton(
+                                onPressed: () => Navigator.of(ctx).pop(null),
+                                child: const Text('Cancel'),
+                              ),
+                              const SizedBox(width: 4),
+                              FilledButton(
+                                style: FilledButton.styleFrom(
+                                    visualDensity: VisualDensity.compact),
+                                onPressed: () {
+                                  final v = ctrl.text.trim();
+                                  Navigator.of(ctx).pop(v.isEmpty ? null : v);
+                                },
+                                child: const Text('Save',
+                                    style: TextStyle(fontSize: 13)),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              );
+              ctrl.dispose();
+              if (updated != null) onEdit(updated);
+            },
+            child: const Icon(Icons.edit_outlined,
+                size: 16, color: AppColors.textSecondary),
+          ),
+          const SizedBox(width: 8),
+          GestureDetector(
+            onTap: () async {
+              final confirmed = await showDialog<bool>(
+                context: context,
+                builder: (ctx) => AlertDialog(
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10)),
+                  titlePadding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
+                  contentPadding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+                  actionsPadding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
+                  title: const Text('Remove item?',
+                      style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
+                  content: Text('Remove "$text"?',
+                      style: const TextStyle(fontSize: 13)),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.of(ctx).pop(false),
+                      child: const Text('Cancel'),
+                    ),
+                    FilledButton(
+                      style: FilledButton.styleFrom(
+                          backgroundColor: AppColors.error,
+                          visualDensity: VisualDensity.compact),
+                      onPressed: () => Navigator.of(ctx).pop(true),
+                      child: const Text('Remove', style: TextStyle(fontSize: 13)),
+                    ),
+                  ],
+                ),
+              );
+              if (confirmed == true) onRemove();
+            },
             child: const Icon(Icons.close_rounded,
                 size: 16, color: AppColors.error),
           ),
