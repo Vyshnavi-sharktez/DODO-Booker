@@ -55,6 +55,7 @@ import '../../features/availability_blocks/presentation/pages/availability_block
 import '../../features/broadcast_notifications/presentation/pages/broadcast_notifications_page.dart';
 import '../../features/bookings/presentation/pages/restore_bin_page.dart';
 import '../../features/service_addons/presentation/pages/addons_page.dart';
+import '../../features/app_branding/presentation/pages/app_branding_page.dart';
 import '../../shared/pages/unauthorized_page.dart';
 import '../rbac/permission_guard.dart';
 
@@ -519,6 +520,13 @@ final routerProvider = Provider<GoRouter>((ref) {
             name: 'restoreBin',
             pageBuilder: (context, state) => const NoTransitionPage(
               child: RestoreBinPage(),
+            ),
+          ),
+          GoRoute(
+            path: '/dashboard/app-branding',
+            name: 'appBranding',
+            pageBuilder: (context, state) => const NoTransitionPage(
+              child: AppBrandingPage(),
             ),
           ),
         ],

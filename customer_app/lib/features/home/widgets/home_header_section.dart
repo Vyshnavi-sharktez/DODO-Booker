@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../../core/constants/app_colors.dart';
+import '../../../core/widgets/branding_logo.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../../profile/services/profile_providers.dart';
 import '../../profile/utils/profile_launcher.dart';
@@ -125,13 +126,7 @@ class _Logo extends StatelessWidget {
           ),
           child: ClipRRect(
             borderRadius: BorderRadius.circular(100),
-            child: Image.asset(
-              'assets/images/logo.png',
-              fit: BoxFit.contain,
-              errorBuilder: (_, _, _) => const Center(
-                child: Text('🦆', style: TextStyle(fontSize: 18)),
-              ),
-            ),
+            child: BrandingLogo(fit: BoxFit.contain),
           ),
         ),
         const SizedBox(width: 10),

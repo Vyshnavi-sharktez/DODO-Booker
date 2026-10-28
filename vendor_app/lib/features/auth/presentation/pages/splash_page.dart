@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../../core/constants/app_colors.dart';
+import '../../../../core/widgets/vendor_branding_logo.dart';
 
 // Shown while AuthStatus is unknown — i.e. during the initial
 // Supabase session resolution on cold start.
@@ -23,10 +24,7 @@ class SplashPage extends StatelessWidget {
                 borderRadius: BorderRadius.circular(16),
               ),
               padding: const EdgeInsets.all(8),
-              child: Image.asset(
-                'assets/images/logo.png',
-                fit: BoxFit.contain,
-              ),
+              child: VendorBrandingLogo(fit: BoxFit.contain),
             ),
             const SizedBox(height: 24),
             const Text(

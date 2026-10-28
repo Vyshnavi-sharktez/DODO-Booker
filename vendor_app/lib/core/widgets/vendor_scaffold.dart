@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import '../constants/app_colors.dart';
+import 'vendor_branding_logo.dart';
 import '../routes/route_names.dart';
 import '../../features/auth/presentation/providers/auth_controller.dart';
 import '../../features/location/application/location_tracking_service.dart';
@@ -398,10 +399,7 @@ class _SidebarBrand extends StatelessWidget {
               borderRadius: BorderRadius.circular(8),
             ),
             padding: const EdgeInsets.all(3),
-            child: Image.asset(
-              'assets/images/logo.png',
-              fit: BoxFit.contain,
-            ),
+            child: VendorBrandingLogo(fit: BoxFit.contain),
           ),
           const SizedBox(width: 12),
           const Expanded(

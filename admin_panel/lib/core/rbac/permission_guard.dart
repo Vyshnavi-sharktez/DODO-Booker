@@ -67,6 +67,7 @@ const Map<String, String> routePermissions = {
   '/support': 'support.read',
   '/notifications': 'notification.read',
   '/restore-bin': 'booking.delete',
+  '/app-branding': 'settings.read',
 };
 
 // Dynamic route patterns: a prefix match maps to its module permission.
