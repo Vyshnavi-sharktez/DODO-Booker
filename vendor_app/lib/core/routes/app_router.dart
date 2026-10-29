@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'route_names.dart';
 import '../widgets/vendor_scaffold.dart';
+import '../../features/auth/presentation/pages/account_inactive_page.dart';
 import '../../features/auth/presentation/pages/login_page.dart';
 import '../../features/auth/presentation/pages/otp_page.dart';
 import '../../features/auth/presentation/pages/splash_page.dart';
@@ -51,15 +52,19 @@ final routerProvider = Provider<GoRouter>((ref) {
         // Stay on splash until auth resolves — prevents Login flash on cold start.
         AuthInitial() || AuthLoading() =>
           path == RoutePaths.splash ? null : RoutePaths.splash,
-        // Authenticated: leave auth/splash pages, stay put everywhere else.
+        // Authenticated: leave auth/splash/inactive pages, stay put everywhere else.
         AuthAuthenticated() =>
           (path == RoutePaths.splash ||
                   path == RoutePaths.login ||
-                  path == RoutePaths.otp)
+                  path == RoutePaths.otp ||
+                  path == RoutePaths.accountInactive)
               ? RoutePaths.dashboard
               : null,
         // OTP flow: ensure we're on the OTP page.
         AuthOtpSent() => path == RoutePaths.otp ? null : RoutePaths.otp,
+        // Account deactivated: show inactive screen, block all other pages.
+        AuthAccountInactive() =>
+          path == RoutePaths.accountInactive ? null : RoutePaths.accountInactive,
         // Unauthenticated / error: go to login unless already on an auth page.
         AuthUnauthenticated() || AuthError() =>
           (path == RoutePaths.login || path == RoutePaths.otp)
@@ -73,6 +78,11 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: RoutePaths.splash,
         name: RouteNames.splash,
         builder: (context, state) => const SplashPage(),
+      ),
+      GoRoute(
+        path: RoutePaths.accountInactive,
+        name: RouteNames.accountInactive,
+        builder: (context, state) => const AccountInactivePage(),
       ),
       GoRoute(
         path: RoutePaths.login,

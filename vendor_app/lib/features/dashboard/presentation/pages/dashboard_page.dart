@@ -10,6 +10,7 @@ import '../../../../core/widgets/clickable.dart';
 import '../../../auth/presentation/providers/auth_controller.dart';
 import '../../../bookings/presentation/widgets/booking_status_badge.dart';
 import '../../../notifications/presentation/providers/notifications_provider.dart';
+import '../../../profile/domain/models/vendor_profile.dart';
 import '../../../profile/presentation/providers/profile_provider.dart';
 import '../../domain/models/dashboard_stats.dart';
 import '../providers/dashboard_provider.dart';
@@ -19,16 +20,95 @@ import '../widgets/stats_card.dart';
 const _heroStart = Color(0xFF111111);
 const _heroEnd   = Color(0xFF2A2A2A);
 
-class DashboardPage extends ConsumerWidget {
+String _greeting() {
+  final h = DateTime.now().hour;
+  if (h < 12) return 'Good morning';
+  if (h < 17) return 'Good afternoon';
+  return 'Good evening';
+}
+
+bool _isProfileIncomplete(VendorProfile p) =>
+    (p.ownerName == null || p.ownerName!.isEmpty) ||
+    (p.email == null || p.email!.isEmpty);
+
+class DashboardPage extends ConsumerStatefulWidget {
   const DashboardPage({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<DashboardPage> createState() => _DashboardPageState();
+}
+
+class _DashboardPageState extends ConsumerState<DashboardPage> {
+  bool _profileDialogShown = false;
+
+  void _showProfileCompletionDialog(BuildContext context, VendorProfile profile) {
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Row(
+          children: [
+            Icon(Icons.person_outline_rounded, size: 22, color: AppColors.primary),
+            SizedBox(width: 10),
+            Text(
+              'Complete Your Profile',
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+            ),
+          ],
+        ),
+        content: const Text(
+          'Add your details so customers can find and trust your business.',
+          style: TextStyle(fontSize: 13, color: AppColors.textSecondary, height: 1.5),
+        ),
+        actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+        actions: [
+          OutlinedButton(
+            onPressed: () => Navigator.pop(ctx),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: AppColors.textSecondary,
+              side: const BorderSide(color: AppColors.border),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+            child: const Text('Later'),
+          ),
+          const SizedBox(width: 8),
+          FilledButton.icon(
+            onPressed: () {
+              Navigator.pop(ctx);
+              context.pushNamed(RouteNames.editProfile, extra: profile);
+            },
+            style: FilledButton.styleFrom(
+              backgroundColor: AppColors.primary,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+            icon: const Icon(Icons.edit_outlined, size: 16),
+            label: const Text('Complete Profile'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final statsAsync = ref.watch(dashboardStatsProvider);
     final vendor = ref.watch(currentVendorUserProvider);
     final unreadCount = ref.watch(vendorUnreadCountProvider);
     final greeting = _greeting();
     final vendorName = vendor?.name?.split(' ').first ?? 'there';
+
+    ref.listen<AsyncValue<VendorProfile?>>(vendorProfileProvider, (_, next) {
+      if (_profileDialogShown) return;
+      next.whenOrNull(data: (profile) {
+        if (profile == null) return;
+        _profileDialogShown = true;
+        if (_isProfileIncomplete(profile)) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) _showProfileCompletionDialog(context, profile);
+          });
+        }
+      });
+    });
 
     debugPrint('[DASH][Page] build — vendor_id=${vendor?.id ?? "NULL"}, '
         'statsAsync=${statsAsync.runtimeType}');
@@ -39,16 +119,16 @@ class DashboardPage extends ConsumerWidget {
     );
 
     return statsAsync.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => _ErrorState(
-          message: e.toString(),
-          onRetry: () => ref.invalidate(dashboardStatsProvider),
-        ),
-        data: (stats) {
-          if (stats == null) {
-            return const Center(child: CircularProgressIndicator());
-          }
-          return RefreshIndicator(
+      loading: () => const Center(child: CircularProgressIndicator()),
+      error: (e, _) => _ErrorState(
+        message: e.toString(),
+        onRetry: () => ref.invalidate(dashboardStatsProvider),
+      ),
+      data: (stats) {
+        if (stats == null) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        return RefreshIndicator(
             onRefresh: () async => ref.invalidate(dashboardStatsProvider),
             child: LayoutBuilder(
               builder: (context, constraints) {
@@ -256,13 +336,6 @@ class DashboardPage extends ConsumerWidget {
           );
         },
     );
-  }
-
-  String _greeting() {
-    final h = DateTime.now().hour;
-    if (h < 12) return 'Good morning';
-    if (h < 17) return 'Good afternoon';
-    return 'Good evening';
   }
 }
 

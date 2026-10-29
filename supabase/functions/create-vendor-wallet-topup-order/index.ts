@@ -124,15 +124,22 @@ export default {
       );
     }
 
-    // ── Validate vendor exists ─────────────────────────────────────────────
+    // ── Validate vendor exists and is active ──────────────────────────────
     const { data: vendor, error: vendorError } = await ctx.supabaseAdmin
       .from("vendors")
-      .select("id")
+      .select("id, is_active")
       .eq("id", vendor_id)
-      .single<{ id: string }>();
+      .single<{ id: string; is_active: boolean }>();
 
     if (vendorError || !vendor) {
       return Response.json({ error: "Vendor not found." }, { status: 404 });
+    }
+
+    if (!vendor.is_active) {
+      return Response.json(
+        { error: "Your account has been deactivated. Please contact DODO support." },
+        { status: 403 },
+      );
     }
 
     // ── Load Razorpay credentials ─────────────────────────────────────────

@@ -15,6 +15,7 @@ import '../../../customer_questions/presentation/providers/customer_questions_pr
 import '../../domain/models/assigned_service.dart';
 import '../../domain/models/catalog_service.dart';
 import '../../domain/models/vendor_service_request_model.dart';
+import '../../../profile/presentation/providers/profile_provider.dart';
 import '../../../subscription/presentation/providers/subscription_provider.dart';
 import '../providers/services_provider.dart';
 import '../widgets/service_card.dart';
@@ -53,40 +54,79 @@ IconData _iconForCategory(String name) {
   return Icons.home_repair_service_rounded;
 }
 
-// ── Ancestor-walking helpers ──────────────────────────────────────────────────
+// ── Catalog tree helpers ──────────────────────────────────────────────────────
 
-/// Walks the [parentOf] name-chain starting at [nodeName] until reaching a
-/// node whose parent is null (the root).  Depth-limited to 10 hops.
-/// Falls back to 'Other' for null/empty input or unknown chains.
-///
-/// [parentOf] maps every non-bookable node's name to its parent's name
-/// (null when the node itself is a root category).
-String _findRoot(String? nodeName, Map<String, String?> parentOf) {
-  if (nodeName == null || nodeName.isEmpty) return 'Other';
-  var current = nodeName;
-  for (int i = 0; i < 10; i++) {
-    if (!parentOf.containsKey(current)) return current; // treat as root
-    final parent = parentOf[current];
-    if (parent == null) return current; // current IS the root
-    current = parent;
+/// Returns the full ancestor path of [parentName] in the catalog tree,
+/// from root to [parentName] inclusive.  Empty list if parentName is null.
+List<String> _ancestorPath(String? parentName, Map<String, String?> parentOf) {
+  if (parentName == null) return const [];
+  final path = <String>[];
+  String? current = parentName;
+  for (int i = 0; i < 20 && current != null; i++) {
+    path.insert(0, current);
+    current = parentOf[current];
   }
-  return current;
+  return path;
 }
 
-/// Returns [parentName] as the sub-category label when the service's direct
-/// parent is NOT itself a root node; returns null when the parent IS the root
-/// (service is directly under root — no sub-category level).
-String? _subCatName(String? parentName, Map<String, String?> parentOf) {
-  if (parentName == null) return null;
-  // parentOf[x] == null means x is a root → service parent is root → no sub-cat
-  if (!parentOf.containsKey(parentName) || parentOf[parentName] == null) {
-    return null;
-  }
-  return parentName;
+/// Tree node for My Services (vendor-assigned services).
+class _MyNode {
+  _MyNode(this.name);
+  final String name;
+  final Map<String, _MyNode> children = {};
+  final List<AssignedService> leafServices = [];
+  int get totalCount =>
+      leafServices.length +
+      children.values.fold(0, (s, n) => s + n.totalCount);
+  List<AssignedService> get allServices => [
+        ...leafServices,
+        for (final c in children.values) ...c.allServices,
+      ];
 }
 
-/// Compound key used to uniquely identify a sub-category inside a root.
-String _subKey(String root, String sub) => '$root␟$sub';
+_MyNode _buildMyServicesTree(
+    List<AssignedService> services, Map<String, String?> parentOf) {
+  final root = _MyNode('__root__');
+  for (final svc in services) {
+    final path = _ancestorPath(svc.catalog.parentName, parentOf);
+    var node = root;
+    for (final segment in path) {
+      node = node.children.putIfAbsent(segment, () => _MyNode(segment));
+    }
+    node.leafServices.add(svc);
+  }
+  return root;
+}
+
+/// Tree node for the full catalog (All Services).
+class _CatalogNode {
+  _CatalogNode(this.name);
+  final String name;
+  final Map<String, _CatalogNode> children = {};
+  final List<CatalogService> leafServices = [];
+  int get totalCount =>
+      leafServices.length +
+      children.values.fold(0, (s, n) => s + n.totalCount);
+  List<CatalogService> get allLeafServices => [
+        ...leafServices,
+        for (final c in children.values) ...c.allLeafServices,
+      ];
+}
+
+_CatalogNode _buildCatalogTree(
+    List<CatalogService> catalog, Map<String, String?> parentOf) {
+  final root = _CatalogNode('__root__');
+  for (final svc in catalog) {
+    if (!svc.isBookable) continue;
+    final path = _ancestorPath(svc.parentName, parentOf);
+    var node = root;
+    for (final segment in path) {
+      node = node.children.putIfAbsent(segment, () => _CatalogNode(segment));
+    }
+    node.leafServices.add(svc);
+  }
+  return root;
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Page
@@ -104,14 +144,12 @@ class ServicesPage extends ConsumerStatefulWidget {
 class _ServicesPageState extends ConsumerState<ServicesPage> {
   late int _tab; // 0 = My Services, 1 = All Services, 2 = My Requests
   final Set<String> _addingIds = {};
+  final Set<String> _bulkAddingKeys = {};
   final Set<String> _expandedMyParents = {}; // serviceId of expanded parent rows in My Services
 
   // Wide-only state
   String _selectedCategory = ''; // root category name filter; '' = all
   final TextEditingController _searchCtrl = TextEditingController();
-  final Set<String> _expandedRoots = {}; // which root sections are open
-  final Set<String> _expandedSubs = {};  // _subKey(root, sub) → open
-  final Set<String> _showAllSubs = {};   // _subKey(root, sub) → show all rows
 
   @override
   void initState() {
@@ -184,21 +222,11 @@ class _ServicesPageState extends ConsumerState<ServicesPage> {
                   vendorAsync: vendorAsync,
                   parentOf: parentOf,
                   addingIds: _addingIds,
+                  bulkAddingKeys: _bulkAddingKeys,
                   onAdd: _addService,
+                  onAddAll: _addAll,
                   selectedCategory: _selectedCategory,
                   searchQuery: _searchCtrl.text.trim(),
-                  expandedRoots: _expandedRoots,
-                  expandedSubs: _expandedSubs,
-                  showAllSubs: _showAllSubs,
-                  onToggleRoot: (root) => setState(() => _expandedRoots.contains(root)
-                      ? _expandedRoots.remove(root)
-                      : _expandedRoots.add(root)),
-                  onToggleSub: (key) => setState(() => _expandedSubs.contains(key)
-                      ? _expandedSubs.remove(key)
-                      : _expandedSubs.add(key)),
-                  onToggleShowAll: (key) => setState(() => _showAllSubs.contains(key)
-                      ? _showAllSubs.remove(key)
-                      : _showAllSubs.add(key)),
                 ),
                 _MyRequestsWide(requestsAsync: requestsAsync),
               ],
@@ -212,25 +240,73 @@ class _ServicesPageState extends ConsumerState<ServicesPage> {
     final requestsAsync = ref.watch(myServiceRequestsProvider);
     return Column(
       children: [
-        // Action buttons row (search / add) inline since AppBar is the shell's.
-        if (_tab != 2 || _tab == 0)
+        // Search bar + Create Service row (hidden on My Requests tab).
+        if (_tab != 2)
           Padding(
-            padding: const EdgeInsets.fromLTRB(8, 4, 4, 0),
+            padding: const EdgeInsets.fromLTRB(12, 10, 12, 0),
             child: Row(
-              mainAxisAlignment: MainAxisAlignment.end,
               children: [
-                if (_tab != 2)
-                  VendorSearchButton(
-                    mode: _tab == 0
-                        ? VendorSearchMode.myServices
-                        : VendorSearchMode.allServices,
+                Expanded(
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: () => showVendorSearchModal(
+                      context,
+                      _tab == 0
+                          ? VendorSearchMode.myServices
+                          : VendorSearchMode.allServices,
+                    ),
+                    child: Container(
+                      height: 40,
+                      decoration: BoxDecoration(
+                        color: AppColors.background,
+                        borderRadius: BorderRadius.circular(100),
+                        border: Border.all(color: AppColors.border),
+                      ),
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      child: Row(
+                        children: const [
+                          Icon(Icons.search_rounded,
+                              size: 17, color: AppColors.textHint),
+                          SizedBox(width: 8),
+                          Text(
+                            'Search services...',
+                            style: TextStyle(
+                                fontSize: 13.5, color: AppColors.textHint),
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
-                if (_tab == 0)
-                  IconButton(
-                    icon: const Icon(Icons.add_rounded),
-                    tooltip: 'Add Service',
-                    onPressed: () => _navigateToAdd(context),
+                ),
+                if (_tab == 0) ...[
+                  const SizedBox(width: 8),
+                  GestureDetector(
+                    onTap: () => _showCreateServiceDialog(context),
+                    child: Container(
+                      height: 40,
+                      padding: const EdgeInsets.symmetric(horizontal: 14),
+                      decoration: BoxDecoration(
+                        color: Colors.black,
+                        borderRadius: BorderRadius.circular(100),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: const [
+                          Icon(Icons.add_rounded, size: 16, color: Colors.white),
+                          SizedBox(width: 5),
+                          Text(
+                            'Create Service',
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
+                ],
               ],
             ),
           ),
@@ -243,7 +319,11 @@ class _ServicesPageState extends ConsumerState<ServicesPage> {
               _MyServicesNarrow(
                   onSwitchToAllServices: () => setState(() => _tab = 1),
                   initialSubTab: widget.initialSubTab),
-              _AllServicesNarrow(addingIds: _addingIds, onAdd: _addService),
+              _AllServicesNarrow(
+                  addingIds: _addingIds,
+                  bulkAddingKeys: _bulkAddingKeys,
+                  onAdd: _addService,
+                  onAddAll: _addAll),
               _MyRequestsNarrow(requestsAsync: requestsAsync),
             ],
           ),
@@ -286,7 +366,91 @@ class _ServicesPageState extends ConsumerState<ServicesPage> {
     }
   }
 
+  Future<void> _addAll(
+    String bulkKey,
+    List<CatalogService> services,
+    Set<String> assignedIds,
+  ) async {
+    final user = ref.read(currentVendorUserProvider);
+    if (user == null || _bulkAddingKeys.contains(bulkKey)) return;
+
+    final toAdd = services
+        .where((s) => s.isBookable && !assignedIds.contains(s.id))
+        .toList();
+    final alreadyCount = services.where((s) => s.isBookable).length - toAdd.length;
+
+    if (toAdd.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('All services in this category are already added.'),
+          duration: Duration(seconds: 2),
+        ));
+      }
+      return;
+    }
+
+    setState(() => _bulkAddingKeys.add(bulkKey));
+    try {
+      await ref
+          .read(assignServicesProvider.notifier)
+          .assign(user.id, toAdd.map((s) => s.id).toList());
+      ref.invalidate(vendorServicesProvider);
+      if (mounted) {
+        final msg = alreadyCount > 0
+            ? '${toAdd.length} added · $alreadyCount already in My Services'
+            : '${toAdd.length} service${toAdd.length == 1 ? '' : 's'} added';
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Row(children: [
+            const Icon(Icons.check_circle_rounded, color: Colors.white, size: 16),
+            const SizedBox(width: 8),
+            Flexible(child: Text(msg)),
+          ]),
+          backgroundColor: AppColors.success,
+          duration: const Duration(seconds: 3),
+        ));
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Could not add services. Please try again.'),
+          backgroundColor: AppColors.error,
+          duration: Duration(seconds: 3),
+        ));
+      }
+    } finally {
+      if (mounted) setState(() => _bulkAddingKeys.remove(bulkKey));
+    }
+  }
+
   void _showCreateServiceDialog(BuildContext context) {
+    final profile = ref.read(vendorProfileProvider).valueOrNull;
+    final incomplete =
+        profile == null || profile.businessName.trim().isEmpty;
+    if (incomplete) {
+      showDialog<void>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Complete Your Profile First'),
+          content: const Text(
+            'Please fill in your business details before creating a service request.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () {
+                Navigator.of(ctx).pop();
+                context.push(RoutePaths.profile);
+              },
+              child: const Text('Go to Profile'),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
     showDialog<void>(
       context: context,
       builder: (_) => const _CreateServiceDialog(),
@@ -476,10 +640,9 @@ class _CategoryChipsBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final rootNames = catalog
-        .map((s) => _findRoot(s.parentName, parentOf))
+    final tree = _buildCatalogTree(catalog, parentOf);
+    final rootNames = tree.children.keys
         .where((n) => n != 'Other')
-        .toSet()
         .toList()
       ..sort();
 
@@ -551,7 +714,7 @@ class _Chip extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Wide — All Services: 2-level (Root → Sub-category → Services)
+// Wide — All Services: recursive tree (Root → … → leaf bookable products)
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _AllServicesWide extends StatelessWidget {
@@ -560,30 +723,22 @@ class _AllServicesWide extends StatelessWidget {
     required this.vendorAsync,
     required this.parentOf,
     required this.addingIds,
+    required this.bulkAddingKeys,
     required this.onAdd,
+    required this.onAddAll,
     required this.selectedCategory,
     required this.searchQuery,
-    required this.expandedRoots,
-    required this.expandedSubs,
-    required this.showAllSubs,
-    required this.onToggleRoot,
-    required this.onToggleSub,
-    required this.onToggleShowAll,
   });
 
   final AsyncValue<List<CatalogService>> catalogAsync;
   final AsyncValue<List<AssignedService>> vendorAsync;
   final Map<String, String?> parentOf;
   final Set<String> addingIds;
+  final Set<String> bulkAddingKeys;
   final Future<void> Function(CatalogService) onAdd;
+  final Future<void> Function(String key, List<CatalogService> services, Set<String> assignedIds) onAddAll;
   final String selectedCategory;
   final String searchQuery;
-  final Set<String> expandedRoots;
-  final Set<String> expandedSubs;
-  final Set<String> showAllSubs;
-  final void Function(String) onToggleRoot;
-  final void Function(String) onToggleSub;
-  final void Function(String) onToggleShowAll;
 
   @override
   Widget build(BuildContext context) {
@@ -593,13 +748,10 @@ class _AllServicesWide extends StatelessWidget {
       data: (catalog) {
         final assigned = vendorAsync.valueOrNull ?? [];
         final directIds = assigned.map((s) => s.serviceId).toSet();
-        // Names of assigned non-bookable parent nodes (e.g. "AC Uninstallation").
         final assignedParentNames = assigned
             .where((s) => !s.catalog.isBookable && s.catalog.childrenCount > 0)
             .map((s) => s.catalog.name)
             .toSet();
-        // Expand: any catalog service whose parentName is an assigned parent
-        // is also considered added — mirrors My Services' child-resolution logic.
         final assignedIds = {
           ...directIds,
           if (assignedParentNames.isNotEmpty)
@@ -610,50 +762,33 @@ class _AllServicesWide extends StatelessWidget {
                 .map((c) => c.id),
         };
 
-        // Filter by search query.
         final q = searchQuery.toLowerCase();
         final filtered = q.isEmpty
             ? catalog
-            : catalog.where((s) =>
-                s.name.toLowerCase().contains(q) ||
-                (s.parentName?.toLowerCase().contains(q) ?? false) ||
-                (s.description?.toLowerCase().contains(q) ?? false)).toList();
+            : catalog
+                .where((s) =>
+                    s.name.toLowerCase().contains(q) ||
+                    (s.parentName?.toLowerCase().contains(q) ?? false) ||
+                    (s.description?.toLowerCase().contains(q) ?? false))
+                .toList();
 
-        // Separate non-bookable parent nodes from bookable services.
-        // Parent nodes are rendered as sub-category group headers with their
-        // own Add button; they are not placed into the service rows.
         final Map<String, CatalogService> parentNodesByName = {};
-        final bookable = <CatalogService>[];
         for (final s in filtered) {
           if (!s.isBookable && s.childrenCount > 0) {
             parentNodesByName[s.name] = s;
-          } else {
-            bookable.add(s);
           }
         }
 
-        // ── Build 2-level grouping: root → sub → services ─────────────────
-        // Map<rootName, Map<subName, List<CatalogService>>>
-        // subName == '' means the service is directly under the root (no sub-cat).
-        final Map<String, Map<String, List<CatalogService>>> grouped = {};
-        for (final s in bookable) {
-          final rootName = _findRoot(s.parentName, parentOf);
-          final subName = _subCatName(s.parentName, parentOf) ?? '';
-          grouped
-              .putIfAbsent(rootName, () => {})
-              .putIfAbsent(subName, () => [])
-              .add(s);
-        }
+        final tree = _buildCatalogTree(filtered, parentOf);
+        var rootEntries = tree.children.entries.toList()
+          ..sort((a, b) => a.key.compareTo(b.key));
 
-        var visibleRoots = grouped.keys.toList()..sort();
-
-        // Apply root category chip filter.
         if (selectedCategory.isNotEmpty) {
-          visibleRoots =
-              visibleRoots.where((r) => r == selectedCategory).toList();
+          rootEntries =
+              rootEntries.where((e) => e.key == selectedCategory).toList();
         }
 
-        if (visibleRoots.isEmpty) {
+        if (rootEntries.isEmpty) {
           return const EmptyStateView(
             icon: Icons.inventory_2_outlined,
             title: 'No services found',
@@ -661,60 +796,28 @@ class _AllServicesWide extends StatelessWidget {
           );
         }
 
-        // When searching, auto-expand every visible root and sub-category.
-        final effectiveRoots = q.isNotEmpty
-            ? visibleRoots.toSet()
-            : expandedRoots;
-
-        // Assign a color per root by its sorted index.
-        final rootColorIndex = {
-          for (int i = 0; i < visibleRoots.length; i++)
-            visibleRoots[i]: i % _kCatColors.length,
-        };
-
         return RefreshIndicator(
           onRefresh: () async {},
           child: ListView.builder(
             key: const PageStorageKey<String>('vendor_services_list'),
             padding: const EdgeInsets.all(24),
-            itemCount: visibleRoots.length,
+            itemCount: rootEntries.length,
             itemBuilder: (_, i) {
-              final root = visibleRoots[i];
-              final subMap = grouped[root]!;
-              final catColor = _kCatColors[rootColorIndex[root]!];
-
-              // Sort sub-categories alphabetically; direct (no sub-cat) first.
-              final subEntries = subMap.entries.toList()
-                ..sort((a, b) {
-                  if (a.key.isEmpty) return -1;
-                  if (b.key.isEmpty) return 1;
-                  return a.key.compareTo(b.key);
-                });
-
-              final totalCount =
-                  subMap.values.fold(0, (s, l) => s + l.length);
-
-              // Auto-expand sub-categories when searching.
-              final effectiveSubs =
-                  q.isNotEmpty ? subEntries.map((e) => e.key).toSet() : null;
-
+              final entry = rootEntries[i];
+              final catColor = _kCatColors[i % _kCatColors.length];
               return Padding(
                 padding: const EdgeInsets.only(bottom: 12),
-                child: _RootSection(
-                  rootName: root,
-                  subEntries: subEntries,
+                child: _AllWideTreeSection(
+                  node: entry.value,
                   catColor: catColor,
-                  totalCount: totalCount,
-                  isExpanded: effectiveRoots.contains(root),
-                  expandedSubs: effectiveSubs ?? expandedSubs,
-                  showAllSubs: showAllSubs,
-                  addingIds: addingIds,
+                  depth: 0,
+                  autoExpand: q.isNotEmpty,
                   assignedIds: assignedIds,
+                  addingIds: addingIds,
+                  bulkAddingKeys: bulkAddingKeys,
                   parentNodesByName: parentNodesByName,
-                  onToggleRoot: () => onToggleRoot(root),
-                  onToggleSub: onToggleSub,
-                  onToggleShowAll: onToggleShowAll,
                   onAdd: onAdd,
+                  onAddAll: onAddAll,
                 ),
               );
             },
@@ -726,125 +829,72 @@ class _AllServicesWide extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Root category section (expandable)
+// All Services Wide — recursive tree section (self-managing expand state)
 // ─────────────────────────────────────────────────────────────────────────────
 
-class _RootSection extends StatelessWidget {
-  const _RootSection({
-    required this.rootName,
-    required this.subEntries,
+class _AllWideTreeSection extends StatefulWidget {
+  const _AllWideTreeSection({
+    required this.node,
     required this.catColor,
-    required this.totalCount,
-    required this.isExpanded,
-    required this.expandedSubs,
-    required this.showAllSubs,
-    required this.addingIds,
+    required this.depth,
     required this.assignedIds,
+    required this.addingIds,
+    required this.bulkAddingKeys,
     required this.parentNodesByName,
-    required this.onToggleRoot,
-    required this.onToggleSub,
-    required this.onToggleShowAll,
     required this.onAdd,
+    required this.onAddAll,
+    this.isLast = false,
+    this.autoExpand = false,
   });
 
-  final String rootName;
-  final List<MapEntry<String, List<CatalogService>>> subEntries;
+  final _CatalogNode node;
   final Color catColor;
-  final int totalCount;
-  final bool isExpanded;
-  final Set<String> expandedSubs;
-  final Set<String> showAllSubs;
-  final Set<String> addingIds;
+  final int depth;
+  final bool isLast;
+  final bool autoExpand;
   final Set<String> assignedIds;
+  final Set<String> addingIds;
+  final Set<String> bulkAddingKeys;
   final Map<String, CatalogService> parentNodesByName;
-  final VoidCallback onToggleRoot;
-  final void Function(String) onToggleSub;
-  final void Function(String) onToggleShowAll;
   final Future<void> Function(CatalogService) onAdd;
+  final Future<void> Function(String key, List<CatalogService> services,
+      Set<String> assignedIds) onAddAll;
 
   @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.border),
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          // ── Root header ───────────────────────────────────────────────────
-          InkWell(
-            onTap: onToggleRoot,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
-              child: Row(
-                children: [
-                  Container(
-                    width: 34,
-                    height: 34,
-                    decoration: BoxDecoration(
-                      color: catColor.withValues(alpha: 0.12),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child:
-                        Icon(_iconForCategory(rootName), size: 17, color: catColor),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Text(
-                      rootName,
-                      style: const TextStyle(
-                        fontSize: 14.5,
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.textPrimary,
-                      ),
-                    ),
-                  ),
-                  Text(
-                    '$totalCount services',
-                    style: const TextStyle(
-                        fontSize: 12.5, color: AppColors.textSecondary),
-                  ),
-                  const SizedBox(width: 12),
-                  AnimatedRotation(
-                    turns: isExpanded ? 0.5 : 0,
-                    duration: const Duration(milliseconds: 200),
-                    child: const Icon(Icons.keyboard_arrow_down_rounded,
-                        size: 20, color: AppColors.textHint),
-                  ),
-                ],
-              ),
-            ),
-          ),
+  State<_AllWideTreeSection> createState() => _AllWideTreeSectionState();
+}
 
-          if (isExpanded) ...[
-            const Divider(height: 1, color: AppColors.border),
-            // ── Sub-category sections ─────────────────────────────────────
-            for (int i = 0; i < subEntries.length; i++) ...[
-              _buildSubEntry(context, subEntries[i], i == subEntries.length - 1),
-            ],
-          ],
-        ],
-      ),
-    );
+class _AllWideTreeSectionState extends State<_AllWideTreeSection> {
+  bool _expanded = false;
+
+  List<_CatalogNode> get _sortedChildren {
+    final entries = widget.node.children.entries.toList()
+      ..sort((a, b) => a.key.compareTo(b.key));
+    return entries.map((e) => e.value).toList();
   }
 
-  Widget _buildSubEntry(
-    BuildContext context,
-    MapEntry<String, List<CatalogService>> entry,
-    bool isLast,
-  ) {
-    final subName = entry.key;
-    final services = entry.value;
-
-    // No sub-category: services are directly under the root.
-    // Show them as a simple table without a sub-category header.
-    if (subName.isEmpty) {
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
+  Widget _buildContent() {
+    final node = widget.node;
+    final children = _sortedChildren;
+    final hasLeaves = node.leafServices.isNotEmpty;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        for (int i = 0; i < children.length; i++)
+          _AllWideTreeSection(
+            node: children[i],
+            catColor: widget.catColor,
+            depth: widget.depth + 1,
+            isLast: i == children.length - 1 && !hasLeaves,
+            autoExpand: widget.autoExpand,
+            assignedIds: widget.assignedIds,
+            addingIds: widget.addingIds,
+            bulkAddingKeys: widget.bulkAddingKeys,
+            parentNodesByName: widget.parentNodesByName,
+            onAdd: widget.onAdd,
+            onAddAll: widget.onAddAll,
+          ),
+        if (hasLeaves) ...[
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
             child: Row(
@@ -857,98 +907,133 @@ class _RootSection extends StatelessWidget {
             ),
           ),
           const Divider(height: 1, color: AppColors.border),
-          for (int i = 0; i < services.length; i++) ...[
+          for (int i = 0; i < node.leafServices.length; i++) ...[
             _ServiceRow(
-              service: services[i],
-              isAdded: assignedIds.contains(services[i].id),
-              isAdding: addingIds.contains(services[i].id),
-              onAdd: onAdd,
+              service: node.leafServices[i],
+              isAdded: widget.assignedIds.contains(node.leafServices[i].id),
+              isAdding: widget.addingIds.contains(node.leafServices[i].id),
+              onAdd: widget.onAdd,
             ),
-            if (i < services.length - 1)
+            if (i < node.leafServices.length - 1)
               const Divider(
-                  height: 1, color: AppColors.border, indent: 20, endIndent: 20),
+                  height: 1,
+                  color: AppColors.border,
+                  indent: 20,
+                  endIndent: 20),
           ],
         ],
-      );
-    }
-
-    // Normal case: sub-category with its own collapsible section.
-    final key = _subKey(rootName, subName);
-    final isSubExpanded = expandedSubs.contains(key);
-    final showAll = showAllSubs.contains(key);
-    return _SubCatSection(
-      subName: subName,
-      services: services,
-      isExpanded: isSubExpanded,
-      showAll: showAll,
-      addingIds: addingIds,
-      assignedIds: assignedIds,
-      isLast: isLast,
-      parentService: parentNodesByName[subName],
-      onToggle: () => onToggleSub(key),
-      onToggleShowAll: () => onToggleShowAll(key),
-      onAdd: onAdd,
+      ],
     );
   }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Sub-category section (expandable, nested inside a root section)
-// ─────────────────────────────────────────────────────────────────────────────
-
-class _SubCatSection extends StatelessWidget {
-  const _SubCatSection({
-    required this.subName,
-    required this.services,
-    required this.isExpanded,
-    required this.showAll,
-    required this.addingIds,
-    required this.assignedIds,
-    required this.isLast,
-    required this.onToggle,
-    required this.onToggleShowAll,
-    required this.onAdd,
-    this.parentService,
-  });
-
-  final String subName;
-  final List<CatalogService> services;
-  final bool isExpanded;
-  final bool showAll;
-  final Set<String> addingIds;
-  final Set<String> assignedIds;
-  final bool isLast;
-  final VoidCallback onToggle;
-  final VoidCallback onToggleShowAll;
-  final Future<void> Function(CatalogService) onAdd;
-  // When non-null, this catalog node represents the whole sub-category.
-  // Its Add button appears on the header row and child rows hide their
-  // individual Add buttons (children are covered via ancestor eligibility).
-  final CatalogService? parentService;
 
   @override
   Widget build(BuildContext context) {
-    final visible = showAll ? services : services.take(_kPreview).toList();
-    final hasMore = services.length > _kPreview;
-    final hasParent = parentService != null;
+    final node = widget.node;
+    final totalCount = node.totalCount;
+    final allLeaves = node.allLeafServices;
+    final bulkKey = node.name;
+    final parentService = widget.parentNodesByName[node.name];
+    final isExpanded = widget.autoExpand || _expanded;
 
+    if (widget.depth == 0) {
+      return Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: AppColors.border),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: InkWell(
+                    onTap: widget.autoExpand
+                        ? null
+                        : () => setState(() => _expanded = !_expanded),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 20, vertical: 15),
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 34,
+                            height: 34,
+                            decoration: BoxDecoration(
+                              color: widget.catColor.withValues(alpha: 0.12),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Icon(_iconForCategory(node.name),
+                                size: 17, color: widget.catColor),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              node.name,
+                              style: const TextStyle(
+                                fontSize: 14.5,
+                                fontWeight: FontWeight.w700,
+                                color: AppColors.textPrimary,
+                              ),
+                            ),
+                          ),
+                          Text(
+                            '$totalCount services',
+                            style: const TextStyle(
+                                fontSize: 12.5,
+                                color: AppColors.textSecondary),
+                          ),
+                          const SizedBox(width: 12),
+                          if (!widget.autoExpand)
+                            AnimatedRotation(
+                              turns: isExpanded ? 0.5 : 0,
+                              duration: const Duration(milliseconds: 200),
+                              child: const Icon(
+                                  Icons.keyboard_arrow_down_rounded,
+                                  size: 20,
+                                  color: AppColors.textHint),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+                _AddAllButton(
+                  isBusy: widget.bulkAddingKeys.contains(bulkKey),
+                  onTap: () =>
+                      widget.onAddAll(bulkKey, allLeaves, widget.assignedIds),
+                ),
+                const SizedBox(width: 12),
+              ],
+            ),
+            if (isExpanded) ...[
+              const Divider(height: 1, color: AppColors.border),
+              _buildContent(),
+            ],
+          ],
+        ),
+      );
+    }
+
+    // Depth > 0: rendered inline inside the parent card
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        // ── Sub-category header ───────────────────────────────────────────
-        // The expand/collapse InkWell covers only the left portion so that
-        // tapping the Add button (right side) does not also toggle expansion.
         Row(
           children: [
             Expanded(
               child: InkWell(
-                onTap: onToggle,
+                onTap: widget.autoExpand
+                    ? null
+                    : () => setState(() => _expanded = !_expanded),
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 20, vertical: 12),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
                   child: Row(
                     children: [
-                      const SizedBox(width: 8),
+                      SizedBox(width: (widget.depth - 1) * 12.0),
                       Container(
                         width: 6,
                         height: 6,
@@ -960,7 +1045,7 @@ class _SubCatSection extends StatelessWidget {
                       const SizedBox(width: 10),
                       Expanded(
                         child: Text(
-                          subName,
+                          node.name,
                           style: const TextStyle(
                             fontSize: 13.5,
                             fontWeight: FontWeight.w600,
@@ -969,90 +1054,46 @@ class _SubCatSection extends StatelessWidget {
                         ),
                       ),
                       Text(
-                        '${services.length} services',
+                        '$totalCount services',
                         style: const TextStyle(
                             fontSize: 12, color: AppColors.textSecondary),
                       ),
                       const SizedBox(width: 10),
-                      AnimatedRotation(
-                        turns: isExpanded ? 0.5 : 0,
-                        duration: const Duration(milliseconds: 200),
-                        child: const Icon(Icons.keyboard_arrow_down_rounded,
-                            size: 18, color: AppColors.textHint),
-                      ),
+                      if (!widget.autoExpand)
+                        AnimatedRotation(
+                          turns: isExpanded ? 0.5 : 0,
+                          duration: const Duration(milliseconds: 200),
+                          child: const Icon(Icons.keyboard_arrow_down_rounded,
+                              size: 18, color: AppColors.textHint),
+                        ),
                     ],
                   ),
                 ),
               ),
             ),
-            if (hasParent) ...[
+            _AddAllButton(
+              isBusy: widget.bulkAddingKeys.contains(bulkKey),
+              onTap: () =>
+                  widget.onAddAll(bulkKey, allLeaves, widget.assignedIds),
+            ),
+            const SizedBox(width: 8),
+            if (parentService != null) ...[
               _ParentAddButton(
-                service: parentService!,
-                isAdded: assignedIds.contains(parentService!.id),
-                isAdding: addingIds.contains(parentService!.id),
-                onAdd: onAdd,
+                service: parentService,
+                isAdded: widget.assignedIds.contains(parentService.id),
+                isAdding: widget.addingIds.contains(parentService.id),
+                onAdd: widget.onAdd,
               ),
               const SizedBox(width: 16),
-            ],
+            ] else
+              const SizedBox(width: 8),
           ],
         ),
-
         if (isExpanded) ...[
           const Divider(height: 1, color: AppColors.border),
-          // Table header — ACTION column is shown only when children have
-          // their own Add buttons (i.e. no parent service on the header).
-          Padding(
-            padding:
-                const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-            child: Row(
-              children: [
-                const Expanded(flex: 3, child: _ColHeader('SERVICE NAME')),
-                const Expanded(flex: 4, child: _ColHeader('DESCRIPTION')),
-                const SizedBox(width: 110, child: _ColHeader('PRICE')),
-                const SizedBox(width: 96, child: _ColHeader('ACTION')),
-              ],
-            ),
-          ),
-          const Divider(height: 1, color: AppColors.border),
-          // Service rows
-          for (int i = 0; i < visible.length; i++) ...[
-            _ServiceRow(
-              service: visible[i],
-              isAdded: assignedIds.contains(visible[i].id),
-              isAdding: addingIds.contains(visible[i].id),
-              onAdd: onAdd,
-            ),
-            if (i < visible.length - 1)
-              const Divider(
-                  height: 1,
-                  color: AppColors.border,
-                  indent: 20,
-                  endIndent: 20),
-          ],
-          // View all / Show less
-          if (hasMore)
-            InkWell(
-              onTap: onToggleShowAll,
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(20, 12, 20, 14),
-                child: Text(
-                  showAll
-                      ? 'Show less'
-                      : 'View all ${services.length} services →',
-                  style: const TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w500,
-                    color: AppColors.primary,
-                  ),
-                ),
-              ),
-            )
-          else
-            const SizedBox(height: 4),
+          _buildContent(),
         ],
-
-        if (!isLast)
-          const Divider(height: 1, color: AppColors.border),
+        if (!widget.isLast) const Divider(height: 1, color: AppColors.border),
       ],
     );
   }
@@ -1323,9 +1364,10 @@ class _MyServicesWideState extends ConsumerState<_MyServicesWide> {
 
   @override
   Widget build(BuildContext context) {
-    final catalogRaw = ref.watch(catalogServicesProvider).valueOrNull ?? [];
     final allRequests = ref.watch(myServiceRequestsProvider).valueOrNull ?? [];
     final vendorId = ref.watch(currentVendorUserProvider)?.id ?? '';
+    final parentOf =
+        ref.watch(catalogParentMapProvider).valueOrNull ?? const <String, String?>{};
 
     final customServices =
         allRequests.where((r) => r.isActiveCustomService).toList();
@@ -1339,13 +1381,6 @@ class _MyServicesWideState extends ConsumerState<_MyServicesWide> {
       // Inline deletion: the service itself is pending admin review
       ...customServices.where((r) => r.isPendingDeletion).map((r) => r.id),
     };
-
-    final Map<String, List<CatalogService>> catalogChildrenOf = {};
-    for (final cat in catalogRaw) {
-      if (cat.isBookable && cat.parentName != null) {
-        catalogChildrenOf.putIfAbsent(cat.parentName!, () => []).add(cat);
-      }
-    }
 
     final pendingQuestionsCount = vendorId.isEmpty
         ? 0
@@ -1393,83 +1428,29 @@ class _MyServicesWideState extends ConsumerState<_MyServicesWide> {
                     );
                   }
 
-                  final assignedParentNames = services
-                      .where((s) =>
-                          !s.catalog.isBookable &&
-                          s.catalog.childrenCount > 0)
-                      .map((s) => s.serviceName)
-                      .toSet();
+                  final tree = _buildMyServicesTree(services, parentOf);
+                  final rootEntries = tree.children.entries.toList()
+                    ..sort((a, b) {
+                      if (a.key == 'Other') return 1;
+                      if (b.key == 'Other') return -1;
+                      return a.key.compareTo(b.key);
+                    });
 
-                  final Map<String, AssignedService> assignedByCatalogId = {
-                    for (final s in services) s.serviceId: s,
-                  };
-
-                  final topLevel = services.where((s) {
-                    if (!s.catalog.isBookable &&
-                        s.catalog.childrenCount > 0) return true;
-                    return !assignedParentNames
-                        .contains(s.catalog.parentName);
-                  }).toList();
-
-                  return ListView(
+                  return ListView.builder(
                     padding: const EdgeInsets.all(24),
-                    children: [
-                      Container(
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: AppColors.border),
+                    itemCount: rootEntries.length,
+                    itemBuilder: (_, i) {
+                      final entry = rootEntries[i];
+                      final catColor = _kCatColors[i % _kCatColors.length];
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 12),
+                        child: _MyWideTreeSection(
+                          node: entry.value,
+                          catColor: catColor,
+                          depth: 0,
                         ),
-                        clipBehavior: Clip.antiAlias,
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            Padding(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 20, vertical: 12),
-                              child: Row(
-                                children: const [
-                                  Expanded(
-                                      flex: 3,
-                                      child: _ColHeader('SERVICE NAME')),
-                                  Expanded(
-                                      flex: 2,
-                                      child: _ColHeader('CATEGORY')),
-                                  SizedBox(
-                                      width: 120,
-                                      child: _ColHeader('BASE PRICE')),
-                                  SizedBox(width: 88, child: _ColHeader('')),
-                                ],
-                              ),
-                            ),
-                            const Divider(height: 1, color: AppColors.border),
-                            for (int i = 0; i < topLevel.length; i++) ...[
-                              if (i > 0)
-                                const Divider(
-                                    height: 1,
-                                    color: AppColors.border,
-                                    indent: 20,
-                                    endIndent: 20),
-                              if (!topLevel[i].catalog.isBookable &&
-                                  topLevel[i].catalog.childrenCount > 0)
-                                _MyParentGroupRow(
-                                  service: topLevel[i],
-                                  children: catalogChildrenOf[
-                                          topLevel[i].serviceName] ??
-                                      [],
-                                  assignedByCatalogId: assignedByCatalogId,
-                                  isExpanded: widget.expandedMyParents
-                                      .contains(topLevel[i].serviceId),
-                                  onToggle: () => widget
-                                      .onToggleMyParent(topLevel[i].serviceId),
-                                )
-                              else
-                                _MyServiceRow(service: topLevel[i]),
-                            ],
-                          ],
-                        ),
-                      ),
-                    ],
+                      );
+                    },
                   );
                 },
               ),
@@ -1947,6 +1928,285 @@ class _MyParentChildRowState extends ConsumerState<_MyParentChildRow> {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// My Services Wide — bulk-remove button (used on root and sub-cat headers)
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _BulkRemoveButton extends ConsumerStatefulWidget {
+  const _BulkRemoveButton({required this.services, required this.label});
+  final List<AssignedService> services;
+  final String label;
+
+  @override
+  ConsumerState<_BulkRemoveButton> createState() => _BulkRemoveButtonState();
+}
+
+class _BulkRemoveButtonState extends ConsumerState<_BulkRemoveButton> {
+  bool _removing = false;
+
+  Future<void> _handleRemove() async {
+    final count = widget.services.length;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (_) => ConfirmationDialog(
+        title: 'Remove All Services',
+        message:
+            'Remove all $count service${count == 1 ? '' : 's'} from "${widget.label}"?',
+        confirmLabel: 'Remove All',
+        isDestructive: true,
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    setState(() => _removing = true);
+    try {
+      final useCase = ref.read(removeVendorServiceUseCaseProvider);
+      for (final s in widget.services) {
+        await useCase(s.id);
+      }
+      ref.invalidate(vendorServicesProvider);
+    } finally {
+      if (mounted) setState(() => _removing = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_removing) {
+      return const SizedBox(
+        width: 20,
+        height: 20,
+        child: CircularProgressIndicator(
+            strokeWidth: 2, color: AppColors.error),
+      );
+    }
+    return IconButton(
+      icon: const Icon(Icons.delete_sweep_rounded, size: 18),
+      color: AppColors.textHint,
+      tooltip: 'Remove all services in this group',
+      onPressed: _handleRemove,
+      visualDensity: VisualDensity.compact,
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// My Services Wide — recursive tree section (self-managing expand state)
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _MyWideTreeSection extends StatefulWidget {
+  const _MyWideTreeSection({
+    required this.node,
+    required this.catColor,
+    required this.depth,
+    this.isLast = false,
+  });
+
+  final _MyNode node;
+  final Color catColor;
+  final int depth;
+  final bool isLast;
+
+  @override
+  State<_MyWideTreeSection> createState() => _MyWideTreeSectionState();
+}
+
+class _MyWideTreeSectionState extends State<_MyWideTreeSection> {
+  bool _expanded = false;
+
+  List<_MyNode> get _sortedChildren {
+    final entries = widget.node.children.entries.toList()
+      ..sort((a, b) => a.key.compareTo(b.key));
+    return entries.map((e) => e.value).toList();
+  }
+
+  Widget _buildContent() {
+    final node = widget.node;
+    final children = _sortedChildren;
+    final hasLeaves = node.leafServices.isNotEmpty;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        for (int i = 0; i < children.length; i++)
+          _MyWideTreeSection(
+            node: children[i],
+            catColor: widget.catColor,
+            depth: widget.depth + 1,
+            isLast: i == children.length - 1 && !hasLeaves,
+          ),
+        if (hasLeaves) ...[
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+            child: Row(
+              children: const [
+                Expanded(flex: 3, child: _ColHeader('SERVICE NAME')),
+                Expanded(flex: 2, child: _ColHeader('CATEGORY')),
+                SizedBox(width: 120, child: _ColHeader('BASE PRICE')),
+                SizedBox(width: 88, child: _ColHeader('')),
+              ],
+            ),
+          ),
+          const Divider(height: 1, color: AppColors.border),
+          for (int i = 0; i < node.leafServices.length; i++) ...[
+            _MyServiceRow(service: node.leafServices[i]),
+            if (i < node.leafServices.length - 1)
+              const Divider(
+                  height: 1,
+                  color: AppColors.border,
+                  indent: 20,
+                  endIndent: 20),
+          ],
+          const SizedBox(height: 4),
+        ],
+      ],
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final node = widget.node;
+    final totalCount = node.totalCount;
+
+    if (widget.depth == 0) {
+      return Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: AppColors.border),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: InkWell(
+                    onTap: () => setState(() => _expanded = !_expanded),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 20, vertical: 15),
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 34,
+                            height: 34,
+                            decoration: BoxDecoration(
+                              color: widget.catColor.withValues(alpha: 0.12),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Icon(_iconForCategory(node.name),
+                                size: 17, color: widget.catColor),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              node.name,
+                              style: const TextStyle(
+                                fontSize: 14.5,
+                                fontWeight: FontWeight.w700,
+                                color: AppColors.textPrimary,
+                              ),
+                            ),
+                          ),
+                          Text(
+                            '$totalCount service${totalCount == 1 ? '' : 's'}',
+                            style: const TextStyle(
+                                fontSize: 12.5,
+                                color: AppColors.textSecondary),
+                          ),
+                          const SizedBox(width: 12),
+                          AnimatedRotation(
+                            turns: _expanded ? 0.5 : 0,
+                            duration: const Duration(milliseconds: 200),
+                            child: const Icon(
+                                Icons.keyboard_arrow_down_rounded,
+                                size: 20,
+                                color: AppColors.textHint),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+                _BulkRemoveButton(
+                    services: node.allServices, label: node.name),
+                const SizedBox(width: 12),
+              ],
+            ),
+            if (_expanded) ...[
+              const Divider(height: 1, color: AppColors.border),
+              _buildContent(),
+            ],
+          ],
+        ),
+      );
+    }
+
+    // Depth > 0: rendered inline inside the parent card
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: InkWell(
+                onTap: () => setState(() => _expanded = !_expanded),
+                child: Padding(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                  child: Row(
+                    children: [
+                      SizedBox(width: (widget.depth - 1) * 12.0),
+                      Container(
+                        width: 6,
+                        height: 6,
+                        decoration: BoxDecoration(
+                          color: AppColors.textHint,
+                          borderRadius: BorderRadius.circular(3),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          node.name,
+                          style: const TextStyle(
+                            fontSize: 13.5,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.textPrimary,
+                          ),
+                        ),
+                      ),
+                      Text(
+                        '$totalCount service${totalCount == 1 ? '' : 's'}',
+                        style: const TextStyle(
+                            fontSize: 12, color: AppColors.textSecondary),
+                      ),
+                      const SizedBox(width: 10),
+                      AnimatedRotation(
+                        turns: _expanded ? 0.5 : 0,
+                        duration: const Duration(milliseconds: 200),
+                        child: const Icon(Icons.keyboard_arrow_down_rounded,
+                            size: 18, color: AppColors.textHint),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            _BulkRemoveButton(services: node.allServices, label: node.name),
+            const SizedBox(width: 8),
+          ],
+        ),
+        if (_expanded) ...[
+          const Divider(height: 1, color: AppColors.border),
+          _buildContent(),
+        ],
+        if (!widget.isLast) const Divider(height: 1, color: AppColors.border),
+      ],
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Shared
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -2061,7 +2321,6 @@ class _MyServicesNarrow extends ConsumerStatefulWidget {
 
 class _MyServicesNarrowState extends ConsumerState<_MyServicesNarrow> {
   late int _subTab;
-  final Set<String> _expandedMyParents = {};
 
   @override
   void initState() {
@@ -2072,16 +2331,10 @@ class _MyServicesNarrowState extends ConsumerState<_MyServicesNarrow> {
   @override
   Widget build(BuildContext context) {
     final servicesAsync = ref.watch(vendorServicesProvider);
-    final catalogRaw = ref.watch(catalogServicesProvider).valueOrNull ?? [];
     final allRequests = ref.watch(myServiceRequestsProvider).valueOrNull ?? [];
     final vendorId = ref.watch(currentVendorUserProvider)?.id ?? '';
-
-    final Map<String, List<CatalogService>> catalogChildrenOf = {};
-    for (final cat in catalogRaw) {
-      if (cat.isBookable && cat.parentName != null) {
-        catalogChildrenOf.putIfAbsent(cat.parentName!, () => []).add(cat);
-      }
-    }
+    final parentOf =
+        ref.watch(catalogParentMapProvider).valueOrNull ?? const <String, String?>{};
 
     final customServices =
         allRequests.where((r) => r.isActiveCustomService).toList();
@@ -2142,67 +2395,28 @@ class _MyServicesNarrowState extends ConsumerState<_MyServicesNarrow> {
                     );
                   }
 
-                  final assignedParentNames = services
-                      .where((s) =>
-                          !s.catalog.isBookable &&
-                          s.catalog.childrenCount > 0)
-                      .map((s) => s.serviceName)
-                      .toSet();
-
-                  final Map<String, AssignedService> assignedByCatalogId = {
-                    for (final s in services) s.serviceId: s,
-                  };
-
-                  final topLevel = services.where((s) {
-                    if (!s.catalog.isBookable &&
-                        s.catalog.childrenCount > 0) return true;
-                    return !assignedParentNames
-                        .contains(s.catalog.parentName);
-                  }).toList();
+                  final tree = _buildMyServicesTree(services, parentOf);
+                  final rootEntries = tree.children.entries.toList()
+                    ..sort((a, b) {
+                      if (a.key == 'Other') return 1;
+                      if (b.key == 'Other') return -1;
+                      return a.key.compareTo(b.key);
+                    });
 
                   return RefreshIndicator(
                     onRefresh: () async =>
                         ref.invalidate(vendorServicesProvider),
-                    child: ListView.separated(
-                      padding: const EdgeInsets.symmetric(vertical: 8),
-                      itemCount: topLevel.length,
-                      separatorBuilder: (_, __) => const Divider(
-                          height: 1, color: AppColors.border),
+                    child: ListView.builder(
+                      padding: const EdgeInsets.symmetric(
+                          vertical: 8, horizontal: 12),
+                      itemCount: rootEntries.length,
                       itemBuilder: (_, i) {
-                        final service = topLevel[i];
-                        final isParent = !service.catalog.isBookable &&
-                            service.catalog.childrenCount > 0;
-                        if (isParent) {
-                          final isExpanded = _expandedMyParents
-                              .contains(service.serviceId);
-                          return _MyParentNarrowCard(
-                            service: service,
-                            children: catalogChildrenOf[
-                                    service.serviceName] ??
-                                [],
-                            assignedByCatalogId: assignedByCatalogId,
-                            isExpanded: isExpanded,
-                            onToggle: () => setState(() => isExpanded
-                                ? _expandedMyParents
-                                    .remove(service.serviceId)
-                                : _expandedMyParents
-                                    .add(service.serviceId)),
-                            onRemove: () async {
-                              await ref
-                                  .read(removeVendorServiceUseCaseProvider)
-                                  .call(service.id);
-                              ref.invalidate(vendorServicesProvider);
-                            },
-                          );
-                        }
-                        return ServiceCard(
-                          service: service,
-                          onRemove: () async {
-                            await ref
-                                .read(removeVendorServiceUseCaseProvider)
-                                .call(service.id);
-                            ref.invalidate(vendorServicesProvider);
-                          },
+                        final entry = rootEntries[i];
+                        final catColor = _kCatColors[i % _kCatColors.length];
+                        return _MyNarrowTreeSection(
+                          node: entry.value,
+                          catColor: catColor,
+                          depth: 0,
                         );
                       },
                     ),
@@ -3284,17 +3498,31 @@ class _NarrowChildTileState extends State<_NarrowChildTile> {
   }
 }
 
-class _AllServicesNarrow extends ConsumerWidget {
-  const _AllServicesNarrow(
-      {required this.addingIds, required this.onAdd});
+class _AllServicesNarrow extends ConsumerStatefulWidget {
+  const _AllServicesNarrow({
+    required this.addingIds,
+    required this.bulkAddingKeys,
+    required this.onAdd,
+    required this.onAddAll,
+  });
 
   final Set<String> addingIds;
+  final Set<String> bulkAddingKeys;
   final Future<void> Function(CatalogService) onAdd;
+  final Future<void> Function(String key, List<CatalogService> services, Set<String> assignedIds) onAddAll;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_AllServicesNarrow> createState() => _AllServicesNarrowState();
+}
+
+class _AllServicesNarrowState extends ConsumerState<_AllServicesNarrow> {
+  @override
+  Widget build(BuildContext context) {
     final catalogAsync = ref.watch(catalogServicesProvider);
     final assignedAsync = ref.watch(vendorServicesProvider);
+    final parentOf =
+        ref.watch(catalogParentMapProvider).valueOrNull ?? const <String, String?>{};
+
     return catalogAsync.when(
       loading: () => const Center(child: CircularProgressIndicator()),
       error: (e, _) => ErrorView(
@@ -3308,6 +3536,7 @@ class _AllServicesNarrow extends ConsumerWidget {
             subtitle: 'The admin has not added any services yet.',
           );
         }
+
         final assigned = assignedAsync.valueOrNull ?? [];
         final directIds = assigned.map((s) => s.serviceId).toSet();
         final assignedParentNames = assigned
@@ -3323,30 +3552,544 @@ class _AllServicesNarrow extends ConsumerWidget {
                     assignedParentNames.contains(c.parentName))
                 .map((c) => c.id),
         };
+
+        final tree = _buildCatalogTree(catalog, parentOf);
+        final rootEntries = tree.children.entries.toList()
+          ..sort((a, b) {
+            if (a.key == 'Other') return 1;
+            if (b.key == 'Other') return -1;
+            return a.key.compareTo(b.key);
+          });
+
         return RefreshIndicator(
           onRefresh: () async {
             ref.invalidate(catalogServicesProvider);
             ref.invalidate(vendorServicesProvider);
           },
-          child: ListView.separated(
-            padding: const EdgeInsets.symmetric(vertical: 8),
-            itemCount: catalog.length,
-            separatorBuilder: (_, _) => const Divider(
-                height: 1, color: AppColors.border, indent: 76),
+          child: ListView.builder(
+            padding: const EdgeInsets.fromLTRB(12, 8, 12, 24),
+            itemCount: rootEntries.length,
             itemBuilder: (_, i) {
-              final service = catalog[i];
-              final isAdded = assignedIds.contains(service.id);
-              final isAdding = addingIds.contains(service.id);
-              return _NarrowCatalogTile(
-                service: service,
-                isAdded: isAdded,
-                isAdding: isAdding,
-                onAdd: (isAdded || isAdding) ? null : () => onAdd(service),
+              final entry = rootEntries[i];
+              final catColor = _kCatColors[i % _kCatColors.length];
+              return _AllNarrowTreeSection(
+                node: entry.value,
+                catColor: catColor,
+                depth: 0,
+                assignedIds: assignedIds,
+                addingIds: widget.addingIds,
+                bulkAddingKeys: widget.bulkAddingKeys,
+                onAdd: widget.onAdd,
+                onAddAll: widget.onAddAll,
               );
             },
           ),
         );
       },
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// My Services Narrow — recursive tree section (self-managing expand state)
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _MyNarrowTreeSection extends ConsumerStatefulWidget {
+  const _MyNarrowTreeSection({
+    required this.node,
+    required this.catColor,
+    required this.depth,
+    this.isLast = false,
+  });
+
+  final _MyNode node;
+  final Color catColor;
+  final int depth;
+  final bool isLast;
+
+  @override
+  ConsumerState<_MyNarrowTreeSection> createState() =>
+      _MyNarrowTreeSectionState();
+}
+
+class _MyNarrowTreeSectionState extends ConsumerState<_MyNarrowTreeSection> {
+  bool _expanded = false;
+
+  Future<void> _removeService(AssignedService s) async {
+    await ref.read(removeVendorServiceUseCaseProvider).call(s.id);
+    ref.invalidate(vendorServicesProvider);
+  }
+
+  List<_MyNode> get _sortedChildren {
+    final entries = widget.node.children.entries.toList()
+      ..sort((a, b) => a.key.compareTo(b.key));
+    return entries.map((e) => e.value).toList();
+  }
+
+  Widget _buildContent() {
+    final node = widget.node;
+    final children = _sortedChildren;
+    final hasLeaves = node.leafServices.isNotEmpty;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        for (int i = 0; i < children.length; i++)
+          _MyNarrowTreeSection(
+            node: children[i],
+            catColor: widget.catColor,
+            depth: widget.depth + 1,
+            isLast: i == children.length - 1 && !hasLeaves,
+          ),
+        if (hasLeaves) ...[
+          for (int i = 0; i < node.leafServices.length; i++) ...[
+            ServiceCard(
+              service: node.leafServices[i],
+              onRemove: () => _removeService(node.leafServices[i]),
+            ),
+            if (i < node.leafServices.length - 1)
+              const Divider(height: 1, color: AppColors.border),
+          ],
+        ],
+      ],
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final node = widget.node;
+    final totalCount = node.totalCount;
+
+    if (widget.depth == 0) {
+      return Container(
+        margin: const EdgeInsets.only(bottom: 10),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: AppColors.border),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Material(
+                    color: Colors.transparent,
+                    child: InkWell(
+                      onTap: () => setState(() => _expanded = !_expanded),
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(12, 12, 8, 12),
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 36,
+                              height: 36,
+                              decoration: BoxDecoration(
+                                color: widget.catColor.withValues(alpha: 0.12),
+                                borderRadius: BorderRadius.circular(9),
+                              ),
+                              child: Icon(_iconForCategory(node.name),
+                                  size: 18, color: widget.catColor),
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Text(
+                                node.name,
+                                style: const TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w700,
+                                  color: AppColors.textPrimary,
+                                ),
+                              ),
+                            ),
+                            Text(
+                              '$totalCount',
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                color: widget.catColor,
+                              ),
+                            ),
+                            const SizedBox(width: 4),
+                            AnimatedRotation(
+                              turns: _expanded ? 0.5 : 0.0,
+                              duration: const Duration(milliseconds: 200),
+                              child: const Icon(
+                                  Icons.keyboard_arrow_down_rounded,
+                                  size: 20,
+                                  color: AppColors.textHint),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                _BulkRemoveButton(
+                    services: node.allServices, label: node.name),
+                const SizedBox(width: 10),
+              ],
+            ),
+            if (_expanded) ...[
+              const Divider(height: 1, color: AppColors.border),
+              _buildContent(),
+            ],
+          ],
+        ),
+      );
+    }
+
+    // Depth > 0: rendered inline inside parent card
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  onTap: () => setState(() => _expanded = !_expanded),
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 11, 8, 11),
+                    child: Row(
+                      children: [
+                        SizedBox(width: (widget.depth - 1) * 10.0),
+                        Container(
+                          width: 6,
+                          height: 6,
+                          decoration: BoxDecoration(
+                            color: AppColors.textHint,
+                            borderRadius: BorderRadius.circular(3),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            node.name,
+                            style: const TextStyle(
+                              fontSize: 13.5,
+                              fontWeight: FontWeight.w600,
+                              color: AppColors.textPrimary,
+                            ),
+                          ),
+                        ),
+                        Text(
+                          '$totalCount',
+                          style: const TextStyle(
+                              fontSize: 12, color: AppColors.textSecondary),
+                        ),
+                        const SizedBox(width: 6),
+                        AnimatedRotation(
+                          turns: _expanded ? 0.5 : 0.0,
+                          duration: const Duration(milliseconds: 200),
+                          child: const Icon(Icons.keyboard_arrow_down_rounded,
+                              size: 18, color: AppColors.textHint),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            _BulkRemoveButton(services: node.allServices, label: node.name),
+            const SizedBox(width: 10),
+          ],
+        ),
+        if (_expanded) ...[
+          const Divider(height: 1, color: AppColors.border),
+          _buildContent(),
+        ],
+        if (!widget.isLast) const Divider(height: 1, color: AppColors.border),
+      ],
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// All Services Narrow — recursive tree section (self-managing expand state)
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _AllNarrowTreeSection extends StatefulWidget {
+  const _AllNarrowTreeSection({
+    required this.node,
+    required this.catColor,
+    required this.depth,
+    required this.assignedIds,
+    required this.addingIds,
+    required this.bulkAddingKeys,
+    required this.onAdd,
+    required this.onAddAll,
+    this.isLast = false,
+  });
+
+  final _CatalogNode node;
+  final Color catColor;
+  final int depth;
+  final bool isLast;
+  final Set<String> assignedIds;
+  final Set<String> addingIds;
+  final Set<String> bulkAddingKeys;
+  final Future<void> Function(CatalogService) onAdd;
+  final Future<void> Function(String key, List<CatalogService> services,
+      Set<String> assignedIds) onAddAll;
+
+  @override
+  State<_AllNarrowTreeSection> createState() => _AllNarrowTreeSectionState();
+}
+
+class _AllNarrowTreeSectionState extends State<_AllNarrowTreeSection> {
+  bool _expanded = false;
+
+  List<_CatalogNode> get _sortedChildren {
+    final entries = widget.node.children.entries.toList()
+      ..sort((a, b) => a.key.compareTo(b.key));
+    return entries.map((e) => e.value).toList();
+  }
+
+  Widget _buildContent() {
+    final node = widget.node;
+    final children = _sortedChildren;
+    final hasLeaves = node.leafServices.isNotEmpty;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        for (int i = 0; i < children.length; i++)
+          _AllNarrowTreeSection(
+            node: children[i],
+            catColor: widget.catColor,
+            depth: widget.depth + 1,
+            isLast: i == children.length - 1 && !hasLeaves,
+            assignedIds: widget.assignedIds,
+            addingIds: widget.addingIds,
+            bulkAddingKeys: widget.bulkAddingKeys,
+            onAdd: widget.onAdd,
+            onAddAll: widget.onAddAll,
+          ),
+        if (hasLeaves) ...[
+          for (int i = 0; i < node.leafServices.length; i++) ...[
+            if (i > 0)
+              const Divider(
+                  height: 1,
+                  color: AppColors.border,
+                  indent: 16,
+                  endIndent: 16),
+            _NarrowCatalogTile(
+              service: node.leafServices[i],
+              isAdded: widget.assignedIds.contains(node.leafServices[i].id),
+              isAdding: widget.addingIds.contains(node.leafServices[i].id),
+              onAdd: (widget.assignedIds.contains(node.leafServices[i].id) ||
+                      widget.addingIds.contains(node.leafServices[i].id))
+                  ? null
+                  : () => widget.onAdd(node.leafServices[i]),
+            ),
+          ],
+        ],
+      ],
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final node = widget.node;
+    final totalCount = node.totalCount;
+    final allLeaves = node.allLeafServices;
+    final bulkKey = node.name;
+
+    if (widget.depth == 0) {
+      return Container(
+        margin: const EdgeInsets.only(bottom: 10),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: AppColors.border),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Material(
+                    color: Colors.transparent,
+                    child: InkWell(
+                      onTap: () => setState(() => _expanded = !_expanded),
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(12, 12, 8, 12),
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 36,
+                              height: 36,
+                              decoration: BoxDecoration(
+                                color: widget.catColor.withValues(alpha: 0.12),
+                                borderRadius: BorderRadius.circular(9),
+                              ),
+                              child: Icon(_iconForCategory(node.name),
+                                  size: 18, color: widget.catColor),
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Text(
+                                node.name,
+                                style: const TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w700,
+                                  color: AppColors.textPrimary,
+                                ),
+                              ),
+                            ),
+                            Text(
+                              '$totalCount',
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                color: widget.catColor,
+                              ),
+                            ),
+                            const SizedBox(width: 4),
+                            AnimatedRotation(
+                              turns: _expanded ? 0.5 : 0.0,
+                              duration: const Duration(milliseconds: 200),
+                              child: const Icon(
+                                  Icons.keyboard_arrow_down_rounded,
+                                  size: 20,
+                                  color: AppColors.textHint),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                _AddAllButton(
+                  isBusy: widget.bulkAddingKeys.contains(bulkKey),
+                  onTap: () =>
+                      widget.onAddAll(bulkKey, allLeaves, widget.assignedIds),
+                ),
+                const SizedBox(width: 10),
+              ],
+            ),
+            if (_expanded) ...[
+              const Divider(height: 1, color: AppColors.border),
+              _buildContent(),
+            ],
+          ],
+        ),
+      );
+    }
+
+    // Depth > 0: rendered inline inside parent card
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  onTap: () => setState(() => _expanded = !_expanded),
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 11, 8, 11),
+                    child: Row(
+                      children: [
+                        SizedBox(width: (widget.depth - 1) * 10.0),
+                        Container(
+                          width: 6,
+                          height: 6,
+                          decoration: BoxDecoration(
+                            color: AppColors.textHint,
+                            borderRadius: BorderRadius.circular(3),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            node.name,
+                            style: const TextStyle(
+                              fontSize: 13.5,
+                              fontWeight: FontWeight.w600,
+                              color: AppColors.textPrimary,
+                            ),
+                          ),
+                        ),
+                        Text(
+                          '$totalCount',
+                          style: const TextStyle(
+                              fontSize: 12, color: AppColors.textSecondary),
+                        ),
+                        const SizedBox(width: 6),
+                        AnimatedRotation(
+                          turns: _expanded ? 0.5 : 0.0,
+                          duration: const Duration(milliseconds: 200),
+                          child: const Icon(Icons.keyboard_arrow_down_rounded,
+                              size: 18, color: AppColors.textHint),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            _AddAllButton(
+              isBusy: widget.bulkAddingKeys.contains(bulkKey),
+              onTap: () =>
+                  widget.onAddAll(bulkKey, allLeaves, widget.assignedIds),
+            ),
+            const SizedBox(width: 10),
+          ],
+        ),
+        if (_expanded) ...[
+          const Divider(height: 1, color: AppColors.border),
+          _buildContent(),
+        ],
+        if (!widget.isLast) const Divider(height: 1, color: AppColors.border),
+      ],
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Compact "+ Add All" button used by both mobile and web hierarchy headers
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _AddAllButton extends StatelessWidget {
+  const _AddAllButton({required this.isBusy, required this.onTap});
+
+  final bool isBusy;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 30,
+      child: isBusy
+          ? const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 8),
+              child: SizedBox(
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+            )
+          : OutlinedButton(
+              onPressed: onTap,
+              style: OutlinedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(horizontal: 10),
+                minimumSize: Size.zero,
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                side: const BorderSide(color: AppColors.primary),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(6)),
+                foregroundColor: AppColors.primary,
+                textStyle: const TextStyle(
+                    fontSize: 12, fontWeight: FontWeight.w600),
+              ),
+              child: const Text('+ Add All'),
+            ),
     );
   }
 }
@@ -3391,7 +4134,7 @@ class _NarrowCatalogTile extends StatelessWidget {
                         fontSize: 14,
                         fontWeight: FontWeight.w600,
                         color: AppColors.textPrimary),
-                    maxLines: 1,
+                    maxLines: 2,
                     overflow: TextOverflow.ellipsis),
                 const SizedBox(height: 3),
                 Row(
@@ -4227,14 +4970,14 @@ class _CreateServiceDialogState extends ConsumerState<_CreateServiceDialog> {
       insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 40),
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 480),
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Header
-              Row(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // Fixed headerâstays visible while content scrolls
+            Padding(
+              padding: const EdgeInsets.fromLTRB(24, 20, 8, 0),
+              child: Row(
                 children: [
                   const Expanded(
                     child: Text(
@@ -4255,6 +4998,14 @@ class _CreateServiceDialogState extends ConsumerState<_CreateServiceDialog> {
                   ),
                 ],
               ),
+            ),
+            Flexible(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
               const SizedBox(height: 4),
               const Text(
                 'Submit a request to add a new service to the catalog.',
@@ -4676,6 +5427,9 @@ class _CreateServiceDialogState extends ConsumerState<_CreateServiceDialog> {
               ),
             ],
           ),
+        ),
+            ),
+          ],
         ),
       ),
     );

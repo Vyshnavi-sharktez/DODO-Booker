@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/widgets/confirmation_dialog.dart';
+import '../../domain/models/assigned_service.dart';
 import '../../domain/models/catalog_service.dart';
 import '../../../auth/presentation/providers/auth_controller.dart';
 import '../providers/services_provider.dart';
@@ -16,6 +17,11 @@ enum VendorSearchMode { myServices, allServices }
 // ─────────────────────────────────────────────────────────────────────────────
 // Public API
 // ─────────────────────────────────────────────────────────────────────────────
+
+/// Opens the full-screen vendor search modal for [mode].
+Future<void> showVendorSearchModal(
+        BuildContext context, VendorSearchMode mode) =>
+    _VendorSearchModal.show(context, mode: mode);
 
 /// Search icon button for the Services AppBar.
 /// Opens a full-screen search modal scoped to [mode].
@@ -202,6 +208,10 @@ class _VendorSearchPanelState extends ConsumerState<_VendorSearchPanel> {
   Timer? _timer;
   Timer? _statusTimer;
 
+  // Cached from ref.watch — keeps _runSearch from reading stale autoDispose data.
+  List<CatalogService> _cachedCatalog = [];
+  List<AssignedService> _cachedAssigned = [];
+
   @override
   void initState() {
     super.initState();
@@ -307,10 +317,9 @@ class _VendorSearchPanelState extends ConsumerState<_VendorSearchPanel> {
 
     final List<CatalogService> data;
     if (widget.mode == VendorSearchMode.myServices) {
-      final assigned = ref.read(vendorServicesProvider).valueOrNull ?? [];
-      data = assigned.map((s) => s.catalog).toList();
+      data = _cachedAssigned.map((s) => s.catalog).toList();
     } else {
-      data = ref.read(catalogServicesProvider).valueOrNull ?? [];
+      data = _cachedCatalog;
     }
 
     final results = data
@@ -327,14 +336,27 @@ class _VendorSearchPanelState extends ConsumerState<_VendorSearchPanel> {
 
   @override
   Widget build(BuildContext context) {
-    // catalogServicesProvider only needed in allServices mode.
+    // Watch both providers so the widget rebuilds when data arrives.
+    // Cache the resolved lists so _runSearch can read them synchronously.
     if (widget.mode == VendorSearchMode.allServices) {
-      ref.watch(catalogServicesProvider);
+      final catalog = ref.watch(catalogServicesProvider).valueOrNull;
+      if (catalog != null && catalog != _cachedCatalog) {
+        _cachedCatalog = catalog;
+        if (_lastQuery.length >= 2) {
+          WidgetsBinding.instance
+              .addPostFrameCallback((_) => _runSearch(_lastQuery));
+        }
+      }
     }
-    // Always watch vendorServicesProvider: My Services list + Add/Added state.
-    final assignedIds = (ref.watch(vendorServicesProvider).valueOrNull ?? [])
-        .map((s) => s.serviceId)
-        .toSet();
+    final assigned = ref.watch(vendorServicesProvider).valueOrNull;
+    if (assigned != null && assigned != _cachedAssigned) {
+      _cachedAssigned = assigned;
+      if (widget.mode == VendorSearchMode.myServices && _lastQuery.length >= 2) {
+        WidgetsBinding.instance
+            .addPostFrameCallback((_) => _runSearch(_lastQuery));
+      }
+    }
+    final assignedIds = _cachedAssigned.map((s) => s.serviceId).toSet();
 
     final showList = _lastQuery.length < 2;
 

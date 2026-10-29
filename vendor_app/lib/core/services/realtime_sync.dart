@@ -1,9 +1,10 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:supabase_flutter/supabase_flutter.dart' hide AuthState;
 
 import '../../features/auth/domain/entities/vendor_user.dart';
 import '../../features/auth/presentation/providers/auth_controller.dart';
+import '../../features/auth/presentation/providers/auth_state.dart';
 import '../../features/bookings/presentation/providers/bookings_provider.dart';
 import '../../features/dashboard/presentation/providers/dashboard_provider.dart';
 import '../../features/documents/presentation/providers/documents_provider.dart';
@@ -42,12 +43,14 @@ class VendorRealtimeSync {
   RealtimeChannel? _walletChannel;
   RealtimeChannel? _docsChannel;
   RealtimeChannel? _catalogChannel;
+  RealtimeChannel? _vendorStatusChannel;
 
   // Same-value guards to prevent channel churn.
   String? _activeNotifVendorId;
   String? _activeWalletVendorId;
   String? _activeDocsVendorId;
   String? _activeSubVendorId;
+  String? _activeStatusVendorId;
 
   VendorRealtimeSync(this._ref, this._client) {
     _subscribeBookings();
@@ -304,6 +307,45 @@ class VendorRealtimeSync {
     debugPrint('[DODO][VendorSync] docs channel subscribed for vendor=$vendorId');
   }
 
+  // ── Vendor active-status watch ───────────────────────────────────────────────
+  //
+  // Watches the vendor's own row for is_active changes.  When the admin deactivates
+  // the vendor while the app is running, this triggers recheckActiveStatus() which
+  // signs out and transitions to AuthAccountInactive.  On reactivation it restores
+  // AuthAuthenticated without requiring a fresh OTP login.
+
+  void resubscribeVendorStatus(String? vendorId) {
+    if (vendorId == _activeStatusVendorId) return;
+    _activeStatusVendorId = vendorId;
+
+    if (_vendorStatusChannel != null) {
+      _client.removeChannel(_vendorStatusChannel!);
+      _vendorStatusChannel = null;
+    }
+    if (vendorId == null) return;
+
+    _vendorStatusChannel = _client
+        .channel('dodo-vendor-status-$vendorId')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.update,
+          schema: 'public',
+          table: 'vendors',
+          filter: PostgresChangeFilter(
+            type: PostgresChangeFilterType.eq,
+            column: 'id',
+            value: vendorId,
+          ),
+          callback: (payload) {
+            debugPrint('[DODO][VendorSync] vendor row UPDATE — re-checking active status');
+            _ref.read(authControllerProvider.notifier).recheckActiveStatus();
+          },
+        )
+        .subscribe((status, error) {
+          debugPrint('[DODO][VendorSync] vendor status channel status=$status error=$error');
+        });
+    debugPrint('[DODO][VendorSync] vendor status channel subscribed for vendor=$vendorId');
+  }
+
   // ── Lifecycle ───────────────────────────────────────────────────────────────
 
   void refetchAll() {
@@ -329,6 +371,7 @@ class VendorRealtimeSync {
     if (_walletChannel != null) _client.removeChannel(_walletChannel!);
     if (_docsChannel != null) _client.removeChannel(_docsChannel!);
     if (_catalogChannel != null) _client.removeChannel(_catalogChannel!);
+    if (_vendorStatusChannel != null) _client.removeChannel(_vendorStatusChannel!);
   }
 }
 
@@ -348,6 +391,24 @@ final vendorRealtimeSyncProvider = Provider<VendorRealtimeSync>((ref) {
       sync.resubscribeSubscription(user?.id);
       sync.resubscribeWallet(user?.id);
       sync.resubscribeDocs(user?.id);
+    },
+    fireImmediately: true,
+  );
+
+  // Status channel is managed separately so it stays alive during
+  // AuthAccountInactive — currentVendorUserProvider returns null when inactive,
+  // which would tear the channel down and break reactivation detection.
+  ref.listen<AuthState>(
+    authControllerProvider,
+    (_, authState) {
+      String? vendorId;
+      if (authState is AuthAuthenticated &&
+          authState.user.userType == 'vendor') {
+        vendorId = authState.user.id;
+      } else if (authState is AuthAccountInactive) {
+        vendorId = authState.vendorId;
+      }
+      sync.resubscribeVendorStatus(vendorId);
     },
     fireImmediately: true,
   );

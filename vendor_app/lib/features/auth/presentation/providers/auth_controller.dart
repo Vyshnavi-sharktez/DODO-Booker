@@ -28,13 +28,53 @@ class AuthController extends StateNotifier<AuthState> {
     try {
       final user = await _repository.getCurrentUser();
       if (user != null) {
-        state = AuthAuthenticated(user: user);
-        _initFcm(user);
+        if (!user.isActive && user.userType == 'vendor') {
+          // Do NOT sign out — keep the phone in SharedPreferences so that
+          // reactivation can restore access without a new OTP. The DB triggers
+          // and RLS policies block all sensitive writes while inactive.
+          state = AuthAccountInactive(vendorId: user.id);
+        } else {
+          state = AuthAuthenticated(user: user);
+          _initFcm(user);
+        }
       } else {
         state = const AuthUnauthenticated();
       }
     } catch (_) {
       state = const AuthUnauthenticated();
+    }
+  }
+
+  /// Re-fetches the vendor record and re-evaluates active status.
+  /// Called on app resume and by the Realtime vendor-status channel.
+  Future<void> recheckActiveStatus() async {
+    final current = state;
+    if (current is! AuthAuthenticated && current is! AuthAccountInactive) return;
+
+    try {
+      final user = await _repository.getCurrentUser();
+      if (user == null) {
+        // Session cleared externally (e.g. explicit sign-out from inactive screen).
+        state = const AuthUnauthenticated();
+        return;
+      }
+      if (!user.isActive && user.userType == 'vendor') {
+        if (current is AuthAuthenticated) {
+          // Newly deactivated — transition without signing out so the phone
+          // remains in SharedPreferences for seamless reactivation.
+          state = AuthAccountInactive(vendorId: user.id);
+        }
+        // Already inactive — no state change needed.
+      } else {
+        if (current is AuthAccountInactive) {
+          // Reactivated: re-validate identity then restore full access.
+          state = AuthAuthenticated(user: user);
+          _initFcm(user);
+        }
+        // Already authenticated — no change needed.
+      }
+    } catch (_) {
+      // Network error during resume check — keep current state.
     }
   }
 
@@ -62,8 +102,12 @@ class AuthController extends StateNotifier<AuthState> {
     state = const AuthLoading();
     try {
       final user = await _repository.verifyOtp(phone: phone, token: token);
-      state = AuthAuthenticated(user: user);
-      _initFcm(user);
+      if (!user.isActive && user.userType == 'vendor') {
+        state = AuthAccountInactive(vendorId: user.id);
+      } else {
+        state = AuthAuthenticated(user: user);
+        _initFcm(user);
+      }
     } catch (e) {
       state = AuthError(message: e.toString());
     }

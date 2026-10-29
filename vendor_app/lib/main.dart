@@ -11,6 +11,7 @@ import 'core/services/fcm_background_handler.dart';
 import 'core/services/local_notification_service.dart';
 import 'core/services/realtime_sync.dart';
 import 'core/theme/app_theme.dart';
+import 'features/auth/presentation/providers/auth_controller.dart';
 import 'features/notifications/presentation/providers/notifications_provider.dart';
 import 'firebase_options.dart';
 
@@ -108,6 +109,9 @@ class _VendorAppState extends ConsumerState<VendorApp>
     } else if (state == AppLifecycleState.resumed) {
       final paused = _pausedAt;
       _pausedAt = null;
+      // Always recheck active status on resume — catches deactivations that
+      // happened while the app was in the background (Realtime may have missed them).
+      ref.read(authControllerProvider.notifier).recheckActiveStatus();
       // After a long background gap Realtime may have missed events — refetch.
       if (paused != null &&
           DateTime.now().difference(paused) > const Duration(minutes: 5)) {
