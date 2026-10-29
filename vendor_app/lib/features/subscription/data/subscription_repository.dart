@@ -90,7 +90,7 @@ class SubscriptionRepository extends BaseRepository {
       debugPrint('[DODO][Settings] raw response (${(data as List).length} rows): $data');
       final parsed = {
         for (final row in data)
-          (row as Map<String, dynamic>)['setting_key'] as String:
+          row['setting_key'] as String:
               (row['setting_value'] as String?) ?? '',
       };
       debugPrint('[DODO][Settings] parsed map: $parsed');

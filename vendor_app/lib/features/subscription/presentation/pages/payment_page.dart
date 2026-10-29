@@ -28,8 +28,6 @@ class PaymentPage extends ConsumerStatefulWidget {
 class _PaymentPageState extends ConsumerState<PaymentPage> {
   _PaymentStatus _status = _PaymentStatus.idle;
   String? _errorMessage;
-  // Stored so we can validate stale Razorpay callbacks against the current order.
-  String? _pendingOrderId;
 
   PendingPaymentInfo get info => widget.info;
 
@@ -72,8 +70,6 @@ class _PaymentPageState extends ConsumerState<PaymentPage> {
     final keyId = orderData['key_id'] as String;
     final orderId = orderData['order_id'] as String;
     final amountPaise = (orderData['amount_paise'] as num).toInt();
-    _pendingOrderId = orderId;
-
     // ── Step 2: Open Razorpay checkout ────────────────────────────────────
     _RazorpayResult result;
 
