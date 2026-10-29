@@ -4,11 +4,14 @@ class CallSession {
   final String callerId;
   final String calleeId;
   final String callerRole; // 'customer' or 'vendor'
-  final String virtualNumber; // e.g. '+91-80000-DODO1'
+  final String virtualNumber; // Exotel ExoPhone
   final String status; // 'initiated', 'ringing', 'connected', 'ended', 'missed', 'failed'
   final DateTime initiatedAt;
   final DateTime? endedAt;
   final int durationSeconds;
+  final String? exotelCallSid;
+  final String? recordingUrl;
+  final String recordingStatus;
   final DateTime createdAt;
   final DateTime updatedAt;
 
@@ -18,11 +21,14 @@ class CallSession {
     required this.callerId,
     required this.calleeId,
     required this.callerRole,
-    this.virtualNumber = '+91-80000-DODO1',
+    this.virtualNumber = '',
     this.status = 'initiated',
     required this.initiatedAt,
     this.endedAt,
     this.durationSeconds = 0,
+    this.exotelCallSid,
+    this.recordingUrl,
+    this.recordingStatus = 'none',
     required this.createdAt,
     required this.updatedAt,
   });
@@ -33,7 +39,7 @@ class CallSession {
   bool get isEnded => status == 'ended';
   bool get isMissed => status == 'missed';
   bool get isFailed => status == 'failed';
-  String get maskedVirtualNumber => '+91 80000-DODO1';
+  bool get isTerminal => isEnded || isMissed || isFailed;
 
   int get calculatedDurationSeconds {
     if (durationSeconds > 0) return durationSeconds;
@@ -63,6 +69,9 @@ class CallSession {
     DateTime? initiatedAt,
     DateTime? endedAt,
     int? durationSeconds,
+    String? exotelCallSid,
+    String? recordingUrl,
+    String? recordingStatus,
     DateTime? createdAt,
     DateTime? updatedAt,
   }) {
@@ -77,6 +86,9 @@ class CallSession {
       initiatedAt: initiatedAt ?? this.initiatedAt,
       endedAt: endedAt ?? this.endedAt,
       durationSeconds: durationSeconds ?? this.durationSeconds,
+      exotelCallSid: exotelCallSid ?? this.exotelCallSid,
+      recordingUrl: recordingUrl ?? this.recordingUrl,
+      recordingStatus: recordingStatus ?? this.recordingStatus,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
     );
@@ -88,8 +100,8 @@ class CallSession {
       bookingId: map['booking_id'] as String,
       callerId: map['caller_id'] as String,
       calleeId: map['callee_id'] as String,
-      callerRole: map['caller_role'] as String? ?? 'customer',
-      virtualNumber: map['virtual_number'] as String? ?? '+91-80000-DODO1',
+      callerRole: map['caller_role'] as String? ?? 'vendor',
+      virtualNumber: map['virtual_number'] as String? ?? '',
       status: map['status'] as String? ?? 'initiated',
       initiatedAt: map['initiated_at'] != null
           ? DateTime.tryParse(map['initiated_at'] as String) ?? DateTime.now()
@@ -98,6 +110,9 @@ class CallSession {
           ? DateTime.tryParse(map['ended_at'] as String)
           : null,
       durationSeconds: (map['duration_seconds'] as num?)?.toInt() ?? 0,
+      exotelCallSid: map['exotel_call_sid'] as String?,
+      recordingUrl: map['recording_url'] as String?,
+      recordingStatus: map['recording_status'] as String? ?? 'none',
       createdAt: map['created_at'] != null
           ? DateTime.tryParse(map['created_at'] as String) ?? DateTime.now()
           : DateTime.now(),

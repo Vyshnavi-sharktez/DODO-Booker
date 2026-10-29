@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/rbac/permission_guard.dart';
 import '../../../../features/auth/application/providers/auth_provider.dart';
+import '../../../../features/app_branding/application/providers/app_branding_providers.dart';
 
 // ── Data models ──────────────────────────────────────────────────────────────
 
@@ -45,6 +46,7 @@ const _kNotifications = _NavItem(
   route: '/dashboard/notifications',
   requiredPermission: 'settings.manage',
 );
+
 
 // ── Grouped navigation structure ─────────────────────────────────────────────
 
@@ -322,6 +324,24 @@ const _kNavGroups = <_NavGroup>[
         icon: Icons.web_rounded,
         route: '/dashboard/landing-page',
         requiredPermission: 'settings.manage',
+      ),
+      _NavItem(
+        label: 'App Branding',
+        icon: Icons.palette_rounded,
+        route: '/dashboard/app-branding',
+        requiredPermission: 'settings.manage',
+      ),
+      _NavItem(
+        label: 'Call Provider',
+        icon: Icons.phone_in_talk_rounded,
+        route: '/dashboard/call-config',
+        requiredPermission: 'call.config',
+      ),
+      _NavItem(
+        label: 'SMS Campaigns',
+        icon: Icons.sms_rounded,
+        route: '/dashboard/campaigns',
+        requiredPermission: 'campaign.read',
       ),
       _NavItem(
         label: 'Settings',
@@ -696,9 +716,14 @@ class _NavTileState extends State<_NavTile> {
 
 // ── _SidebarBrand ─────────────────────────────────────────────────────────────
 
-class _SidebarBrand extends StatelessWidget {
+class _SidebarBrand extends ConsumerWidget {
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    // Loads the admin-panel icon URL from Supabase at runtime.
+    // Falls back to the local asset while loading or on error.
+    final iconUrl =
+        ref.watch(adminPanelBrandingIconProvider).valueOrNull;
+
     return Container(
       height: 64,
       padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -717,10 +742,19 @@ class _SidebarBrand extends StatelessWidget {
               borderRadius: BorderRadius.circular(8),
             ),
             padding: const EdgeInsets.all(3),
-            child: Image.asset(
-              'assets/images/logo.png',
-              fit: BoxFit.contain,
-            ),
+            child: iconUrl != null && iconUrl.isNotEmpty
+                ? Image.network(
+                    iconUrl,
+                    fit: BoxFit.contain,
+                    errorBuilder: (_, _, _) => Image.asset(
+                      'assets/images/logo.png',
+                      fit: BoxFit.contain,
+                    ),
+                  )
+                : Image.asset(
+                    'assets/images/logo.png',
+                    fit: BoxFit.contain,
+                  ),
           ),
           const SizedBox(width: 12),
           const Expanded(

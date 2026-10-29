@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../constants/app_colors.dart';
+import 'branding_logo.dart';
 import 'app_modal_dialog.dart';
 import 'pwa_install_dialog.dart';
 import '../../features/notifications/widgets/notifications_modal.dart';
@@ -1204,59 +1205,7 @@ class _DodoBrand extends StatelessWidget {
   Widget build(BuildContext context) {
     final w = MediaQuery.sizeOf(context).width;
     final h = w >= 1024 ? 34.0 : w >= 768 ? 28.0 : 24.0;
-    return Image.asset(
-      'assets/images/logo.png',
-      height: h,
-      fit: BoxFit.contain,
-      filterQuality: FilterQuality.high,
-      errorBuilder: (ctx, e, _) => const _FallbackBrand(),
-    );
-  }
-}
-
-class _FallbackBrand extends StatelessWidget {
-  const _FallbackBrand();
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Container(
-          width: 36,
-          height: 36,
-          decoration: BoxDecoration(
-            color: AppColors.textPrimary,
-            borderRadius: BorderRadius.circular(9),
-          ),
-          child: const Icon(Icons.home_repair_service_rounded,
-              color: AppColors.gold, size: 18),
-        ),
-        const SizedBox(width: 9),
-        RichText(
-          text: const TextSpan(
-            children: [
-              TextSpan(
-                text: 'DODO',
-                style: TextStyle(
-                    color: AppColors.textPrimary,
-                    fontSize: 17,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: 0.8),
-              ),
-              TextSpan(
-                text: ' BOOKER',
-                style: TextStyle(
-                    color: AppColors.textPrimary,
-                    fontSize: 17,
-                    fontWeight: FontWeight.w500,
-                    letterSpacing: 0.3),
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
+    return BrandingLogo(height: h, fit: BoxFit.contain);
   }
 }
 

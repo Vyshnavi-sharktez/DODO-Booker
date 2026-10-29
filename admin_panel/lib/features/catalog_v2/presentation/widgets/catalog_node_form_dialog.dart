@@ -821,29 +821,47 @@ class _CatalogNodeFormDialogState extends State<CatalogNodeFormDialog> {
             onTap: () async {
               final confirmed = await showDialog<bool>(
                 context: context,
-                builder: (ctx) => AlertDialog(
+                builder: (ctx) => Dialog(
                   shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(10)),
-                  titlePadding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
-                  contentPadding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-                  actionsPadding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
-                  title: const Text('Remove item?',
-                      style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
-                  content: Text('Remove "$text"?',
-                      style: const TextStyle(fontSize: 13)),
-                  actions: [
-                    TextButton(
-                      onPressed: () => Navigator.of(ctx).pop(false),
-                      child: const Text('Cancel'),
+                  child: SizedBox(
+                    width: 400,
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 14, 8, 8),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text('Remove item?',
+                              style: TextStyle(
+                                  fontSize: 15, fontWeight: FontWeight.w600)),
+                          const SizedBox(height: 8),
+                          Text('Remove "$text"?',
+                              style: const TextStyle(fontSize: 13),
+                              softWrap: true),
+                          const SizedBox(height: 10),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.end,
+                            children: [
+                              TextButton(
+                                onPressed: () => Navigator.of(ctx).pop(false),
+                                child: const Text('Cancel'),
+                              ),
+                              const SizedBox(width: 4),
+                              FilledButton(
+                                style: FilledButton.styleFrom(
+                                    backgroundColor: AppColors.error,
+                                    visualDensity: VisualDensity.compact),
+                                onPressed: () => Navigator.of(ctx).pop(true),
+                                child: const Text('Remove',
+                                    style: TextStyle(fontSize: 13)),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
                     ),
-                    FilledButton(
-                      style: FilledButton.styleFrom(
-                          backgroundColor: AppColors.error,
-                          visualDensity: VisualDensity.compact),
-                      onPressed: () => Navigator.of(ctx).pop(true),
-                      child: const Text('Remove', style: TextStyle(fontSize: 13)),
-                    ),
-                  ],
+                  ),
                 ),
               );
               if (confirmed == true) onRemove();

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../core/constants/app_colors.dart';
+import '../../../../core/widgets/vendor_branding_logo.dart';
 import '../../../../core/routes/route_names.dart';
 import '../../../../shared/widgets/app_button.dart';
 import '../providers/auth_controller.dart';
@@ -175,25 +176,7 @@ class _BrandHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     return Column(
       children: [
-        Image.asset(
-          'assets/images/logo.png',
-          height: 56,
-          fit: BoxFit.contain,
-          filterQuality: FilterQuality.high,
-          errorBuilder: (context, error, stack) => Container(
-            width: 80,
-            height: 80,
-            decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.15),
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: const Icon(
-              Icons.store_rounded,
-              size: 40,
-              color: Colors.white,
-            ),
-          ),
-        ),
+        VendorBrandingLogo(height: 56, fit: BoxFit.contain),
         const SizedBox(height: 20),
         const Text(
           'DODO BOOKER',

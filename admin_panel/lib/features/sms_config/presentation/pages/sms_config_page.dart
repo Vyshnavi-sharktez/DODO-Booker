@@ -34,6 +34,11 @@ const _msg91 = SmsProviderDefinition(
       label: 'Sender ID',
       hint: 'e.g. DODOOK — 6-char approved sender',
     ),
+    SmsExtraFieldDef(
+      key: 'test_phone',
+      label: 'Test Phone (Campaigns)',
+      hint: 'E.164 format, e.g. +919876543210 — used by SMS Campaigns in test mode',
+    ),
   ],
 );
 

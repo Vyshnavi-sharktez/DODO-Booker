@@ -591,8 +591,24 @@ class _AllServicesWide extends StatelessWidget {
       loading: () => const Center(child: CircularProgressIndicator()),
       error: (e, _) => ErrorView(message: e.toString(), onRetry: () {}),
       data: (catalog) {
-        final assignedIds =
-            (vendorAsync.valueOrNull ?? []).map((s) => s.serviceId).toSet();
+        final assigned = vendorAsync.valueOrNull ?? [];
+        final directIds = assigned.map((s) => s.serviceId).toSet();
+        // Names of assigned non-bookable parent nodes (e.g. "AC Uninstallation").
+        final assignedParentNames = assigned
+            .where((s) => !s.catalog.isBookable && s.catalog.childrenCount > 0)
+            .map((s) => s.catalog.name)
+            .toSet();
+        // Expand: any catalog service whose parentName is an assigned parent
+        // is also considered added — mirrors My Services' child-resolution logic.
+        final assignedIds = {
+          ...directIds,
+          if (assignedParentNames.isNotEmpty)
+            ...catalog
+                .where((c) =>
+                    c.parentName != null &&
+                    assignedParentNames.contains(c.parentName))
+                .map((c) => c.id),
+        };
 
         // Filter by search query.
         final q = searchQuery.toLowerCase();
@@ -3292,9 +3308,21 @@ class _AllServicesNarrow extends ConsumerWidget {
             subtitle: 'The admin has not added any services yet.',
           );
         }
-        final assignedIds = (assignedAsync.valueOrNull ?? [])
-            .map((s) => s.serviceId)
+        final assigned = assignedAsync.valueOrNull ?? [];
+        final directIds = assigned.map((s) => s.serviceId).toSet();
+        final assignedParentNames = assigned
+            .where((s) => !s.catalog.isBookable && s.catalog.childrenCount > 0)
+            .map((s) => s.catalog.name)
             .toSet();
+        final assignedIds = {
+          ...directIds,
+          if (assignedParentNames.isNotEmpty)
+            ...catalog
+                .where((c) =>
+                    c.parentName != null &&
+                    assignedParentNames.contains(c.parentName))
+                .map((c) => c.id),
+        };
         return RefreshIndicator(
           onRefresh: () async {
             ref.invalidate(catalogServicesProvider);

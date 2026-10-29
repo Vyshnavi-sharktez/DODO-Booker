@@ -9,7 +9,7 @@ import '../../../features/catalog/models/catalog_node_model.dart';
 
 // ── Layout constants (full-image portrait card) ───────────────────────────────
 
-const double _kCardW  = 340.0;
+const double _kCardW  = 240.0;
 const double _kCardH  = 180.0;
 const double _kGap    = 20.0;
 const double _kRadius = 16.0;

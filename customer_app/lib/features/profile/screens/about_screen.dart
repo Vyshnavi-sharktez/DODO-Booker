@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../core/widgets/branding_logo.dart';
 
 class AboutScreen extends StatelessWidget {
   final bool inModal;
@@ -41,18 +42,7 @@ class _AboutBody extends StatelessWidget {
             ),
             child: ClipRRect(
               borderRadius: BorderRadius.circular(22),
-              child: Image.asset(
-                'assets/images/logo.png',
-                fit: BoxFit.cover,
-                errorBuilder: (_, _, _) => Container(
-                  color: cs.primaryContainer,
-                  child: Icon(
-                    Icons.home_repair_service_rounded,
-                    size: 44,
-                    color: cs.primary,
-                  ),
-                ),
-              ),
+              child: BrandingLogo(fit: BoxFit.cover),
             ),
           ),
 

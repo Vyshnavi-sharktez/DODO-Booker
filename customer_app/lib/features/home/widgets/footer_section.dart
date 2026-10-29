@@ -4,6 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/constants/app_colors.dart';
+import '../../../core/widgets/branding_logo.dart';
 import '../../../core/widgets/page_sheet.dart';
 import '../../../routes/app_router.dart';
 import '../../info/screens/contact_screen.dart';
@@ -567,25 +568,7 @@ class _BrandColumn extends StatelessWidget {
     return Column(
       crossAxisAlignment: align,
       children: [
-        Image.asset(
-          'assets/images/logo.png',
-          height: 40,
-          fit: BoxFit.contain,
-          errorBuilder: (_, _, _) => Container(
-            width: 44,
-            height: 44,
-            decoration: BoxDecoration(
-              color: AppColors.gold,
-              borderRadius: BorderRadius.circular(9),
-            ),
-            alignment: Alignment.center,
-            child: const Icon(
-              Icons.home_repair_service_rounded,
-              size: 26,
-              color: AppColors.primary,
-            ),
-          ),
-        ),
+        BrandingLogo(height: 40, fit: BoxFit.contain),
         const SizedBox(height: 12),
         Text(
           'DODO Booker',

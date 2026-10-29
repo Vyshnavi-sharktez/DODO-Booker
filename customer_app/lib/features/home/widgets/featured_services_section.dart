@@ -16,8 +16,8 @@ const double _kRadius = 20.0;
 const double _kInfoH  = 120.0;
 
 ({double w, double h}) _cardSize(double viewportW) {
-  if (viewportW < 600) return (w: 220.0, h: 300.0);
-  return (w: 260.0, h: 340.0);
+  if (viewportW < 600) return (w: 220.0, h: 220.0 * 0.75 + _kInfoH);
+  return (w: 260.0, h: 260.0 * 0.75 + _kInfoH);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
