@@ -30,3 +30,8 @@ final class AuthError extends AuthState {
   const AuthError({required this.message});
   final String message;
 }
+
+final class AuthAccountInactive extends AuthState {
+  const AuthAccountInactive({required this.vendorId});
+  final String vendorId;
+}

@@ -149,10 +149,19 @@ class _VendorsPageState extends ConsumerState<VendorsPage> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Delete failed: $e'),
-            backgroundColor: AppColors.error,
+        showDialog<void>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12)),
+            title: const Text('Delete Failed'),
+            content: Text(e.toString()),
+            actions: [
+              FilledButton(
+                onPressed: () => Navigator.of(ctx).pop(),
+                child: const Text('OK'),
+              ),
+            ],
           ),
         );
       }

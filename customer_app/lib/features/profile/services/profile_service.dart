@@ -15,7 +15,9 @@ class ProfileService {
 
   Future<String?> _currentPhone() async {
     final prefs = await SharedPreferences.getInstance();
-    return prefs.getString(_phoneKey);
+    final stored = prefs.getString(_phoneKey);
+    if (stored != null) return stored;
+    return _db.auth.currentUser?.phone;
   }
 
   // ── Fetch profile ──────────────────────────────────────────────────────────
@@ -71,12 +73,8 @@ class ProfileService {
 // ── Dev fallback profile ──────────────────────────────────────────────────────
 
 const _devProfile = ProfileModel(
-  id: 'dev-user-1',
-  fullName: 'Amara Patel',
-  mobileNumber: '+91 98765 43210',
-  email: 'amara.patel@example.com',
-  totalBookings: 12,
-  completedBookings: 9,
-  savedAmount: 1840,
-  favouriteCount: 4,
+  id: '',
+  fullName: '',
+  mobileNumber: '',
+  email: '',
 );

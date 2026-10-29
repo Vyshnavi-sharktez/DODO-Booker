@@ -683,19 +683,20 @@ class _SupportChatScreenState extends ConsumerState<SupportChatScreen> {
         ),
         if (_adminIsTyping && (!conv.isClosed || _activatingNewChat))
           const _TypingIndicator('Admin is typing'),
-        _ReplyInput(
-          ctrl: _msgCtrl,
-          sending: _sending,
-          pendingImageBytes: _pendingImageBytes,
-          disabled: !_inputEnabled,
-          onSend: _send,
-          onPickImage: _pickImage,
-          onClearImage: () => setState(() {
-            _pendingImageBytes = null;
-            _pendingImageMime = null;
-            _pendingImageFilename = null;
-          }),
-        ),
+        if (!conv.isClosed || _activatingNewChat)
+          _ReplyInput(
+            ctrl: _msgCtrl,
+            sending: _sending,
+            pendingImageBytes: _pendingImageBytes,
+            disabled: !_inputEnabled,
+            onSend: _send,
+            onPickImage: _pickImage,
+            onClearImage: () => setState(() {
+              _pendingImageBytes = null;
+              _pendingImageMime = null;
+              _pendingImageFilename = null;
+            }),
+          ),
       ],
     );
   }

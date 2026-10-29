@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -59,13 +61,56 @@ class AdminRealtimeSync {
 
   bool _wasDisconnected = false;
 
+  // Auth state listener — re-subscribes the channel after the admin signs in
+  // so the channel JWT matches the authenticated session. Without this, a
+  // channel created before login uses the anon context and Supabase Realtime
+  // may not deliver postgres_changes events for RLS-enabled tables.
+  StreamSubscription<AuthState>? _authSub;
+
+  // Polling fallback — refreshes bookings every 30 s if realtime is silent.
+  Timer? _pollTimer;
+
   AdminRealtimeSync(this._ref, this._client) {
     _subscribe();
+    _watchAuth();
+    _startPolling();
     // Dispatch escalation processing is kept as a timer because it triggers
     // a server-side RPC (processPendingDispatchEscalations). The UI update
     // on escalation is already covered by the bookings realtime subscription
     // above — when an escalation level changes the bookings UPDATE event fires.
     _ref.watch(dispatchEscalationTimerProvider);
+  }
+
+  // Re-subscribes the Realtime channel whenever the admin signs in or the
+  // access token is refreshed. The previous channel is torn down first so
+  // the new subscription carries the latest JWT.
+  void _watchAuth() {
+    _authSub = _client.auth.onAuthStateChange.listen((data) {
+      if (data.event == AuthChangeEvent.signedIn ||
+          data.event == AuthChangeEvent.tokenRefreshed) {
+        debugPrint('[DODO][AdminSync] ${data.event} — resubscribing channel');
+        _resubscribe();
+      }
+    });
+  }
+
+  void _resubscribe() {
+    if (_channel != null) {
+      _client.removeChannel(_channel!);
+      _channel = null;
+    }
+    _subscribe();
+    refetchAll();
+  }
+
+  // Fallback polling: re-fetches key data every 15 s in case realtime
+  // events are missed (e.g. network interruption, channel auth lag).
+  // Notifications have no realtime fallback, so they are always polled.
+  void _startPolling() {
+    _pollTimer = Timer.periodic(const Duration(seconds: 15), (_) {
+      _refreshBookings();
+      _refreshNotifications();
+    });
   }
 
   void _subscribe() {
@@ -454,6 +499,8 @@ class AdminRealtimeSync {
   }
 
   void dispose() {
+    _authSub?.cancel();
+    _pollTimer?.cancel();
     if (_channel != null) _client.removeChannel(_channel!);
   }
 }
