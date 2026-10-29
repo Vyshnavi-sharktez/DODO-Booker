@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../shared/repositories/base_repository.dart';
 import '../domain/models/subscription_plan.dart';
@@ -214,6 +215,7 @@ class SubscriptionRepository extends BaseRepository {
           'vendor_id': vendorId,
           'status': 'pending_payment',
           'subscription_permissions': plan.permissions,
+          'plan_duration_days': plan.durationDays,
           ...extraFields,
         })
         .select()
@@ -299,6 +301,66 @@ class SubscriptionRepository extends BaseRepository {
         .select()
         .single();
     return data['id'] as String;
+  }
+
+  /// Step 1 of real Razorpay checkout: creates a Razorpay order server-side
+  /// and returns { key_id, order_id, amount_paise, currency }.
+  ///
+  /// The amount is read from the DB row — the client cannot inflate it.
+  Future<Map<String, dynamic>> createSubscriptionOrder({
+    required String subscriptionId,
+    required String paymentId,
+    required String vendorId,
+  }) async {
+    try {
+      final response = await supabase.functions.invoke(
+        'create-subscription-order',
+        body: {
+          'subscription_id': subscriptionId,
+          'payment_id': paymentId,
+          'vendor_id': vendorId,
+        },
+      );
+      return Map<String, dynamic>.from(response.data as Map);
+    } on FunctionException catch (e) {
+      String message = 'Failed to create payment order.';
+      final details = e.details;
+      if (details is Map) message = details['error'] as String? ?? message;
+      throw Exception(message);
+    }
+  }
+
+  /// Step 3 of real Razorpay checkout: sends the Razorpay payment IDs to the
+  /// server, which verifies the HMAC-SHA256 signature and atomically marks the
+  /// payment paid and the subscription active.
+  ///
+  /// Throws [Exception] with a user-readable message on failure.
+  Future<void> verifySubscriptionPayment({
+    required String subscriptionId,
+    required String paymentId,
+    required String vendorId,
+    required String razorpayPaymentId,
+    required String razorpayOrderId,
+    required String razorpaySignature,
+  }) async {
+    try {
+      await supabase.functions.invoke(
+        'verify-subscription-payment',
+        body: {
+          'subscription_id': subscriptionId,
+          'payment_id': paymentId,
+          'vendor_id': vendorId,
+          'razorpay_payment_id': razorpayPaymentId,
+          'razorpay_order_id': razorpayOrderId,
+          'razorpay_signature': razorpaySignature,
+        },
+      );
+    } on FunctionException catch (e) {
+      String message = 'Payment verification failed.';
+      final details = e.details;
+      if (details is Map) message = details['error'] as String? ?? message;
+      throw Exception(message);
+    }
   }
 }
 

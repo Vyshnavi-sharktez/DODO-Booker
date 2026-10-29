@@ -47,6 +47,7 @@ const _kNotifications = _NavItem(
   requiredPermission: 'settings.manage',
 );
 
+
 // ── Grouped navigation structure ─────────────────────────────────────────────
 
 const _kNavGroups = <_NavGroup>[
@@ -329,6 +330,18 @@ const _kNavGroups = <_NavGroup>[
         icon: Icons.palette_rounded,
         route: '/dashboard/app-branding',
         requiredPermission: 'settings.manage',
+      ),
+      _NavItem(
+        label: 'Call Provider',
+        icon: Icons.phone_in_talk_rounded,
+        route: '/dashboard/call-config',
+        requiredPermission: 'call.config',
+      ),
+      _NavItem(
+        label: 'SMS Campaigns',
+        icon: Icons.sms_rounded,
+        route: '/dashboard/campaigns',
+        requiredPermission: 'campaign.read',
       ),
       _NavItem(
         label: 'Settings',

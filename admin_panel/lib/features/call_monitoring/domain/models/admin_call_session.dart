@@ -7,11 +7,14 @@ class AdminCallSession {
   final String calleeId;
   final String? calleeName;
   final String callerRole; // 'customer' or 'vendor'
-  final String virtualNumber; // e.g. '+91-80000-DODO1'
+  final String virtualNumber; // Exotel ExoPhone
   final String status; // 'initiated', 'ringing', 'connected', 'ended', 'missed', 'failed'
   final DateTime initiatedAt;
   final DateTime? endedAt;
   final int storedDurationSeconds;
+  final String? exotelCallSid;
+  final String? recordingUrl;
+  final String recordingStatus; // 'none', 'pending', 'available', 'failed'
   final DateTime createdAt;
   final DateTime updatedAt;
 
@@ -29,6 +32,9 @@ class AdminCallSession {
     required this.initiatedAt,
     this.endedAt,
     this.storedDurationSeconds = 0,
+    this.exotelCallSid,
+    this.recordingUrl,
+    this.recordingStatus = 'none',
     required this.createdAt,
     required this.updatedAt,
   });
@@ -71,6 +77,15 @@ class AdminCallSession {
     final bookingObj = map['bookings'] as Map<String, dynamic>?;
     final bookingNum = bookingObj?['booking_number'] as String?;
 
+    // Recording URLs are stored in call_session_recordings (admin-only table)
+    // and joined here.  Participants never see the URL via call_sessions directly.
+    final recordingRows =
+        map['call_session_recordings'] as List<dynamic>? ?? [];
+    final recordingRow = recordingRows.isNotEmpty
+        ? recordingRows.first as Map<String, dynamic>
+        : null;
+    final recUrl = recordingRow?['recording_url'] as String?;
+
     return AdminCallSession(
       id: map['id'] as String,
       bookingId: map['booking_id'] as String,
@@ -78,7 +93,7 @@ class AdminCallSession {
       callerId: map['caller_id'] as String,
       calleeId: map['callee_id'] as String,
       callerRole: map['caller_role'] as String? ?? 'customer',
-      virtualNumber: map['virtual_number'] as String? ?? '+91-80000-DODO1',
+      virtualNumber: map['virtual_number'] as String? ?? '',
       status: map['status'] as String? ?? 'initiated',
       initiatedAt: map['initiated_at'] != null
           ? DateTime.tryParse(map['initiated_at'] as String) ?? DateTime.now()
@@ -87,6 +102,9 @@ class AdminCallSession {
           ? DateTime.tryParse(map['ended_at'] as String)
           : null,
       storedDurationSeconds: (map['duration_seconds'] as num?)?.toInt() ?? 0,
+      exotelCallSid: map['exotel_call_sid'] as String?,
+      recordingUrl: recUrl,
+      recordingStatus: map['recording_status'] as String? ?? 'none',
       createdAt: map['created_at'] != null
           ? DateTime.tryParse(map['created_at'] as String) ?? DateTime.now()
           : DateTime.now(),

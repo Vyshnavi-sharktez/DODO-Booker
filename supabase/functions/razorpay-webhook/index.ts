@@ -419,83 +419,165 @@ export default {
       .eq("gateway_order_id", razorpayOrderId)
       .single();
 
-    if (lookupError || !paymentRow) {
-      // Unknown order: test delivery, different system, or late delivery for a
-      // manually-cancelled order. Always acknowledge to stop Razorpay retries.
-      return Response.json({ received: true, handled: false });
-    }
+    if (!lookupError && paymentRow) {
+      // ── Booking payment path (existing logic, unchanged) ──────────────────
 
-    if (paymentRow.gateway !== "razorpay") {
-      return Response.json({ received: true, handled: false });
-    }
+      if (paymentRow.gateway !== "razorpay") {
+        return Response.json({ received: true, handled: false });
+      }
 
-    // ── Idempotency ─────────────────────────────────────────────────────────
-    // A success terminal state is never reversed, even by a late failure event.
-    // This also handles the race where verify-razorpay-payment wins first.
-    if (paymentRow.status === "success") {
-      return Response.json({ received: true, idempotent: true });
-    }
-    if (event === "payment.failed" && paymentRow.status === "failed") {
-      return Response.json({ received: true, idempotent: true });
-    }
+      if (paymentRow.status === "success") {
+        return Response.json({ received: true, idempotent: true });
+      }
+      if (event === "payment.failed" && paymentRow.status === "failed") {
+        return Response.json({ received: true, idempotent: true });
+      }
 
-    // ── payment.captured → success ──────────────────────────────────────────
-    if (event === "payment.captured") {
-      const { error: paymentUpdateError } = await supabase
+      if (event === "payment.captured") {
+        const { error: paymentUpdateError } = await supabase
+          .from("booking_payments")
+          .update({
+            status: "success",
+            gateway_payment_id: razorpayPaymentId,
+            verified_at: new Date().toISOString(),
+            gateway_response: paymentEntity as unknown as Record<string, unknown>,
+          })
+          .eq("id", paymentRow.id);
+
+        if (paymentUpdateError) {
+          return Response.json(
+            { error: "Failed to update payment record." },
+            { status: 500 },
+          );
+        }
+
+        const { error: bookingUpdateError } = await supabase
+          .from("bookings")
+          .update({ payment_status: "success" })
+          .eq("id", paymentRow.booking_id);
+
+        if (bookingUpdateError) {
+          return Response.json(
+            { error: "Payment recorded but failed to update booking status." },
+            { status: 500 },
+          );
+        }
+
+        return Response.json({ received: true, success: true });
+      }
+
+      // payment.failed
+      const bookingFailureReason =
+        paymentEntity.error_description ??
+        paymentEntity.error_code ??
+        "Payment failed";
+
+      const { error: failedUpdateError } = await supabase
         .from("booking_payments")
         .update({
-          status: "success",
+          status: "failed",
+          failure_reason: bookingFailureReason,
           gateway_payment_id: razorpayPaymentId,
-          verified_at: new Date().toISOString(),
           gateway_response: paymentEntity as unknown as Record<string, unknown>,
         })
         .eq("id", paymentRow.id);
 
-      if (paymentUpdateError) {
-        // Non-200 causes Razorpay to retry; idempotency handles re-delivery cleanly.
+      if (failedUpdateError) {
         return Response.json(
           { error: "Failed to update payment record." },
           { status: 500 },
         );
       }
 
-      const { error: bookingUpdateError } = await supabase
-        .from("bookings")
-        .update({ payment_status: "success" })
-        .eq("id", paymentRow.booking_id);
+      return Response.json({ received: true, failed: true });
+    }
 
-      if (bookingUpdateError) {
-        // booking_payments is already success; the next retry hits idempotency
-        // and returns 200 without repeating the bookings update.
+    // ── booking_payments not found — try vendor_wallet_topup_attempts ───────
+    // Orders created by create-vendor-wallet-topup-order have receipt prefix
+    // 'vwt_' but are identified here by gateway_order_id, not by receipt.
+    const { data: topupAttempt, error: topupLookupError } = await supabase
+      .from("vendor_wallet_topup_attempts")
+      .select("id, vendor_id, gateway, status")
+      .eq("gateway_order_id", razorpayOrderId)
+      .single<{ id: string; vendor_id: string; gateway: string; status: string }>();
+
+    if (topupLookupError || !topupAttempt) {
+      // Unknown order: test delivery, different system, or manually-cancelled.
+      return Response.json({ received: true, handled: false });
+    }
+
+    if (topupAttempt.gateway !== "razorpay") {
+      return Response.json({ received: true, handled: false });
+    }
+
+    // ── Idempotency for wallet top-up ────────────────────────────────────────
+    if (topupAttempt.status === "success") {
+      return Response.json({ received: true, idempotent: true });
+    }
+    if (event === "payment.failed" && topupAttempt.status === "failed") {
+      return Response.json({ received: true, idempotent: true });
+    }
+    // A failure event for an already-successful top-up must never revert it.
+    if (event === "payment.failed" && topupAttempt.status === "success") {
+      console.warn(
+        `[razorpay-webhook] payment.failed for already-completed wallet ` +
+          `top-up attempt ${topupAttempt.id}. Ignoring.`,
+      );
+      return Response.json(
+        { received: true, handled: false, reason: "already_complete" },
+      );
+    }
+
+    // ── payment.captured → credit wallet via RPC ────────────────────────────
+    if (event === "payment.captured") {
+      const { data: rpcResult, error: rpcError } = await supabase.rpc(
+        "complete_vendor_wallet_topup",
+        {
+          p_topup_attempt_id:   topupAttempt.id,
+          p_vendor_id:          topupAttempt.vendor_id,
+          p_gateway_payment_id: razorpayPaymentId,
+          p_gateway_signature:  "",
+          p_gateway_response:   paymentEntity as unknown as Record<string, unknown>,
+        },
+      );
+
+      if (rpcError) {
+        console.error(
+          `[razorpay-webhook] complete_vendor_wallet_topup failed for ` +
+            `attempt ${topupAttempt.id}: ${rpcError.message}`,
+        );
         return Response.json(
-          { error: "Payment recorded but failed to update booking status." },
+          { error: "Failed to credit vendor wallet." },
           { status: 500 },
         );
       }
 
-      return Response.json({ received: true, success: true });
+      const idempotent = rpcResult === "already_complete";
+      return Response.json({ received: true, success: true, idempotent });
     }
 
-    // ── payment.failed → failed ─────────────────────────────────────────────
-    // Do NOT touch bookings — the customer can retry payment without re-booking.
-    const failureReason =
+    // ── payment.failed → mark attempt failed ────────────────────────────────
+    const walletFailureReason =
       paymentEntity.error_description ??
       paymentEntity.error_code ??
       "Payment failed";
 
-    const { error: failedUpdateError } = await supabase
-      .from("booking_payments")
-      .update({
-        status: "failed",
-        failure_reason: failureReason,
-        gateway_payment_id: razorpayPaymentId,
-        gateway_response: paymentEntity as unknown as Record<string, unknown>,
-      })
-      .eq("id", paymentRow.id);
+    const { error: failRpcError } = await supabase.rpc(
+      "fail_vendor_wallet_topup",
+      {
+        p_topup_attempt_id: topupAttempt.id,
+        p_failure_reason:   walletFailureReason,
+        p_gateway_response: paymentEntity as unknown as Record<string, unknown>,
+      },
+    );
 
-    if (failedUpdateError) {
+    if (failRpcError) {
+      console.error(
+        `[razorpay-webhook] fail_vendor_wallet_topup failed for ` +
+          `attempt ${topupAttempt.id}: ${failRpcError.message}`,
+      );
       return Response.json(
-        { error: "Failed to update payment record." },
+        { error: "Failed to update top-up record." },
         { status: 500 },
       );
     }

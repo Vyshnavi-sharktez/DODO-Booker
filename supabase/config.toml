@@ -62,3 +62,21 @@ enabled = true
 verify_jwt = false
 import_map = "./functions/sms-test-message/deno.json"
 entrypoint = "./functions/sms-test-message/index.ts"
+
+[functions.send-sms-campaign]
+enabled = true
+verify_jwt = false
+import_map = "./functions/send-sms-campaign/deno.json"
+entrypoint = "./functions/send-sms-campaign/index.ts"
+
+[functions.initiate-exotel-call]
+enabled = true
+verify_jwt = false
+import_map = "./functions/initiate-exotel-call/deno.json"
+entrypoint = "./functions/initiate-exotel-call/index.ts"
+
+[functions.exotel-webhook]
+enabled = true
+verify_jwt = false
+import_map = "./functions/exotel-webhook/deno.json"
+entrypoint = "./functions/exotel-webhook/index.ts"

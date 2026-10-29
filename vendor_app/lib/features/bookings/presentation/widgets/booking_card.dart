@@ -28,6 +28,7 @@ class BookingCard extends ConsumerStatefulWidget {
 class _BookingCardState extends ConsumerState<BookingCard> {
   bool _updating = false;
   bool _rejecting = false;
+  bool _calling = false;
 
   // Mirrors the booking's new status immediately after any successful API call,
   // so the correct next-step UI appears without waiting for the provider refetch.
@@ -779,7 +780,7 @@ class _BookingCardState extends ConsumerState<BookingCard> {
                 maxLines: 2,
               ),
 
-            if (['assigned', 'accepted', 'en_route', 'in_progress'].contains(_booking.status.toLowerCase())) ...[
+            if (['accepted', 'en_route', 'in_progress'].contains(_booking.status.toLowerCase())) ...[
               const SizedBox(height: 8),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -816,23 +817,20 @@ class _BookingCardState extends ConsumerState<BookingCard> {
                       ),
                     ),
                     ElevatedButton.icon(
-                      onPressed: () {
-                        final currentVendorId = Supabase.instance.client.auth.currentUser?.id ??
-                            ref.read(currentVendorUserProvider)?.id ??
-                            'vendor_1';
-                        final calleeCustomerId = _booking.customerId.isNotEmpty
-                            ? _booking.customerId
-                            : 'customer_1';
-                        CallBridgeDialog.show(
-                          context,
-                          bookingId: _booking.id,
-                          bookingNumber: _booking.bookingNumber,
-                          callerId: currentVendorId,
-                          calleeId: calleeCustomerId,
-                          callerRole: 'vendor',
-                          recipientName: _booking.customerName ?? 'Customer',
-                          bookingStatus: _booking.status,
-                        );
+                      onPressed: _calling ? null : () async {
+                        setState(() => _calling = true);
+                        try {
+                          await CallBridgeDialog.show(
+                            context,
+                            bookingId: _booking.id,
+                            bookingNumber: _booking.bookingNumber,
+                            callerRole: 'vendor',
+                            recipientName: _booking.customerName ?? 'Customer',
+                            bookingStatus: _booking.status,
+                          );
+                        } finally {
+                          if (mounted) setState(() => _calling = false);
+                        }
                       },
                       style: ElevatedButton.styleFrom(
                         backgroundColor: AppColors.primary,

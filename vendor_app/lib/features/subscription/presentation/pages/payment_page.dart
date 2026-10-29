@@ -1,9 +1,15 @@
+import 'dart:async';
+
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:razorpay_flutter/razorpay_flutter.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../../../core/services/razorpay_checkout.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/routes/route_names.dart';
-
+import '../../../auth/presentation/providers/auth_controller.dart';
 import '../../data/subscription_repository.dart';
 import '../providers/subscription_provider.dart';
 
@@ -22,65 +28,177 @@ class PaymentPage extends ConsumerStatefulWidget {
 class _PaymentPageState extends ConsumerState<PaymentPage> {
   _PaymentStatus _status = _PaymentStatus.idle;
   String? _errorMessage;
+  // Stored so we can validate stale Razorpay callbacks against the current order.
+  String? _pendingOrderId;
 
   PendingPaymentInfo get info => widget.info;
 
-  // ── Simulate payment success (placeholder) ─────────────────────────────────
-  //
-  // When integrating Razorpay:
-  //   1. Replace this method body with `gateway.initiatePayment(request)`.
-  //   2. On PaymentResult.success = true → call _onPaymentSuccess(reference).
-  //   3. On PaymentResult.success = false → call _onPaymentFailed(errorMsg).
-  //   4. Remove the simulate buttons from the build method.
+  // ── Razorpay flow ──────────────────────────────────────────────────────────
 
-  Future<void> _onPaymentSuccess([String? gatewayRef]) async {
-    setState(() => _status = _PaymentStatus.processing);
+  Future<void> _startRazorpay() async {
+    setState(() {
+      _status = _PaymentStatus.processing;
+      _errorMessage = null;
+    });
+
+    final vendor = ref.read(currentVendorUserProvider);
+    if (vendor == null) {
+      setState(() {
+        _status = _PaymentStatus.failed;
+        _errorMessage = 'Vendor session not found. Please log in again.';
+      });
+      return;
+    }
+
+    // ── Step 1: Create Razorpay order via Edge Function ────────────────────
+    Map<String, dynamic> orderData;
     try {
-      await ref.read(subscriptionRepositoryProvider).activateSubscription(
+      orderData = await ref.read(subscriptionRepositoryProvider).createSubscriptionOrder(
             subscriptionId: info.subscriptionId,
             paymentId: info.paymentId,
-            planDurationDays: info.planDurationDays,
-            gatewayReference: gatewayRef,
+            vendorId: vendor.id,
+          );
+    } catch (e) {
+      if (!mounted) return;
+      final message = e.toString().replaceFirst('Exception: ', '');
+      await _recordFailure(message);
+      setState(() {
+        _status = _PaymentStatus.failed;
+        _errorMessage = message;
+      });
+      return;
+    }
+
+    final keyId = orderData['key_id'] as String;
+    final orderId = orderData['order_id'] as String;
+    final amountPaise = (orderData['amount_paise'] as num).toInt();
+    _pendingOrderId = orderId;
+
+    // ── Step 2: Open Razorpay checkout ────────────────────────────────────
+    _RazorpayResult result;
+
+    if (kIsWeb) {
+      final webResult = await openRazorpayCheckout(
+        keyId: keyId,
+        orderId: orderId,
+        amountPaise: amountPaise,
+        name: 'DODO Services',
+        description: info.planName,
+      );
+      result = webResult.succeeded
+          ? _RazorpayResult.success(
+              paymentId: webResult.paymentId!,
+              orderId: webResult.orderId!,
+              signature: webResult.signature!,
+            )
+          : _RazorpayResult.failure(
+              webResult.errorMessage ?? 'Payment was not completed.',
+            );
+    } else {
+      final completer = Completer<_RazorpayResult>();
+      final razorpay = Razorpay();
+
+      razorpay.on(Razorpay.EVENT_PAYMENT_SUCCESS, (PaymentSuccessResponse r) {
+        razorpay.clear();
+        if (!completer.isCompleted) {
+          if (r.orderId != orderId) {
+            completer.complete(_RazorpayResult.failure('Order ID mismatch — stale callback.'));
+            return;
+          }
+          completer.complete(_RazorpayResult.success(
+            paymentId: r.paymentId ?? '',
+            orderId: r.orderId ?? orderId,
+            signature: r.signature ?? '',
+          ));
+        }
+      });
+
+      razorpay.on(Razorpay.EVENT_PAYMENT_ERROR, (PaymentFailureResponse r) {
+        razorpay.clear();
+        if (!completer.isCompleted) {
+          completer.complete(_RazorpayResult.failure(
+            r.message ?? 'Payment failed or was cancelled.',
+          ));
+        }
+      });
+
+      razorpay.on(Razorpay.EVENT_EXTERNAL_WALLET, (ExternalWalletResponse r) {
+        razorpay.clear();
+        if (!completer.isCompleted) {
+          completer.complete(_RazorpayResult.failure('External wallet is not supported.'));
+        }
+      });
+
+      razorpay.open({
+        'key': keyId,
+        'amount': amountPaise,
+        'order_id': orderId,
+        'currency': 'INR',
+        'name': 'DODO Services',
+        'description': info.planName,
+        'prefill': {'contact': '', 'email': ''},
+        'external': {'wallets': <String>[]},
+      });
+
+      result = await completer.future;
+    }
+
+    if (!result.succeeded) {
+      if (!mounted) return;
+      await _recordFailure(result.errorMessage ?? 'Payment was not completed.');
+      setState(() {
+        _status = _PaymentStatus.failed;
+        _errorMessage = result.errorMessage ?? 'Payment was not completed.';
+      });
+      return;
+    }
+
+    // ── Step 3: Verify signature server-side — activates subscription ──────
+    if (!mounted) return;
+    setState(() => _status = _PaymentStatus.processing);
+
+    try {
+      await ref.read(subscriptionRepositoryProvider).verifySubscriptionPayment(
+            subscriptionId: info.subscriptionId,
+            paymentId: info.paymentId,
+            vendorId: vendor.id,
+            razorpayPaymentId: result.paymentId!,
+            razorpayOrderId: result.orderId!,
+            razorpaySignature: result.signature!,
           );
       ref.invalidate(mySubscriptionProvider);
       if (mounted) setState(() => _status = _PaymentStatus.success);
+    } on FunctionException catch (e) {
+      String message = 'Payment received but verification failed.';
+      final details = e.details;
+      if (details is Map) message = details['error'] as String? ?? message;
+      if (!mounted) return;
+      setState(() {
+        _status = _PaymentStatus.failed;
+        _errorMessage = '$message Contact support if the amount was deducted.';
+      });
     } catch (e) {
-      if (mounted) {
-        setState(() {
-          _status = _PaymentStatus.failed;
-          _errorMessage = e.toString().replaceFirst('Exception: ', '');
-        });
-      }
+      if (!mounted) return;
+      final message = e.toString().replaceFirst('Exception: ', '');
+      setState(() {
+        _status = _PaymentStatus.failed;
+        _errorMessage = '$message Contact support if the amount was deducted.';
+      });
     }
   }
 
-  Future<void> _onPaymentFailed([String? reason]) async {
-    setState(() => _status = _PaymentStatus.processing);
+  Future<void> _recordFailure(String reason) async {
     try {
       await ref.read(subscriptionRepositoryProvider).recordPaymentFailure(
             paymentId: info.paymentId,
             notes: reason,
           );
     } catch (_) {
-      // Best-effort; failure to record is logged but does not block UI.
-    }
-    if (mounted) {
-      setState(() {
-        _status = _PaymentStatus.failed;
-        _errorMessage = reason ?? 'Payment was not completed.';
-      });
+      // Best-effort; UI shows the failure regardless.
     }
   }
 
-  void _retry() {
-    // Navigate back to browse plans to select a plan again.
-    // The pending_payment subscription + failed payment stay in DB;
-    // the unique index prevents creating a second pending subscription.
-    // A full retry flow would create a new payment record for the same
-    // subscription — handled by SubscriptionRepository.createRetryPayment().
-    context.go(RoutePaths.browsePlans);
-  }
-
+  void _retry() => context.go(RoutePaths.browsePlans);
   void _done() => context.go(RoutePaths.subscription);
 
   // ── Build ──────────────────────────────────────────────────────────────────
@@ -88,37 +206,31 @@ class _PaymentPageState extends ConsumerState<PaymentPage> {
   @override
   Widget build(BuildContext context) {
     return switch (_status) {
-        _PaymentStatus.idle => _IdleView(
-            info: info,
-            onSimulateSuccess: () => _onPaymentSuccess('SIMULATE_OK'),
-            onSimulateFail: () => _onPaymentFailed('Simulated payment failure'),
-          ),
-        _PaymentStatus.processing => const _ProcessingView(),
-        _PaymentStatus.success => _SuccessView(
-            info: info,
-            onDone: _done,
-          ),
-        _PaymentStatus.failed => _FailedView(
-            info: info,
-            message: _errorMessage,
-            onRetry: _retry,
-            onCancel: _done,
-          ),
-      };
+      _PaymentStatus.idle => _PayNowView(
+          info: info,
+          onPayNow: _startRazorpay,
+        ),
+      _PaymentStatus.processing => const _ProcessingView(),
+      _PaymentStatus.success => _SuccessView(
+          info: info,
+          onDone: _done,
+        ),
+      _PaymentStatus.failed => _FailedView(
+          info: info,
+          message: _errorMessage,
+          onRetry: _retry,
+          onCancel: _done,
+        ),
+    };
   }
 }
 
-// ── Idle: shows payment details + simulate buttons ─────────────────────────────
+// ── Idle: shows amount + Pay Now button ───────────────────────────────────────
 
-class _IdleView extends StatelessWidget {
-  const _IdleView({
-    required this.info,
-    required this.onSimulateSuccess,
-    required this.onSimulateFail,
-  });
+class _PayNowView extends StatelessWidget {
+  const _PayNowView({required this.info, required this.onPayNow});
   final PendingPaymentInfo info;
-  final VoidCallback onSimulateSuccess;
-  final VoidCallback onSimulateFail;
+  final VoidCallback onPayNow;
 
   @override
   Widget build(BuildContext context) {
@@ -135,7 +247,7 @@ class _IdleView extends StatelessWidget {
               gradient: LinearGradient(
                 colors: [
                   AppColors.primary,
-                  AppColors.primary.withValues(alpha: 0.82)
+                  AppColors.primary.withValues(alpha: 0.82),
                 ],
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
@@ -164,67 +276,41 @@ class _IdleView extends StatelessWidget {
               ],
             ),
           ),
-          const SizedBox(height: 24),
-
-          // Placeholder notice
-          Container(
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              color: AppColors.warning.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(
-                  color: AppColors.warning.withValues(alpha: 0.3)),
-            ),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Icon(Icons.info_outline_rounded,
-                    size: 18, color: AppColors.warning),
-                const SizedBox(width: 10),
-                const Expanded(
-                  child: Text(
-                    'Payment gateway integration is in progress. '
-                    'Use the simulate buttons below to test the flow.',
-                    style: TextStyle(fontSize: 12, height: 1.4),
-                  ),
-                ),
-              ],
-            ),
-          ),
           const SizedBox(height: 28),
 
+          // Pay Now button
           SizedBox(
             width: double.infinity,
             child: FilledButton.icon(
-              onPressed: onSimulateSuccess,
+              onPressed: onPayNow,
               style: FilledButton.styleFrom(
-                backgroundColor: AppColors.success,
+                backgroundColor: AppColors.primary,
                 padding: const EdgeInsets.symmetric(vertical: 16),
                 shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(14)),
               ),
-              icon: const Icon(Icons.check_circle_rounded, size: 20),
-              label: const Text('Simulate Payment Success',
-                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+              icon: const Icon(Icons.payment_rounded, size: 20),
+              label: const Text(
+                'Pay Now',
+                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+              ),
             ),
           ),
           const SizedBox(height: 12),
-          SizedBox(
-            width: double.infinity,
-            child: OutlinedButton.icon(
-              onPressed: onSimulateFail,
-              style: OutlinedButton.styleFrom(
-                foregroundColor: AppColors.error,
-                side: BorderSide(
-                    color: AppColors.error.withValues(alpha: 0.5)),
-                padding: const EdgeInsets.symmetric(vertical: 14),
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14)),
+
+          // Secure payment note
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.lock_outline_rounded,
+                  size: 14, color: AppColors.textSecondary),
+              const SizedBox(width: 6),
+              const Text(
+                'Secured by Razorpay',
+                style: TextStyle(
+                    fontSize: 12, color: AppColors.textSecondary),
               ),
-              icon: const Icon(Icons.cancel_outlined, size: 18),
-              label: const Text('Simulate Payment Failure',
-                  style: TextStyle(fontSize: 14)),
-            ),
+            ],
           ),
         ],
       ),
@@ -272,7 +358,8 @@ class _SuccessView extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             Container(
-              width: 88, height: 88,
+              width: 88,
+              height: 88,
               decoration: BoxDecoration(
                 color: AppColors.success.withValues(alpha: 0.12),
                 shape: BoxShape.circle,
@@ -339,7 +426,8 @@ class _FailedView extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             Container(
-              width: 88, height: 88,
+              width: 88,
+              height: 88,
               decoration: BoxDecoration(
                 color: AppColors.error.withValues(alpha: 0.1),
                 shape: BoxShape.circle,
@@ -388,4 +476,37 @@ class _FailedView extends StatelessWidget {
       ),
     );
   }
+}
+
+// ── Internal result type ──────────────────────────────────────────────────────
+
+class _RazorpayResult {
+  final bool succeeded;
+  final String? paymentId;
+  final String? orderId;
+  final String? signature;
+  final String? errorMessage;
+
+  const _RazorpayResult._({
+    required this.succeeded,
+    this.paymentId,
+    this.orderId,
+    this.signature,
+    this.errorMessage,
+  });
+
+  factory _RazorpayResult.success({
+    required String paymentId,
+    required String orderId,
+    required String signature,
+  }) =>
+      _RazorpayResult._(
+        succeeded: true,
+        paymentId: paymentId,
+        orderId: orderId,
+        signature: signature,
+      );
+
+  factory _RazorpayResult.failure(String message) =>
+      _RazorpayResult._(succeeded: false, errorMessage: message);
 }

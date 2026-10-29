@@ -78,23 +78,41 @@ class ServiceService {
     final serviceIds = parentOfChild.keys.toList();
     if (serviceIds.isEmpty) return [];
 
-    // Step 3 — fetch catalog_node data for service IDs
+    // Step 3 — fetch catalog_node data for service IDs (no DB ordering — we
+    // sort client-side to respect both subcategory order and per-service sort_order)
     final nodeData = await _db
         .from('catalog_nodes_view')
         .select()
         .inFilter('id', serviceIds)
         .eq('is_bookable', true)
-        .eq('is_active', true)
-        .order('name', ascending: true);
+        .eq('is_active', true);
+
+    // subcatIndexMap gives the admin-configured position of each subcategory.
+    // Primary sort: subcategory position (preserves category-level order).
+    // Secondary sort: catalog_nodes.sort_order within each subcategory.
+    // Tertiary sort: name for deterministic ties.
+    final subcatIndexMap = {
+      for (int i = 0; i < subcatIds.length; i++) subcatIds[i]: i,
+    };
 
     final nodes = (nodeData as List)
         .map((e) {
           final r = Map<String, dynamic>.from(e as Map<String, dynamic>);
-          // Inject the sub_category_id from the relationship map
           r['sub_category_id_override'] = parentOfChild[r['id']];
           return r;
         })
-        .toList();
+        .toList()
+      ..sort((a, b) {
+        final aParent = parentOfChild[a['id'] as String] ?? '';
+        final bParent = parentOfChild[b['id'] as String] ?? '';
+        final cmp = (subcatIndexMap[aParent] ?? 999)
+            .compareTo(subcatIndexMap[bParent] ?? 999);
+        if (cmp != 0) return cmp;
+        final cmp2 = (a['sort_order'] as int? ?? 0)
+            .compareTo(b['sort_order'] as int? ?? 0);
+        if (cmp2 != 0) return cmp2;
+        return (a['name'] as String).compareTo(b['name'] as String);
+      });
 
     return _enrichAndBuild(nodes);
   }

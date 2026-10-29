@@ -14,7 +14,8 @@ class CallMonitoringRepository {
           .from('call_sessions')
           .select('''
             *,
-            bookings!booking_id(booking_number)
+            bookings!booking_id(booking_number),
+            call_session_recordings(recording_url)
           ''')
           .order('initiated_at', ascending: false);
 

@@ -11,8 +11,8 @@ import '../../../features/category/services/category_providers.dart';
 // ── Layout constants (standard card, same spec as sub_services) ───────────────
 
 const double _kCardW = 240.0;
-const double _kImgH = 170.0;
-const double _kLabelH = 56.0;
+const double _kImgH = 180.0;
+const double _kLabelH = 52.0;
 const double _kCardH = _kImgH + _kLabelH;
 const double _kGap = 16.0;
 const double _kRadius = 16.0;

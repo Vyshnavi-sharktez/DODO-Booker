@@ -1,3 +1,5 @@
+import 'package:supabase_flutter/supabase_flutter.dart';
+
 import '../../../shared/repositories/base_repository.dart';
 import '../domain/models/wallet.dart';
 import '../domain/models/transaction.dart';
@@ -114,21 +116,52 @@ class WalletRepository extends BaseRepository {
     }
   }
 
-  /// TEMPORARY IMPLEMENTATION: Simulates payment gateway success by calling the top-up RPC.
-  /// 
-  /// NOTE FOR REAL PAYMENT GATEWAY INTEGRATION:
-  /// When integrating Razorpay/Stripe, replace the RPC call below with the payment
-  /// gateway verification webhook/callback. The dialog UX and downstream providers
-  /// do not need to change.
-  Future<void> topUpWallet({
+  /// Creates a Razorpay order for a wallet top-up via the
+  /// `create-vendor-wallet-topup-order` Edge Function.
+  ///
+  /// Returns the fields needed to open the Razorpay checkout:
+  ///   attemptId, keyId, orderId, amountPaise, currency.
+  Future<Map<String, dynamic>> createTopUpOrder({
     required String vendorId,
-    required double amount,
-    String description = 'Wallet Top-Up (Simulated Payment)',
+    required double amountRupees,
   }) async {
-    await supabase.rpc('admin_top_up_vendor_wallet', params: {
-      'p_vendor_id': vendorId,
-      'p_amount': amount,
-      'p_description': description,
-    });
+    try {
+      final response = await supabase.functions.invoke(
+        'create-vendor-wallet-topup-order',
+        body: {'vendor_id': vendorId, 'amount': amountRupees},
+      );
+      return Map<String, dynamic>.from(response.data as Map);
+    } on FunctionException catch (e) {
+      String message = 'Could not create payment order.';
+      final details = e.details;
+      if (details is Map) message = details['error'] as String? ?? message;
+      throw Exception(message);
+    }
+  }
+
+  Future<void> verifyTopUp({
+    required String topupAttemptId,
+    required String vendorId,
+    required String razorpayPaymentId,
+    required String razorpayOrderId,
+    required String razorpaySignature,
+  }) async {
+    try {
+      await supabase.functions.invoke(
+        'verify-vendor-wallet-topup',
+        body: {
+          'topup_attempt_id': topupAttemptId,
+          'vendor_id': vendorId,
+          'razorpay_payment_id': razorpayPaymentId,
+          'razorpay_order_id': razorpayOrderId,
+          'razorpay_signature': razorpaySignature,
+        },
+      );
+    } on FunctionException catch (e) {
+      String message = 'Payment verification failed.';
+      final details = e.details;
+      if (details is Map) message = details['error'] as String? ?? message;
+      throw Exception(message);
+    }
   }
 }

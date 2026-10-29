@@ -35,11 +35,10 @@ const double _kInfoH  = 130.0;
 
 ({double w, double h}) _cardSize(double viewportW) {
   if (viewportW < 600) {
-    // ~1.2 cards visible on mobile — card = 70% viewport width
     final w = (viewportW * 0.70).clamp(180.0, 280.0);
-    return (w: w, h: 300.0);
+    return (w: w, h: w * 0.75 + _kInfoH);
   }
-  return (w: 260.0, h: 340.0); // desktop
+  return (w: 260.0, h: 260.0 * 0.75 + _kInfoH); // desktop
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

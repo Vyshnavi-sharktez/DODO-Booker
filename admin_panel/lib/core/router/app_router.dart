@@ -56,6 +56,8 @@ import '../../features/broadcast_notifications/presentation/pages/broadcast_noti
 import '../../features/bookings/presentation/pages/restore_bin_page.dart';
 import '../../features/service_addons/presentation/pages/addons_page.dart';
 import '../../features/app_branding/presentation/pages/app_branding_page.dart';
+import '../../features/campaigns/presentation/pages/campaigns_page.dart';
+import '../../features/call_config/presentation/pages/call_config_page.dart';
 import '../../shared/pages/unauthorized_page.dart';
 import '../rbac/permission_guard.dart';
 
@@ -527,6 +529,20 @@ final routerProvider = Provider<GoRouter>((ref) {
             name: 'appBranding',
             pageBuilder: (context, state) => const NoTransitionPage(
               child: AppBrandingPage(),
+            ),
+          ),
+          GoRoute(
+            path: '/dashboard/campaigns',
+            name: 'campaigns',
+            pageBuilder: (context, state) => const NoTransitionPage(
+              child: CampaignsPage(),
+            ),
+          ),
+          GoRoute(
+            path: '/dashboard/call-config',
+            name: 'callConfig',
+            pageBuilder: (context, state) => const NoTransitionPage(
+              child: CallConfigPage(),
             ),
           ),
         ],
