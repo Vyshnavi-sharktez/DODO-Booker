@@ -225,6 +225,7 @@ class _BookingsPageState extends ConsumerState<BookingsPage> {
   String? _statusFilter;
   String? _assignedToFilter; // null = All, _kUnassigned = Unassigned, vendorId = specific vendor
   DateTime? _dateFilter;
+  DateTime? _createdDateFilter;
   int _page = 1;
   static const int _pageSize = 10;
 
@@ -294,13 +295,23 @@ class _BookingsPageState extends ConsumerState<BookingsPage> {
             d.day == _dateFilter!.day;
       }).toList();
     }
+    if (_createdDateFilter != null) {
+      result = result.where((b) {
+        if (b.createdAt == null) return false;
+        final d = b.createdAt!.toLocal();
+        return d.year == _createdDateFilter!.year &&
+            d.month == _createdDateFilter!.month &&
+            d.day == _createdDateFilter!.day;
+      }).toList();
+    }
     return result;
   }
 
   bool get _hasFilters =>
       _statusFilter != null ||
       _assignedToFilter != null ||
-      _dateFilter != null;
+      _dateFilter != null ||
+      _createdDateFilter != null;
 
   List<_AmcContractAggregate> _applyAmcStatusFilter(
       List<_AmcContractAggregate> contracts) {
@@ -371,6 +382,16 @@ class _BookingsPageState extends ConsumerState<BookingsPage> {
       lastDate: DateTime(2030),
     );
     if (picked != null) setState(() { _dateFilter = picked; _page = 1; });
+  }
+
+  Future<void> _pickCreatedDateFilter() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _createdDateFilter ?? DateTime.now(),
+      firstDate: DateTime(2020),
+      lastDate: DateTime(2030),
+    );
+    if (picked != null) setState(() { _createdDateFilter = picked; _page = 1; });
   }
 
   // ── Actions ──────────────────────────────────────────────────────────────────
@@ -1238,6 +1259,57 @@ class _BookingsPageState extends ConsumerState<BookingsPage> {
                 ),
               ),
 
+              // Created Date
+              InkWell(
+                onTap: _pickCreatedDateFilter,
+                borderRadius: BorderRadius.circular(8),
+                child: Container(
+                  height: 46,
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12),
+                  decoration: BoxDecoration(
+                    border: Border.all(
+                      color: _createdDateFilter != null
+                          ? AppColors.primary.withValues(alpha: 0.5)
+                          : AppColors.border,
+                    ),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.event_note_rounded,
+                          size: 16,
+                          color: _createdDateFilter != null
+                              ? AppColors.primary
+                              : AppColors.textSecondary),
+                      const SizedBox(width: 8),
+                      Text(
+                        _createdDateFilter != null
+                            ? _dateFmt.format(_createdDateFilter!)
+                            : 'Created Date',
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: _createdDateFilter != null
+                              ? AppColors.textPrimary
+                              : AppColors.textSecondary,
+                        ),
+                      ),
+                      if (_createdDateFilter != null) ...[
+                        const SizedBox(width: 6),
+                        GestureDetector(
+                          onTap: () =>
+                              setState(() { _createdDateFilter = null; _page = 1; }),
+                          child: Icon(Icons.close_rounded,
+                              size: 14,
+                              color: AppColors.textSecondary),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+
               // Clear
               if (_hasFilters)
                 TextButton.icon(
@@ -1245,6 +1317,7 @@ class _BookingsPageState extends ConsumerState<BookingsPage> {
                     _statusFilter = null;
                     _assignedToFilter = null;
                     _dateFilter = null;
+                    _createdDateFilter = null;
                     _page = 1;
                   }),
                   icon: const Icon(Icons.filter_alt_off_rounded,
@@ -1310,12 +1383,59 @@ class _BookingsPageState extends ConsumerState<BookingsPage> {
                     );
                   }
                   if (filtered.isEmpty) {
+                    if (_dateFilter != null) {
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          _DailySummaryCard(date: _dateFilter!, bookings: const <Booking>[]),
+                          const SizedBox(height: 16),
+                          Expanded(
+                            child: _EmptyState(
+                              message: 'No bookings for ${DateFormat('dd MMMM yyyy').format(_dateFilter!)}',
+                              sub: 'No bookings are scheduled for this date.',
+                            ),
+                          ),
+                        ],
+                      );
+                    }
                     return _EmptyState(
                       message: 'No bookings match your filters',
                       sub: 'Try adjusting your search or filters.',
                     );
                   }
                   final paged = filtered.skip((_page - 1) * _pageSize).take(_pageSize).toList();
+                  if (_dateFilter != null) {
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        _DailySummaryCard(date: _dateFilter!, bookings: filtered),
+                        const SizedBox(height: 12),
+                        _DateSectionHeader(date: _dateFilter!, count: filtered.length),
+                        const SizedBox(height: 8),
+                        Expanded(
+                          child: _BookingsTable(
+                            bookings: paged,
+                            totalCount: filtered.length,
+                            vendors: vendors,
+                            onView: _openDetails,
+                            onEdit: _openEditDialog,
+                            onAssign: _openAssignDialog,
+                            onHistory: _openHistoryDialog,
+                            onStartDodoService: _startDodoService,
+                            onCancel: _confirmCancel,
+                            onDelete: _confirmDelete,
+                            searchQuery: _searchQuery,
+                          ),
+                        ),
+                        PaginationBar(
+                          totalItems: filtered.length,
+                          currentPage: _page,
+                          pageSize: _pageSize,
+                          onPageChanged: (p) => setState(() => _page = p),
+                        ),
+                      ],
+                    );
+                  }
                   return Column(
                     children: [
                       Expanded(
@@ -2820,6 +2940,221 @@ class _AmcContractRow extends StatelessWidget {
     );
   }
 }
+
+// ── Daily booking summary (shown above table when Service Date filter is set) ──
+
+class _DailySummaryCard extends StatelessWidget {
+  final DateTime date;
+  final List<Booking> bookings;
+
+  const _DailySummaryCard({required this.date, required this.bookings});
+
+  int _count(bool Function(Booking) test) => bookings.where(test).length;
+
+  static bool _isPending(Booking b) {
+    if (b.dispatchStatus == 'exhausted') return true;
+    if (b.dispatchStatus == 'dispatching') return true;
+    if (b.status == 'assigned' && b.dispatchStatus != 'accepted') return true;
+    return b.status == 'pending';
+  }
+
+  static bool _isAccepted(Booking b) {
+    if (b.status == 'assigned' && b.dispatchStatus == 'accepted') return true;
+    return b.status == 'accepted' || b.status == 'assigned_to_dodo_team';
+  }
+
+  static bool _isInProgress(Booking b) =>
+      b.status == 'in_progress' ||
+      b.status == 'on_the_way' ||
+      b.status == 'arrived';
+
+  static bool _isCompleted(Booking b) => b.status == 'completed';
+
+  static bool _isCancelled(Booking b) =>
+      b.status == 'cancelled' || b.status == 'rejected';
+
+  @override
+  Widget build(BuildContext context) {
+    final total = bookings.length;
+    final pending = _count(_isPending);
+    final accepted = _count(_isAccepted);
+    final inProgress = _count(_isInProgress);
+    final completed = _count(_isCompleted);
+    final cancelled = _count(_isCancelled);
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.bar_chart_rounded, size: 15, color: AppColors.primary),
+              const SizedBox(width: 7),
+              Text(
+                'Daily Summary · ${DateFormat('dd MMMM yyyy').format(date)}',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.textPrimary,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              Expanded(
+                child: _DailySummaryTile(
+                  label: 'Total',
+                  count: total,
+                  color: AppColors.primary,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _DailySummaryTile(
+                  label: 'Pending',
+                  count: pending,
+                  color: const Color(0xFFDD6B20),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _DailySummaryTile(
+                  label: 'Accepted',
+                  count: accepted,
+                  color: const Color(0xFF3182CE),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _DailySummaryTile(
+                  label: 'In Progress',
+                  count: inProgress,
+                  color: const Color(0xFF805AD5),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _DailySummaryTile(
+                  label: 'Completed',
+                  count: completed,
+                  color: const Color(0xFF38A169),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _DailySummaryTile(
+                  label: 'Cancelled',
+                  count: cancelled,
+                  color: const Color(0xFFE53E3E),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DailySummaryTile extends StatelessWidget {
+  final String label;
+  final int count;
+  final Color color;
+
+  const _DailySummaryTile({
+    required this.label,
+    required this.count,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.07),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: color.withValues(alpha: 0.2)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            '$count',
+            style: TextStyle(
+              fontSize: 22,
+              fontWeight: FontWeight.w700,
+              color: color,
+            ),
+          ),
+          const SizedBox(height: 3),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w500,
+              color: AppColors.textSecondary,
+            ),
+            overflow: TextOverflow.ellipsis,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Section heading (shown between summary and table when date filter is set) ─
+
+class _DateSectionHeader extends StatelessWidget {
+  final DateTime date;
+  final int count;
+
+  const _DateSectionHeader({required this.date, required this.count});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Icon(Icons.calendar_today_rounded, size: 14, color: AppColors.primary),
+        const SizedBox(width: 8),
+        Text(
+          'Bookings for ${DateFormat('dd MMMM yyyy').format(date)}',
+          style: TextStyle(
+            fontSize: 15,
+            fontWeight: FontWeight.w600,
+            color: AppColors.textPrimary,
+          ),
+        ),
+        const SizedBox(width: 10),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+          decoration: BoxDecoration(
+            color: AppColors.primary.withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Text(
+            '$count booking${count == 1 ? '' : 's'}',
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: AppColors.primary,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 class _AmcContractStatusBadge extends StatelessWidget {
   final String status;

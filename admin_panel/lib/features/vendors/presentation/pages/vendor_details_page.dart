@@ -321,11 +321,18 @@ class _OverviewTab extends ConsumerWidget {
                 value: vendor.vendorNumber!,
               ),
             _InfoCell(
-              icon: Icons.toggle_on_rounded,
-              label: 'Active',
+              icon: Icons.check_circle_outline_rounded,
+              label: 'Account Active',
               value: vendor.isActive ? 'Yes' : 'No',
               valueColor:
                   vendor.isActive ? AppColors.success : AppColors.textSecondary,
+            ),
+            _InfoCell(
+              icon: Icons.wifi_rounded,
+              label: 'Online (Vendor-controlled)',
+              value: vendor.isOnline ? 'Online' : 'Offline',
+              valueColor:
+                  vendor.isOnline ? AppColors.success : AppColors.textSecondary,
             ),
             _InfoCell(
               icon: Icons.star_rounded,

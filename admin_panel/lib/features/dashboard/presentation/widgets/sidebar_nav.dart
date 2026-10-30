@@ -146,9 +146,9 @@ const _kNavGroups = <_NavGroup>[
         requiredPermission: 'dodo_team.view',
       ),
       _NavItem(
-        label: 'Vendor Serving Areas',
+        label: 'Service Areas',
         icon: Icons.location_on_rounded,
-        route: '/dashboard/vendor-serving-areas',
+        route: '/dashboard/service-areas',
         requiredPermission: 'vendor.view',
       ),
       _NavItem(

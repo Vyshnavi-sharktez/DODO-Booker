@@ -93,9 +93,10 @@ class VendorsNotifier extends StateNotifier<AsyncValue<List<Vendor>>> {
     await _load();
   }
 
-  Future<void> deleteVendor(String id) async {
-    await _repo.deleteVendor(id);
+  Future<Map<String, dynamic>> deleteVendor(String id) async {
+    final result = await _repo.deleteVendor(id);
     await _load();
+    return result;
   }
 
   Future<void> toggleActive(String id, {required bool currentIsActive}) async {

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:geolocator/geolocator.dart';
 import '../../../../core/services/nominatim_service.dart';
+import '../../../../core/services/pin_code_service.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/phone_input_field.dart';
 import '../../domain/models/vendor.dart';
@@ -66,6 +67,10 @@ class _VendorFormDialogState extends State<VendorFormDialog> {
   late bool _isPreferredVendor;
   late final TextEditingController _preferredVendorFee;
 
+  final _pinInputCtrl = TextEditingController();
+  final _pinLookup = PinLookupController();
+  PinLookupStatus _pinStatus = PinLookupStatus.idle;
+
   @override
   void initState() {
     super.initState();
@@ -95,10 +100,13 @@ class _VendorFormDialogState extends State<VendorFormDialog> {
           ? e.preferredVendorFee.toStringAsFixed(2)
           : '',
     );
+    _pinInputCtrl.addListener(_onPinChanged);
   }
 
   @override
   void dispose() {
+    _pinLookup.dispose();
+    _pinInputCtrl.dispose();
     _businessName.dispose();
     _ownerName.dispose();
     _phone.dispose();
@@ -109,6 +117,56 @@ class _VendorFormDialogState extends State<VendorFormDialog> {
     _commissionRate.dispose();
     _preferredVendorFee.dispose();
     super.dispose();
+  }
+
+  void _onPinChanged() {
+    _pinLookup.onPinChanged(
+      _pinInputCtrl.text.trim(),
+      isMounted: () => mounted,
+      onPinActive: () {
+        if (!mounted) return;
+        setState(() {
+          _pinStatus = PinLookupStatus.loading;
+          _clearPinFilledFields();
+        });
+      },
+      onResult: (result, lat, lng) {
+        if (!mounted) return;
+        setState(() {
+          _pinStatus = PinLookupStatus.found;
+          _city.text = result.district;
+          if (lat != null && lng != null) {
+            _latitude = lat;
+            _longitude = lng;
+          }
+        });
+      },
+      onFailed: () {
+        if (!mounted) return;
+        setState(() => _pinStatus = PinLookupStatus.notFound);
+      },
+      onIdle: () {
+        if (!mounted) return;
+        setState(() {
+          _pinStatus = PinLookupStatus.idle;
+          _clearPinFilledFields();
+        });
+      },
+    );
+  }
+
+  void _clearPinFilledFields() {
+    final fc = _pinLookup.lastFilledCity;
+    final fLat = _pinLookup.lastFilledLat;
+    final fLng = _pinLookup.lastFilledLng;
+    if (fc != null && _city.text.trim() == fc.trim()) {
+      _city.text = '';
+    }
+    if (fLat != null && fLng != null &&
+        _latitude == fLat && _longitude == fLng) {
+      _latitude = null;
+      _longitude = null;
+    }
   }
 
   Future<void> _useCurrentLocation() async {
@@ -372,6 +430,45 @@ class _VendorFormDialogState extends State<VendorFormDialog> {
                             ),
                           ),
                         ],
+                      ),
+                      const SizedBox(height: 16),
+
+                      // PIN Code Lookup helper (not persisted — fills city)
+                      TextFormField(
+                        controller: _pinInputCtrl,
+                        keyboardType: TextInputType.number,
+                        inputFormatters: [
+                          FilteringTextInputFormatter.digitsOnly,
+                          LengthLimitingTextInputFormatter(6),
+                        ],
+                        decoration: InputDecoration(
+                          labelText: 'PIN Code',
+                          hintText: '6-digit PIN auto-fills city',
+                          prefixIcon:
+                              const Icon(Icons.pin_drop_outlined),
+                          helperText: 'Not stored — only used to fill city',
+                          suffixIcon: switch (_pinStatus) {
+                            PinLookupStatus.loading => const Padding(
+                              padding: EdgeInsets.all(12),
+                              child: SizedBox.square(
+                                dimension: 16,
+                                child: CircularProgressIndicator(
+                                    strokeWidth: 2),
+                              ),
+                            ),
+                            PinLookupStatus.found => const Icon(
+                              Icons.check_circle_rounded,
+                              color: AppColors.success,
+                              size: 20,
+                            ),
+                            PinLookupStatus.notFound => const Icon(
+                              Icons.error_outline_rounded,
+                              color: AppColors.error,
+                              size: 20,
+                            ),
+                            _ => null,
+                          },
+                        ),
                       ),
                       const SizedBox(height: 16),
 

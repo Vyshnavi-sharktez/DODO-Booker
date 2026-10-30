@@ -7,6 +7,7 @@ import '../../../models/address_model.dart';
 import '../models/cart_item.dart';
 import '../../amc/services/amc_visit_number_service.dart';
 import '../../booking/services/coupon_service.dart';
+import '../../service_charge/services/service_charge_service.dart';
 
 
 class CheckoutService {
@@ -42,6 +43,7 @@ class CheckoutService {
     String paymentMethod = 'cash',
     String paymentStatus = 'pending',
     double globalAddonsTotal = 0.0,
+    double serviceChargeAmount = 0.0,
   }) async {
     assert(items.isNotEmpty, 'Cannot create a booking with an empty cart');
     debugPrint('[DODO][Checkout] createCartBooking started — ${items.length} item(s)');
@@ -55,7 +57,10 @@ class CheckoutService {
     final tax = taxAmount;
     final surge = surgeAmount;
     final pvFee = preferredVendorFeeAmount ?? 0.0;
-    final gross = subtotal + surge + pvFee + tax;
+    // Always re-derive SC server-side — never trust the client-passed value.
+    final serviceCharge =
+        await ServiceChargeService().resolveCartServiceCharge(items);
+    final gross = subtotal + surge + pvFee + tax + serviceCharge;
     final totalAmount = (gross - discountAmount).clamp(0.0, double.infinity);
     final serviceDate = date.toIso8601String().substring(0, 10);
 
@@ -369,6 +374,7 @@ class CheckoutService {
         'preferred_vendor_id': ?preferredVendorId,
         'vendor_id': ?effectiveVendorId,
         if (pvFee > 0) 'preferred_vendor_fee_amount': pvFee,
+        if (serviceCharge > 0) 'service_charge_amount': serviceCharge,
       }).eq('id', pendingVisitId);
       bookingData = Map<String, dynamic>.from(
         await _client.from('bookings').select().eq('id', pendingVisitId).single(),
@@ -397,6 +403,7 @@ class CheckoutService {
         if (surge > 0 && surgeName != null) 'surge_fee_name': surgeName,
         if (surge > 0 && surgeType != null) 'surge_fee_type': surgeType,
         if (surge > 0 && surgeValue != null) 'surge_fee_value': surgeValue,
+        if (serviceCharge > 0) 'service_charge_amount': serviceCharge,
         if (surge > 0) 'surge_fee_amount': surge,
         'preferred_vendor_id': ?preferredVendorId,
         // Set vendor_id so booking skips admin assignment queue (preferred vendor or custom service vendor).

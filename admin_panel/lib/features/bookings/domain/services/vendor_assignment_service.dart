@@ -26,6 +26,8 @@ class AssigneeCandidate {
   // True when this vendor's active subscription plan does not include
   // allow_booking_assignment. Selection is disabled in the assignment dialog.
   final bool ineligibleForAssignment;
+  // True when the vendor is assigned to a serving area that covers the booking location.
+  final bool isInArea;
 
   const AssigneeCandidate({
     required this.id,
@@ -38,6 +40,7 @@ class AssigneeCandidate {
     this.vendorTier,
     this.ineligibleForCod = false,
     this.ineligibleForAssignment = false,
+    this.isInArea = false,
   });
 
   factory AssigneeCandidate.fromVendor(
@@ -45,6 +48,7 @@ class AssigneeCandidate {
     double? distanceKm,
     bool ineligibleForCod = false,
     bool ineligibleForAssignment = false,
+    bool isInArea = false,
   }) =>
       AssigneeCandidate(
         id: v.id,
@@ -59,6 +63,7 @@ class AssigneeCandidate {
         vendorTier: v.vendorTier,
         ineligibleForCod: ineligibleForCod,
         ineligibleForAssignment: ineligibleForAssignment,
+        isInArea: isInArea,
       );
 
   factory AssigneeCandidate.fromTeam(DodoTeam t) => AssigneeCandidate(
@@ -212,6 +217,10 @@ class VendorAssignmentService {
   }
 
   /// Returns `({inArea, all})` using serving-area assignments, sorted by Tier Priority.
+  ///
+  /// `inArea`  — active + online vendors whose serving areas cover the booking location.
+  /// `all`     — all active vendors (online + offline), in-area first then out-of-area.
+  ///             Inactive vendors are always excluded from both lists.
   static ({List<AssigneeCandidate> inArea, List<AssigneeCandidate> all})
       rankVendorAssigneesByServingAreas({
     double? bookingLat,
@@ -223,9 +232,13 @@ class VendorAssignmentService {
     Set<String> codIneligibleVendorIds = const {},
     Set<String> assignmentIneligibleVendorIds = const {},
   }) {
-    final activeVendors = vendors.where((v) => v.isActive && v.isOnline).toList();
+    // All active vendors feed the Show All list (includes offline).
+    final allActiveVendors = vendors.where((v) => v.isActive).toList();
+    // Only online active vendors qualify for the in-area list.
+    final onlineActiveVendors =
+        allActiveVendors.where((v) => v.isOnline).toList();
 
-    AssigneeCandidate toCandidate(Vendor v) {
+    AssigneeCandidate toCandidate(Vendor v, {bool isInArea = false}) {
       final ineligibleCod = codIneligibleVendorIds.contains(v.id);
       final ineligibleAssignment = assignmentIneligibleVendorIds.contains(v.id);
       if (busyVendorIds.contains(v.id)) {
@@ -240,17 +253,21 @@ class VendorAssignmentService {
           vendorTier: v.vendorTier,
           ineligibleForCod: ineligibleCod,
           ineligibleForAssignment: ineligibleAssignment,
+          isInArea: isInArea,
         );
       }
       return AssigneeCandidate.fromVendor(
         v,
         ineligibleForCod: ineligibleCod,
         ineligibleForAssignment: ineligibleAssignment,
+        isInArea: isInArea,
       );
     }
 
     if (bookingLat == null || bookingLng == null) {
-      final all = activeVendors.map(toCandidate).toList()
+      final all = allActiveVendors
+          .map((v) => toCandidate(v))
+          .toList()
         ..sort(compareCandidates);
       return (inArea: [], all: all);
     }
@@ -267,22 +284,31 @@ class VendorAssignmentService {
       inAreaVendorIds.addAll(assignmentsMap[areaId] ?? {});
     }
 
+    // inArea list: online active vendors whose areas cover the booking.
     final inArea = <AssigneeCandidate>[];
-    final outside = <AssigneeCandidate>[];
-
-    for (final vendor in activeVendors) {
-      final candidate = toCandidate(vendor);
+    for (final vendor in onlineActiveVendors) {
       if (inAreaVendorIds.contains(vendor.id)) {
-        inArea.add(candidate);
+        inArea.add(toCandidate(vendor, isInArea: true));
+      }
+    }
+
+    // All list: all active vendors split in-area first, then out-of-area.
+    final allInArea = <AssigneeCandidate>[];
+    final allOutside = <AssigneeCandidate>[];
+    for (final vendor in allActiveVendors) {
+      final isIn = inAreaVendorIds.contains(vendor.id);
+      if (isIn) {
+        allInArea.add(toCandidate(vendor, isInArea: true));
       } else {
-        outside.add(candidate);
+        allOutside.add(toCandidate(vendor, isInArea: false));
       }
     }
 
     inArea.sort(compareCandidates);
-    outside.sort(compareCandidates);
+    allInArea.sort(compareCandidates);
+    allOutside.sort(compareCandidates);
 
-    return (inArea: inArea, all: [...inArea, ...outside]);
+    return (inArea: inArea, all: [...allInArea, ...allOutside]);
   }
 
   /// Returns `({inArea, all})` for DODO team assignment.

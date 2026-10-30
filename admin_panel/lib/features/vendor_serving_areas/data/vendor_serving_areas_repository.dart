@@ -7,7 +7,7 @@ class VendorServingAreasRepository {
 
   Future<List<VendorServingArea>> fetchAll() async {
     final rows = await _client
-        .from('vendor_serving_areas')
+        .from('service_availability_areas')
         .select()
         .order('name');
     return (rows as List<dynamic>)
@@ -155,11 +155,11 @@ class VendorServingAreasRepository {
       String vendorId) async {
     final rows = await _client
         .from('vendor_serving_area_assignments')
-        .select('vendor_serving_areas!serving_area_id(*)')
+        .select('service_availability_areas!serving_area_id(*)')
         .eq('vendor_id', vendorId);
     return (rows as List<dynamic>)
         .map((r) => VendorServingArea.fromMap(
-            (r as Map<String, dynamic>)['vendor_serving_areas']
+            (r as Map<String, dynamic>)['service_availability_areas']
                 as Map<String, dynamic>))
         .toList();
   }

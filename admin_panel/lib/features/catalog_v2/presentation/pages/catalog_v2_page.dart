@@ -96,6 +96,8 @@ class _CatalogV2PageState extends ConsumerState<CatalogV2Page> {
           warrantyDays,
           warrantyCovers,
           warrantyExclusions,
+          serviceChargeEnabled = false,
+          serviceChargeAmount = 0,
         }) async {
           await ref.read(catalogNodeNotifierProvider.notifier).createNode(
                 parentId: parent?.id,
@@ -118,6 +120,8 @@ class _CatalogV2PageState extends ConsumerState<CatalogV2Page> {
                 warrantyDays: warrantyDays,
                 warrantyCovers: warrantyCovers,
                 warrantyExclusions: warrantyExclusions,
+                serviceChargeEnabled: serviceChargeEnabled,
+                serviceChargeAmount: serviceChargeAmount,
               );
           if (mounted && parent != null) {
             setState(() => _expandedIds.add(parent.id));
@@ -161,6 +165,8 @@ class _CatalogV2PageState extends ConsumerState<CatalogV2Page> {
           warrantyDays,
           warrantyCovers,
           warrantyExclusions,
+          serviceChargeEnabled = false,
+          serviceChargeAmount = 0,
         }) async {
           await ref.read(catalogNodeNotifierProvider.notifier).updateNode(
                 node.id,
@@ -184,6 +190,8 @@ class _CatalogV2PageState extends ConsumerState<CatalogV2Page> {
                 warrantyDays: warrantyDays,
                 warrantyCovers: warrantyCovers,
                 warrantyExclusions: warrantyExclusions,
+                serviceChargeEnabled: serviceChargeEnabled,
+                serviceChargeAmount: serviceChargeAmount,
               );
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(

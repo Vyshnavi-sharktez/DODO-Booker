@@ -1,11 +1,13 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:geolocator/geolocator.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/widgets/clickable.dart';
 import '../../../../core/screens/map_picker_screen.dart';
 import '../../../../core/services/nominatim_service.dart';
+import '../../../../core/services/pin_code_service.dart';
 import '../../../auth/presentation/providers/auth_controller.dart';
 import '../../../serving_areas/presentation/providers/serving_areas_provider.dart';
 import '../../../serving_areas/presentation/widgets/serving_areas_selector.dart';
@@ -27,11 +29,15 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
   late final TextEditingController _emailCtrl;
   late final TextEditingController _cityCtrl;
   late final TextEditingController _addressCtrl;
+  late final TextEditingController _pincodeCtrl;
 
   double? _latitude;
   double? _longitude;
   bool _isLocating = false;
   String? _locationError;
+
+  PinLookupStatus _pinStatus = PinLookupStatus.idle;
+  final _pinCtrl = PinLookupController();
 
   // Serving-area selection — seeded once from server, persisted on submit.
   bool _areasInitialized = false;
@@ -60,16 +66,70 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
     _addressCtrl = TextEditingController(text: widget.profile.address ?? '');
     _latitude = widget.profile.latitude;
     _longitude = widget.profile.longitude;
+    _pincodeCtrl = TextEditingController();
+    _pincodeCtrl.addListener(_onPincodeChanged);
   }
 
   @override
   void dispose() {
+    _pinCtrl.dispose();
     _businessNameCtrl.dispose();
     _ownerNameCtrl.dispose();
     _emailCtrl.dispose();
     _cityCtrl.dispose();
     _addressCtrl.dispose();
+    _pincodeCtrl.dispose();
     super.dispose();
+  }
+
+  void _onPincodeChanged() {
+    _pinCtrl.onPinChanged(
+      _pincodeCtrl.text.trim(),
+      isMounted: () => mounted,
+      onPinActive: () {
+        if (!mounted) return;
+        setState(() {
+          _pinStatus = PinLookupStatus.loading;
+          _clearPinFilledFields();
+        });
+      },
+      onResult: (result, lat, lng) {
+        if (!mounted) return;
+        setState(() {
+          _pinStatus = PinLookupStatus.found;
+          _cityCtrl.text = result.district;
+          if (lat != null && lng != null) {
+            _latitude = lat;
+            _longitude = lng;
+          }
+        });
+      },
+      onFailed: () {
+        if (!mounted) return;
+        setState(() => _pinStatus = PinLookupStatus.notFound);
+      },
+      onIdle: () {
+        if (!mounted) return;
+        setState(() {
+          _pinStatus = PinLookupStatus.idle;
+          _clearPinFilledFields();
+        });
+      },
+    );
+  }
+
+  void _clearPinFilledFields() {
+    final fc = _pinCtrl.lastFilledCity;
+    final fLat = _pinCtrl.lastFilledLat;
+    final fLng = _pinCtrl.lastFilledLng;
+    if (fc != null && _cityCtrl.text.trim() == fc.trim()) {
+      _cityCtrl.text = '';
+    }
+    if (fLat != null && fLng != null &&
+        _latitude == fLat && _longitude == fLng) {
+      _latitude = null;
+      _longitude = null;
+    }
   }
 
   Future<void> _useCurrentLocation() async {
@@ -289,6 +349,45 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
                   validator: (v) => (v == null || v.trim().isEmpty)
                       ? 'Business address is required'
                       : null,
+                ),
+                const SizedBox(height: 16),
+                TextFormField(
+                  controller: _pincodeCtrl,
+                  keyboardType: TextInputType.number,
+                  inputFormatters: [
+                    FilteringTextInputFormatter.digitsOnly,
+                    LengthLimitingTextInputFormatter(6),
+                  ],
+                  decoration: InputDecoration(
+                    labelText: 'PIN Code',
+                    hintText: 'e.g. 500072',
+                    prefixIcon: const Icon(Icons.pin_drop_outlined),
+                    helperText: 'Auto-fills city from India Post',
+                    suffixIcon: switch (_pinStatus) {
+                      PinLookupStatus.loading => const Padding(
+                        padding: EdgeInsets.all(12),
+                        child: SizedBox.square(
+                          dimension: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ),
+                      ),
+                      PinLookupStatus.found => const Icon(
+                        Icons.check_circle_rounded,
+                        color: Color(0xFF2E7D32),
+                        size: 20,
+                      ),
+                      PinLookupStatus.notFound => const Icon(
+                        Icons.error_outline_rounded,
+                        color: AppColors.error,
+                        size: 20,
+                      ),
+                      _ => null,
+                    },
+                    border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12)),
+                    filled: true,
+                    fillColor: AppColors.background,
+                  ),
                 ),
                 const SizedBox(height: 12),
 

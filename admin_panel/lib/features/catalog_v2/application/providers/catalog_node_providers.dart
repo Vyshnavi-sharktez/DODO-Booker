@@ -52,9 +52,11 @@ class CatalogNodeNotifier
     int? warrantyDays,
     String? warrantyCovers,
     String? warrantyExclusions,
+    bool serviceChargeEnabled = false,
+    double serviceChargeAmount = 0,
   }) async {
     final sortOrder = await _repo.getNextSortOrder(parentId);
-    await _repo.createNode(
+    final node = await _repo.createNode(
       parentId: parentId,
       name: name,
       slug: slug,
@@ -77,6 +79,13 @@ class CatalogNodeNotifier
       warrantyCovers: warrantyCovers,
       warrantyExclusions: warrantyExclusions,
     );
+    if (!isBookable) {
+      await _repo.upsertServiceChargeConfig(
+        node.id,
+        enabled: serviceChargeEnabled,
+        amount: serviceChargeAmount,
+      );
+    }
     await _load();
   }
 
@@ -102,6 +111,8 @@ class CatalogNodeNotifier
     int? warrantyDays,
     String? warrantyCovers,
     String? warrantyExclusions,
+    bool serviceChargeEnabled = false,
+    double serviceChargeAmount = 0,
   }) async {
     await _repo.updateNode(
       id,
@@ -125,6 +136,11 @@ class CatalogNodeNotifier
       warrantyDays: warrantyDays,
       warrantyCovers: warrantyCovers,
       warrantyExclusions: warrantyExclusions,
+    );
+    await _repo.upsertServiceChargeConfig(
+      id,
+      enabled: !isBookable && serviceChargeEnabled,
+      amount: !isBookable ? serviceChargeAmount : 0,
     );
     await _load();
   }

@@ -949,6 +949,8 @@ class _DesktopListCard extends ConsumerWidget {
   void _addToCart(BuildContext context, WidgetRef ref) {
     final result = ref.read(cartProvider.notifier).addToCart(
           node,
+          unitPriceOverride: node.finalPrice ?? node.basePrice ?? 0.0,
+          originalUnitPrice: node.hasDiscount ? node.basePrice : null,
           parentNodeId: parentId,
           rootCategoryId: rootCategoryId,
         );
@@ -1134,46 +1136,40 @@ class _DesktopListCard extends ConsumerWidget {
           ],
         );
       }
-      return Wrap(
-        spacing: 8,
-        runSpacing: 8,
+      return Row(
+        mainAxisSize: MainAxisSize.min,
         children: [
           _OutlinedBtn(
             label: 'View Details',
             onTap: () =>
                 openCatalogNode(context, node, parentId: parentId, rootCategoryId: rootCategoryId),
           ),
-          if (inCart)
-            Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                _CardQtyBtn(
-                  label: '-',
-                  onTap: () => ref
-                      .read(cartProvider.notifier)
-                      .updateQuantity(cartItem.bookingId, qty - 1),
+          const SizedBox(width: 8),
+          if (inCart) ...[
+            _CardQtyBtn(
+              label: '-',
+              onTap: () => ref
+                  .read(cartProvider.notifier)
+                  .updateQuantity(cartItem.bookingId, qty - 1),
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 10),
+              child: Text(
+                '$qty',
+                style: GoogleFonts.poppins(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: _kTextDark,
                 ),
-                Padding(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 10),
-                  child: Text(
-                    '$qty',
-                    style: GoogleFonts.poppins(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      color: _kTextDark,
-                    ),
-                  ),
-                ),
-                _CardQtyBtn(
-                  label: '+',
-                  onTap: () => ref
-                      .read(cartProvider.notifier)
-                      .updateQuantity(cartItem.bookingId, qty + 1),
-                ),
-              ],
-            )
-          else
+              ),
+            ),
+            _CardQtyBtn(
+              label: '+',
+              onTap: () => ref
+                  .read(cartProvider.notifier)
+                  .updateQuantity(cartItem.bookingId, qty + 1),
+            ),
+          ] else
             _AddToCartBtn(onTap: () => _addToCart(context, ref)),
         ],
       );
@@ -1415,7 +1411,6 @@ class _DesktopListCard extends ConsumerWidget {
     // ── Desktop: horizontal card (image left, content right) ───────────────
     return Container(
       clipBehavior: Clip.antiAlias,
-      height: 250,
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
@@ -1428,33 +1423,35 @@ class _DesktopListCard extends ConsumerWidget {
           ),
         ],
       ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          // ── Image panel (left, warm cream bg) ────────────────────────
-          Container(
-            width: 280,
-            color: const Color(0xFFF3EDE0),
-            child: imageUrl != null
-                ? Image.network(
-                    imageUrl,
-                    fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) => Center(
+      child: IntrinsicHeight(
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // ── Image panel (left, warm cream bg) ──────────────────────
+            Container(
+              width: 280,
+              constraints: const BoxConstraints(minHeight: 200),
+              color: const Color(0xFFF3EDE0),
+              child: imageUrl != null
+                  ? Image.network(
+                      imageUrl,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => Center(
+                        child: Icon(
+                          IconRegistry.resolve(node.iconKey, node.name),
+                          size: 52,
+                          color: _kTextMuted,
+                        ),
+                      ),
+                    )
+                  : Center(
                       child: Icon(
                         IconRegistry.resolve(node.iconKey, node.name),
                         size: 52,
                         color: _kTextMuted,
                       ),
                     ),
-                  )
-                : Center(
-                    child: Icon(
-                      IconRegistry.resolve(node.iconKey, node.name),
-                      size: 52,
-                      color: _kTextMuted,
-                    ),
-                  ),
-          ),
+            ),
 
           // ── Content panel (right) ─────────────────────────────────────
           Expanded(
@@ -1623,59 +1620,6 @@ class _DesktopListCard extends ConsumerWidget {
                     ),
                     const SizedBox(height: 8),
                   ],
-                  // Customer social proof (avatars + label)
-                  if (node.reviewCount > 0)
-                    Row(
-                      children: [
-                        SizedBox(
-                          width: 60,
-                          height: 22,
-                          child: Stack(
-                            children: [
-                              Positioned(
-                                left: 0,
-                                child: Container(
-                                  width: 22,
-                                  height: 22,
-                                  decoration: const BoxDecoration(
-                                    color: Color(0xFF7B9CDE),
-                                    shape: BoxShape.circle,
-                                  ),
-                                ),
-                              ),
-                              Positioned(
-                                left: 14,
-                                child: Container(
-                                  width: 22,
-                                  height: 22,
-                                  decoration: const BoxDecoration(
-                                    color: Color(0xFF85C1A3),
-                                    shape: BoxShape.circle,
-                                  ),
-                                ),
-                              ),
-                              Positioned(
-                                left: 28,
-                                child: Container(
-                                  width: 22,
-                                  height: 22,
-                                  decoration: const BoxDecoration(
-                                    color: Color(0xFFE8A87C),
-                                    shape: BoxShape.circle,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Text(
-                          'Customers loved our service',
-                          style: GoogleFonts.inter(
-                              fontSize: 12, color: _kTextMuted),
-                        ),
-                      ],
-                    ),
                   const Spacer(),
                   actionButtons(),
                 ],
@@ -1683,6 +1627,7 @@ class _DesktopListCard extends ConsumerWidget {
             ),
           ),
         ],
+        ),
       ),
     );
   }

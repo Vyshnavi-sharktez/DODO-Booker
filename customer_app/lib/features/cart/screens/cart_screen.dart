@@ -485,6 +485,24 @@ class _CartItemCardState extends ConsumerState<_CartItemCard> {
                                 ],
                               ],
                             )
+                          else if (item.originalUnitPrice != null)
+                            Row(
+                              children: [
+                                Text(
+                                  '₹${(item.originalUnitPrice! + addonsTotal).toInt()}',
+                                  style: tt.labelSmall?.copyWith(
+                                    color: AppColors.textHint,
+                                    decoration: TextDecoration.lineThrough,
+                                  ),
+                                ),
+                                const SizedBox(width: 4),
+                                Text(
+                                  '₹${item.unitPrice.toInt()} per unit',
+                                  style: tt.labelSmall
+                                      ?.copyWith(color: AppColors.textSecondary),
+                                ),
+                              ],
+                            )
                           else
                             Text(
                               '₹${item.unitPrice.toInt()} per unit',
@@ -676,6 +694,7 @@ class _CartItemCardState extends ConsumerState<_CartItemCard> {
     CartNotifier notifier,
     CartItem item,
   ) {
+    final addonsTotal = item.addons.fold(0.0, (s, a) => s + a.addonPrice);
     return Container(
       decoration: BoxDecoration(
         color: AppColors.surface,
@@ -763,11 +782,30 @@ class _CartItemCardState extends ConsumerState<_CartItemCard> {
                         const SizedBox(height: 2),
                       ],
                       if (!item.isAmc)
-                        Text(
-                          '₹${item.unitPrice.toInt()} per unit',
-                          style: tt.labelSmall
-                              ?.copyWith(color: AppColors.textSecondary),
-                        ),
+                        if (item.originalUnitPrice != null)
+                          Row(
+                            children: [
+                              Text(
+                                '₹${(item.originalUnitPrice! + addonsTotal).toInt()}',
+                                style: tt.labelSmall?.copyWith(
+                                  color: AppColors.textHint,
+                                  decoration: TextDecoration.lineThrough,
+                                ),
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                '₹${item.unitPrice.toInt()} per unit',
+                                style: tt.labelSmall
+                                    ?.copyWith(color: AppColors.textSecondary),
+                              ),
+                            ],
+                          )
+                        else
+                          Text(
+                            '₹${item.unitPrice.toInt()} per unit',
+                            style: tt.labelSmall
+                                ?.copyWith(color: AppColors.textSecondary),
+                          ),
                     ],
                   ),
                 ),

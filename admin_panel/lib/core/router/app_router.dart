@@ -378,8 +378,8 @@ final routerProvider = Provider<GoRouter>((ref) {
             ),
           ),
           GoRoute(
-            path: '/dashboard/vendor-serving-areas',
-            name: 'vendorServingAreas',
+            path: '/dashboard/service-areas',
+            name: 'serviceAreas',
             pageBuilder: (context, state) => const NoTransitionPage(
               child: VendorServingAreasPage(),
             ),

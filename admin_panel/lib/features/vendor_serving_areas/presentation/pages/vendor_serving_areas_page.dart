@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../application/providers/vendor_serving_areas_providers.dart';
 import '../../domain/models/vendor_serving_area.dart';
-import '../widgets/vendor_serving_area_dialog.dart';
 
 class VendorServingAreasPage extends ConsumerStatefulWidget {
   const VendorServingAreasPage({super.key});
@@ -34,149 +33,6 @@ class _VendorServingAreasPageState
     return list;
   }
 
-  Future<void> _openAdd() async {
-    final result = await showDialog<VendorServingArea>(
-      context: context,
-      barrierDismissible: false,
-      builder: (_) => const VendorServingAreaDialog(),
-    );
-    if (result == null || !mounted) return;
-    try {
-      await ref.read(vendorServingAreasRepositoryProvider).create(result);
-      ref.invalidate(vendorServingAreasProvider);
-      ref.invalidate(areaAssignmentCountsProvider);
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('"${result.name}" added successfully.'),
-          backgroundColor: AppColors.success,
-        ),
-      );
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Failed to add: $e'),
-          backgroundColor: AppColors.error,
-        ),
-      );
-    }
-  }
-
-  Future<void> _openEdit(VendorServingArea area) async {
-    final result = await showDialog<VendorServingArea>(
-      context: context,
-      barrierDismissible: false,
-      builder: (_) => VendorServingAreaDialog(existing: area),
-    );
-    if (result == null || !mounted) return;
-    try {
-      await ref
-          .read(vendorServingAreasRepositoryProvider)
-          .update(area.id, result);
-      ref.invalidate(vendorServingAreasProvider);
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('"${result.name}" updated.'),
-          backgroundColor: AppColors.success,
-        ),
-      );
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Failed to update: $e'),
-          backgroundColor: AppColors.error,
-        ),
-      );
-    }
-  }
-
-  Future<void> _toggleActive(VendorServingArea area) async {
-    try {
-      await ref
-          .read(vendorServingAreasRepositoryProvider)
-          .setActive(area.id, active: !area.isActive);
-      ref.invalidate(vendorServingAreasProvider);
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Failed: $e'),
-          backgroundColor: AppColors.error,
-        ),
-      );
-    }
-  }
-
-  Future<void> _confirmDelete(VendorServingArea area) async {
-    final repo = ref.read(vendorServingAreasRepositoryProvider);
-    final count = await repo.countAssignments(area.id);
-
-    if (!mounted) return;
-
-    if (count > 0) {
-      showDialog<void>(
-        context: context,
-        builder: (dialogContext) => AlertDialog(
-          title: const Text('Cannot Delete'),
-          content: Text(
-            '"${area.name}" is assigned to $count vendor${count == 1 ? '' : 's'}.\n'
-            'Remove all vendor assignments before deleting this area.',
-          ),
-          actions: [
-            FilledButton(
-              onPressed: () => Navigator.of(dialogContext).pop(),
-              child: const Text('OK'),
-            ),
-          ],
-        ),
-      );
-      return;
-    }
-
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Delete Serving Area?'),
-        content: Text('Delete "${area.name}"? This cannot be undone.'),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(false),
-              child: const Text('Cancel')),
-          FilledButton(
-            onPressed: () => Navigator.of(dialogContext).pop(true),
-            style: FilledButton.styleFrom(backgroundColor: AppColors.error),
-            child: const Text('Delete'),
-          ),
-        ],
-      ),
-    );
-    if (confirmed != true || !mounted) return;
-
-    final result = await repo.delete(area.id);
-    if (!mounted) return;
-
-    if (result.deleted) {
-      ref.invalidate(vendorServingAreasProvider);
-      ref.invalidate(areaAssignmentCountsProvider);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('"${area.name}" deleted.'),
-          backgroundColor: AppColors.success,
-        ),
-      );
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(result.error ?? 'Delete failed.'),
-          backgroundColor: AppColors.error,
-        ),
-      );
-    }
-  }
-
   void _openVendorsDialog(VendorServingArea area) {
     showDialog<void>(
       context: context,
@@ -195,35 +51,22 @@ class _VendorServingAreasPageState
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // ── Header ──────────────────────────────────────────────────────────
-          Row(
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Vendor Serving Areas',
-                    style: TextStyle(
-                      fontSize: 22,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.textPrimary,
-                    ),
-                  ),
-                  Text(
-                    'Admin-defined geographic zones vendors can select during registration',
-                    style: TextStyle(
-                      fontSize: 13,
-                      color: AppColors.textSecondary,
-                    ),
-                  ),
-                ],
+              Text(
+                'Vendor Area Assignments',
+                style: TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.textPrimary,
+                ),
               ),
-              const Spacer(),
-              FilledButton.icon(
-                onPressed: _openAdd,
-                icon: const Icon(Icons.add_location_alt_rounded, size: 16),
-                label: const Text('Add Area'),
-                style: FilledButton.styleFrom(
-                  backgroundColor: AppColors.primary,
+              Text(
+                'Shows which vendors are assigned to each service area. Manage areas in Service Availability Areas.',
+                style: TextStyle(
+                  fontSize: 13,
+                  color: AppColors.textSecondary,
                 ),
               ),
             ],
@@ -304,24 +147,17 @@ class _VendorServingAreasPageState
                         Icon(Icons.map_outlined,
                             size: 56, color: AppColors.textSecondary),
                         const SizedBox(height: 16),
-                        Text('No serving areas yet',
+                        Text('No service areas configured yet',
                             style: TextStyle(
                                 fontSize: 17,
                                 fontWeight: FontWeight.w600,
                                 color: AppColors.textPrimary)),
                         const SizedBox(height: 6),
-                        Text('Add the first area for vendors to select.',
-                            style: TextStyle(
-                                fontSize: 13,
-                                color: AppColors.textSecondary)),
-                        const SizedBox(height: 20),
-                        FilledButton.icon(
-                          onPressed: _openAdd,
-                          icon: const Icon(Icons.add_location_alt_rounded,
-                              size: 16),
-                          label: const Text('Add Area'),
-                          style: FilledButton.styleFrom(
-                              backgroundColor: AppColors.primary),
+                        Text(
+                          'Add areas in the Service Availability Areas page.',
+                          style: TextStyle(
+                              fontSize: 13,
+                              color: AppColors.textSecondary),
                         ),
                       ],
                     ),
@@ -343,9 +179,6 @@ class _VendorServingAreasPageState
                     area: areas[i],
                     vendorCount: counts[areas[i].id] ?? 0,
                     onViewVendors: () => _openVendorsDialog(areas[i]),
-                    onEdit: () => _openEdit(areas[i]),
-                    onToggleActive: () => _toggleActive(areas[i]),
-                    onDelete: () => _confirmDelete(areas[i]),
                   ),
                 );
               },
@@ -406,16 +239,10 @@ class _AreaCard extends StatelessWidget {
     required this.area,
     required this.vendorCount,
     required this.onViewVendors,
-    required this.onEdit,
-    required this.onToggleActive,
-    required this.onDelete,
   });
   final VendorServingArea area;
   final int vendorCount;
   final VoidCallback onViewVendors;
-  final VoidCallback onEdit;
-  final VoidCallback onToggleActive;
-  final VoidCallback onDelete;
 
   @override
   Widget build(BuildContext context) {
@@ -537,43 +364,6 @@ class _AreaCard extends StatelessWidget {
             ),
           ),
 
-          // Management actions
-          Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Tooltip(
-                message: area.isActive ? 'Deactivate' : 'Activate',
-                child: IconButton(
-                  onPressed: onToggleActive,
-                  icon: Icon(
-                    area.isActive
-                        ? Icons.toggle_on_rounded
-                        : Icons.toggle_off_rounded,
-                    size: 26,
-                    color: area.isActive
-                        ? AppColors.success
-                        : AppColors.textSecondary,
-                  ),
-                ),
-              ),
-              Tooltip(
-                message: 'Edit',
-                child: IconButton(
-                  onPressed: onEdit,
-                  icon: Icon(Icons.edit_rounded,
-                      size: 18, color: AppColors.primary),
-                ),
-              ),
-              Tooltip(
-                message: 'Delete',
-                child: IconButton(
-                  onPressed: onDelete,
-                  icon: Icon(Icons.delete_outline_rounded,
-                      size: 18, color: AppColors.error),
-                ),
-              ),
-            ],
-          ),
         ],
       ),
     );

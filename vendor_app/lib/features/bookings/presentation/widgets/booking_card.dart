@@ -783,68 +783,81 @@ class _BookingCardState extends ConsumerState<BookingCard> {
             if (['accepted', 'en_route', 'in_progress'].contains(_booking.status.toLowerCase())) ...[
               const SizedBox(height: 8),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
                   color: AppColors.primary.withValues(alpha: 0.06),
                   borderRadius: BorderRadius.circular(8),
                   border: Border.all(color: AppColors.primary.withValues(alpha: 0.2)),
                 ),
-                child: Row(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Icon(Icons.shield_rounded, size: 16, color: AppColors.primary),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            _booking.customerName ?? 'Customer',
-                            style: const TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.bold,
-                              color: AppColors.textPrimary,
-                            ),
+                    Row(
+                      children: [
+                        const Icon(Icons.shield_rounded, size: 16, color: AppColors.primary),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                _booking.customerName ?? 'Customer',
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.bold,
+                                  color: AppColors.textPrimary,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              const Text(
+                                'Protected via DODO Virtual Call Bridge',
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  color: AppColors.primary,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ],
                           ),
-                          const Text(
-                            'Protected via DODO Virtual Call Bridge',
-                            style: TextStyle(
-                              fontSize: 10,
-                              color: AppColors.primary,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    ElevatedButton.icon(
-                      onPressed: _calling ? null : () async {
-                        setState(() => _calling = true);
-                        try {
-                          await CallBridgeDialog.show(
-                            context,
-                            bookingId: _booking.id,
-                            bookingNumber: _booking.bookingNumber,
-                            callerRole: 'vendor',
-                            recipientName: _booking.customerName ?? 'Customer',
-                            bookingStatus: _booking.status,
-                          );
-                        } finally {
-                          if (mounted) setState(() => _calling = false);
-                        }
-                      },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.primary,
-                        foregroundColor: Colors.white,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(20),
                         ),
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                        elevation: 0,
-                      ),
-                      icon: const Icon(Icons.phone_rounded, size: 12),
-                      label: const Text(
-                        'Call Customer',
-                        style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton.icon(
+                        onPressed: _calling ? null : () async {
+                          setState(() => _calling = true);
+                          try {
+                            await CallBridgeDialog.show(
+                              context,
+                              bookingId: _booking.id,
+                              bookingNumber: _booking.bookingNumber,
+                              callerRole: 'vendor',
+                              recipientName: _booking.customerName ?? 'Customer',
+                              bookingStatus: _booking.status,
+                            );
+                          } finally {
+                            if (mounted) setState(() => _calling = false);
+                          }
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.primary,
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          elevation: 0,
+                        ),
+                        icon: const Icon(Icons.phone_rounded, size: 14),
+                        label: const Text(
+                          'Call Customer',
+                          style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                        ),
                       ),
                     ),
                   ],

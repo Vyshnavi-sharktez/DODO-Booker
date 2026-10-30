@@ -28,6 +28,7 @@ class VendorsRepository {
     final data = await _supabase
         .from('vendors')
         .select('*, vendor_tiers(*)')
+        .isFilter('deleted_at', null)
         .order('created_at', ascending: false);
     return (data as List<dynamic>)
         .map((r) => Vendor.fromMap(r as Map<String, dynamic>))
@@ -178,8 +179,12 @@ class VendorsRepository {
     return Vendor.fromMap(data);
   }
 
-  Future<void> deleteVendor(String id) async {
-    await _supabase.from('vendors').delete().eq('id', id);
+  Future<Map<String, dynamic>> deleteVendor(String id) async {
+    final result = await _supabase.rpc(
+      'admin_delete_vendor',
+      params: {'p_vendor_id': id},
+    );
+    return Map<String, dynamic>.from(result as Map);
   }
 
   Future<void> updateActive(String id, {required bool isActive}) async {
