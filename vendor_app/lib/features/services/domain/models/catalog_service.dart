@@ -24,6 +24,13 @@ class CatalogService {
     this.rating,
     this.reviewCount = 0,
     this.childrenCount = 0,
+    this.includedItems = const [],
+    this.excludedItems = const [],
+    this.beforeAfterPairs = const [],
+    this.warrantyEnabled = false,
+    this.warrantyDays,
+    this.warrantyCovers,
+    this.warrantyExclusions,
   });
 
   final String id;
@@ -48,11 +55,28 @@ class CatalogService {
   final int reviewCount;
   final int childrenCount;
 
+  // ── Detail fields — populated from catalog_nodes_view full .select() ─────
+  final List<String> includedItems;
+  final List<String> excludedItems;
+  final List<Map<String, String>> beforeAfterPairs;
+  final bool warrantyEnabled;
+  final int? warrantyDays;
+  final String? warrantyCovers;
+  final String? warrantyExclusions;
+
   // ── Backward-compatible accessors used by CatalogServiceTile ─────────────
   String? get categoryName => parentName;
   // catalog_nodes_view exposes a single parent_name; there is no separate
   // sub-category column, so this always returns null.
   String? get subCategoryName => null;
+
+  double get discountAmount => discountType == 'percentage'
+      ? basePrice * discountValue / 100
+      : discountValue;
+
+  double get finalPrice => (basePrice - discountAmount).clamp(0.0, double.infinity);
+
+  bool get hasDiscount => discountValue > 0;
 
   factory CatalogService.fromMap(Map<String, dynamic> map) {
     return CatalogService(
@@ -74,6 +98,25 @@ class CatalogService {
       rating: (map['rating'] as num?)?.toDouble(),
       reviewCount: (map['review_count'] as int?) ?? 0,
       childrenCount: (map['children_count'] as int?) ?? 0,
+      includedItems: (map['included_items'] as List<dynamic>?)
+              ?.map((e) => e.toString())
+              .where((s) => s.isNotEmpty)
+              .toList() ??
+          [],
+      excludedItems: (map['excluded_items'] as List<dynamic>?)
+              ?.map((e) => e.toString())
+              .where((s) => s.isNotEmpty)
+              .toList() ??
+          [],
+      beforeAfterPairs: (map['before_after_pairs'] as List<dynamic>?)
+              ?.map((e) => Map<String, String>.from(
+                  (e as Map).map((k, v) => MapEntry(k.toString(), v.toString()))))
+              .toList() ??
+          [],
+      warrantyEnabled: (map['warranty_enabled'] as bool?) ?? false,
+      warrantyDays: map['warranty_days'] as int?,
+      warrantyCovers: map['warranty_covers'] as String?,
+      warrantyExclusions: map['warranty_exclusions'] as String?,
     );
   }
 }

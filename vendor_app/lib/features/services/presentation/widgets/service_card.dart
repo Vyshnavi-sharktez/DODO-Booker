@@ -3,6 +3,7 @@ import '../../../../core/constants/app_colors.dart';
 import '../../../../core/utils/format_utils.dart';
 import '../../../../core/widgets/confirmation_dialog.dart';
 import '../../domain/models/assigned_service.dart';
+import '../pages/vendor_service_detail_dialog.dart';
 
 class ServiceCard extends StatefulWidget {
   const ServiceCard({
@@ -107,11 +108,23 @@ class _ServiceCardState extends State<ServiceCard> {
                 ),
               )
             else
-              IconButton(
-                icon: const Icon(Icons.delete_outline_rounded),
-                color: AppColors.textHint,
-                tooltip: 'Remove service',
-                onPressed: _handleRemove,
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.open_in_new_rounded, size: 17),
+                    color: AppColors.textHint,
+                    tooltip: 'View details',
+                    onPressed: () => VendorServiceDetailDialog.show(
+                        context, widget.service.catalog),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.delete_outline_rounded),
+                    color: AppColors.textHint,
+                    tooltip: 'Remove service',
+                    onPressed: _handleRemove,
+                  ),
+                ],
               ),
           ],
         ),
