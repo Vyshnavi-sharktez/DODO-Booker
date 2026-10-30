@@ -600,43 +600,67 @@ class _MobileServicesSectionState extends State<_MobileServicesSection> {
               padding: const EdgeInsets.symmetric(horizontal: 20),
               child: Column(
                 children: [
-                  GridView.count(
-                    crossAxisCount: 3,
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    mainAxisSpacing: 16,
-                    crossAxisSpacing: 16,
-                    childAspectRatio: 0.72,
-                    children: [
-                      ...display.map(
-                        (n) => _CategoryGridItem(
-                          node: n,
-                          onTap: () => widget.onNodeTap(n),
-                        ),
-                      ),
-                      if (!_expanded && hasMore)
-                        _MoreGridItem(
-                          onTap: () => setState(() => _expanded = true),
-                        ),
-                    ],
+                  AnimatedSize(
+                    duration: const Duration(milliseconds: 300),
+                    curve: Curves.easeInOut,
+                    alignment: Alignment.topCenter,
+                    child: GridView.count(
+                      crossAxisCount: 3,
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      mainAxisSpacing: 16,
+                      crossAxisSpacing: 16,
+                      childAspectRatio: 0.72,
+                      children: display
+                          .map(
+                            (n) => _CategoryGridItem(
+                              node: n,
+                              onTap: () => widget.onNodeTap(n),
+                            ),
+                          )
+                          .toList(),
+                    ),
                   ),
-                  if (_expanded && hasMore) ...[
+                  if (hasMore) ...[
                     const SizedBox(height: 16),
-                    GestureDetector(
-                      onTap: () => setState(() => _expanded = false),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 24, vertical: 10),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFEDE8DF),
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        child: Text(
-                          'Show Less ↑',
-                          style: GoogleFonts.inter(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600,
-                            color: AppColors.textPrimary,
+                    Center(
+                      child: GestureDetector(
+                        onTap: () =>
+                            setState(() => _expanded = !_expanded),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 20, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF5F0E8),
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(
+                              color: const Color(0xFFDED5C4),
+                              width: 1,
+                            ),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                _expanded ? 'Show Less' : 'Show More',
+                                style: GoogleFonts.inter(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                  color: AppColors.textPrimary,
+                                ),
+                              ),
+                              const SizedBox(width: 4),
+                              AnimatedRotation(
+                                turns: _expanded ? 0.5 : 0,
+                                duration:
+                                    const Duration(milliseconds: 300),
+                                child: const Icon(
+                                  Icons.keyboard_arrow_down_rounded,
+                                  size: 18,
+                                  color: AppColors.textPrimary,
+                                ),
+                              ),
+                            ],
                           ),
                         ),
                       ),
@@ -732,50 +756,6 @@ class _CategoryIconFallback extends StatelessWidget {
   }
 }
 
-class _MoreGridItem extends StatelessWidget {
-  final VoidCallback? onTap;
-  const _MoreGridItem({this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Expanded(
-            child: Container(
-              decoration: BoxDecoration(
-                color: const Color(0xFFEDE8DF),
-                borderRadius: BorderRadius.circular(14),
-              ),
-              alignment: Alignment.center,
-              child: const Icon(
-                Icons.grid_view_rounded,
-                size: 30,
-                color: AppColors.textSecondary,
-              ),
-            ),
-          ),
-          const SizedBox(height: 6),
-          SizedBox(
-            height: 34,
-            child: Text(
-              'More',
-              style: GoogleFonts.inter(
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-                color: AppColors.textPrimary,
-                height: 1.2,
-              ),
-              textAlign: TextAlign.center,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
 
 class _CategoryGridSkeleton extends StatelessWidget {
   @override
