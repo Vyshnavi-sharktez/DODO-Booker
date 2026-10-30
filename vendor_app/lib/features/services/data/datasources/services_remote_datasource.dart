@@ -87,11 +87,23 @@ class ServicesRemoteDatasource {
     return List<Map<String, dynamic>>.from(data as List);
   }
 
+  Future<List<Map<String, dynamic>>> fetchServiceFaqs(String serviceId) async {
+    final data = await _client
+        .from('service_faqs')
+        .select('id, question, answer')
+        .eq('service_id', serviceId)
+        .order('sort_order', ascending: true);
+    return List<Map<String, dynamic>>.from(data as List);
+  }
+
   Future<void> assignServices(
     String vendorId,
     List<String> serviceIds,
   ) async {
-    await _client.from('vendor_services').insert(
+    if (serviceIds.isEmpty) return;
+    // ignoreDuplicates → ON CONFLICT DO NOTHING, making this idempotent.
+    // Safe whether or not a unique constraint on (vendor_id, service_id) exists.
+    await _client.from('vendor_services').upsert(
           serviceIds
               .map(
                 (id) => {
@@ -101,6 +113,7 @@ class ServicesRemoteDatasource {
                 },
               )
               .toList(),
+          ignoreDuplicates: true,
         );
   }
 

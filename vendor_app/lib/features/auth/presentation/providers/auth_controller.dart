@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:supabase_flutter/supabase_flutter.dart' hide AuthState;
 import '../../../../core/network/supabase_client_provider.dart';
 import '../../../../core/services/fcm_service.dart';
 import '../../data/datasources/auth_remote_datasource.dart';
@@ -94,7 +95,7 @@ class AuthController extends StateNotifier<AuthState> {
       state = AuthOtpSent(phone: phone);
     } catch (e) {
       debugPrint('[DODO][AuthController] sendOtp error: $e');
-      state = AuthError(message: e.toString());
+      state = AuthError(message: _sendOtpError(e));
     }
   }
 
@@ -109,8 +110,26 @@ class AuthController extends StateNotifier<AuthState> {
         _initFcm(user);
       }
     } catch (e) {
-      state = AuthError(message: e.toString());
+      state = AuthError(message: _otpErrorMessage(e));
     }
+  }
+
+  String _otpErrorMessage(Object e) {
+    if (e is AuthException) {
+      if (e.code == 'otp_expired') return 'OTP has expired. Please request a new OTP.';
+      if (e.code == 'over_sms_send_rate_limit') return 'Too many attempts. Please wait before requesting a new OTP.';
+      return 'Invalid OTP. Please try again.';
+    }
+    return 'Something went wrong. Please try again.';
+  }
+
+  String _sendOtpError(Object e) {
+    if (e is AuthException) {
+      if (e.code == 'over_sms_send_rate_limit') return 'Too many OTP requests. Please wait and try again.';
+      if (e.code == 'sms_send_failed') return 'Unable to send OTP. Please check your number.';
+      return 'Failed to send OTP. Please try again.';
+    }
+    return 'Something went wrong. Please try again.';
   }
 
   Future<void> signOut() async {

@@ -22,6 +22,7 @@ import '../widgets/service_card.dart';
 import '../widgets/vendor_search_bar.dart';
 import '../widgets/service_content_widgets.dart';
 import '../widgets/vendor_service_config_dialog.dart';
+import 'vendor_service_detail_dialog.dart';
 
 // ── Category palette — assigned by root-category sort index ───────────────────
 const _kCatColors = [
@@ -338,8 +339,8 @@ class _ServicesPageState extends ConsumerState<ServicesPage> {
     setState(() => _addingIds.add(service.id));
     try {
       await ref
-          .read(assignServicesProvider.notifier)
-          .assign(user.id, [service.id]);
+          .read(assignServicesUseCaseProvider)
+          .call(user.id, [service.id]);
       ref.invalidate(vendorServicesProvider);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
@@ -392,8 +393,8 @@ class _ServicesPageState extends ConsumerState<ServicesPage> {
     setState(() => _bulkAddingKeys.add(bulkKey));
     try {
       await ref
-          .read(assignServicesProvider.notifier)
-          .assign(user.id, toAdd.map((s) => s.id).toList());
+          .read(assignServicesUseCaseProvider)
+          .call(user.id, toAdd.map((s) => s.id).toList());
       ref.invalidate(vendorServicesProvider);
       if (mounted) {
         final msg = alreadyCount > 0
@@ -772,13 +773,6 @@ class _AllServicesWide extends StatelessWidget {
                     (s.description?.toLowerCase().contains(q) ?? false))
                 .toList();
 
-        final Map<String, CatalogService> parentNodesByName = {};
-        for (final s in filtered) {
-          if (!s.isBookable && s.childrenCount > 0) {
-            parentNodesByName[s.name] = s;
-          }
-        }
-
         final tree = _buildCatalogTree(filtered, parentOf);
         var rootEntries = tree.children.entries.toList()
           ..sort((a, b) => a.key.compareTo(b.key));
@@ -815,7 +809,6 @@ class _AllServicesWide extends StatelessWidget {
                   assignedIds: assignedIds,
                   addingIds: addingIds,
                   bulkAddingKeys: bulkAddingKeys,
-                  parentNodesByName: parentNodesByName,
                   onAdd: onAdd,
                   onAddAll: onAddAll,
                 ),
@@ -840,7 +833,6 @@ class _AllWideTreeSection extends StatefulWidget {
     required this.assignedIds,
     required this.addingIds,
     required this.bulkAddingKeys,
-    required this.parentNodesByName,
     required this.onAdd,
     required this.onAddAll,
     this.isLast = false,
@@ -855,7 +847,6 @@ class _AllWideTreeSection extends StatefulWidget {
   final Set<String> assignedIds;
   final Set<String> addingIds;
   final Set<String> bulkAddingKeys;
-  final Map<String, CatalogService> parentNodesByName;
   final Future<void> Function(CatalogService) onAdd;
   final Future<void> Function(String key, List<CatalogService> services,
       Set<String> assignedIds) onAddAll;
@@ -890,7 +881,6 @@ class _AllWideTreeSectionState extends State<_AllWideTreeSection> {
             assignedIds: widget.assignedIds,
             addingIds: widget.addingIds,
             bulkAddingKeys: widget.bulkAddingKeys,
-            parentNodesByName: widget.parentNodesByName,
             onAdd: widget.onAdd,
             onAddAll: widget.onAddAll,
           ),
@@ -902,7 +892,7 @@ class _AllWideTreeSectionState extends State<_AllWideTreeSection> {
                 Expanded(flex: 3, child: _ColHeader('SERVICE NAME')),
                 Expanded(flex: 4, child: _ColHeader('DESCRIPTION')),
                 SizedBox(width: 110, child: _ColHeader('PRICE')),
-                SizedBox(width: 96, child: _ColHeader('ACTION')),
+                SizedBox(width: 128, child: _ColHeader('ACTION')),
               ],
             ),
           ),
@@ -932,7 +922,6 @@ class _AllWideTreeSectionState extends State<_AllWideTreeSection> {
     final totalCount = node.totalCount;
     final allLeaves = node.allLeafServices;
     final bulkKey = node.name;
-    final parentService = widget.parentNodesByName[node.name];
     final isExpanded = widget.autoExpand || _expanded;
 
     if (widget.depth == 0) {
@@ -1002,6 +991,10 @@ class _AllWideTreeSectionState extends State<_AllWideTreeSection> {
                 ),
                 _AddAllButton(
                   isBusy: widget.bulkAddingKeys.contains(bulkKey),
+                  addedCount: allLeaves
+                      .where((s) => widget.assignedIds.contains(s.id))
+                      .length,
+                  totalLeafCount: allLeaves.length,
                   onTap: () =>
                       widget.onAddAll(bulkKey, allLeaves, widget.assignedIds),
                 ),
@@ -1073,20 +1066,14 @@ class _AllWideTreeSectionState extends State<_AllWideTreeSection> {
             ),
             _AddAllButton(
               isBusy: widget.bulkAddingKeys.contains(bulkKey),
+              addedCount: allLeaves
+                  .where((s) => widget.assignedIds.contains(s.id))
+                  .length,
+              totalLeafCount: allLeaves.length,
               onTap: () =>
                   widget.onAddAll(bulkKey, allLeaves, widget.assignedIds),
             ),
             const SizedBox(width: 8),
-            if (parentService != null) ...[
-              _ParentAddButton(
-                service: parentService,
-                isAdded: widget.assignedIds.contains(parentService.id),
-                isAdding: widget.addingIds.contains(parentService.id),
-                onAdd: widget.onAdd,
-              ),
-              const SizedBox(width: 16),
-            ] else
-              const SizedBox(width: 8),
           ],
         ),
         if (isExpanded) ...[
@@ -1140,9 +1127,13 @@ class _ServiceRowState extends State<_ServiceRow> {
       cursor: SystemMouseCursors.click,
       child: Container(
         color: Colors.transparent,
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 13),
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
         child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
+            // Thumbnail image
+            _ServiceThumb(imageUrl: s.imageUrl, name: s.name),
+            const SizedBox(width: 10),
             Expanded(
               flex: 3,
               child: Text(
@@ -1180,7 +1171,33 @@ class _ServiceRowState extends State<_ServiceRow> {
                 ),
               ),
             ),
-            SizedBox(width: 96, child: _buildAction()),
+            SizedBox(
+              width: 128,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  SizedBox(
+                    width: 30,
+                    height: 30,
+                    child: Tooltip(
+                      message: 'View details',
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(6),
+                        onTap: () =>
+                            VendorServiceDetailDialog.show(context, s),
+                        child: const Icon(
+                          Icons.open_in_new_rounded,
+                          size: 15,
+                          color: AppColors.textHint,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  _buildAction(),
+                ],
+              ),
+            ),
           ],
         ),
       ),
@@ -1247,88 +1264,6 @@ class _ServiceRowState extends State<_ServiceRow> {
 // Add button rendered on a sub-category group header when a parent catalog
 // node covers that group.  Taps the parent service, not individual children.
 // ─────────────────────────────────────────────────────────────────────────────
-
-class _ParentAddButton extends StatelessWidget {
-  const _ParentAddButton({
-    required this.service,
-    required this.isAdded,
-    required this.isAdding,
-    required this.onAdd,
-  });
-
-  final CatalogService service;
-  final bool isAdded;
-  final bool isAdding;
-  final Future<void> Function(CatalogService) onAdd;
-
-  Future<void> _confirmAdd(BuildContext context) async {
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (_) => ConfirmationDialog(
-        title: 'Add Service',
-        message: 'Add "${service.name}" to your services?',
-        confirmLabel: 'Add Service',
-      ),
-    );
-    if (ok == true) onAdd(service);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    if (isAdding) {
-      return const SizedBox(
-        width: 20,
-        height: 20,
-        child: CircularProgressIndicator(
-            strokeWidth: 2, color: AppColors.primary),
-      );
-    }
-    if (isAdded) {
-      return Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-        decoration: BoxDecoration(
-          color: AppColors.success.withAlpha(20),
-          borderRadius: BorderRadius.circular(6),
-          border: Border.all(color: AppColors.success.withAlpha(80)),
-        ),
-        child: const Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.check_rounded, size: 12, color: AppColors.success),
-            SizedBox(width: 4),
-            Text('Added',
-                style: TextStyle(
-                    fontSize: 11.5,
-                    fontWeight: FontWeight.w600,
-                    color: AppColors.success)),
-          ],
-        ),
-      );
-    }
-    return GestureDetector(
-      onTap: () => _confirmAdd(context),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(6),
-          border: Border.all(color: AppColors.primary),
-        ),
-        child: const Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.add_rounded, size: 13, color: AppColors.primary),
-            SizedBox(width: 3),
-            Text('Add',
-                style: TextStyle(
-                    fontSize: 11.5,
-                    fontWeight: FontWeight.w600,
-                    color: AppColors.primary)),
-          ],
-        ),
-      ),
-    );
-  }
-}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Wide — My Services (DODO / Custom sub-tabs)
@@ -1604,7 +1539,7 @@ class _MyServiceRowState extends ConsumerState<_MyServiceRow> {
                       color: AppColors.textPrimary)),
             ),
             SizedBox(
-              width: 88,
+              width: 118,
               child: _removing
                   ? const Center(
                       child: SizedBox(
@@ -1614,6 +1549,23 @@ class _MyServiceRowState extends ConsumerState<_MyServiceRow> {
                   : Row(
                       mainAxisAlignment: MainAxisAlignment.end,
                       children: [
+                        SizedBox(
+                          width: 30,
+                          height: 30,
+                          child: Tooltip(
+                            message: 'View details',
+                            child: InkWell(
+                              borderRadius: BorderRadius.circular(6),
+                              onTap: () => VendorServiceDetailDialog.show(
+                                  context, s.catalog),
+                              child: const Icon(
+                                Icons.open_in_new_rounded,
+                                size: 15,
+                                color: AppColors.textHint,
+                              ),
+                            ),
+                          ),
+                        ),
                         IconButton(
                           icon: const Icon(
                               Icons.delete_outline_rounded,
@@ -2040,7 +1992,7 @@ class _MyWideTreeSectionState extends State<_MyWideTreeSection> {
                 Expanded(flex: 3, child: _ColHeader('SERVICE NAME')),
                 Expanded(flex: 2, child: _ColHeader('CATEGORY')),
                 SizedBox(width: 120, child: _ColHeader('BASE PRICE')),
-                SizedBox(width: 88, child: _ColHeader('')),
+                SizedBox(width: 118, child: _ColHeader('')),
               ],
             ),
           ),
@@ -3966,6 +3918,10 @@ class _AllNarrowTreeSectionState extends State<_AllNarrowTreeSection> {
                 ),
                 _AddAllButton(
                   isBusy: widget.bulkAddingKeys.contains(bulkKey),
+                  addedCount: allLeaves
+                      .where((s) => widget.assignedIds.contains(s.id))
+                      .length,
+                  totalLeafCount: allLeaves.length,
                   onTap: () =>
                       widget.onAddAll(bulkKey, allLeaves, widget.assignedIds),
                 ),
@@ -4036,6 +3992,10 @@ class _AllNarrowTreeSectionState extends State<_AllNarrowTreeSection> {
             ),
             _AddAllButton(
               isBusy: widget.bulkAddingKeys.contains(bulkKey),
+              addedCount: allLeaves
+                  .where((s) => widget.assignedIds.contains(s.id))
+                  .length,
+              totalLeafCount: allLeaves.length,
               onTap: () =>
                   widget.onAddAll(bulkKey, allLeaves, widget.assignedIds),
             ),
@@ -4057,39 +4017,78 @@ class _AllNarrowTreeSectionState extends State<_AllNarrowTreeSection> {
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _AddAllButton extends StatelessWidget {
-  const _AddAllButton({required this.isBusy, required this.onTap});
+  const _AddAllButton({
+    required this.isBusy,
+    required this.addedCount,
+    required this.totalLeafCount,
+    required this.onTap,
+  });
 
   final bool isBusy;
+  final int addedCount;
+  final int totalLeafCount;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
+    if (isBusy) {
+      return const SizedBox(
+        height: 30,
+        child: Padding(
+          padding: EdgeInsets.symmetric(horizontal: 8),
+          child: SizedBox(
+            width: 16,
+            height: 16,
+            child: CircularProgressIndicator(strokeWidth: 2),
+          ),
+        ),
+      );
+    }
+    final allAdded = totalLeafCount > 0 && addedCount >= totalLeafCount;
+    final someAdded = addedCount > 0 && !allAdded;
+    if (allAdded) {
+      return Container(
+        height: 30,
+        padding: const EdgeInsets.symmetric(horizontal: 10),
+        decoration: BoxDecoration(
+          color: AppColors.success.withAlpha(20),
+          borderRadius: BorderRadius.circular(6),
+          border: Border.all(color: AppColors.success.withAlpha(80)),
+        ),
+        child: const Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.check_rounded, size: 12, color: AppColors.success),
+            SizedBox(width: 4),
+            Text(
+              'Added',
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: AppColors.success,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
     return SizedBox(
       height: 30,
-      child: isBusy
-          ? const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 8),
-              child: SizedBox(
-                width: 16,
-                height: 16,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              ),
-            )
-          : OutlinedButton(
-              onPressed: onTap,
-              style: OutlinedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(horizontal: 10),
-                minimumSize: Size.zero,
-                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                side: const BorderSide(color: AppColors.primary),
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(6)),
-                foregroundColor: AppColors.primary,
-                textStyle: const TextStyle(
-                    fontSize: 12, fontWeight: FontWeight.w600),
-              ),
-              child: const Text('+ Add All'),
-            ),
+      child: OutlinedButton(
+        onPressed: onTap,
+        style: OutlinedButton.styleFrom(
+          padding: const EdgeInsets.symmetric(horizontal: 10),
+          minimumSize: Size.zero,
+          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          side: const BorderSide(color: AppColors.primary),
+          shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(6)),
+          foregroundColor: AppColors.primary,
+          textStyle:
+              const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+        ),
+        child: Text(someAdded ? '+ Add Remaining' : '+ Add All'),
+      ),
     );
   }
 }
@@ -4110,20 +4109,11 @@ class _NarrowCatalogTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          Container(
-            width: 48,
-            height: 48,
-            decoration: BoxDecoration(
-              color: AppColors.primaryLight,
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: const Icon(Icons.home_repair_service_rounded,
-                size: 22, color: AppColors.primary),
-          ),
+          _ServiceThumb(imageUrl: service.imageUrl, name: service.name),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
@@ -4159,7 +4149,22 @@ class _NarrowCatalogTile extends StatelessWidget {
               ],
             ),
           ),
-          const SizedBox(width: 10),
+          const SizedBox(width: 8),
+          // View icon
+          SizedBox(
+            width: 28,
+            height: 28,
+            child: InkWell(
+              borderRadius: BorderRadius.circular(6),
+              onTap: () => VendorServiceDetailDialog.show(context, service),
+              child: const Icon(
+                Icons.open_in_new_rounded,
+                size: 15,
+                color: AppColors.textHint,
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
           _buildAction(context),
         ],
       ),
@@ -4231,6 +4236,54 @@ class _NarrowCatalogTile extends StatelessWidget {
       ),
     );
   }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Service thumbnail — 44×44, used in both wide and narrow product rows
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _ServiceThumb extends StatelessWidget {
+  const _ServiceThumb({required this.imageUrl, required this.name});
+  final String? imageUrl;
+  final String name;
+
+  IconData get _icon {
+    final n = name.toLowerCase();
+    if (n.contains('clean')) return Icons.cleaning_services_rounded;
+    if (n.contains('ac') || n.contains('air')) return Icons.ac_unit_rounded;
+    if (n.contains('plumb') || n.contains('tap')) return Icons.plumbing_rounded;
+    if (n.contains('electric') || n.contains('fan')) return Icons.electrical_services_rounded;
+    if (n.contains('paint')) return Icons.format_paint_rounded;
+    if (n.contains('pest')) return Icons.bug_report_rounded;
+    if (n.contains('carp')) return Icons.handyman_rounded;
+    return Icons.home_repair_service_rounded;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final hasImage = imageUrl?.isNotEmpty == true;
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(8),
+      child: SizedBox(
+        width: 44,
+        height: 44,
+        child: hasImage
+            ? Image.network(
+                imageUrl!,
+                fit: BoxFit.cover,
+                loadingBuilder: (_, child, progress) =>
+                    progress == null ? child : _placeholder(),
+                errorBuilder: (_, __, ___) => _placeholder(),
+              )
+            : _placeholder(),
+      ),
+    );
+  }
+
+  Widget _placeholder() => Container(
+        color: AppColors.primaryLight,
+        child: Icon(_icon, size: 20, color: AppColors.primary),
+      );
 }
 
 class _NarrowDot extends StatelessWidget {
@@ -5177,6 +5230,7 @@ class _CreateServiceDialogState extends ConsumerState<_CreateServiceDialog> {
                     ),
                   ),
               ],
+              if (featureEnabled) ...[
               const SizedBox(height: 20),
               const Divider(height: 1),
               const SizedBox(height: 20),
@@ -5425,6 +5479,21 @@ class _CreateServiceDialogState extends ConsumerState<_CreateServiceDialog> {
                   ),
                 ],
               ),
+              ] else ...[
+                const SizedBox(height: 20),
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    style: OutlinedButton.styleFrom(
+                      fixedSize: const Size.fromHeight(44),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8)),
+                    ),
+                    child: const Text('Close'),
+                  ),
+                ),
+              ],
             ],
           ),
         ),

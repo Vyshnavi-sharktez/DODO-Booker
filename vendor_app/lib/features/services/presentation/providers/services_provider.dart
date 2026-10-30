@@ -93,6 +93,24 @@ final vendorTrendingServicesProvider = FutureProvider<List<CatalogService>>(
   },
 );
 
+/// Static FAQs for a single catalog service, fetched from service_faqs table.
+/// Uses the same query as the Customer App's catalogNodeFaqsProvider.
+final vendorServiceFaqsProvider = FutureProvider.autoDispose
+    .family<List<({String question, String answer})>, String>(
+  (ref, serviceId) async {
+    final maps = await ref
+        .read(servicesDatasourceProvider)
+        .fetchServiceFaqs(serviceId);
+    return maps
+        .map((m) => (
+              question: (m['question'] as String?) ?? '',
+              answer: (m['answer'] as String?) ?? '',
+            ))
+        .where((f) => f.question.isNotEmpty && f.answer.isNotEmpty)
+        .toList();
+  },
+);
+
 // ── Action notifiers ──────────────────────────────────────────────────────────
 
 class AssignServicesNotifier extends StateNotifier<AsyncValue<void>> {

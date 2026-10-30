@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/widgets/app_modal_dialog.dart';
 import '../../../core/widgets/clickable.dart';
@@ -106,9 +107,18 @@ class _OtpVerificationModalState extends ConsumerState<OtpVerificationModal> {
       _nodes[0].requestFocus();
       setState(() {
         _isLoading = false;
-        _error = 'Invalid OTP. Please check and try again.';
+        _error = _otpError(e);
       });
     }
+  }
+
+  String _otpError(Object e) {
+    if (e is AuthException) {
+      if (e.code == 'otp_expired') return 'OTP has expired. Please request a new OTP.';
+      if (e.code == 'over_sms_send_rate_limit') return 'Too many attempts. Please wait before requesting a new OTP.';
+      return 'Invalid OTP. Please try again.';
+    }
+    return 'Something went wrong. Please try again.';
   }
 
   Future<void> _resend() async {
