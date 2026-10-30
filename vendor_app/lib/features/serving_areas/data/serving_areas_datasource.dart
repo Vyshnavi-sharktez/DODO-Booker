@@ -7,7 +7,7 @@ class ServingAreasDatasource {
 
   Future<List<ServingArea>> fetchActive() async {
     final rows = await _client
-        .from('vendor_serving_areas')
+        .from('service_availability_areas')
         .select()
         .eq('is_active', true)
         .order('name');

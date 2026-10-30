@@ -36,6 +36,7 @@ import '../../tax/providers/tax_provider.dart';
 import '../../surge_fee/models/surge_fee_model.dart';
 import '../../surge_fee/providers/surge_fee_provider.dart';
 import '../../preferred_vendor/providers/preferred_vendor_provider.dart';
+import '../../service_charge/providers/service_charge_provider.dart';
 import '../../service_availability/services/serviceability_service.dart';
 import '../../service_availability/widgets/service_area_unavailable_dialog.dart';
 import '../../../features/booking/services/razorpay_service.dart';
@@ -63,6 +64,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
   SurgeFeeModel _displaySurge = SurgeFeeModel.defaults;
   String? _selectedPreferredVendorId;
   double _preferredVendorFeeAmount = 0.0;
+  double _serviceChargeTotal = 0.0;
 
   static const _monthNames = [
     'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
@@ -119,7 +121,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
   double get _loyaltyDiscount => _loyaltyRedeemPoints.toDouble();
 
   double get _grandTotal =>
-      (_subtotal + _surge + _preferredVendorFeeAmount + _tax - _discount - _loyaltyDiscount)
+      (_subtotal + _surge + _preferredVendorFeeAmount + _tax + _serviceChargeTotal - _discount - _loyaltyDiscount)
           .clamp(0.0, double.infinity);
 
   Future<void> _pickDate() async {
@@ -300,6 +302,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         preferredVendorFeeAmount: _preferredVendorFeeAmount > 0 ? _preferredVendorFeeAmount : null,
         paymentMethod: paymentMethod,
         globalAddonsTotal: ref.read(globalAddonsTotalProvider),
+        serviceChargeAmount: _serviceChargeTotal,
       );
       debugPrint('[DODO][Checkout] ✓ createCartBooking returned — id=${booking.id}');
 
@@ -755,6 +758,15 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     _surgeTotal = newSurgeTotal;
     _displaySurge = firstSurge ?? SurgeFeeModel.defaults;
 
+    // Resolve service charge total; keep previous value while RPC is in flight
+    // so the grand total doesn't flash to 0 on every quantity change.
+    final scAsync = ref.watch(serviceChargeTotalProvider);
+    _serviceChargeTotal = scAsync.when(
+      data: (v) => v,
+      loading: () => _serviceChargeTotal,
+      error: (_, __) => _serviceChargeTotal,
+    );
+
     // Resolve loyalty earn points per cart item using scoped catalog config.
     final globalLoyalty =
         ref.watch(loyaltySettingsProvider).valueOrNull ?? LoyaltySettingsModel.defaults;
@@ -1015,6 +1027,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
           loyaltyDiscount: _loyaltyDiscount,
           surge: _surge,
           preferredVendorFee: _preferredVendorFeeAmount,
+          serviceCharge: _serviceChargeTotal,
           tax: _tax,
           grandTotal: _grandTotal,
           surgeLabel: _displaySurge.displayLabel,
@@ -2035,6 +2048,7 @@ class _PriceSummary extends StatelessWidget {
   final double loyaltyDiscount;
   final double surge;
   final double preferredVendorFee;
+  final double serviceCharge;
   final double tax;
   final double grandTotal;
   final String surgeLabel;
@@ -2049,6 +2063,7 @@ class _PriceSummary extends StatelessWidget {
     required this.loyaltyDiscount,
     required this.surge,
     this.preferredVendorFee = 0.0,
+    this.serviceCharge = 0.0,
     required this.tax,
     required this.grandTotal,
     this.surgeLabel = 'Surge Fee',
@@ -2093,6 +2108,10 @@ class _PriceSummary extends StatelessWidget {
             value: '₹${preferredVendorFee.toInt()}',
             tt: tt,
           ),
+        ],
+        if (serviceCharge > 0) ...[
+          const SizedBox(height: 8),
+          _Row(label: 'Service Charge', value: '₹${serviceCharge.toInt()}', tt: tt),
         ],
         if (showTaxLine && tax > 0) ...[
           const SizedBox(height: 8),

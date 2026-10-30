@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../../../core/theme/app_theme.dart';
 import '../../../../../core/widgets/image_upload_field.dart';
@@ -51,6 +52,8 @@ class CatalogNodeFormDialog extends StatefulWidget {
     int? warrantyDays,
     String? warrantyCovers,
     String? warrantyExclusions,
+    bool serviceChargeEnabled,
+    double serviceChargeAmount,
   }) onSave;
 
   @override
@@ -82,6 +85,8 @@ class _CatalogNodeFormDialogState extends State<CatalogNodeFormDialog> {
   late final TextEditingController _warrantyDays;
   late final TextEditingController _warrantyCovers;
   late final TextEditingController _warrantyExclusions;
+  bool _serviceChargeEnabled = false;
+  late final TextEditingController _serviceChargeAmount;
   bool _saving = false;
 
   /// True when this dialog is creating or editing a root-level (no-parent) node.
@@ -89,6 +94,10 @@ class _CatalogNodeFormDialogState extends State<CatalogNodeFormDialog> {
   bool get _isRootContext =>
       widget.parentNode == null &&
       (widget.existing == null || widget.existing!.isRoot);
+
+  /// True when the node is a bookable leaf product. SC must NOT be shown here.
+  bool get _isEffectivelyBookable =>
+      _isBookable && !_isRootContext && !widget.hasChildren;
 
   @override
   void initState() {
@@ -125,6 +134,29 @@ class _CatalogNodeFormDialogState extends State<CatalogNodeFormDialog> {
     );
     _warrantyCovers = TextEditingController(text: e?.warrantyCovers ?? '');
     _warrantyExclusions = TextEditingController(text: e?.warrantyExclusions ?? '');
+    _serviceChargeAmount = TextEditingController();
+    if (e != null) _loadServiceChargeConfig(e.id);
+  }
+
+  Future<void> _loadServiceChargeConfig(String nodeId) async {
+    try {
+      final row = await Supabase.instance.client
+          .from('catalog_node_configs')
+          .select('is_enabled, config')
+          .eq('node_id', nodeId)
+          .eq('module', 'service_charge')
+          .maybeSingle();
+      if (row != null && mounted) {
+        final enabled = (row['is_enabled'] as bool?) ?? false;
+        final cfg = row['config'] as Map<String, dynamic>?;
+        final amount = (cfg?['amount'] as num?)?.toDouble() ?? 0.0;
+        setState(() {
+          _serviceChargeEnabled = enabled;
+          _serviceChargeAmount.text =
+              amount > 0 ? amount.toStringAsFixed(0) : '';
+        });
+      }
+    } catch (_) {}
   }
 
   @override
@@ -140,6 +172,7 @@ class _CatalogNodeFormDialogState extends State<CatalogNodeFormDialog> {
     _warrantyDays.dispose();
     _warrantyCovers.dispose();
     _warrantyExclusions.dispose();
+    _serviceChargeAmount.dispose();
     super.dispose();
   }
 
@@ -190,6 +223,10 @@ class _CatalogNodeFormDialogState extends State<CatalogNodeFormDialog> {
         warrantyExclusions: (_isBookable && _warrantyEnabled && _warrantyExclusions.text.trim().isNotEmpty)
             ? _warrantyExclusions.text.trim()
             : null,
+        serviceChargeEnabled: !_isEffectivelyBookable && _serviceChargeEnabled,
+        serviceChargeAmount: (!_isEffectivelyBookable && _serviceChargeEnabled && _serviceChargeAmount.text.trim().isNotEmpty)
+            ? (double.tryParse(_serviceChargeAmount.text.trim()) ?? 0)
+            : 0,
       );
       if (mounted) Navigator.of(context).pop();
     } catch (e) {
@@ -698,6 +735,52 @@ class _CatalogNodeFormDialogState extends State<CatalogNodeFormDialog> {
                     '+ Add excluded item',
                     () => setState(() => _addingExcluded = true),
                   ),
+              ],
+            ],
+
+            // ── Service Charge — non-bookable navigation nodes only ─────────
+            // Bookable leaf products are excluded. Charge resolves via hierarchy.
+            if (!_isEffectivelyBookable) ...[
+              const SizedBox(height: 16),
+              const Divider(),
+              const SizedBox(height: 12),
+              _buildToggleRow(
+                icon: Icons.receipt_long_outlined,
+                label: 'Service Charge',
+                subtitle: 'Fixed charge applied once per booking for products under this node',
+                value: _serviceChargeEnabled,
+                onChanged: (v) => setState(() {
+                  _serviceChargeEnabled = v;
+                  if (!v) _serviceChargeAmount.clear();
+                }),
+                activeColor: AppColors.primary,
+              ),
+              if (_serviceChargeEnabled) ...[
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: _serviceChargeAmount,
+                  decoration: const InputDecoration(
+                    labelText: 'Charge Amount (₹) *',
+                    prefixIcon: Icon(Icons.currency_rupee),
+                    helperText:
+                        'Applied once per booking, resolved via hierarchy from product upward.',
+                  ),
+                  keyboardType:
+                      const TextInputType.numberWithOptions(decimal: true),
+                  inputFormatters: [
+                    FilteringTextInputFormatter.allow(
+                        RegExp(r'^\d+\.?\d{0,2}')),
+                  ],
+                  validator: (v) {
+                    if (_isEffectivelyBookable || !_serviceChargeEnabled) return null;
+                    if (v == null || v.trim().isEmpty) {
+                      return 'Amount is required when service charge is enabled';
+                    }
+                    final amt = double.tryParse(v.trim());
+                    if (amt == null || amt <= 0) return 'Amount must be greater than 0';
+                    return null;
+                  },
+                ),
               ],
             ],
           ],

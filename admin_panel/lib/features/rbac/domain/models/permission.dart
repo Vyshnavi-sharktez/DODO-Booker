@@ -33,7 +33,7 @@ class Permission {
     'refund.view': 'View refund requests, history, and status updates.',
     'service.view': 'View and manage services, attributes, and showcase items.',
     'settings.manage': 'Manage global platform settings, service availability areas, and fees.',
-    'vendor.view': 'View and manage vendors, serving areas, tiers, and settlements.',
+    'vendor.view': 'View and manage vendors, service areas, tiers, and settlements.',
     // Granular CRUD permissions
     'booking.create': 'Create bookings manually.',
     'booking.read': 'View bookings, warranty claims, call sessions, and dispatch analytics.',
@@ -44,7 +44,7 @@ class Permission {
     'customer.update': 'Edit customer information, addresses, and manage account status.',
     'customer.delete': 'Delete customer accounts.',
     'vendor.create': 'Add new vendor accounts.',
-    'vendor.read': 'View vendors, serving areas, subscriptions, tiers, and service requests.',
+    'vendor.read': 'View vendors, service areas, subscriptions, tiers, and service requests.',
     'vendor.update': 'Edit vendor profiles, verify, assign tiers, and manage settlements.',
     'vendor.delete': 'Delete vendor accounts.',
     'catalog.create': 'Create catalog nodes, categories, services, and AMC plans.',

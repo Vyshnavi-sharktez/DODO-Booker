@@ -456,6 +456,40 @@ class CatalogNodeRepository {
     return (data as List).length;
   }
 
+  // ── Service charge config ─────────────────────────────────────────────────────
+
+  Future<({bool enabled, double amount})?> fetchServiceChargeConfig(String nodeId) async {
+    final row = await _supabase
+        .from('catalog_node_configs')
+        .select('is_enabled, config')
+        .eq('node_id', nodeId)
+        .eq('module', 'service_charge')
+        .maybeSingle();
+    if (row == null) return null;
+    final enabled = (row['is_enabled'] as bool?) ?? false;
+    final cfg = row['config'] as Map<String, dynamic>?;
+    final amount = (cfg?['amount'] as num?)?.toDouble() ?? 0.0;
+    return (enabled: enabled, amount: amount);
+  }
+
+  Future<void> upsertServiceChargeConfig(
+    String nodeId, {
+    required bool enabled,
+    required double amount,
+  }) async {
+    await _supabase
+        .from('catalog_node_configs')
+        .delete()
+        .eq('node_id', nodeId)
+        .eq('module', 'service_charge');
+    await _supabase.from('catalog_node_configs').insert({
+      'node_id': nodeId,
+      'module': 'service_charge',
+      'is_enabled': enabled,
+      'config': {'amount': amount},
+    });
+  }
+
   Future<CatalogNode> fetchById(String id) => _fetchById(id);
 
   Future<CatalogNode> _fetchById(String id) async {

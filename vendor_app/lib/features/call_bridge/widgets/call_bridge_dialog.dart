@@ -49,7 +49,7 @@ class CallBridgeDialog extends ConsumerStatefulWidget {
 
 class _CallBridgeDialogState extends ConsumerState<CallBridgeDialog> {
   CallSession? _session;
-  String _statusText = 'Initiating call via Exotel…';
+  String _statusText = 'Initiating secured call…';
   bool _initiating = true;
   bool _isTerminal = false;
   String? _error;
@@ -114,7 +114,7 @@ class _CallBridgeDialogState extends ConsumerState<CallBridgeDialog> {
 
   String _statusForSession(CallSession s) {
     return switch (s.status) {
-      'initiated' => 'Connecting to Exotel…',
+      'initiated' => 'Connecting…',
       'ringing' => 'Your phone is ringing — please answer',
       'connected' => 'Call connected',
       'ended' => 'Call ended (${s.durationFormatted})',
@@ -159,7 +159,7 @@ class _CallBridgeDialogState extends ConsumerState<CallBridgeDialog> {
                       size: 14, color: AppColors.primary),
                   SizedBox(width: 6),
                   Text(
-                    'DODO SECURE CALL — POWERED BY EXOTEL',
+                    'DODO BOOKER SECURED CALL',
                     style: TextStyle(
                       fontSize: 10,
                       fontWeight: FontWeight.bold,
@@ -297,7 +297,7 @@ class _CallBridgeDialogState extends ConsumerState<CallBridgeDialog> {
                 Padding(
                   padding: const EdgeInsets.only(top: 6),
                   child: Text(
-                    'Exotel is calling your registered phone number.',
+                    'Your registered phone number will ring shortly.',
                     style: TextStyle(
                         fontSize: 11,
                         color: AppColors.textSecondary),

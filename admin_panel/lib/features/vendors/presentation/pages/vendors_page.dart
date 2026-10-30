@@ -140,12 +140,35 @@ class _VendorsPageState extends ConsumerState<VendorsPage> {
     );
     if (confirmed != true) return;
     try {
-      await ref
+      final result = await ref
           .read(vendorsNotifierProvider.notifier)
           .deleteVendor(vendor.id);
-      if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(const SnackBar(content: Text('Vendor deleted')));
+      if (!mounted) return;
+      final action = result['action'] as String?;
+      if (action == 'archived') {
+        final reason = result['reason'] as String? ?? 'historical records';
+        showDialog<void>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12)),
+            title: const Text('Vendor Archived'),
+            content: Text(
+              '"${vendor.businessName}" has been deactivated and hidden from all lists.\n\n'
+              'Historical records were preserved ($reason).',
+            ),
+            actions: [
+              FilledButton(
+                onPressed: () => Navigator.of(ctx).pop(),
+                child: const Text('OK'),
+              ),
+            ],
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Vendor deleted')),
+        );
       }
     } catch (e) {
       if (mounted) {
@@ -735,10 +758,18 @@ class _VendorRow extends StatelessWidget {
             ),
           ),
 
-          // Status
+          // Account status + availability
           Expanded(
             flex: 2,
-            child: _StatusBadge(status: vendor.status),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _StatusBadge(status: vendor.status),
+                const SizedBox(height: 4),
+                _OnlineDot(isOnline: vendor.isOnline),
+              ],
+            ),
           ),
 
           // Rating
@@ -837,6 +868,32 @@ class _VendorAvatar extends StatelessWidget {
               ),
             )
           : null,
+    );
+  }
+}
+
+class _OnlineDot extends StatelessWidget {
+  final bool isOnline;
+  const _OnlineDot({required this.isOnline});
+
+  @override
+  Widget build(BuildContext context) {
+    final color =
+        isOnline ? const Color(0xFF38A169) : AppColors.textSecondary;
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 6,
+          height: 6,
+          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+        ),
+        const SizedBox(width: 4),
+        Text(
+          isOnline ? 'Online' : 'Offline',
+          style: TextStyle(fontSize: 11, color: color),
+        ),
+      ],
     );
   }
 }

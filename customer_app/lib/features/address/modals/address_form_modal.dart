@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:geolocator/geolocator.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/services/nominatim_service.dart';
+import '../../../core/services/pin_code_service.dart';
 import '../../../core/widgets/app_modal_dialog.dart';
 import '../../../models/address_model.dart';
 import '../screens/map_picker_screen.dart';
@@ -41,6 +42,9 @@ class _AddressFormModalState extends ConsumerState<AddressFormModal> {
   String? _locationError;
   Future<void> Function()? _settingsCallback;
 
+  PinLookupStatus _pinStatus = PinLookupStatus.idle;
+  final _pinCtrl = PinLookupController();
+
   static const _types = ['Home', 'Office', 'Other'];
 
   bool get _isEditing => widget.initialAddress != null;
@@ -58,16 +62,77 @@ class _AddressFormModalState extends ConsumerState<AddressFormModal> {
     _pincodeCtrl.text = a?.pincode ?? '';
     _latitude = a?.latitude;
     _longitude = a?.longitude;
+    _pincodeCtrl.addListener(_onPincodeChanged);
   }
 
   @override
   void dispose() {
+    _pinCtrl.dispose();
     _line1Ctrl.dispose();
     _line2Ctrl.dispose();
     _cityCtrl.dispose();
     _stateCtrl.dispose();
     _pincodeCtrl.dispose();
     super.dispose();
+  }
+
+  void _onPincodeChanged() {
+    _pinCtrl.onPinChanged(
+      _pincodeCtrl.text.trim(),
+      isMounted: () => mounted,
+      onPinActive: () {
+        if (!mounted) return;
+        setState(() {
+          _pinStatus = PinLookupStatus.loading;
+          _clearPinFilledFields();
+        });
+      },
+      onResult: (result, lat, lng) {
+        if (!mounted) return;
+        setState(() {
+          _pinStatus = PinLookupStatus.found;
+          // Always overwrite — user explicitly changed the PIN.
+          _cityCtrl.text = result.district;
+          _stateCtrl.text = result.state;
+          if (lat != null && lng != null) {
+            _latitude = lat;
+            _longitude = lng;
+          }
+        });
+      },
+      onFailed: () {
+        if (!mounted) return;
+        setState(() => _pinStatus = PinLookupStatus.notFound);
+      },
+      onIdle: () {
+        if (!mounted) return;
+        setState(() {
+          _pinStatus = PinLookupStatus.idle;
+          _clearPinFilledFields();
+        });
+      },
+    );
+  }
+
+  /// Clears city, state, and coordinates only if they were filled by the
+  /// last PIN lookup (detected via [PinLookupController.lastFilled*]).
+  /// Manually edited values are left untouched.
+  void _clearPinFilledFields() {
+    final fc = _pinCtrl.lastFilledCity;
+    final fs = _pinCtrl.lastFilledState;
+    final fLat = _pinCtrl.lastFilledLat;
+    final fLng = _pinCtrl.lastFilledLng;
+    if (fc != null && _cityCtrl.text.trim() == fc.trim()) {
+      _cityCtrl.text = '';
+    }
+    if (fs != null && _stateCtrl.text.trim() == fs.trim()) {
+      _stateCtrl.text = '';
+    }
+    if (fLat != null && fLng != null &&
+        _latitude == fLat && _longitude == fLng) {
+      _latitude = null;
+      _longitude = null;
+    }
   }
 
   void _setLocationError(String msg, {Future<void> Function()? openSettings}) {
@@ -477,7 +542,28 @@ class _AddressFormModalState extends ConsumerState<AddressFormModal> {
             const SizedBox(height: 6),
             TextFormField(
               controller: _pincodeCtrl,
-              decoration: _inputDecoration('e.g. 560001', cs),
+              decoration: _inputDecoration('e.g. 560001', cs).copyWith(
+                suffixIcon: switch (_pinStatus) {
+                  PinLookupStatus.loading => const Padding(
+                    padding: EdgeInsets.all(12),
+                    child: SizedBox.square(
+                      dimension: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                  ),
+                  PinLookupStatus.found => const Icon(
+                    Icons.check_circle_rounded,
+                    color: Color(0xFF2E7D32),
+                    size: 20,
+                  ),
+                  PinLookupStatus.notFound => const Icon(
+                    Icons.error_outline_rounded,
+                    color: AppColors.error,
+                    size: 20,
+                  ),
+                  _ => null,
+                },
+              ),
               keyboardType: TextInputType.number,
               inputFormatters: [
                 FilteringTextInputFormatter.digitsOnly,

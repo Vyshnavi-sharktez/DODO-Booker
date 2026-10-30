@@ -137,6 +137,30 @@ final _vendorServiceEligibleProvider =
   return (result ?? []).map((id) => id as String).toSet();
 });
 
+/// Single-query today's workload: returns {vendorId → count} of bookings
+/// whose service_date is today (Asia/Kolkata = UTC+05:30), grouped by vendor.
+/// Excludes cancelled and rejected bookings. Keyed by the IST date string so
+/// a new day's dialog open automatically fetches fresh data.
+final _vendorTodayBookingCountsProvider =
+    FutureProvider.autoDispose.family<Map<String, int>, String>(
+        (ref, todayIst) async {
+  final rows = await Supabase.instance.client
+      .from('bookings')
+      .select('vendor_id, status')
+      .eq('service_date', todayIst)
+      .not('vendor_id', 'is', null);
+  const excluded = {'cancelled', 'rejected'};
+  final counts = <String, int>{};
+  for (final r in rows as List) {
+    final id = r['vendor_id'] as String?;
+    final status = r['status'] as String?;
+    if (id != null && id.isNotEmpty && !excluded.contains(status)) {
+      counts[id] = (counts[id] ?? 0) + 1;
+    }
+  }
+  return counts;
+});
+
 enum _AssigneeType { vendor, team, unassigned }
 
 // ── Dialog ─────────────────────────────────────────────────────────────────────
@@ -562,6 +586,30 @@ class _BookingAssignmentDialogState
             const <String>{}
         : const <String>{};
 
+    // Today in IST (Asia/Kolkata = UTC+05:30) for workload counts.
+    final todayIst = _isoDateFmt.format(
+      DateTime.now().toUtc().add(const Duration(hours: 5, minutes: 30)),
+    );
+    final todayBookingCounts =
+        ref.watch(_vendorTodayBookingCountsProvider(todayIst)).valueOrNull ??
+            const <String, int>{};
+
+    // Invert area→vendors map to vendor→areas for serving-area chip display.
+    // Both data sources are already watched above; no extra queries needed.
+    final areaById = {
+      for (final a in servingAreasAsync.valueOrNull ?? <VendorServingArea>[])
+        a.id: a,
+    };
+    final vendorAreasMap = <String, List<VendorServingArea>>{};
+    for (final entry
+        in (assignmentsAsync.valueOrNull ?? <String, Set<String>>{}).entries) {
+      final area = areaById[entry.key];
+      if (area == null) continue;
+      for (final vendorId in entry.value) {
+        (vendorAreasMap[vendorId] ??= []).add(area);
+      }
+    }
+
     final allVendors = vendorsAsync.valueOrNull ?? <Vendor>[];
     final allTeams = dodoTeamsAsync.valueOrNull ?? <DodoTeam>[];
 
@@ -659,6 +707,8 @@ class _BookingAssignmentDialogState
                               ? (widget.booking.amcContractId ?? '')
                               : '',
                           noServiceVendors: noServiceVendors,
+                          todayBookingCounts: todayBookingCounts,
+                          vendorAreasMap: vendorAreasMap,
                         ),
 
                       if (_assigneeType == _AssigneeType.team)
@@ -847,6 +897,8 @@ class _BookingAssignmentDialogState
     bool assignmentEnforced = false,
     String contractId = '',
     bool noServiceVendors = false,
+    Map<String, int> todayBookingCounts = const {},
+    Map<String, List<VendorServingArea>> vendorAreasMap = const {},
   }) {
     if (isLoading) {
       return const Center(
@@ -979,6 +1031,8 @@ class _BookingAssignmentDialogState
             ..._candidateCards(
               result.all,
               selectedId: _vendorId,
+              todayBookingCounts: todayBookingCounts,
+              vendorAreasMap: vendorAreasMap,
               onSelect: (id) => setState(() {
                 final next = _vendorId == id ? '' : id;
                 if (next != _walletErrVendorId) _clearWalletError();
@@ -1094,6 +1148,8 @@ class _BookingAssignmentDialogState
         ..._candidateCards(
           result.inArea,
           selectedId: _vendorId,
+          todayBookingCounts: todayBookingCounts,
+          vendorAreasMap: vendorAreasMap,
           onSelect: (id) => setState(() {
             if (id != _walletErrVendorId) _clearWalletError();
             _vendorId = id;
@@ -1256,18 +1312,80 @@ class _BookingAssignmentDialogState
     );
   }
 
+  Future<bool> _confirmOfflineAssignment(String vendorName) async {
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape:
+            RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        title: const Text('Assign Offline Vendor?'),
+        content: Text(
+          '$vendorName is currently offline and may not be available.\n\n'
+          'You can still assign this booking, but the vendor will need to '
+          'come online and accept it in the vendor app.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            style: FilledButton.styleFrom(
+              backgroundColor: AppColors.warning,
+            ),
+            child: const Text('Assign Anyway'),
+          ),
+        ],
+      ),
+    );
+    return result == true;
+  }
+
   List<Widget> _candidateCards(
     List<AssigneeCandidate> candidates, {
     String? selectedId,
     void Function(String id)? onSelect,
+    Map<String, int> todayBookingCounts = const {},
+    Map<String, List<VendorServingArea>> vendorAreasMap = const {},
   }) {
     return candidates.map((candidate) {
       final isBusy = candidate.status == AssigneeStatus.busy;
-      final blocked = _saving || isBusy || candidate.ineligibleForCod || candidate.ineligibleForAssignment;
+      final isOfflineVendor = candidate.kind == AssigneeKind.vendor &&
+          candidate.status == AssigneeStatus.offline;
+      final blocked = _saving ||
+          isBusy ||
+          candidate.ineligibleForCod ||
+          candidate.ineligibleForAssignment;
+      final todayCount = candidate.kind == AssigneeKind.vendor
+          ? (todayBookingCounts[candidate.id] ?? 0)
+          : null;
+      final vendorAreas = candidate.kind == AssigneeKind.vendor
+          ? (vendorAreasMap[candidate.id] ?? const <VendorServingArea>[])
+          : null;
+      final isInArea =
+          candidate.kind == AssigneeKind.vendor ? candidate.isInArea : null;
+
+      VoidCallback? effectiveOnSelect;
+      if (!blocked) {
+        if (isOfflineVendor) {
+          effectiveOnSelect = () async {
+            if (await _confirmOfflineAssignment(candidate.name)) {
+              onSelect?.call(candidate.id);
+            }
+          };
+        } else {
+          effectiveOnSelect = () => onSelect?.call(candidate.id);
+        }
+      }
+
       return _AssigneeCandidateCard(
         candidate: candidate,
         isSelected: selectedId == candidate.id,
-        onSelect: blocked ? null : () => onSelect?.call(candidate.id),
+        onSelect: effectiveOnSelect,
+        todayCount: todayCount,
+        vendorAreas: vendorAreas,
+        isInArea: isInArea,
       );
     }).toList();
   }
@@ -1324,11 +1442,21 @@ class _AssigneeCandidateCard extends StatelessWidget {
   final AssigneeCandidate candidate;
   final bool isSelected;
   final VoidCallback? onSelect;
+  // null for DODO Team cards; 0+ for vendor cards.
+  final int? todayCount;
+  // null for DODO Team cards; empty list means vendor has no assigned areas.
+  final List<VendorServingArea>? vendorAreas;
+  // Whether this vendor's serving areas cover the booking location.
+  // null for DODO Team cards.
+  final bool? isInArea;
 
   const _AssigneeCandidateCard({
     required this.candidate,
     required this.isSelected,
     required this.onSelect,
+    this.todayCount,
+    this.vendorAreas,
+    this.isInArea,
   });
 
   @override
@@ -1511,6 +1639,89 @@ class _AssigneeCandidateCard extends StatelessWidget {
                   'Also busy on this date',
                   style: TextStyle(
                       fontSize: 11, color: AppColors.textSecondary),
+                ),
+              ],
+            ),
+          ],
+          if (todayCount case final count?) ...[
+            const SizedBox(height: 6),
+            Row(
+              children: [
+                Icon(Icons.calendar_today_outlined,
+                    size: 12, color: AppColors.textSecondary),
+                const SizedBox(width: 5),
+                Text(
+                  "Today's Assigned Bookings: $count",
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w500,
+                    color: count > 0
+                        ? AppColors.textPrimary
+                        : AppColors.textSecondary,
+                  ),
+                ),
+              ],
+            ),
+          ],
+          if (vendorAreas case final areas?) ...[
+            const SizedBox(height: 8),
+            if (areas.isEmpty)
+              Text(
+                'No serving areas selected',
+                style: TextStyle(
+                    fontSize: 11, color: AppColors.textSecondary),
+              )
+            else
+              Wrap(
+                spacing: 4,
+                runSpacing: 4,
+                children: [
+                  for (final area in areas)
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: AppColors.primary.withValues(alpha: 0.08),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(
+                          color: AppColors.primary.withValues(alpha: 0.25),
+                        ),
+                      ),
+                      child: Text(
+                        area.name,
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w500,
+                          color: AppColors.primary,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+          ],
+          if (isInArea != null) ...[
+            const SizedBox(height: 6),
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  isInArea!
+                      ? Icons.location_on_rounded
+                      : Icons.location_off_rounded,
+                  size: 12,
+                  color: isInArea!
+                      ? AppColors.success
+                      : AppColors.textSecondary,
+                ),
+                const SizedBox(width: 4),
+                Text(
+                  isInArea! ? 'In-area' : 'Out-of-area',
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: isInArea!
+                        ? AppColors.success
+                        : AppColors.textSecondary,
+                  ),
                 ),
               ],
             ),
