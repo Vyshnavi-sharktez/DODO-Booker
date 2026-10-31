@@ -7,42 +7,23 @@
 // No changes to the repository, notifier, or database schema are needed —
 // the settings table is generic key-value storage.
 const Map<String, String> kSettingDefaults = {
-  // General
-  'platform_name': 'DODO Booker',
-  'support_email': 'support@dodobooker.com',
-  'support_phone': '',
-  'default_currency': 'INR',
-  'timezone': 'Asia/Kolkata',
-
   // Business
-  'platform_commission_pct': '10',
   'min_booking_amount': '100',
   'max_booking_amount': '50000',
-  'auto_assign_vendor': 'false',
 
   // Booking
   'booking_cancellation_window_hours': '24',
   'booking_reschedule_limit': '2',
-  'advance_booking_days': '30',
   'amc_scheduling_window_days': '5',
   'default_warranty_days': '30',
   'default_refund_period_days': '30',
 
   // Notification
-  'enable_email_notifications': 'true',
   'enable_push_notifications': 'true',
-  'enable_sms_notifications': 'false',
   'notification_retention_hours': '168',
 
   // Vendor
-  'vendor_approval_required': 'true',
-  'vendor_commission_pct': '80',
-  'settlement_cycle_days': '7',
   'gps_geofence_radius_meters': '100',
-
-  // Customer
-  'allow_customer_registration': 'true',
-  'allow_referral_program': 'false',
 
   // Wallet
   'wallet_minimum_balance': '0',

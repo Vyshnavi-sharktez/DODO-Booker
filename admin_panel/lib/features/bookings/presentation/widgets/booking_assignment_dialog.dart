@@ -200,6 +200,9 @@ class _BookingAssignmentDialogState
   bool _saving = false;
   bool _showAllVendors = false;
   bool _showAllTeams = false;
+  // True when the currently selected vendor does not serve the booking location
+  // and the admin confirmed the out-of-area override. Reset on any other selection.
+  bool _geoOverride = false;
 
   // Wallet error inline state — populated when the DB rejects an assignment
   // because the selected vendor's balance is below the global minimum.
@@ -505,6 +508,8 @@ class _BookingAssignmentDialogState
 
     setState(() => _saving = true);
     try {
+      final geoOverrideUsed =
+          _geoOverride && _assigneeType == _AssigneeType.vendor;
       await widget.onSave(
         assignmentType: assignmentType,
         vendorId: _assigneeType == _AssigneeType.vendor ? _vendorId : null,
@@ -512,6 +517,19 @@ class _BookingAssignmentDialogState
         serviceDate: _serviceDate,
         notes: _notesCtrl.text.trim().isEmpty ? null : _notesCtrl.text.trim(),
       );
+      // Record geo override audit metadata on the booking row.
+      // Best-effort: does not fail the assignment if the update fails.
+      if (geoOverrideUsed) {
+        try {
+          await Supabase.instance.client.from('bookings').update({
+            'geo_override_at': DateTime.now().toUtc().toIso8601String(),
+            'geo_override_admin_id':
+                Supabase.instance.client.auth.currentUser?.id,
+          }).eq('id', widget.booking.id);
+        } catch (e) {
+          debugPrint('[GEO_OVERRIDE][AUDIT] Failed to log audit: $e');
+        }
+      }
       if (mounted) Navigator.of(context).pop();
     } catch (e) {
       if (mounted) {
@@ -930,16 +948,32 @@ class _BookingAssignmentDialogState
           final completedStr = lastVendorData.completedAt != null
               ? _dateFmt.format(lastVendorData.completedAt!.toLocal())
               : null;
+          final recIsInArea = result.inArea.any((c) => c.id == recVendor.id);
+          final recIsOutOfArea = !recIsInArea &&
+              _bookingHasCoordinates &&
+              _vendorId != recVendor.id;
+          final recAreas =
+              vendorAreasMap[recVendor.id] ?? <VendorServingArea>[];
           amcRecommendedSection = _AmcRecommendedVendorCard(
             vendor: recVendor,
             completedAt: completedStr,
             isSelected: _vendorId == recVendor.id,
             onSelect: _saving
                 ? null
-                : () => setState(() {
+                : () async {
+                    if (recIsOutOfArea) {
+                      if (!await _confirmOutOfAreaAssignment(
+                          recVendor.businessName, recAreas)) {
+                        return;
+                      }
+                    }
+                    if (!mounted) return;
+                    setState(() {
+                      _geoOverride = recIsOutOfArea;
                       if (recVendor.id != _walletErrVendorId) _clearWalletError();
                       _vendorId = recVendor.id;
-                    }),
+                    });
+                  },
           );
         }
       }
@@ -1342,6 +1376,134 @@ class _BookingAssignmentDialogState
     return result == true;
   }
 
+  Future<bool> _confirmOutOfAreaAssignment(
+    String vendorName,
+    List<VendorServingArea> vendorAreas,
+  ) async {
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => Dialog(
+        shape:
+            RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        insetPadding:
+            const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 380),
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Icon(Icons.warning_amber_rounded,
+                        color: AppColors.warning, size: 18),
+                    const SizedBox(width: 8),
+                    const Text(
+                      'Out-of-Area Vendor',
+                      style: TextStyle(
+                          fontSize: 15, fontWeight: FontWeight.bold),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  'This vendor does not currently serve the customer\'s '
+                  'location. Are you sure this vendor is willing to '
+                  'provide the service at this location?',
+                  style: TextStyle(
+                      fontSize: 13, color: AppColors.textSecondary),
+                ),
+                if (widget.booking.address != null) ...[
+                  const SizedBox(height: 10),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Icon(Icons.location_on_rounded,
+                          size: 13, color: AppColors.textSecondary),
+                      const SizedBox(width: 4),
+                      Expanded(
+                        child: Text(
+                          widget.booking.address!,
+                          style: TextStyle(
+                              fontSize: 12,
+                              color: AppColors.textSecondary),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+                const SizedBox(height: 10),
+                Text(
+                  '$vendorName\'s areas: ',
+                  style: const TextStyle(
+                      fontSize: 12, fontWeight: FontWeight.w600),
+                ),
+                const SizedBox(height: 4),
+                if (vendorAreas.isEmpty)
+                  Text(
+                    'None configured',
+                    style: TextStyle(
+                        fontSize: 12, color: AppColors.textSecondary),
+                  )
+                else
+                  Wrap(
+                    spacing: 4,
+                    runSpacing: 4,
+                    children: [
+                      for (final area in vendorAreas)
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 7, vertical: 2),
+                          decoration: BoxDecoration(
+                            color:
+                                AppColors.primary.withValues(alpha: 0.08),
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(
+                              color: AppColors.primary
+                                  .withValues(alpha: 0.25),
+                            ),
+                          ),
+                          child: Text(
+                            area.name,
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w500,
+                              color: AppColors.primary,
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                const SizedBox(height: 16),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    TextButton(
+                      onPressed: () => Navigator.of(ctx).pop(false),
+                      child: const Text('No, Cancel'),
+                    ),
+                    const SizedBox(width: 8),
+                    FilledButton(
+                      onPressed: () => Navigator.of(ctx).pop(true),
+                      style: FilledButton.styleFrom(
+                          backgroundColor: AppColors.warning),
+                      child: const Text('Yes, Assign'),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+    return result == true;
+  }
+
   List<Widget> _candidateCards(
     List<AssigneeCandidate> candidates, {
     String? selectedId,
@@ -1368,15 +1530,27 @@ class _BookingAssignmentDialogState
 
       VoidCallback? effectiveOnSelect;
       if (!blocked) {
-        if (isOfflineVendor) {
-          effectiveOnSelect = () async {
-            if (await _confirmOfflineAssignment(candidate.name)) {
-              onSelect?.call(candidate.id);
+        final isNewSelection = candidate.id != selectedId;
+        final isVendorOutOfArea = candidate.kind == AssigneeKind.vendor &&
+            !candidate.isInArea &&
+            _bookingHasCoordinates &&
+            isNewSelection;
+
+        effectiveOnSelect = () async {
+          if (isVendorOutOfArea) {
+            final areas =
+                vendorAreasMap[candidate.id] ?? const <VendorServingArea>[];
+            if (!await _confirmOutOfAreaAssignment(candidate.name, areas)) {
+              return;
             }
-          };
-        } else {
-          effectiveOnSelect = () => onSelect?.call(candidate.id);
-        }
+          }
+          if (isOfflineVendor) {
+            if (!await _confirmOfflineAssignment(candidate.name)) return;
+          }
+          if (!mounted) return;
+          setState(() => _geoOverride = isVendorOutOfArea);
+          onSelect?.call(candidate.id);
+        };
       }
 
       return _AssigneeCandidateCard(

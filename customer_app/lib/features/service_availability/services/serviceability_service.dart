@@ -57,11 +57,18 @@ class ServiceabilityService {
   }
 
   /// Called when the address has no coordinates.
-  /// Only blocks if at least one active zone is configured — if no zones
-  /// exist the check is irrelevant and the customer should not be blocked.
+  /// Short-circuits to serviceable when the global toggle is off.
+  /// When on, only blocks if at least one active zone is configured.
   Future<ServiceabilityResult> _handleMissingCoordinates() async {
     debugPrint('[DODO][Serviceability] address has no coordinates');
     try {
+      final toggleResult =
+          await _client.rpc('is_service_area_restrictions_enabled');
+      final restrictionsEnabled = toggleResult as bool? ?? false;
+      debugPrint(
+          '[DODO][Serviceability] restrictionsEnabled=$restrictionsEnabled (no coords)');
+      if (!restrictionsEnabled) return ServiceabilityResult.serviceable;
+
       final rows = await _client
           .from('service_availability_areas')
           .select('id')
