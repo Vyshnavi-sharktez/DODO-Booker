@@ -1358,20 +1358,6 @@ class _DesktopListCard extends ConsumerWidget {
                         return const SizedBox.shrink();
                       },
                     ),
-                    // Description
-                    if (node.description?.isNotEmpty == true) ...[
-                      const SizedBox(height: 4),
-                      Text(
-                        node.description!,
-                        style: GoogleFonts.inter(
-                          fontSize: 11,
-                          color: _kTextMuted,
-                          height: 1.4,
-                        ),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ],
                     // Rating
                     if (node.rating > 0) ...[
                       const SizedBox(height: 5),
@@ -1410,6 +1396,7 @@ class _DesktopListCard extends ConsumerWidget {
 
     // ── Desktop: horizontal card (image left, content right) ───────────────
     return Container(
+      height: 220,
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
         color: Colors.white,
@@ -1423,14 +1410,12 @@ class _DesktopListCard extends ConsumerWidget {
           ),
         ],
       ),
-      child: IntrinsicHeight(
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
             // ── Image panel (left, warm cream bg) ──────────────────────
             Container(
               width: 280,
-              constraints: const BoxConstraints(minHeight: 200),
               color: const Color(0xFFF3EDE0),
               child: imageUrl != null
                   ? Image.network(
@@ -1581,20 +1566,6 @@ class _DesktopListCard extends ConsumerWidget {
                     },
                   ),
                   const SizedBox(height: 8),
-                  // Description
-                  if (node.description?.isNotEmpty == true) ...[
-                    Text(
-                      node.description!,
-                      style: GoogleFonts.inter(
-                        fontSize: 13,
-                        color: _kTextMuted,
-                        height: 1.55,
-                      ),
-                      maxLines: 3,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    const SizedBox(height: 10),
-                  ],
                   // Rating + review count
                   if (node.rating > 0) ...[
                     Row(
@@ -1627,7 +1598,6 @@ class _DesktopListCard extends ConsumerWidget {
             ),
           ),
         ],
-        ),
       ),
     );
   }
