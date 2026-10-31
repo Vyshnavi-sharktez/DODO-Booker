@@ -5,6 +5,24 @@ class ServiceAvailabilityAreasRepository {
   const ServiceAvailabilityAreasRepository(this._client);
   final SupabaseClient _client;
 
+  static const _toggleKey = 'service_area_restrictions_enabled';
+
+  Future<bool> getServiceAreaToggle() async {
+    final row = await _client
+        .from('settings')
+        .select('setting_value')
+        .eq('setting_key', _toggleKey)
+        .maybeSingle();
+    return (row?['setting_value'] as String?) == 'true';
+  }
+
+  Future<void> setServiceAreaToggle(bool enabled) async {
+    await _client.from('settings').upsert(
+      {'setting_key': _toggleKey, 'setting_value': enabled ? 'true' : 'false'},
+      onConflict: 'setting_key',
+    );
+  }
+
   Future<List<ServiceAvailabilityArea>> fetchAll() async {
     final rows = await _client
         .from('service_availability_areas')

@@ -34,6 +34,21 @@ class _ServiceAvailabilityAreasPageState
     return list;
   }
 
+  Future<void> _setToggle(bool enabled) async {
+    try {
+      await ref
+          .read(serviceAvailabilityAreasRepositoryProvider)
+          .setServiceAreaToggle(enabled);
+      ref.invalidate(serviceAreaToggleProvider);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('Failed to update setting: $e'),
+        backgroundColor: AppColors.error,
+      ));
+    }
+  }
+
   Future<void> _openAdd() async {
     final result = await showDialog<ServiceAvailabilityArea>(
       context: context,
@@ -183,6 +198,75 @@ class _ServiceAvailabilityAreasPageState
                 ),
               ),
             ],
+          ),
+          const SizedBox(height: 16),
+
+          // ── Global toggle ─────────────────────────────────────────────────────
+          ref.watch(serviceAreaToggleProvider).when(
+            loading: () => const SizedBox(height: 60, child: Center(child: CircularProgressIndicator())),
+            error: (_, _) => const SizedBox.shrink(),
+            data: (enabled) => Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              decoration: BoxDecoration(
+                color: AppColors.surface,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: enabled
+                      ? AppColors.primary.withAlpha(80)
+                      : AppColors.border,
+                ),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      color: enabled
+                          ? AppColors.primaryLight
+                          : AppColors.border.withAlpha(60),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Icon(
+                      Icons.public_rounded,
+                      size: 20,
+                      color: enabled ? AppColors.primary : AppColors.textSecondary,
+                    ),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Service Area Restrictions',
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.textPrimary,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          enabled
+                              ? 'ON — bookings are restricted to the configured service zones below.'
+                              : 'OFF — all customer locations are accepted regardless of zones.',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: AppColors.textSecondary,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Switch(
+                    value: enabled,
+                    onChanged: _setToggle,
+                    activeColor: AppColors.primary,
+                  ),
+                ],
+              ),
+            ),
           ),
           const SizedBox(height: 16),
 

@@ -17,69 +17,12 @@ class SettingsPage extends ConsumerWidget {
 
   static const List<SettingSectionDef> _sections = [
     SettingSectionDef(
-      id: 'general',
-      title: 'General Settings',
-      description: 'Platform identity and contact information',
-      icon: Icons.tune_rounded,
-      color: AppColors.primary,
-      fields: [
-        SettingFieldDef(
-          key: 'platform_name',
-          label: 'Platform Name',
-          hint: 'e.g. DODO Booker',
-          type: SettingFieldType.text,
-        ),
-        SettingFieldDef(
-          key: 'support_email',
-          label: 'Support Email',
-          hint: 'support@example.com',
-          type: SettingFieldType.email,
-        ),
-        SettingFieldDef(
-          key: 'support_phone',
-          label: 'Support Phone',
-          hint: '+91 9876543210',
-          type: SettingFieldType.phone,
-        ),
-        SettingFieldDef(
-          key: 'default_currency',
-          label: 'Default Currency',
-          type: SettingFieldType.dropdown,
-          options: ['INR', 'USD', 'EUR', 'GBP', 'AED', 'SGD'],
-        ),
-        SettingFieldDef(
-          key: 'timezone',
-          label: 'Timezone',
-          type: SettingFieldType.dropdown,
-          options: [
-            'Asia/Kolkata',
-            'UTC',
-            'America/New_York',
-            'America/Los_Angeles',
-            'Europe/London',
-            'Europe/Paris',
-            'Asia/Dubai',
-            'Asia/Singapore',
-          ],
-        ),
-      ],
-    ),
-    SettingSectionDef(
       id: 'business',
       title: 'Business Settings',
       description: 'Platform commissions, booking limits and automation',
       icon: Icons.business_center_rounded,
       color: Color(0xFF3182CE),
       fields: [
-        SettingFieldDef(
-          key: 'platform_commission_pct',
-          label: 'Platform Commission',
-          hint: '10',
-          type: SettingFieldType.percent,
-          unit: '%',
-          min: 0,
-          max: 100,
-        ),
         SettingFieldDef(
           key: 'min_booking_amount',
           label: 'Minimum Booking Amount',
@@ -95,12 +38,6 @@ class SettingsPage extends ConsumerWidget {
           type: SettingFieldType.decimal,
           unit: 'â‚¹',
           min: 0,
-        ),
-        SettingFieldDef(
-          key: 'auto_assign_vendor',
-          label: 'Auto Assign Vendor',
-          hint: 'Automatically assign the nearest available vendor',
-          type: SettingFieldType.toggle,
         ),
       ],
     ),
@@ -127,15 +64,6 @@ class SettingsPage extends ConsumerWidget {
           type: SettingFieldType.integer,
           min: 0,
           max: 10,
-        ),
-        SettingFieldDef(
-          key: 'advance_booking_days',
-          label: 'Advance Booking Days',
-          hint: 'How many days ahead a customer can schedule',
-          type: SettingFieldType.integer,
-          unit: 'days',
-          min: 1,
-          max: 365,
         ),
         SettingFieldDef(
           key: 'amc_scheduling_window_days',
@@ -174,21 +102,9 @@ class SettingsPage extends ConsumerWidget {
       color: Color(0xFF805AD5),
       fields: [
         SettingFieldDef(
-          key: 'enable_email_notifications',
-          label: 'Email Notifications',
-          hint: 'Send booking and status updates via email',
-          type: SettingFieldType.toggle,
-        ),
-        SettingFieldDef(
           key: 'enable_push_notifications',
           label: 'Push Notifications',
           hint: 'Send in-app push notifications to users',
-          type: SettingFieldType.toggle,
-        ),
-        SettingFieldDef(
-          key: 'enable_sms_notifications',
-          label: 'SMS Notifications',
-          hint: 'Send booking confirmations via SMS',
           type: SettingFieldType.toggle,
         ),
         SettingFieldDef(
@@ -210,30 +126,6 @@ class SettingsPage extends ConsumerWidget {
       color: Color(0xFFDD6B20),
       fields: [
         SettingFieldDef(
-          key: 'vendor_approval_required',
-          label: 'Vendor Approval Required',
-          hint: 'New vendors require admin approval before going live',
-          type: SettingFieldType.toggle,
-        ),
-        SettingFieldDef(
-          key: 'vendor_commission_pct',
-          label: 'Vendor Commission',
-          hint: 'Percentage of booking amount paid to vendor',
-          type: SettingFieldType.percent,
-          unit: '%',
-          min: 0,
-          max: 100,
-        ),
-        SettingFieldDef(
-          key: 'settlement_cycle_days',
-          label: 'Settlement Cycle',
-          hint: 'How often vendor earnings are settled',
-          type: SettingFieldType.integer,
-          unit: 'days',
-          min: 1,
-          max: 90,
-        ),
-        SettingFieldDef(
           key: 'gps_geofence_radius_meters',
           label: 'GPS Geofence Radius',
           hint: 'Maximum allowable distance in meters between vendor GPS logs and service location for geofence validation',
@@ -241,27 +133,6 @@ class SettingsPage extends ConsumerWidget {
           unit: 'm',
           min: 10,
           max: 10000,
-        ),
-      ],
-    ),
-    SettingSectionDef(
-      id: 'customer',
-      title: 'Customer Settings',
-      description: 'Registration and referral program configuration',
-      icon: Icons.people_rounded,
-      color: Color(0xFF2B6CB0),
-      fields: [
-        SettingFieldDef(
-          key: 'allow_customer_registration',
-          label: 'Allow Customer Registration',
-          hint: 'New customers can self-register via the mobile app',
-          type: SettingFieldType.toggle,
-        ),
-        SettingFieldDef(
-          key: 'allow_referral_program',
-          label: 'Allow Referral Program',
-          hint: 'Enable referral rewards for existing customers',
-          type: SettingFieldType.toggle,
         ),
       ],
     ),

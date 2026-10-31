@@ -13,3 +13,9 @@ final serviceAvailabilityAreasProvider =
     FutureProvider.autoDispose<List<ServiceAvailabilityArea>>((ref) {
   return ref.watch(serviceAvailabilityAreasRepositoryProvider).fetchAll();
 });
+
+final serviceAreaToggleProvider = FutureProvider.autoDispose<bool>((ref) {
+  return ref
+      .watch(serviceAvailabilityAreasRepositoryProvider)
+      .getServiceAreaToggle();
+});
