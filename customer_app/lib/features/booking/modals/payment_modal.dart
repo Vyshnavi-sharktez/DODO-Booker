@@ -1,16 +1,39 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/widgets/app_modal_dialog.dart';
+import '../providers/dodo_upi_provider.dart';
+import 'upi_payment_modal.dart';
 
-/// Payment modal. Pops with `'razorpay'` (Pay Online) or `'cod'` (Cash After Service).
-class PaymentModal extends StatelessWidget {
+// ── Payment modal ─────────────────────────────────────────────────────────────
+/// Pops with: `'razorpay'`, `'cod'`, `'upi_dodo'`, or `'upi_dodo:<utr>'`.
+
+class PaymentModal extends ConsumerWidget {
   final double totalAmount;
 
   const PaymentModal({super.key, required this.totalAmount});
 
+  Future<void> _openUpiModal(
+    BuildContext context,
+    DodoUpiConfig cfg,
+  ) async {
+    final result = await AppModalDialog.show<String>(
+      context: context,
+      child: UpiPaymentModal(
+        upiId: cfg.upiId,
+        qrImageUrl: cfg.qrImageUrl,
+        totalAmount: totalAmount,
+      ),
+    );
+    if (result != null && context.mounted) {
+      Navigator.of(context).pop(result);
+    }
+  }
+
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final tt = Theme.of(context).textTheme;
+    final upiCfgAsync = ref.watch(dodoUpiConfigProvider);
 
     return AppModalDialog(
       title: 'Payment',
@@ -57,6 +80,27 @@ class PaymentModal extends StatelessWidget {
             tag: 'Recommended',
             onTap: () => Navigator.of(context).pop('razorpay'),
           ),
+
+          // DODO UPI option — shown only when enabled and configured
+          upiCfgAsync.when(
+            data: (cfg) {
+              if (cfg == null || !cfg.isEnabled) return const SizedBox.shrink();
+              return Column(
+                children: [
+                  const SizedBox(height: 10),
+                  _PaymentOption(
+                    icon: Icons.qr_code_rounded,
+                    label: 'Pay via DODO UPI',
+                    subtitle: 'Scan QR or pay to our UPI ID directly',
+                    onTap: () => _openUpiModal(context, cfg),
+                  ),
+                ],
+              );
+            },
+            loading: () => const SizedBox.shrink(),
+            error: (_, __) => const SizedBox.shrink(),
+          ),
+
           const SizedBox(height: 10),
           _PaymentOption(
             icon: Icons.money_rounded,
@@ -123,7 +167,8 @@ class _PaymentOption extends StatelessWidget {
             ),
             if (tag != null) ...[
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                 decoration: BoxDecoration(
                   color: AppColors.success.withAlpha(25),
                   borderRadius: BorderRadius.circular(20),

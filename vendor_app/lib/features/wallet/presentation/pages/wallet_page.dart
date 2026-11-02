@@ -32,6 +32,8 @@ class WalletPage extends ConsumerWidget {
           final vendorId = profile.id;
           final asyncWallet = ref.watch(walletProvider(vendorId));
           final asyncTxns = ref.watch(walletTransactionsProvider(vendorId));
+          final minBalance =
+              ref.watch(walletMinimumBalanceProvider).valueOrNull ?? 0.0;
 
           return asyncWallet.when(
             data: (wallet) {
@@ -39,6 +41,7 @@ class WalletPage extends ConsumerWidget {
                 onRefresh: () async {
                   ref.invalidate(walletProvider(vendorId));
                   ref.invalidate(walletTransactionsProvider(vendorId));
+                  ref.invalidate(walletMinimumBalanceProvider);
                   await Future.wait([
                     ref.read(walletProvider(vendorId).future),
                     ref.read(walletTransactionsProvider(vendorId).future),
@@ -51,7 +54,7 @@ class WalletPage extends ConsumerWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       // Balance Card Widget
-                      BalanceCard(wallet: wallet),
+                      BalanceCard(wallet: wallet, minimumBalance: minBalance),
 
                       const SizedBox(height: 24),
 

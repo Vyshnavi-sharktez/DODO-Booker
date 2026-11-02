@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import '../../../../core/constants/app_colors.dart';
 
+/// Shown after OTP verification for vendor-collected (cash) bookings.
+/// Returns true when confirmed, null when dismissed.
 class CodCashConfirmationDialog extends StatelessWidget {
   const CodCashConfirmationDialog({
     super.key,
@@ -33,11 +35,8 @@ class CodCashConfirmationDialog extends StatelessWidget {
                         color: AppColors.primary.withValues(alpha: 0.1),
                         shape: BoxShape.circle,
                       ),
-                      child: const Icon(
-                        Icons.payments_rounded,
-                        color: AppColors.primary,
-                        size: 24,
-                      ),
+                      child: const Icon(Icons.payments_rounded,
+                          color: AppColors.primary, size: 24),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
@@ -47,16 +46,13 @@ class CodCashConfirmationDialog extends StatelessWidget {
                           const Text(
                             'Confirm Cash Collection',
                             style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                            ),
+                                fontSize: 16, fontWeight: FontWeight.bold),
                           ),
                           Text(
                             'Booking #$bookingNumber',
                             style: const TextStyle(
-                              fontSize: 12,
-                              color: AppColors.textSecondary,
-                            ),
+                                fontSize: 12,
+                                color: AppColors.textSecondary),
                           ),
                         ],
                       ),
@@ -65,8 +61,8 @@ class CodCashConfirmationDialog extends StatelessWidget {
                 ),
                 const SizedBox(height: 16),
                 Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 16, vertical: 12),
                   decoration: BoxDecoration(
                     color: Colors.grey.shade100,
                     borderRadius: BorderRadius.circular(10),
@@ -74,28 +70,18 @@ class CodCashConfirmationDialog extends StatelessWidget {
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      const Text(
-                        'Cash Amount:',
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
+                      const Text('Amount Collected:',
+                          style: TextStyle(
+                              fontSize: 13, fontWeight: FontWeight.w500)),
                       Text(
                         '₹${totalAmount.toStringAsFixed(2)}',
                         style: const TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                          color: AppColors.primary,
-                        ),
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: AppColors.primary),
                       ),
                     ],
                   ),
-                ),
-                const SizedBox(height: 16),
-                const Text(
-                  'Confirm that you have collected the cash payment from the customer.',
-                  style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
                 ),
                 const SizedBox(height: 20),
                 Row(
@@ -122,7 +108,7 @@ class CodCashConfirmationDialog extends StatelessWidget {
                               borderRadius: BorderRadius.circular(8)),
                         ),
                         icon: const Icon(Icons.check_circle_rounded, size: 18),
-                        label: const Text('Cash Collected'),
+                        label: const Text('Confirm'),
                       ),
                     ),
                   ],

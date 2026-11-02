@@ -23,6 +23,7 @@ import '../../amc/models/amc_contract_model.dart';
 import '../../warranties/models/service_warranty_model.dart';
 import '../../warranties/screens/warranty_details_screen.dart';
 import '../../warranties/services/warranty_providers.dart';
+import '../../booking/providers/dodo_upi_provider.dart';
 
 class BookingDetailsScreen extends ConsumerStatefulWidget {
   final MyBookingModel booking;
@@ -81,7 +82,10 @@ class _BookingDetailsScreenState extends ConsumerState<BookingDetailsScreen> {
                 _RefundBanners(booking: booking),
               if (booking.completionOtp != null &&
                   _otpVisibleForStatus(booking.status))
-                _OtpDisplayCard(otp: booking.completionOtp!),
+                _OtpDisplayCard(
+                  otp: booking.completionOtp!,
+                  paymentMethod: booking.paymentMethod,
+                ),
               if (booking.isAmc) _AmcContractCard(booking: booking),
               _BookingInfoCard(booking: booking),
               _ServiceInfoCard(booking: booking),
@@ -1450,16 +1454,17 @@ class _WarrantySectionContent extends StatelessWidget {
 
 // ── OTP Display Card (awaiting_verification) ──────────────────────────────────
 
-class _OtpDisplayCard extends StatefulWidget {
+class _OtpDisplayCard extends ConsumerStatefulWidget {
   final String otp;
+  final String paymentMethod;
 
-  const _OtpDisplayCard({required this.otp});
+  const _OtpDisplayCard({required this.otp, required this.paymentMethod});
 
   @override
-  State<_OtpDisplayCard> createState() => _OtpDisplayCardState();
+  ConsumerState<_OtpDisplayCard> createState() => _OtpDisplayCardState();
 }
 
-class _OtpDisplayCardState extends State<_OtpDisplayCard> {
+class _OtpDisplayCardState extends ConsumerState<_OtpDisplayCard> {
   bool _visible = false;
 
   @override
@@ -1564,6 +1569,101 @@ class _OtpDisplayCardState extends State<_OtpDisplayCard> {
                   ),
                 ],
               ),
+            ),
+            // DODO UPI payment section — shown for COD bookings so customer can pay
+            if (widget.paymentMethod == 'cash' ||
+                widget.paymentMethod == 'cod')
+              ref.watch(dodoUpiPaymentInfoProvider).maybeWhen(
+                data: (cfg) {
+                  if (cfg == null) return const SizedBox.shrink();
+                  return Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    const SizedBox(height: 14),
+                    Container(
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: AppColors.primary.withAlpha(10),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(
+                          color: AppColors.primary.withAlpha(40),
+                        ),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              const Icon(
+                                Icons.qr_code_rounded,
+                                size: 16,
+                                color: AppColors.primary,
+                              ),
+                              const SizedBox(width: 6),
+                              Text(
+                                'Pay via DODO UPI',
+                                style: tt.labelMedium?.copyWith(
+                                  color: AppColors.primary,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ],
+                          ),
+                          if (cfg.qrImageUrl != null &&
+                              cfg.qrImageUrl!.isNotEmpty) ...[
+                            const SizedBox(height: 12),
+                            Center(
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(8),
+                                child: Image.network(
+                                  cfg.qrImageUrl!,
+                                  width: 160,
+                                  height: 160,
+                                  fit: BoxFit.contain,
+                                  errorBuilder: (_, __, ___) =>
+                                      const SizedBox.shrink(),
+                                ),
+                              ),
+                            ),
+                          ],
+                          const SizedBox(height: 10),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  cfg.upiId,
+                                  style: tt.bodyMedium?.copyWith(
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ),
+                              IconButton(
+                                icon: const Icon(Icons.copy_rounded, size: 18),
+                                color: AppColors.primary,
+                                visualDensity: VisualDensity.compact,
+                                padding: EdgeInsets.zero,
+                                tooltip: 'Copy UPI ID',
+                                onPressed: () {
+                                  Clipboard.setData(
+                                    ClipboardData(text: cfg.upiId),
+                                  );
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: Text('UPI ID copied'),
+                                      duration: Duration(seconds: 2),
+                                    ),
+                                  );
+                                },
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                );
+              },
+              orElse: () => const SizedBox.shrink(),
             ),
           ],
         ),

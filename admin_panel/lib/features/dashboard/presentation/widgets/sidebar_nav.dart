@@ -164,7 +164,7 @@ const _kNavGroups = <_NavGroup>[
         requiredPermission: 'vendor.view',
       ),
       _NavItem(
-        label: 'Vendor Catalog',
+        label: 'Vendor Custom Services',
         icon: Icons.storefront_rounded,
         route: '/dashboard/vendor-catalog',
         requiredPermission: 'vendor.view',
@@ -293,6 +293,12 @@ const _kNavGroups = <_NavGroup>[
         label: 'Online Payments',
         icon: Icons.payment_rounded,
         route: '/dashboard/payment-config',
+        requiredPermission: 'settings.manage',
+      ),
+      _NavItem(
+        label: 'UPI QR',
+        icon: Icons.qr_code_rounded,
+        route: '/dashboard/upi-config',
         requiredPermission: 'settings.manage',
       ),
       _NavItem(

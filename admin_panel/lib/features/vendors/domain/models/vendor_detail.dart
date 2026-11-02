@@ -72,6 +72,26 @@ class VendorServiceArea {
       );
 }
 
+class VendorPlatformService {
+  const VendorPlatformService({
+    required this.vendorServiceId,
+    required this.serviceId,
+    required this.name,
+    this.parentName,
+    required this.basePrice,
+    required this.isActive,
+    required this.isBookable,
+  });
+
+  final String vendorServiceId;
+  final String serviceId;
+  final String name;
+  final String? parentName;
+  final double basePrice;
+  final bool isActive;
+  final bool isBookable;
+}
+
 class VendorBookingStats {
   const VendorBookingStats({
     required this.total,

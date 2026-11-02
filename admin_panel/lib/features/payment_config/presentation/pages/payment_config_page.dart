@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../application/providers/payment_config_providers.dart';
 import '../widgets/gateway_config_card.dart';
+import '../widgets/upi_dodo_config_card.dart';
 
 // ── Gateway registry ──────────────────────────────────────────────────────────
 // To add a new gateway (e.g. Stripe): append one GatewayDefinition here.
@@ -62,6 +63,8 @@ class _PaymentConfigBody extends StatelessWidget {
         children: [
           _buildPageHeader(),
           const SizedBox(height: 24),
+          const UpiDodoConfigCard(),
+          const SizedBox(height: 20),
           LayoutBuilder(
             builder: (context, constraints) {
               final twoCol = constraints.maxWidth >= 860;

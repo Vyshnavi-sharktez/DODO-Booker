@@ -17,3 +17,13 @@ final walletTransactionsProvider =
   (ref, vendorId) =>
       ref.watch(walletRepositoryProvider).fetchTransactions(vendorId),
 );
+
+final walletMinimumBalanceProvider = FutureProvider<double>((ref) async {
+  final supabase = ref.watch(supabaseClientProvider);
+  final row = await supabase
+      .from('settings')
+      .select('setting_value')
+      .eq('setting_key', 'wallet_minimum_balance')
+      .maybeSingle();
+  return double.tryParse(row?['setting_value'] as String? ?? '') ?? 0.0;
+});

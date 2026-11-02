@@ -200,6 +200,55 @@ class VendorDetailRepository {
     );
   }
 
+  Stream<List<VendorPlatformService>> streamVendorPlatformServices(
+      String vendorId) {
+    return _supabase
+        .from('vendor_services')
+        .stream(primaryKey: ['id'])
+        .eq('vendor_id', vendorId)
+        .asyncMap((vsRows) async {
+          final rows = List<Map<String, dynamic>>.from(vsRows);
+          if (rows.isEmpty) return <VendorPlatformService>[];
+
+          final serviceIds =
+              rows.map((r) => r['service_id'] as String).toList();
+
+          final nodeRows = await _supabase
+              .from('catalog_nodes_view')
+              .select('id, name, parent_name, base_price, is_bookable')
+              .inFilter('id', serviceIds);
+
+          final nodeMap = <String, Map<String, dynamic>>{
+            for (final n in (nodeRows as List).cast<Map<String, dynamic>>())
+              n['id'] as String: n,
+          };
+
+          return rows.map((vs) {
+            final node = nodeMap[vs['service_id'] as String] ?? {};
+            return VendorPlatformService(
+              vendorServiceId: vs['id'] as String,
+              serviceId: vs['service_id'] as String? ?? '',
+              name: node['name'] as String? ?? 'Unknown',
+              parentName: node['parent_name'] as String?,
+              basePrice: (node['base_price'] as num?)?.toDouble() ?? 0.0,
+              isActive: (vs['is_active'] as bool?) ?? true,
+              isBookable: (node['is_bookable'] as bool?) ?? true,
+            );
+          }).toList();
+        });
+  }
+
+  Future<Map<String, String?>> fetchCatalogParentMap() async {
+    final rows = await _supabase
+        .from('catalog_nodes_view')
+        .select('name, parent_name')
+        .eq('is_active', true);
+    return {
+      for (final r in (rows as List).cast<Map<String, dynamic>>())
+        (r['name'] as String? ?? ''): r['parent_name'] as String?,
+    };
+  }
+
   Future<List<VendorWalletTransaction>> fetchWalletTransactions(
       String vendorId) async {
     final rows = await _supabase

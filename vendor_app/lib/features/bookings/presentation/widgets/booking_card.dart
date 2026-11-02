@@ -354,8 +354,7 @@ class _BookingCardState extends ConsumerState<BookingCard> {
   }
 
   // Called immediately after OTP verification for COD bookings.
-  // Shows the cash confirmation dialog. "Cash Collected" completes the booking.
-  // Dismissal leaves the booking in awaiting_verification for later confirmation.
+  // Shows cash confirmation dialog. Dismissal leaves booking in awaiting_verification.
   Future<void> _handleCodCashConfirmationAfterOtp() async {
     if (!mounted) return;
     final confirmed = await showDialog<bool>(
@@ -394,7 +393,7 @@ class _BookingCardState extends ConsumerState<BookingCard> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Booking $_bookingRef completed and COD cash collection recorded.'),
+            content: Text('Booking $_bookingRef completed and payment collection recorded.'),
             backgroundColor: AppColors.success,
           ),
         );
@@ -458,7 +457,7 @@ class _BookingCardState extends ConsumerState<BookingCard> {
     if (confirmed != true || !mounted) return;
 
     try {
-      await ref.read(bookingsRepositoryProvider).confirmCodCashCollection(
+      await ref.read(bookingsRepositoryProvider).completeCodBookingAfterOtp(
             bookingId: _booking.id,
           );
       if (mounted) {
@@ -477,7 +476,7 @@ class _BookingCardState extends ConsumerState<BookingCard> {
         );
       }
     } catch (e) {
-      debugPrint('[COD] confirmCodCashCollection ERROR: $e');
+      debugPrint('[COD] completeCodBookingAfterOtp ERROR: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -1167,7 +1166,7 @@ class _BookingCardState extends ConsumerState<BookingCard> {
                         child: OutlinedButton.icon(
                           onPressed: _showCodCashConfirmationDialog,
                           icon: const Icon(Icons.payments_rounded, size: 16),
-                          label: const Text('Confirm Cash Collection'),
+                          label: const Text('Confirm Payment Collection'),
                           style: OutlinedButton.styleFrom(
                             foregroundColor: AppColors.warning,
                             side: const BorderSide(color: AppColors.warning),
