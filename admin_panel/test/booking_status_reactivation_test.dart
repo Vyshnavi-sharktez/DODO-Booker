@@ -48,7 +48,7 @@ void main() {
 
       final initialBooking = Booking.fromMap(cancelledBookingMap);
       expect(initialBooking.status, equals('cancelled'));
-      expect(initialBooking.paymentMethodLabel, equals('Online'));
+      expect(initialBooking.paymentMethodLabel, equals('Paid Online (Razorpay)'));
 
       // 2. Simulate reactivation logic (Cancelled → Pending)
       final reactivationPayload = <String, dynamic>{
@@ -77,7 +77,7 @@ void main() {
       expect(reactivatedBooking.status, equals('pending'));
       expect(reactivatedBooking.isUnassigned, isTrue);
       expect(reactivatedBooking.isCod, isTrue);
-      expect(reactivatedBooking.paymentMethodLabel, equals('COD'));
+      expect(reactivatedBooking.paymentMethodLabel, equals('Cash – Vendor Collected'));
       expect(reactivatedBooking.paymentStatus, equals('pending'));
       expect(reactivatedBooking.codCashCollected, isNull);
       expect(reactivatedBooking.codConfirmedAt, isNull);
@@ -130,7 +130,7 @@ void main() {
       expect(reactivatedBooking.status, equals('assigned'));
       expect(reactivatedBooking.assignmentType, equals('External Vendor'));
       expect(reactivatedBooking.isCod, isTrue);
-      expect(reactivatedBooking.paymentMethodLabel, equals('COD'));
+      expect(reactivatedBooking.paymentMethodLabel, equals('Cash – Vendor Collected'));
       expect(reactivatedBooking.paymentStatus, equals('pending'));
       expect(reactivatedBooking.codCashCollected, isNull);
       expect(reactivatedBooking.cancellationReason, isNull);

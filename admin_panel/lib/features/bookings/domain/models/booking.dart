@@ -180,7 +180,7 @@ class Booking {
   bool get isPaymentUnverified => !isCod && paymentStatus != 'success';
 
   String get paymentMethodLabel => switch (paymentMethod) {
-        'razorpay' => 'Paid Online (Razorpay)',
+        'razorpay' || 'online' => 'Paid Online (Razorpay)',
         'upi_dodo' => 'Paid via UPI – DODO Collected',
         'cash' || 'cod' => 'Cash – Vendor Collected',
         _ => paymentMethod,
