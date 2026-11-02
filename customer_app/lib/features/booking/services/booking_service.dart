@@ -427,6 +427,7 @@ class BookingService {
     double? preferredVendorFeeAmount,
     AmcPlanModel? amcPlan,
     String paymentMethod = 'cod',
+    String? upiReference,
   }) async {
     debugPrint('[DODO][Booking] createBooking started');
     debugPrint('[DODO][Booking] Service: ${service.name} (id=${service.id})');
@@ -562,6 +563,8 @@ class BookingService {
         'status': 'pending',
         'payment_method': paymentMethod,
         'payment_status': 'pending',
+        if (upiReference != null && upiReference.isNotEmpty)
+          'upi_reference': upiReference,
         'subtotal': subtotal,
         'tax_amount': tax,
         'discount_amount': discountAmount,

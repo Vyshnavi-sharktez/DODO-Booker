@@ -243,6 +243,7 @@ class VendorSettlementRepository {
         .select('id, subtotal, discount_amount, total_amount, created_at')
         .eq('vendor_id', vendorId)
         .eq('status', 'completed')
+        .inFilter('payment_method', ['razorpay', 'online', 'upi_dodo'])
         .order('created_at', ascending: false);
 
     if ((bookingsData as List).isEmpty) return [];
@@ -429,7 +430,8 @@ class VendorSettlementRepository {
         .from('bookings')
         .select('id, vendor_id, subtotal, total_amount')
         .eq('status', 'completed')
-        .not('vendor_id', 'is', null);
+        .not('vendor_id', 'is', null)
+        .inFilter('payment_method', ['razorpay', 'online', 'upi_dodo']);
     final settlementsFuture = _supabase
         .from('vendor_settlements')
         .select('vendor_id, settled_at');
@@ -592,7 +594,8 @@ class VendorSettlementRepository {
         .from('bookings')
         .select('id, subtotal, total_amount')
         .eq('vendor_id', vendorId)
-        .eq('status', 'completed');
+        .eq('status', 'completed')
+        .inFilter('payment_method', ['razorpay', 'online', 'upi_dodo']);
     final settlementsFuture = _supabase
         .from('vendor_settlements')
         .select('settled_at')

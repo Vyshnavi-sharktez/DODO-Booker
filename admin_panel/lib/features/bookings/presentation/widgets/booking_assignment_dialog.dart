@@ -161,6 +161,34 @@ final _vendorTodayBookingCountsProvider =
   return counts;
 });
 
+/// Single-query today's rejection count: returns {vendorId → count} of
+/// booking_assignments where status = 'rejected' and responded_at falls within
+/// today's IST day (Asia/Kolkata = UTC+05:30). Keyed by the IST date string.
+final _vendorTodayRejectedCountsProvider =
+    FutureProvider.autoDispose.family<Map<String, int>, String>(
+        (ref, todayIst) async {
+  final nowUtc = DateTime.now().toUtc();
+  final nowIst = nowUtc.add(const Duration(hours: 5, minutes: 30));
+  final dayStartUtc = DateTime.utc(nowIst.year, nowIst.month, nowIst.day)
+      .subtract(const Duration(hours: 5, minutes: 30));
+  final dayEndUtc = dayStartUtc.add(const Duration(days: 1));
+  final rows = await Supabase.instance.client
+      .from('booking_assignments')
+      .select('vendor_id')
+      .eq('status', 'rejected')
+      .gte('responded_at', dayStartUtc.toIso8601String())
+      .lt('responded_at', dayEndUtc.toIso8601String())
+      .not('vendor_id', 'is', null);
+  final counts = <String, int>{};
+  for (final r in rows as List) {
+    final id = r['vendor_id'] as String?;
+    if (id != null && id.isNotEmpty) {
+      counts[id] = (counts[id] ?? 0) + 1;
+    }
+  }
+  return counts;
+});
+
 enum _AssigneeType { vendor, team, unassigned }
 
 // ── Dialog ─────────────────────────────────────────────────────────────────────
@@ -611,6 +639,9 @@ class _BookingAssignmentDialogState
     final todayBookingCounts =
         ref.watch(_vendorTodayBookingCountsProvider(todayIst)).valueOrNull ??
             const <String, int>{};
+    final todayRejectedCounts =
+        ref.watch(_vendorTodayRejectedCountsProvider(todayIst)).valueOrNull ??
+            const <String, int>{};
 
     // Invert area→vendors map to vendor→areas for serving-area chip display.
     // Both data sources are already watched above; no extra queries needed.
@@ -726,6 +757,7 @@ class _BookingAssignmentDialogState
                               : '',
                           noServiceVendors: noServiceVendors,
                           todayBookingCounts: todayBookingCounts,
+                          todayRejectedCounts: todayRejectedCounts,
                           vendorAreasMap: vendorAreasMap,
                         ),
 
@@ -916,6 +948,7 @@ class _BookingAssignmentDialogState
     String contractId = '',
     bool noServiceVendors = false,
     Map<String, int> todayBookingCounts = const {},
+    Map<String, int> todayRejectedCounts = const {},
     Map<String, List<VendorServingArea>> vendorAreasMap = const {},
   }) {
     if (isLoading) {
@@ -1066,6 +1099,7 @@ class _BookingAssignmentDialogState
               result.all,
               selectedId: _vendorId,
               todayBookingCounts: todayBookingCounts,
+              todayRejectedCounts: todayRejectedCounts,
               vendorAreasMap: vendorAreasMap,
               onSelect: (id) => setState(() {
                 final next = _vendorId == id ? '' : id;
@@ -1183,6 +1217,7 @@ class _BookingAssignmentDialogState
           result.inArea,
           selectedId: _vendorId,
           todayBookingCounts: todayBookingCounts,
+          todayRejectedCounts: todayRejectedCounts,
           vendorAreasMap: vendorAreasMap,
           onSelect: (id) => setState(() {
             if (id != _walletErrVendorId) _clearWalletError();
@@ -1509,6 +1544,7 @@ class _BookingAssignmentDialogState
     String? selectedId,
     void Function(String id)? onSelect,
     Map<String, int> todayBookingCounts = const {},
+    Map<String, int> todayRejectedCounts = const {},
     Map<String, List<VendorServingArea>> vendorAreasMap = const {},
   }) {
     return candidates.map((candidate) {
@@ -1521,6 +1557,9 @@ class _BookingAssignmentDialogState
           candidate.ineligibleForAssignment;
       final todayCount = candidate.kind == AssigneeKind.vendor
           ? (todayBookingCounts[candidate.id] ?? 0)
+          : null;
+      final todayRejectedCount = candidate.kind == AssigneeKind.vendor
+          ? (todayRejectedCounts[candidate.id] ?? 0)
           : null;
       final vendorAreas = candidate.kind == AssigneeKind.vendor
           ? (vendorAreasMap[candidate.id] ?? const <VendorServingArea>[])
@@ -1558,6 +1597,7 @@ class _BookingAssignmentDialogState
         isSelected: selectedId == candidate.id,
         onSelect: effectiveOnSelect,
         todayCount: todayCount,
+        todayRejectedCount: todayRejectedCount,
         vendorAreas: vendorAreas,
         isInArea: isInArea,
       );
@@ -1618,6 +1658,8 @@ class _AssigneeCandidateCard extends StatelessWidget {
   final VoidCallback? onSelect;
   // null for DODO Team cards; 0+ for vendor cards.
   final int? todayCount;
+  // null for DODO Team cards; 0+ for vendor cards.
+  final int? todayRejectedCount;
   // null for DODO Team cards; empty list means vendor has no assigned areas.
   final List<VendorServingArea>? vendorAreas;
   // Whether this vendor's serving areas cover the booking location.
@@ -1629,6 +1671,7 @@ class _AssigneeCandidateCard extends StatelessWidget {
     required this.isSelected,
     required this.onSelect,
     this.todayCount,
+    this.todayRejectedCount,
     this.vendorAreas,
     this.isInArea,
   });
@@ -1831,6 +1874,26 @@ class _AssigneeCandidateCard extends StatelessWidget {
                     fontWeight: FontWeight.w500,
                     color: count > 0
                         ? AppColors.textPrimary
+                        : AppColors.textSecondary,
+                  ),
+                ),
+              ],
+            ),
+          ],
+          if (todayRejectedCount case final rejCount?) ...[
+            const SizedBox(height: 4),
+            Row(
+              children: [
+                Icon(Icons.cancel_outlined,
+                    size: 12, color: AppColors.textSecondary),
+                const SizedBox(width: 5),
+                Text(
+                  "Today's Rejected Bookings: $rejCount",
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w500,
+                    color: rejCount > 0
+                        ? AppColors.error
                         : AppColors.textSecondary,
                   ),
                 ),

@@ -159,10 +159,22 @@ Future<void> launchBookingFlow(
     context: context,
     child: PaymentModal(totalAmount: finalTotal),
   );
-  final paymentMethod = await payFuture;
-  if (!context.mounted || paymentMethod == null) {
+  final rawPayment = await payFuture;
+  if (!context.mounted || rawPayment == null) {
     ref.read(selectedCouponProvider.notifier).state = null;
     return;
+  }
+
+  // Parse upi_dodo:<utr> encoding from UpiPaymentModal.
+  final String paymentMethod;
+  final String? upiReference;
+  if (rawPayment.startsWith('upi_dodo:')) {
+    paymentMethod = 'upi_dodo';
+    final ref_ = rawPayment.substring('upi_dodo:'.length);
+    upiReference = ref_.isEmpty ? null : ref_;
+  } else {
+    paymentMethod = rawPayment;
+    upiReference = null;
   }
 
   // ── Step 7: Create booking & navigate to success ──────────────────────────
@@ -183,6 +195,7 @@ Future<void> launchBookingFlow(
           preferredVendorFeeAmount: amcPlan != null ? null : (pvSelection.fee > 0 ? pvSelection.fee : null),
           amcPlan: amcPlan,
           paymentMethod: paymentMethod,
+          upiReference: upiReference,
         );
     ref.read(selectedCouponProvider.notifier).state = null;
     if (!context.mounted) return;

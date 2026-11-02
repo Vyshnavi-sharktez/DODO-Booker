@@ -1485,6 +1485,20 @@ class _BookingInfoCard extends StatelessWidget {
             label: 'Payment Method',
             value: booking.paymentMethodLabel,
           ),
+          if (booking.upiReference != null &&
+              booking.upiReference!.trim().isNotEmpty) ...[
+            const SizedBox(height: 12),
+            _InfoKeyValRow(
+              icon: Icons.receipt_long_outlined,
+              label: 'UPI Reference (UTR)',
+              value: booking.upiReference!.trim(),
+            ),
+          ],
+          if (booking.paymentMethod == 'upi_dodo' &&
+              booking.paymentStatus != 'success') ...[
+            const SizedBox(height: 10),
+            _UpiVerifyButton(bookingId: booking.id),
+          ],
           const SizedBox(height: 12),
           _InfoKeyValRow(
             icon: Icons.account_balance_wallet_outlined,
@@ -3581,6 +3595,79 @@ class _ReviewCard extends StatelessWidget {
             ),
           ],
         ],
+      ),
+    );
+  }
+}
+
+// ── UPI verification button ────────────────────────────────────────────────────
+// Shown for upi_dodo bookings where payment_status != 'success'.
+// Admin manually verifies the UTR in their UPI app and taps this button.
+
+class _UpiVerifyButton extends ConsumerStatefulWidget {
+  final String bookingId;
+  const _UpiVerifyButton({required this.bookingId});
+
+  @override
+  ConsumerState<_UpiVerifyButton> createState() => _UpiVerifyButtonState();
+}
+
+class _UpiVerifyButtonState extends ConsumerState<_UpiVerifyButton> {
+  bool _verifying = false;
+
+  Future<void> _verify() async {
+    setState(() => _verifying = true);
+    try {
+      await Supabase.instance.client
+          .from('bookings')
+          .update({'payment_status': 'success'})
+          .eq('id', widget.bookingId);
+      if (mounted) {
+        ref.invalidate(bookingsNotifierProvider);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('UPI payment verified'),
+            backgroundColor: AppColors.success,
+            behavior: SnackBarBehavior.floating,
+            width: 360,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Verification failed: $e'),
+            backgroundColor: AppColors.error,
+            behavior: SnackBarBehavior.floating,
+            width: 360,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _verifying = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: double.infinity,
+      child: OutlinedButton.icon(
+        onPressed: _verifying ? null : _verify,
+        icon: _verifying
+            ? const SizedBox(
+                width: 14,
+                height: 14,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              )
+            : const Icon(Icons.verified_outlined, size: 16),
+        label: Text(_verifying ? 'Verifying…' : 'Mark UPI Payment as Verified'),
+        style: OutlinedButton.styleFrom(
+          foregroundColor: const Color(0xFF0F9D58),
+          side: const BorderSide(color: Color(0xFF0F9D58)),
+          padding: const EdgeInsets.symmetric(vertical: 10),
+        ),
       ),
     );
   }

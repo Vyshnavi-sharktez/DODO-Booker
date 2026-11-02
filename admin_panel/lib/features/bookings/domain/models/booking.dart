@@ -87,11 +87,12 @@ class Booking {
   final double? latitude;
   final double? longitude;
   final String? completionOtp;
-  final String paymentMethod; // 'cash' | 'cod' | 'online' — mirrors DB default 'cash'
-  final String? paymentStatus; // 'pending' | 'success' | 'failed' | null for COD
+  final String paymentMethod; // 'cash' | 'cod' | 'razorpay' | 'upi_dodo'
+  final String? paymentStatus;
   final bool? codCashCollected;
   final String? codNotCollectedReason;
   final DateTime? codConfirmedAt;
+  final String? upiReference;
   final bool isAmc;
   final String? amcPlanName;
   final String? amcRecurrenceInterval;
@@ -153,6 +154,7 @@ class Booking {
     this.codCashCollected,
     this.codNotCollectedReason,
     this.codConfirmedAt,
+    this.upiReference,
     this.isAmc = false,
     this.amcPlanName,
     this.amcRecurrenceInterval,
@@ -170,15 +172,19 @@ class Booking {
   });
 
   bool get isUnassigned => assignmentType == 'Unassigned';
-  // 'cash' is the canonical value written by the customer app ("Cash After Service").
-  // 'cod' is accepted as an alias for backward compatibility.
+
+  // Vendor-collected: vendor has the cash; DODO deducts commission via wallet.
   bool get isCod => paymentMethod == 'cash' || paymentMethod == 'cod';
 
-  // True for online bookings whose payment has not been verified.
-  // These must not be assigned to vendors or dispatched.
+  // True for Razorpay/DODO-UPI bookings whose payment has not been confirmed.
   bool get isPaymentUnverified => !isCod && paymentStatus != 'success';
 
-  String get paymentMethodLabel => isCod ? 'COD' : 'Online';
+  String get paymentMethodLabel => switch (paymentMethod) {
+        'razorpay' => 'Paid Online (Razorpay)',
+        'upi_dodo' => 'Paid via UPI – DODO Collected',
+        'cash' || 'cod' => 'Cash – Vendor Collected',
+        _ => paymentMethod,
+      };
 
   bool get isWarrantyRework => (notes ?? '').contains('[WARRANTY REWORK]');
 
@@ -309,6 +315,7 @@ class Booking {
       codConfirmedAt: map['cod_confirmed_at'] != null
           ? DateTime.tryParse(map['cod_confirmed_at'] as String)
           : null,
+      upiReference: map['upi_reference'] as String?,
       isAmc: map['is_amc'] as bool? ?? false,
       amcPlanName: map['amc_plan_name'] as String?,
       amcRecurrenceInterval: map['amc_recurrence_interval'] as String?,

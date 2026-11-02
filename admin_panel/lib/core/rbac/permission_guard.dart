@@ -47,6 +47,7 @@ const Map<String, String> routePermissions = {
   '/seo': 'settings.read',
   '/landing-page': 'settings.read',
   '/payment-config': 'settings.read',
+  '/upi-config': 'settings.read',
   '/whatsapp-config': 'settings.read',
   '/push-config': 'settings.read',
   '/sms-config': 'settings.read',

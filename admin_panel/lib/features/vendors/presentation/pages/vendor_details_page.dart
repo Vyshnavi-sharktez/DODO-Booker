@@ -107,8 +107,8 @@ class _VendorDetailView extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return DefaultTabController(
-      length: 4,
-      initialIndex: initialTab.clamp(0, 3),
+      length: 5,
+      initialIndex: initialTab.clamp(0, 4),
       child: Padding(
         padding: const EdgeInsets.all(24),
         child: Column(
@@ -131,6 +131,7 @@ class _VendorDetailView extends ConsumerWidget {
                 Tab(text: 'Documents'),
                 Tab(text: 'Analytics'),
                 Tab(text: 'Penalty History'),
+                Tab(text: 'Services'),
               ],
             ),
             const SizedBox(height: 16),
@@ -141,6 +142,7 @@ class _VendorDetailView extends ConsumerWidget {
                   _DocumentsTab(vendorId: vendorId),
                   _AnalyticsTab(vendor: vendor, vendorId: vendorId),
                   _PenaltyHistoryTab(vendorId: vendorId),
+                  _ServicesTab(vendorId: vendorId),
                 ],
               ),
             ),
@@ -1567,6 +1569,420 @@ class _DetailRow extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+// ── Services Tab ───────────────────────────────────────────────────────────────
+
+// ── Category colour palette (matches Vendor App) ─────────────────────────────
+const _kAdminCatColors = [
+  Color(0xFF4A90D9),
+  Color(0xFFE67E22),
+  Color(0xFF27AE60),
+  Color(0xFF8E44AD),
+  Color(0xFFE74C3C),
+  Color(0xFF16A085),
+  Color(0xFFF39C12),
+  Color(0xFF2980B9),
+  Color(0xFFC0392B),
+  Color(0xFF1ABC9C),
+];
+
+IconData _adminIconForCategory(String name) {
+  final n = name.toLowerCase();
+  if (n.contains('clean')) return Icons.cleaning_services_rounded;
+  if (n.contains('ac') || n.contains('appliance')) return Icons.ac_unit_rounded;
+  if (n.contains('plumb')) return Icons.plumbing_rounded;
+  if (n.contains('pest')) return Icons.bug_report_rounded;
+  if (n.contains('electric')) return Icons.electrical_services_rounded;
+  if (n.contains('carpen')) return Icons.carpenter_rounded;
+  if (n.contains('paint')) return Icons.format_paint_rounded;
+  if (n.contains('garden') || n.contains('lawn')) return Icons.yard_rounded;
+  if (n.contains('security') || n.contains('cctv')) return Icons.security_rounded;
+  if (n.contains('repair') || n.contains('fix')) return Icons.build_rounded;
+  return Icons.home_repair_service_rounded;
+}
+
+// ── Catalog tree helpers (identical logic to Vendor App) ─────────────────────
+
+List<String> _adminAncestorPath(String? parentName, Map<String, String?> parentOf) {
+  if (parentName == null) return const [];
+  final path = <String>[];
+  String? current = parentName;
+  for (int i = 0; i < 20 && current != null; i++) {
+    path.insert(0, current);
+    current = parentOf[current];
+  }
+  return path;
+}
+
+class _AdminNode {
+  _AdminNode(this.name);
+  final String name;
+  final Map<String, _AdminNode> children = {};
+  final List<VendorPlatformService> leafServices = [];
+  int get totalCount =>
+      leafServices.length + children.values.fold(0, (s, n) => s + n.totalCount);
+}
+
+_AdminNode _buildAdminServicesTree(
+    List<VendorPlatformService> services, Map<String, String?> parentOf) {
+  final root = _AdminNode('__root__');
+  for (final svc in services) {
+    final path = _adminAncestorPath(svc.parentName, parentOf);
+    var node = root;
+    for (final segment in path) {
+      node = node.children.putIfAbsent(segment, () => _AdminNode(segment));
+    }
+    node.leafServices.add(svc);
+  }
+  return root;
+}
+
+// ── Services Tab ─────────────────────────────────────────────────────────────
+
+class _ServicesTab extends ConsumerWidget {
+  const _ServicesTab({required this.vendorId});
+  final String vendorId;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final servicesAsync = ref.watch(vendorPlatformServicesProvider(vendorId));
+    final parentOf = ref.watch(adminCatalogParentMapProvider).valueOrNull ?? const {};
+
+    return servicesAsync.when(
+      loading: () => const Center(child: CircularProgressIndicator()),
+      error: (e, _) => _ErrorView(
+        message: 'Failed to load services: $e',
+        onRetry: () => ref.invalidate(vendorPlatformServicesProvider(vendorId)),
+      ),
+      data: (services) {
+        if (services.isEmpty) {
+          return const _EmptyTabState(
+            icon: Icons.home_repair_service_outlined,
+            message: 'No platform services added',
+            sub: 'This vendor has not added any services from the app catalog.',
+          );
+        }
+
+        final tree = _buildAdminServicesTree(services, parentOf);
+        final rootEntries = tree.children.entries.toList()
+          ..sort((a, b) {
+            if (a.key == 'Other') return 1;
+            if (b.key == 'Other') return -1;
+            return a.key.compareTo(b.key);
+          });
+
+        return ListView.builder(
+          padding: const EdgeInsets.all(16),
+          itemCount: rootEntries.length,
+          itemBuilder: (_, i) {
+            final entry = rootEntries[i];
+            final catColor = _kAdminCatColors[i % _kAdminCatColors.length];
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: _AdminTreeSection(
+                node: entry.value,
+                catColor: catColor,
+                depth: 0,
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+}
+
+// ── Recursive tree section (mirrors _MyWideTreeSection, read-only) ───────────
+
+class _AdminTreeSection extends StatefulWidget {
+  const _AdminTreeSection({
+    required this.node,
+    required this.catColor,
+    required this.depth,
+    this.isLast = false,
+  });
+
+  final _AdminNode node;
+  final Color catColor;
+  final int depth;
+  final bool isLast;
+
+  @override
+  State<_AdminTreeSection> createState() => _AdminTreeSectionState();
+}
+
+class _AdminTreeSectionState extends State<_AdminTreeSection> {
+  bool _expanded = false;
+
+  List<_AdminNode> get _sortedChildren {
+    final entries = widget.node.children.entries.toList()
+      ..sort((a, b) => a.key.compareTo(b.key));
+    return entries.map((e) => e.value).toList();
+  }
+
+  Widget _buildContent() {
+    final node = widget.node;
+    final children = _sortedChildren;
+    final hasLeaves = node.leafServices.isNotEmpty;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        for (int i = 0; i < children.length; i++)
+          _AdminTreeSection(
+            node: children[i],
+            catColor: widget.catColor,
+            depth: widget.depth + 1,
+            isLast: i == children.length - 1 && !hasLeaves,
+          ),
+        if (hasLeaves) ...[
+          const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+            child: Row(
+              children: [
+                Expanded(flex: 3, child: _ColHeader('SERVICE NAME')),
+                Expanded(flex: 2, child: _ColHeader('CATEGORY')),
+                SizedBox(width: 110, child: _ColHeader('BASE PRICE')),
+                SizedBox(width: 80, child: _ColHeader('STATUS')),
+              ],
+            ),
+          ),
+          const Divider(height: 1, color: AppColors.border),
+          for (int i = 0; i < node.leafServices.length; i++) ...[
+            _AdminServiceRow(service: node.leafServices[i]),
+            if (i < node.leafServices.length - 1)
+              const Divider(
+                  height: 1,
+                  color: AppColors.border,
+                  indent: 20,
+                  endIndent: 20),
+          ],
+          const SizedBox(height: 4),
+        ],
+      ],
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final node = widget.node;
+    final totalCount = node.totalCount;
+
+    if (widget.depth == 0) {
+      return Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: AppColors.border),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            InkWell(
+              onTap: () => setState(() => _expanded = !_expanded),
+              child: Padding(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 34,
+                      height: 34,
+                      decoration: BoxDecoration(
+                        color: widget.catColor.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Icon(_adminIconForCategory(node.name),
+                          size: 17, color: widget.catColor),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        node.name,
+                        style: const TextStyle(
+                          fontSize: 14.5,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.textPrimary,
+                        ),
+                      ),
+                    ),
+                    Text(
+                      '$totalCount service${totalCount == 1 ? '' : 's'}',
+                      style: const TextStyle(
+                          fontSize: 12.5, color: AppColors.textSecondary),
+                    ),
+                    const SizedBox(width: 12),
+                    AnimatedRotation(
+                      turns: _expanded ? 0.5 : 0,
+                      duration: const Duration(milliseconds: 200),
+                      child: const Icon(Icons.keyboard_arrow_down_rounded,
+                          size: 20, color: AppColors.textSecondary),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            if (_expanded) ...[
+              const Divider(height: 1, color: AppColors.border),
+              _buildContent(),
+            ],
+          ],
+        ),
+      );
+    }
+
+    // Depth > 0: inline inside parent card
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        InkWell(
+          onTap: () => setState(() => _expanded = !_expanded),
+          child: Padding(
+            padding:
+                const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+            child: Row(
+              children: [
+                SizedBox(width: (widget.depth - 1) * 12.0),
+                Container(
+                  width: 6,
+                  height: 6,
+                  decoration: BoxDecoration(
+                    color: AppColors.textSecondary,
+                    borderRadius: BorderRadius.circular(3),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    node.name,
+                    style: const TextStyle(
+                      fontSize: 13.5,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.textPrimary,
+                    ),
+                  ),
+                ),
+                Text(
+                  '$totalCount service${totalCount == 1 ? '' : 's'}',
+                  style: const TextStyle(
+                      fontSize: 12, color: AppColors.textSecondary),
+                ),
+                const SizedBox(width: 10),
+                AnimatedRotation(
+                  turns: _expanded ? 0.5 : 0,
+                  duration: const Duration(milliseconds: 200),
+                  child: const Icon(Icons.keyboard_arrow_down_rounded,
+                      size: 18, color: AppColors.textSecondary),
+                ),
+              ],
+            ),
+          ),
+        ),
+        if (_expanded) ...[
+          const Divider(height: 1, color: AppColors.border),
+          _buildContent(),
+        ],
+        if (!widget.isLast) const Divider(height: 1, color: AppColors.border),
+      ],
+    );
+  }
+}
+
+class _AdminServiceRow extends StatelessWidget {
+  const _AdminServiceRow({required this.service});
+  final VendorPlatformService service;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      color: Colors.transparent,
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+      child: Row(
+        children: [
+          Expanded(
+            flex: 3,
+            child: Text(
+              service.name,
+              style: const TextStyle(
+                  fontSize: 13.5,
+                  fontWeight: FontWeight.w500,
+                  color: AppColors.textPrimary),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          Expanded(
+            flex: 2,
+            child: Text(
+              service.parentName ?? '—',
+              style: const TextStyle(
+                  fontSize: 13, color: AppColors.textSecondary),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          SizedBox(
+            width: 110,
+            child: Text(
+              service.basePrice > 0
+                  ? '₹${service.basePrice.toStringAsFixed(0)}'
+                  : '—',
+              style: const TextStyle(
+                  fontSize: 13.5,
+                  fontWeight: FontWeight.w500,
+                  color: AppColors.textPrimary),
+            ),
+          ),
+          SizedBox(
+            width: 80,
+            child: Container(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+              decoration: BoxDecoration(
+                color: (service.isActive
+                        ? AppColors.success
+                        : AppColors.textSecondary)
+                    .withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Text(
+                service.isActive ? 'Active' : 'Inactive',
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  color: service.isActive
+                      ? AppColors.success
+                      : AppColors.textSecondary,
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── _ColHeader (shared with both sections) ────────────────────────────────────
+
+class _ColHeader extends StatelessWidget {
+  const _ColHeader(this.label);
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      label,
+      style: const TextStyle(
+        fontSize: 11,
+        fontWeight: FontWeight.w600,
+        color: AppColors.textSecondary,
+        letterSpacing: 0.5,
       ),
     );
   }

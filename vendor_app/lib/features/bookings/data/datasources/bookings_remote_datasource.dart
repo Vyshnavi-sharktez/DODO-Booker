@@ -251,16 +251,14 @@ class BookingsRemoteDatasource {
   }
 
   // Called after the vendor confirms cash collection in the OTP flow.
-  // Sets status=completed and stamps cod_cash_collected+cod_confirmed_at.
-  // Only called when the vendor taps "Cash Collected" — dismissal leaves
-  // the booking in awaiting_verification for later confirmation.
   Future<void> completeCodBookingAfterOtp({
     required String bookingId,
   }) async {
+    final now = DateTime.now().toUtc().toIso8601String();
     await _client.from('bookings').update({
       'status': 'completed',
       'cod_cash_collected': true,
-      'cod_confirmed_at': DateTime.now().toUtc().toIso8601String(),
+      'cod_confirmed_at': now,
     }).eq('id', bookingId);
   }
 

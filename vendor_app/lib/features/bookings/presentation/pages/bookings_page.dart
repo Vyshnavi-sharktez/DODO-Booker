@@ -93,17 +93,17 @@ class _BookingsPageState extends ConsumerState<BookingsPage>
                 controller: _tabController,
                 children: _isDodoTeam
                     ? [
-                        _buildBookingsList(bookings, 'in_progress', 'awaiting_verification'),
-                        _buildBookingsList(bookings, 'completed'),
-                        _buildBookingsList(bookings, 'cancelled'),
+                        _buildBookingsList(bookings, {'in_progress', 'en_route', 'awaiting_verification'}),
+                        _buildBookingsList(bookings, {'completed'}),
+                        _buildBookingsList(bookings, {'cancelled'}),
                         _buildTodayList(bookings),
                       ]
                     : [
-                        _buildBookingsList(bookings, 'assigned', 'accepted'),
-                        _buildBookingsList(bookings, 'in_progress', 'awaiting_verification'),
-                        _buildBookingsList(bookings, 'completed'),
-                        _buildBookingsList(bookings, 'rejected'),
-                        _buildBookingsList(bookings, 'cancelled'),
+                        _buildBookingsList(bookings, {'assigned', 'accepted'}),
+                        _buildBookingsList(bookings, {'in_progress', 'en_route', 'awaiting_verification'}),
+                        _buildBookingsList(bookings, {'completed'}),
+                        _buildBookingsList(bookings, {'rejected'}),
+                        _buildBookingsList(bookings, {'cancelled'}),
                         _buildTodayList(bookings),
                       ],
               ),
@@ -113,19 +113,20 @@ class _BookingsPageState extends ConsumerState<BookingsPage>
       );
   }
 
-  Widget _buildBookingsList(List<Booking> bookings, String status,
-      [String? additionalStatus]) {
+  Widget _buildBookingsList(List<Booking> bookings, Set<String> statuses) {
+    final primary = statuses.first;
     final filtered = bookings
         .where((b) =>
-            b.status == status ||
-            (additionalStatus != null && b.status == additionalStatus) ||
-            (status == 'assigned' && b.isWarrantyRework && (b.status == 'pending' || b.status == 'assigned')))
+            statuses.contains(b.status) ||
+            (statuses.contains('assigned') &&
+                b.isWarrantyRework &&
+                (b.status == 'pending' || b.status == 'assigned')))
         .toList();
-    if (filtered.isEmpty) return _emptyState(status);
+    if (filtered.isEmpty) return _emptyState(primary);
     return RefreshIndicator(
       onRefresh: () async => ref.invalidate(vendorBookingsProvider),
       child: ListView.builder(
-        key: PageStorageKey<String>('vendor_bookings_$status'),
+        key: PageStorageKey<String>('vendor_bookings_$primary'),
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         itemCount: filtered.length,
         itemBuilder: (_, i) => BookingCard(booking: filtered[i]),

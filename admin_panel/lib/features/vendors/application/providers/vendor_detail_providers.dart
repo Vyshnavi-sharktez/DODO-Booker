@@ -71,6 +71,20 @@ final vendorWalletInfoProvider =
   },
 );
 
+final vendorPlatformServicesProvider =
+    StreamProvider.autoDispose.family<List<VendorPlatformService>, String>(
+  (ref, vendorId) {
+    return ref
+        .watch(vendorDetailRepositoryProvider)
+        .streamVendorPlatformServices(vendorId);
+  },
+);
+
+final adminCatalogParentMapProvider =
+    FutureProvider.autoDispose<Map<String, String?>>((ref) {
+  return ref.watch(vendorDetailRepositoryProvider).fetchCatalogParentMap();
+});
+
 final vendorWalletTransactionsProvider =
     FutureProvider.autoDispose.family<List<VendorWalletTransaction>, String>(
   (ref, vendorId) {
