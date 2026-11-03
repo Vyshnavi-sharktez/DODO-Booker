@@ -16,6 +16,7 @@ class Booking {
     this.customerName,
     this.customerPhone,
     this.discountAmount = 0.0,
+    this.serviceChargeAmount = 0.0,
     this.createdAt,
     this.rejectionReason,
     this.rejectedAt,
@@ -50,6 +51,7 @@ class Booking {
   final String? customerName;
   final String? customerPhone;
   final double discountAmount;
+  final double serviceChargeAmount;
   final DateTime? createdAt;
   final String? rejectionReason;
   final DateTime? rejectedAt;
@@ -73,7 +75,12 @@ class Booking {
   bool get isDodoTeam => assignmentType == 'DODO Team';
 
   bool get isCod =>
-      paymentMethod.toLowerCase() == 'cash' || paymentMethod.toLowerCase() == 'cod';
+      paymentMethod.toLowerCase() == 'cash' ||
+      paymentMethod.toLowerCase() == 'cod' ||
+      paymentMethod.toLowerCase() == 'upi_vendor';
+
+  bool get isUpiVendorCollection =>
+      paymentMethod.toLowerCase() == 'upi_vendor';
 
   bool get isCodCollectionPending =>
       isCod && status == 'completed' && codConfirmedAt == null;
@@ -112,6 +119,7 @@ class Booking {
       subtotal: (map['subtotal'] as num?)?.toDouble() ?? 0.0,
       totalAmount: (map['total_amount'] as num?)?.toDouble() ?? 0.0,
       discountAmount: (map['discount_amount'] as num?)?.toDouble() ?? 0.0,
+      serviceChargeAmount: (map['service_charge_amount'] as num?)?.toDouble() ?? 0.0,
       serviceDate: map['service_date'] != null
           ? DateTime.tryParse(map['service_date'] as String)
           : null,
@@ -167,6 +175,7 @@ class Booking {
       subtotal: subtotal,
       totalAmount: totalAmount,
       discountAmount: discountAmount,
+      serviceChargeAmount: serviceChargeAmount,
       serviceDate: serviceDate,
       address: address,
       notes: notes ?? this.notes,

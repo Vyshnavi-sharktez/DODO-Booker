@@ -18,6 +18,9 @@ class VendorBookingRow {
   /// False for paid rows settled before the tax-breakdown migration.
   final bool hasTaxBreakdown;
 
+  /// Fixed service charge applied at booking time (0 if none).
+  final double serviceChargeAmount;
+
   /// Platform Commission deducted from the pre-tax service amount.
   final double commissionAmount;
 
@@ -41,6 +44,7 @@ class VendorBookingRow {
     required this.subtotalBeforeTax,
     required this.taxAmount,
     required this.hasTaxBreakdown,
+    this.serviceChargeAmount = 0.0,
     required this.commissionAmount,
     required this.netVendorAmount,
     required this.commissionLabel,

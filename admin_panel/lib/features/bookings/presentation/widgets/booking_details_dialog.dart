@@ -167,12 +167,14 @@ class _BookingDetailsDialogState extends ConsumerState<BookingDetailsDialog> {
     try {
       await InvoiceService.downloadInvoice(
         booking: booking,
-        customerName: customer?.fullName ?? '',
-        customerPhone:
-            customer?.phone.isNotEmpty == true ? customer!.phone : null,
+        customerName: customer?.fullName ?? booking.customerName ?? '',
+        customerPhone: customer?.phone.isNotEmpty == true
+            ? customer!.phone
+            : booking.customerPhone,
         customerEmail:
             customer?.email.isNotEmpty == true ? customer!.email : null,
         assigneeName: assigneeName.isNotEmpty ? assigneeName : null,
+        generatedBy: 'admin',
       );
     } catch (e) {
       if (!mounted) return;
@@ -1004,6 +1006,13 @@ class _ServicesCard extends StatelessWidget {
                   _PriceRow(
                     label: _taxLabel(booking),
                     value: _currency.format(booking.taxAmount),
+                  ),
+                ],
+                if (booking.serviceChargeAmount > 0) ...[
+                  const SizedBox(height: 6),
+                  _PriceRow(
+                    label: 'Service Charge',
+                    value: _currency.format(booking.serviceChargeAmount),
                   ),
                 ],
                 const Padding(

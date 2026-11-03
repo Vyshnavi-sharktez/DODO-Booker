@@ -317,9 +317,21 @@ class _SettlementHistoryDialogState
               ? const Text('—',
                   style: TextStyle(
                       fontSize: 12, color: AppColors.textSecondary))
-              : Text(
-                  '₹${_moneyFmt.format(row.subtotalBeforeTax)}',
-                  style: const TextStyle(fontSize: 13),
+              : Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      '₹${_moneyFmt.format(row.subtotalBeforeTax)}',
+                      style: const TextStyle(fontSize: 13),
+                    ),
+                    if (row.serviceChargeAmount > 0)
+                      Text(
+                        '+₹${_moneyFmt.format(row.serviceChargeAmount)} SC',
+                        style: const TextStyle(
+                            fontSize: 10, color: AppColors.textSecondary),
+                      ),
+                  ],
                 ),
         ),
         // Tax (amount + rate)

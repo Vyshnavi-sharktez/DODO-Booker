@@ -400,6 +400,8 @@ class _TransactionDetailsBody extends ConsumerWidget {
             : 'N/A');
 
     // Resolve Commission Rate
+    final serviceChargeAmount =
+        (booking?['service_charge_amount'] as num?)?.toDouble() ?? 0.0;
     final bookingSubtotal = (booking?['subtotal'] as num?)?.toDouble() ??
         (booking?['total_amount'] as num?)?.toDouble() ??
         itemTotalSum;
@@ -416,6 +418,11 @@ class _TransactionDetailsBody extends ConsumerWidget {
         _DetailRow(label: 'Booking ID', value: bookingIdDisplay),
         _DetailRow(label: 'Service', value: serviceName),
         _DetailRow(label: 'Completed Date & Time', value: completedDateDisplay),
+        if (serviceChargeAmount > 0)
+          _DetailRow(
+            label: 'Service Charge',
+            value: currencyFormatter.format(serviceChargeAmount),
+          ),
         _DetailRow(label: 'Commission Rate', value: rateDisplay),
         _DetailRow(
           label: 'Commission Amount',

@@ -1,11 +1,17 @@
+import 'dart:convert';
 import 'dart:math';
-import 'dart:typed_data';
 
+import 'package:flutter/foundation.dart';
+import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
+import 'package:supabase_flutter/supabase_flutter.dart';
+
+import '../../invoice_config/data/invoice_config_repository.dart';
 import '../domain/models/booking.dart';
 import 'invoice_downloader.dart';
+import 'invoice_storage_service.dart';
 
 class InvoiceService {
   InvoiceService._();
@@ -16,33 +22,153 @@ class InvoiceService {
 
   // ── Public API ─────────────────────────────────────────────────────────────
 
-  /// Generates and downloads the invoice PDF for [booking].
-  /// [customerName], [customerPhone], [customerEmail], and [assigneeName] are
-  /// resolved by the caller (dialog/screen) from providers or a DB fetch.
   static Future<void> downloadInvoice({
     required Booking booking,
     required String customerName,
     String? customerPhone,
     String? customerEmail,
     String? assigneeName,
+    String generatedBy = 'admin',
   }) async {
-    final bytes = await _buildPdf(
+    // 1. Check for an already-generated invoice (dedup)
+    final existing = await InvoiceStorageService.fetchExisting(booking.id);
+    if (existing != null) {
+      try {
+        final signedUrl =
+            await InvoiceStorageService.createSignedUrl(existing.pdfPath);
+        await downloadPdfFromUrl(signedUrl, 'DODO_${existing.invoiceNumber}.pdf');
+        return;
+      } catch (e) {
+        // Storage file missing — fall through and regenerate
+        debugPrint('[InvoiceService] Signed URL failed, regenerating: $e');
+      }
+    }
+
+    // 2. Fetch company branding config
+    final config = await InvoiceConfigRepository(
+      Supabase.instance.client,
+    ).fetch();
+
+    // 3. Generate invoice number from DB sequence
+    final invoiceNum =
+        await InvoiceStorageService.nextInvoiceNumber(config.invoicePrefix);
+
+    // 4. Build PDF — use Edge Function if template is configured
+    final Uint8List bytes;
+    final templatePath = _templateStoragePath(config.templatePdfUrl);
+    if (templatePath != null) {
+      bytes = await _buildPdfViaTemplate(
+        templatePath: templatePath,
+        booking: booking,
+        customerName: customerName,
+        customerPhone: customerPhone,
+        customerEmail: customerEmail,
+        assigneeName: assigneeName,
+        invoiceNumber: invoiceNum,
+        config: config,
+      );
+    } else {
+      bytes = await _buildPdf(
+        booking: booking,
+        customerName: customerName,
+        customerPhone: customerPhone,
+        customerEmail: customerEmail,
+        assigneeName: assigneeName,
+        invoiceNumber: invoiceNum,
+        config: config,
+      );
+    }
+
+    // 5. Upload to storage
+    final path = '${booking.id}/$invoiceNum.pdf';
+    await InvoiceStorageService.uploadPdf(path, bytes);
+
+    // 6. Insert DB record (financial snapshot frozen here)
+    await InvoiceStorageService.handleRaceConditionInsert(
+      bookingId: booking.id,
+      invoiceNumber: invoiceNum,
+      pdfPath: path,
       booking: booking,
-      customerName: customerName,
-      customerPhone: customerPhone,
-      customerEmail: customerEmail,
-      assigneeName: assigneeName,
+      generatedBy: generatedBy,
     );
-    final num = invoiceNumber(booking);
-    await downloadPdf(bytes, 'DODO_$num.pdf');
+
+    // 7. Download bytes to browser/device
+    await downloadPdf(bytes, 'DODO_$invoiceNum.pdf');
   }
 
-  static String invoiceNumber(Booking booking) {
-    if (booking.bookingNumber.isNotEmpty) {
-      return 'INV-${booking.bookingNumber}';
+  // ── Edge Function template fill ────────────────────────────────────────────
+
+  /// Extracts the storage path from a public URL (e.g. ".../cms-media/invoice-templates/x.pdf"
+  /// → "invoice-templates/x.pdf").  Returns null when no template is set.
+  static String? _templateStoragePath(String? publicUrl) {
+    if (publicUrl == null || publicUrl.isEmpty) return null;
+    const marker = '/cms-media/';
+    final idx = publicUrl.indexOf(marker);
+    if (idx == -1) return null;
+    return publicUrl.substring(idx + marker.length);
+  }
+
+  static Future<Uint8List> _buildPdfViaTemplate({
+    required String templatePath,
+    required Booking booking,
+    required String customerName,
+    required String invoiceNumber,
+    required InvoiceConfigData config,
+    String? customerPhone,
+    String? customerEmail,
+    String? assigneeName,
+  }) async {
+    final addonsTotal = booking.addons.fold(0.0, (s, a) => s + a.price);
+
+    final response = await Supabase.instance.client.functions.invoke(
+      'invoice-fill',
+      body: {
+        'templatePath': templatePath,
+        'booking': {
+          'invoiceNumber': invoiceNumber,
+          'invoiceDate': _dateFmt.format(booking.createdAt ?? DateTime.now()),
+          'customerName': customerName,
+          'customerPhone': customerPhone ?? '',
+          'customerEmail': customerEmail ?? '',
+          'customerAddress': booking.address ?? '',
+          'bookingRef': booking.bookingNumber,
+          'serviceDate': booking.serviceDate != null
+              ? _dateFmt.format(booking.serviceDate!)
+              : '',
+          'assignedTo': assigneeName ?? '',
+          'paymentMethod': booking.paymentMethodLabel,
+          'items': booking.items
+              .map((i) => {
+                    'name': i.serviceName,
+                    'qty': '${i.quantity}',
+                    'unitPrice': _currency.format(i.unitPrice),
+                    'totalPrice': _currency.format(i.totalPrice),
+                  })
+              .toList(),
+          'addons': booking.addons
+              .map((a) => {
+                    'name': a.name,
+                    'price': _currency.format(a.price),
+                  })
+              .toList(),
+          'subtotal': _currency.format(booking.subtotal + addonsTotal),
+          'taxLabel': 'Taxes & Fees',
+          'taxAmount': _currency.format(booking.taxAmount),
+          'discount': _currency.format(booking.discountAmount),
+          'grandTotal': _currency.format(booking.totalAmount),
+        },
+      },
+    );
+
+    if (response.status >= 400) {
+      final errMsg = response.data is Map
+          ? (response.data as Map)['error'] as String? ?? 'Unknown error'
+          : 'HTTP ${response.status}';
+      throw Exception('invoice-fill failed: $errMsg');
     }
-    final id = booking.id.replaceAll('-', '').toUpperCase();
-    return 'INV-${id.substring(0, min(8, id.length))}';
+
+    final base64Str = (response.data as Map)['pdf'] as String;
+    return base64Decode(base64Str);
   }
 
   // ── PDF builder ────────────────────────────────────────────────────────────
@@ -50,19 +176,22 @@ class InvoiceService {
   static Future<Uint8List> _buildPdf({
     required Booking booking,
     required String customerName,
+    required String invoiceNumber,
+    required InvoiceConfigData config,
     String? customerPhone,
     String? customerEmail,
     String? assigneeName,
   }) async {
+    final logoImage = await _loadLogoImage(config.logoUrl);
     final doc = pw.Document();
-    final invNum = invoiceNumber(booking);
 
     doc.addPage(
       pw.MultiPage(
         pageFormat: PdfPageFormat.a4,
         margin: const pw.EdgeInsets.symmetric(horizontal: 48, vertical: 48),
         build: (ctx) => [
-          _header(invNum, booking.createdAt ?? DateTime.now()),
+          _header(invoiceNumber, booking.createdAt ?? DateTime.now(), config,
+              logoImage),
           pw.SizedBox(height: 28),
           _infoSection(
             booking: booking,
@@ -80,7 +209,7 @@ class InvoiceService {
           pw.SizedBox(height: 20),
           _totalsBlock(booking),
           pw.SizedBox(height: 28),
-          _footer(),
+          _footer(config),
         ],
       ),
     );
@@ -88,9 +217,25 @@ class InvoiceService {
     return doc.save();
   }
 
+  static Future<pw.ImageProvider?> _loadLogoImage(String? url) async {
+    if (url == null || url.isEmpty) return null;
+    try {
+      final response = await http.get(Uri.parse(url));
+      if (response.statusCode == 200) {
+        return pw.MemoryImage(response.bodyBytes);
+      }
+    } catch (_) {}
+    return null;
+  }
+
   // ── Header ─────────────────────────────────────────────────────────────────
 
-  static pw.Widget _header(String invoiceNum, DateTime date) {
+  static pw.Widget _header(
+    String invoiceNum,
+    DateTime date,
+    InvoiceConfigData config,
+    pw.ImageProvider? logo,
+  ) {
     return pw.Container(
       padding: const pw.EdgeInsets.all(20),
       decoration: pw.BoxDecoration(color: PdfColor.fromHex('111111')),
@@ -101,8 +246,12 @@ class InvoiceService {
           pw.Column(
             crossAxisAlignment: pw.CrossAxisAlignment.start,
             children: [
+              if (logo != null) ...[
+                pw.Image(logo, width: 56, height: 40, fit: pw.BoxFit.contain),
+                pw.SizedBox(height: 6),
+              ],
               pw.Text(
-                'DODO BOOKER',
+                config.companyName,
                 style: pw.TextStyle(
                   fontSize: 22,
                   fontWeight: pw.FontWeight.bold,
@@ -111,12 +260,21 @@ class InvoiceService {
               ),
               pw.SizedBox(height: 4),
               pw.Text(
-                'Home Services Platform',
+                config.companyTagline,
                 style: pw.TextStyle(
                   fontSize: 9,
                   color: PdfColor.fromHex('9AA0A6'),
                 ),
               ),
+              if (config.companyGstin != null &&
+                  config.companyGstin!.isNotEmpty) ...[
+                pw.SizedBox(height: 4),
+                pw.Text(
+                  'GSTIN: ${config.companyGstin}',
+                  style: pw.TextStyle(
+                      fontSize: 8, color: PdfColor.fromHex('9AA0A6')),
+                ),
+              ],
             ],
           ),
           pw.Column(
@@ -162,7 +320,6 @@ class InvoiceService {
     return pw.Row(
       crossAxisAlignment: pw.CrossAxisAlignment.start,
       children: [
-        // Bill to
         pw.Expanded(
           child: pw.Column(
             crossAxisAlignment: pw.CrossAxisAlignment.start,
@@ -192,7 +349,6 @@ class InvoiceService {
           ),
         ),
         pw.SizedBox(width: 32),
-        // Service details
         pw.Expanded(
           child: pw.Column(
             crossAxisAlignment: pw.CrossAxisAlignment.start,
@@ -217,6 +373,7 @@ class InvoiceService {
               if (assigneeName != null && assigneeName.isNotEmpty)
                 _detailRow('Assigned To', assigneeName),
               _detailRow('Status', 'Completed'),
+              _detailRow('Payment', booking.paymentMethodLabel),
             ],
           ),
         ),
@@ -382,6 +539,8 @@ class InvoiceService {
               _totalRow('Subtotal', _currency.format(booking.subtotal)),
               if (addonsTotal > 0)
                 _totalRow('Add-ons', _currency.format(addonsTotal)),
+              if (booking.taxAmount > 0)
+                _totalRow('Taxes & Fees', _currency.format(booking.taxAmount)),
               if (booking.discountAmount > 0)
                 _totalRow(
                   'Discount',
@@ -403,7 +562,7 @@ class InvoiceService {
 
   // ── Footer ─────────────────────────────────────────────────────────────────
 
-  static pw.Widget _footer() {
+  static pw.Widget _footer(InvoiceConfigData config) {
     final grey = PdfColor.fromHex('5F6368');
     final lightGrey = PdfColor.fromHex('9AA0A6');
     return pw.Column(
@@ -411,13 +570,14 @@ class InvoiceService {
       children: [
         pw.Divider(color: PdfColor.fromHex('E5E7EB')),
         pw.SizedBox(height: 8),
-        pw.Text(
-          'Payment details will be available after payment is processed.',
-          style: pw.TextStyle(
-              fontSize: 9, color: grey, fontStyle: pw.FontStyle.italic),
-          textAlign: pw.TextAlign.center,
-        ),
-        pw.SizedBox(height: 4),
+        if (config.footerNote != null && config.footerNote!.isNotEmpty) ...[
+          pw.Text(
+            config.footerNote!,
+            style: pw.TextStyle(fontSize: 9, color: grey),
+            textAlign: pw.TextAlign.center,
+          ),
+          pw.SizedBox(height: 4),
+        ],
         pw.Text(
           'This is a computer-generated invoice and does not require a physical signature.',
           style: pw.TextStyle(fontSize: 9, color: grey),
@@ -425,7 +585,7 @@ class InvoiceService {
         ),
         pw.SizedBox(height: 4),
         pw.Text(
-          '© ${DateTime.now().year} DODO Booker. All rights reserved.',
+          '© ${DateTime.now().year} ${config.companyName}. All rights reserved.',
           style: pw.TextStyle(fontSize: 9, color: lightGrey),
           textAlign: pw.TextAlign.center,
         ),

@@ -34,6 +34,7 @@ import '../../features/surge_fees/presentation/pages/surge_fee_settings_page.dar
 import '../../features/seo/presentation/pages/seo_management_page.dart';
 import '../../features/landing_page_cms/presentation/pages/landing_page_cms_page.dart';
 import '../../features/payment_config/presentation/pages/payment_config_page.dart';
+import '../../features/invoice_config/presentation/pages/invoice_config_page.dart';
 import '../../features/payment_config/presentation/pages/upi_config_page.dart';
 import '../../features/whatsapp_config/presentation/pages/whatsapp_config_page.dart';
 import '../../features/sms_config/presentation/pages/sms_config_page.dart';
@@ -418,6 +419,13 @@ final routerProvider = Provider<GoRouter>((ref) {
             name: 'paymentConfig',
             pageBuilder: (context, state) => const NoTransitionPage(
               child: PaymentConfigPage(),
+            ),
+          ),
+          GoRoute(
+            path: '/dashboard/invoice-config',
+            name: 'invoiceConfig',
+            pageBuilder: (context, state) => const NoTransitionPage(
+              child: InvoiceConfigPage(),
             ),
           ),
           GoRoute(

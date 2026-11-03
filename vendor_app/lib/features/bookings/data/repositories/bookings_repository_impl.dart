@@ -74,8 +74,12 @@ class BookingsRepositoryImpl implements IBookingsRepository {
   @override
   Future<void> completeCodBookingAfterOtp({
     required String bookingId,
+    required String collectionMode,
   }) =>
-      _datasource.completeCodBookingAfterOtp(bookingId: bookingId);
+      _datasource.completeCodBookingAfterOtp(
+        bookingId: bookingId,
+        collectionMode: collectionMode,
+      );
 
   @override
   Future<void> createAdminNotification({

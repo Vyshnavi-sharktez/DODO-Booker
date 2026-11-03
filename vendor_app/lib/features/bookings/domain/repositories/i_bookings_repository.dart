@@ -14,6 +14,7 @@ abstract class IBookingsRepository {
   Future<bool> verifyCompletionOtp(String bookingId, String otp);
   Future<void> completeCodBookingAfterOtp({
     required String bookingId,
+    required String collectionMode,
   });
   Future<void> createAdminNotification({
     required String title,
