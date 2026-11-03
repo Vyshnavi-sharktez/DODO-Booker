@@ -49,7 +49,7 @@ class WalletRepository extends BaseRepository {
           .from('bookings')
           .select('''
             id, booking_number, status, created_at, completed_at, otp_verified_at,
-            subtotal, total_amount,
+            subtotal, total_amount, service_charge_amount,
             booking_items(
               service_id,
               quantity,
@@ -68,7 +68,7 @@ class WalletRepository extends BaseRepository {
             .from('bookings')
             .select('''
               id, booking_number, status, created_at, completed_at, otp_verified_at,
-              subtotal, total_amount,
+              subtotal, total_amount, service_charge_amount,
               booking_items(
                 service_id,
                 quantity,

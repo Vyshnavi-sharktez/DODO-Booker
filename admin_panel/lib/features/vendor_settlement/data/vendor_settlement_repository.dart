@@ -240,7 +240,7 @@ class VendorSettlementRepository {
   Future<List<VendorBookingRow>> fetchBookingRows(String vendorId) async {
     final bookingsData = await _supabase
         .from('bookings')
-        .select('id, subtotal, discount_amount, total_amount, created_at')
+        .select('id, subtotal, discount_amount, total_amount, service_charge_amount, created_at')
         .eq('vendor_id', vendorId)
         .eq('status', 'completed')
         .inFilter('payment_method', ['razorpay', 'online', 'upi_dodo'])
@@ -328,6 +328,7 @@ class VendorSettlementRepository {
       final rawTotal = (b['total_amount'] as num?)?.toDouble() ?? 0.0;
       final rawSubtotal = (b['subtotal'] as num?)?.toDouble() ?? rawTotal;
       final rawDiscount = (b['discount_amount'] as num?)?.toDouble() ?? 0.0;
+      final serviceChargeAmount = (b['service_charge_amount'] as num?)?.toDouble() ?? 0.0;
       final completedAt =
           DateTime.tryParse(b['created_at'] as String? ?? '') ?? DateTime.now();
       final items = itemsByBooking[bookingId] ?? [];
@@ -408,6 +409,7 @@ class VendorSettlementRepository {
         subtotalBeforeTax: subtotalBeforeTax,
         taxAmount: taxAmount,
         hasTaxBreakdown: hasTaxBreakdown,
+        serviceChargeAmount: serviceChargeAmount,
         commissionAmount: commissionAmount,
         netVendorAmount: netVendorAmount,
         commissionLabel: commissionLabel,

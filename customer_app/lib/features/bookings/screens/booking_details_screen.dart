@@ -926,6 +926,12 @@ class _PaymentCard extends StatelessWidget {
           value: '₹${booking.taxAmount.toStringAsFixed(2)}',
           tt: tt,
         ),
+        if (booking.serviceChargeAmount > 0)
+          _PaymentRow(
+            label: 'Service Charge',
+            value: '₹${booking.serviceChargeAmount.toStringAsFixed(2)}',
+            tt: tt,
+          ),
         const Divider(height: 16),
         _PaymentRow(
           label: 'Total Paid',

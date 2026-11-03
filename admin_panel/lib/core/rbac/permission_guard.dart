@@ -46,6 +46,7 @@ const Map<String, String> routePermissions = {
   '/surge-fees': 'settings.read',
   '/seo': 'settings.read',
   '/landing-page': 'settings.read',
+  '/invoice-config': 'settings.read',
   '/payment-config': 'settings.read',
   '/upi-config': 'settings.read',
   '/whatsapp-config': 'settings.read',

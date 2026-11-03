@@ -116,6 +116,7 @@ class MyBookingModel {
   final String timeSlot;
   final double baseAmount;
   final double taxAmount;
+  final double serviceChargeAmount;
   final double totalAmount;
   final String status;
   final String assignmentType; // 'Unassigned' | 'External Vendor' | 'DODO Team'
@@ -154,6 +155,7 @@ class MyBookingModel {
     required this.timeSlot,
     required this.baseAmount,
     required this.taxAmount,
+    this.serviceChargeAmount = 0.0,
     required this.totalAmount,
     required this.status,
     this.assignmentType = 'Unassigned',
@@ -325,6 +327,7 @@ class MyBookingModel {
           ((json['base_amount'] ?? json['subtotal']) as num?)?.toDouble() ??
               0.0,
       taxAmount: (json['tax_amount'] as num?)?.toDouble() ?? 0.0,
+      serviceChargeAmount: (json['service_charge_amount'] as num?)?.toDouble() ?? 0.0,
       totalAmount: (json['total_amount'] as num?)?.toDouble() ?? 0.0,
       status: status,
       assignmentType: assignmentType,

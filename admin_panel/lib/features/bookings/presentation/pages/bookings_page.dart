@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:intl/intl.dart';
 import '../../../../core/theme/app_theme.dart';
+import '../../application/invoice_service.dart';
 import '../../../../core/widgets/admin_search_bar.dart';
 import '../../../../core/widgets/highlighted_text.dart';
 import '../../../auth/application/providers/auth_provider.dart';
@@ -955,6 +956,25 @@ class _BookingsPageState extends ConsumerState<BookingsPage> {
     }
   }
 
+  Future<void> _downloadInvoice(Booking booking) async {
+    try {
+      await InvoiceService.downloadInvoice(
+        booking: booking,
+        customerName: booking.customerName ?? '',
+        customerPhone: booking.customerPhone?.isNotEmpty == true
+            ? booking.customerPhone
+            : null,
+        assigneeName: booking.vendorName.isNotEmpty ? booking.vendorName : null,
+        generatedBy: 'admin',
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not generate invoice: $e')),
+      );
+    }
+  }
+
   Future<void> _confirmDelete(Booking booking) async {
     final confirmed = await showDialog<bool>(
       context: context,
@@ -1424,6 +1444,7 @@ class _BookingsPageState extends ConsumerState<BookingsPage> {
                             onStartDodoService: _startDodoService,
                             onCancel: _confirmCancel,
                             onDelete: _confirmDelete,
+                            onDownloadInvoice: _downloadInvoice,
                             searchQuery: _searchQuery,
                           ),
                         ),
@@ -1574,6 +1595,7 @@ class _BookingsTable extends StatelessWidget {
   final void Function(Booking) onStartDodoService;
   final void Function(Booking)? onCancel;
   final void Function(Booking) onDelete;
+  final void Function(Booking)? onDownloadInvoice;
   final String searchQuery;
 
   const _BookingsTable({
@@ -1587,6 +1609,7 @@ class _BookingsTable extends StatelessWidget {
     required this.onStartDodoService,
     this.onCancel,
     required this.onDelete,
+    this.onDownloadInvoice,
     this.searchQuery = '',
   });
 
@@ -1638,6 +1661,9 @@ class _BookingsTable extends StatelessWidget {
                                   onStartDodoService: () => onStartDodoService(b),
                                   onCancel: onCancel != null ? () => onCancel!(b) : null,
                                   onDelete: () => onDelete(b),
+                                  onDownloadInvoice: onDownloadInvoice != null
+                                      ? () => onDownloadInvoice!(b)
+                                      : null,
                                   searchQuery: searchQuery,
                                 );
                               },
@@ -1718,6 +1744,7 @@ class _BookingRow extends StatelessWidget {
   final VoidCallback onStartDodoService;
   final VoidCallback? onCancel;
   final VoidCallback onDelete;
+  final VoidCallback? onDownloadInvoice;
   final String searchQuery;
 
   const _BookingRow({
@@ -1731,6 +1758,7 @@ class _BookingRow extends StatelessWidget {
     required this.onStartDodoService,
     this.onCancel,
     required this.onDelete,
+    this.onDownloadInvoice,
     this.searchQuery = '',
   });
 
@@ -2041,6 +2069,15 @@ class _BookingRow extends StatelessWidget {
                     icon: Icon(Icons.cancel_outlined,
                         size: 16, color: AppColors.error),
                     tooltip: 'Cancel booking',
+                    visualDensity: VisualDensity.compact,
+                  ),
+                if (onDownloadInvoice != null &&
+                    booking.status == 'completed')
+                  IconButton(
+                    onPressed: onDownloadInvoice,
+                    icon: Icon(Icons.receipt_long_rounded,
+                        size: 16, color: AppColors.textSecondary),
+                    tooltip: 'Download Invoice',
                     visualDensity: VisualDensity.compact,
                   ),
                 IconButton(

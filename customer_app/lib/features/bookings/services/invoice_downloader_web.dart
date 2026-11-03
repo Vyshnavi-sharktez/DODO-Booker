@@ -10,3 +10,9 @@ Future<void> downloadPdf(Uint8List bytes, String filename) async {
     ..click();
   html.Url.revokeObjectUrl(url);
 }
+
+Future<void> downloadPdfFromUrl(String url, String filename) async {
+  html.AnchorElement(href: url)
+    ..setAttribute('download', filename)
+    ..click();
+}

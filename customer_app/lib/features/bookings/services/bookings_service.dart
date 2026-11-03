@@ -18,7 +18,7 @@ class BookingsService {
   static const _bookingSelect = '''
     id, booking_number, customer_id, vendor_id, dodo_team_id,
     assignment_type, service_date, scheduled_time, status, payment_method, payment_status,
-    subtotal, tax_amount, discount_amount, total_amount,
+    subtotal, tax_amount, discount_amount, total_amount, service_charge_amount,
     address, notes, created_at,
     completion_otp, otp_verified_at,
     cancelled_by, cancellation_reason,

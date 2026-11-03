@@ -80,3 +80,9 @@ enabled = true
 verify_jwt = false
 import_map = "./functions/exotel-webhook/deno.json"
 entrypoint = "./functions/exotel-webhook/index.ts"
+
+[functions.invoice-fill]
+enabled = true
+verify_jwt = true
+import_map = "./functions/invoice-fill/deno.json"
+entrypoint = "./functions/invoice-fill/index.ts"

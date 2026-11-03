@@ -72,6 +72,7 @@ class Booking {
   final double subtotal;
   final double taxAmount;
   final double discountAmount;
+  final double serviceChargeAmount;
   final double totalAmount;
   final String? couponCode;
   final String? address;
@@ -134,6 +135,7 @@ class Booking {
     required this.subtotal,
     this.taxAmount = 0.0,
     required this.discountAmount,
+    this.serviceChargeAmount = 0.0,
     required this.totalAmount,
     this.couponCode,
     this.address,
@@ -287,6 +289,7 @@ class Booking {
       subtotal: (map['subtotal'] as num?)?.toDouble() ?? 0.0,
       taxAmount: (map['tax_amount'] as num?)?.toDouble() ?? 0.0,
       discountAmount: (map['discount_amount'] as num?)?.toDouble() ?? 0.0,
+      serviceChargeAmount: (map['service_charge_amount'] as num?)?.toDouble() ?? 0.0,
       totalAmount: (map['total_amount'] as num?)?.toDouble() ?? 0.0,
       couponCode: map['coupon_code'] as String?,
       address: map['address'] as String?,
@@ -405,6 +408,7 @@ class Booking {
       subtotal: subtotal,
       taxAmount: taxAmount,
       discountAmount: discountAmount,
+      serviceChargeAmount: serviceChargeAmount,
       totalAmount: totalAmount,
       couponCode: couponCode,
       address: address ?? this.address,

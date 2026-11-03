@@ -357,7 +357,7 @@ class _BookingCardState extends ConsumerState<BookingCard> {
   // Shows cash confirmation dialog. Dismissal leaves booking in awaiting_verification.
   Future<void> _handleCodCashConfirmationAfterOtp() async {
     if (!mounted) return;
-    final confirmed = await showDialog<bool>(
+    final collectionMode = await showDialog<String>(
       context: context,
       barrierDismissible: false,
       builder: (_) => CodCashConfirmationDialog(
@@ -366,7 +366,7 @@ class _BookingCardState extends ConsumerState<BookingCard> {
       ),
     );
 
-    if (confirmed != true || !mounted) {
+    if (collectionMode == null || !mounted) {
       debugPrint('[COD][OTP] Cash dialog dismissed — booking stays in awaiting_verification');
       return;
     }
@@ -375,6 +375,7 @@ class _BookingCardState extends ConsumerState<BookingCard> {
     try {
       await ref.read(bookingsRepositoryProvider).completeCodBookingAfterOtp(
             bookingId: _booking.id,
+            collectionMode: collectionMode,
           );
 
       _applyStatusUpdate('completed');
@@ -445,7 +446,7 @@ class _BookingCardState extends ConsumerState<BookingCard> {
   }
 
   Future<void> _showCodCashConfirmationDialog() async {
-    final confirmed = await showDialog<bool>(
+    final collectionMode = await showDialog<String>(
       context: context,
       barrierDismissible: false,
       builder: (_) => CodCashConfirmationDialog(
@@ -454,11 +455,12 @@ class _BookingCardState extends ConsumerState<BookingCard> {
       ),
     );
 
-    if (confirmed != true || !mounted) return;
+    if (collectionMode == null || !mounted) return;
 
     try {
       await ref.read(bookingsRepositoryProvider).completeCodBookingAfterOtp(
             bookingId: _booking.id,
+            collectionMode: collectionMode,
           );
       if (mounted) {
         setState(() {
@@ -918,6 +920,27 @@ class _BookingCardState extends ConsumerState<BookingCard> {
             const SizedBox(height: 10),
             const Divider(height: 1, color: AppColors.border),
             const SizedBox(height: 10),
+
+            if (_booking.serviceChargeAmount > 0) ...[
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'Service Charge',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                  Text(
+                    FormatUtils.currency(_booking.serviceChargeAmount),
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 4),
+            ],
 
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,

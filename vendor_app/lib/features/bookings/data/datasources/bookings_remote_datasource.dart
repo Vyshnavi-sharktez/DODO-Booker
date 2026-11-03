@@ -10,7 +10,7 @@ class BookingsRemoteDatasource {
   static const _select = '''
     id, booking_number, customer_id, vendor_id, dodo_team_id,
     assignment_type, service_date,
-    status, subtotal, discount_amount, total_amount,
+    status, subtotal, discount_amount, total_amount, service_charge_amount,
     address, notes, created_at, rejection_reason, rejected_at,
     completion_otp, otp_verified_at, payment_method,
     cod_cash_collected, cod_not_collected_reason, cod_confirmed_at,
@@ -250,16 +250,25 @@ class BookingsRemoteDatasource {
     return true;
   }
 
-  // Called after the vendor confirms cash collection in the OTP flow.
+  // Called after the vendor confirms collection in the OTP flow.
+  // collectionMode: 'cash' → wallet deduction; 'upi_dodo' → vendor payout.
   Future<void> completeCodBookingAfterOtp({
     required String bookingId,
+    required String collectionMode,
   }) async {
     final now = DateTime.now().toUtc().toIso8601String();
-    await _client.from('bookings').update({
+    final payload = <String, dynamic>{
       'status': 'completed',
       'cod_cash_collected': true,
       'cod_confirmed_at': now,
-    }).eq('id', bookingId);
+    };
+    // If vendor collected via DODO scanner, update payment_method so the
+    // commission trigger skips wallet deduction and the booking is eligible
+    // for vendor payout settlement.
+    if (collectionMode == 'upi_dodo') {
+      payload['payment_method'] = 'upi_dodo';
+    }
+    await _client.from('bookings').update(payload).eq('id', bookingId);
   }
 
   Future<void> createAdminNotification({

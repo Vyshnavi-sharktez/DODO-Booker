@@ -290,6 +290,12 @@ const _kNavGroups = <_NavGroup>[
         requiredPermission: 'settings.manage',
       ),
       _NavItem(
+        label: 'Invoice Config',
+        icon: Icons.receipt_long_rounded,
+        route: '/dashboard/invoice-config',
+        requiredPermission: 'settings.manage',
+      ),
+      _NavItem(
         label: 'Online Payments',
         icon: Icons.payment_rounded,
         route: '/dashboard/payment-config',
