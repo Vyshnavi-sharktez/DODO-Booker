@@ -413,6 +413,9 @@ class CartNotifier extends StateNotifier<List<CartItem>> {
       quantity: quantity,
       customServiceId: service.id,
       vendorId: service.vendorId,
+      vcsPricingType: service.pricingType,
+      vcsPricePerMinute: service.pricePerMinute,
+      vcsDurationMinutes: service.durationMinutes,
     );
     state = [...state, newItem];
     _save();

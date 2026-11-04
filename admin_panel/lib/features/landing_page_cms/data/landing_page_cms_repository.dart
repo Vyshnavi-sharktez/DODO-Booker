@@ -98,6 +98,8 @@ const _kSeedRows = [
     'button_text': 'Book Now',
     'button_url': '/',
   }),
+  _Seed('vendor_catalog', 'Vendor Catalog Services', 140, false, false,
+      {'title': 'Vendor Services'}),
 ];
 
 class _Seed {

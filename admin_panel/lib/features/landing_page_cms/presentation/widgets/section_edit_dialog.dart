@@ -236,6 +236,7 @@ class _ConfigEditor extends StatelessWidget {
       'promo_banner'     => _PromoBannerConfig(config: config, onChanged: onChanged),
       'faq'              => _FaqConfig(config: config, onChanged: onChanged),
       'cta'              => _CtaConfig(config: config, onChanged: onChanged),
+      'vendor_catalog'   => _TitleOnlyConfig(config: config, onChanged: onChanged, titleHint: 'Vendor Services'),
       _                  => const SizedBox.shrink(),
     };
 

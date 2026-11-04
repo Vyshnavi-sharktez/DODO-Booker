@@ -6,6 +6,7 @@ class VendorCustomServiceModel {
     required this.serviceName,
     this.description,
     required this.activePrice,
+    this.basePrice,
     this.imageUrl,
     required this.vendorId,
     required this.vendorName,
@@ -18,17 +19,28 @@ class VendorCustomServiceModel {
     this.warrantyDays,
     this.warrantyCovers,
     this.warrantyExclusions,
+    this.vendorCategoryId,
+    this.pricingType = 'fixed',
+    this.pricePerMinute,
+    this.durationMinutes,
+    this.categoryName,
+    this.categoryIconKey,
+    this.optionsCount = 0,
+    this.discountType = 'none',
+    this.discountValue = 0,
   });
 
   final String id;
   final String serviceName;
   final String? description;
   final double activePrice;
+  final double? basePrice;      // original pre-discount price (vsr.price)
   final String? imageUrl;
   final String vendorId;
   final String vendorName;
   final double rating;
   final int reviewCount;
+  final int optionsCount;
   final List<String> includedItems;
   final List<String> excludedItems;
   final List<Map<String, String>> beforeAfterPairs;
@@ -36,8 +48,33 @@ class VendorCustomServiceModel {
   final int? warrantyDays;
   final String? warrantyCovers;
   final String? warrantyExclusions;
+  final String? vendorCategoryId;
+  final String pricingType; // 'fixed' | 'minutes_based' | 'duration_based'
+  final double? pricePerMinute;
+  final int? durationMinutes;
+  final String? categoryName;
+  final String? categoryIconKey;
+  final String discountType;    // 'none' | 'percentage' | 'fixed'
+  final double discountValue;
+
+  bool get isMinutesBased => pricingType == 'minutes_based';
+  bool get isDurationBased => pricingType == 'duration_based';
+
+  bool get hasDiscount =>
+      pricingType == 'fixed' &&
+      discountType != 'none' &&
+      discountValue > 0 &&
+      basePrice != null &&
+      basePrice! > activePrice;
 
   String get formattedPrice => '₹${activePrice.toInt()}';
+
+  String get pricingLabel {
+    if (!isMinutesBased || pricePerMinute == null || durationMinutes == null) {
+      return formattedPrice;
+    }
+    return '₹${pricePerMinute!.toStringAsFixed(0)}/min × ${durationMinutes}min';
+  }
 
   factory VendorCustomServiceModel.fromMap(Map<String, dynamic> m) {
     return VendorCustomServiceModel(
@@ -45,6 +82,9 @@ class VendorCustomServiceModel {
       serviceName: m['service_name'] as String,
       description: m['description'] as String?,
       activePrice: double.parse(m['active_price'].toString()),
+      basePrice: m['price'] != null
+          ? double.tryParse(m['price'].toString())
+          : null,
       imageUrl: m['image_url'] as String?,
       vendorId: m['vendor_id'] as String,
       vendorName: m['vendor_name'] as String,
@@ -69,6 +109,15 @@ class VendorCustomServiceModel {
       warrantyDays: m['warranty_days'] as int?,
       warrantyCovers: m['warranty_covers'] as String?,
       warrantyExclusions: m['warranty_exclusions'] as String?,
+      vendorCategoryId: m['vendor_category_id'] as String?,
+      pricingType: m['pricing_type'] as String? ?? 'fixed',
+      pricePerMinute: (m['price_per_minute'] as num?)?.toDouble(),
+      durationMinutes: (m['duration_minutes'] as num?)?.toInt(),
+      categoryName: m['category_name'] as String?,
+      categoryIconKey: m['category_icon_key'] as String?,
+      optionsCount: (m['options_count'] as num?)?.toInt() ?? 0,
+      discountType: m['discount_type'] as String? ?? 'none',
+      discountValue: (m['discount_value'] as num?)?.toDouble() ?? 0,
     );
   }
 

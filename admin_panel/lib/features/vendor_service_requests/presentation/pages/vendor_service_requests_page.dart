@@ -143,7 +143,6 @@ class _ServiceRequestsTabState extends ConsumerState<_ServiceRequestsTab> {
         _FilterChips(
           filters: const [
             ('pending', 'Pending'),
-            ('needs_catalog', 'Needs Catalog'),
             ('completed', 'Completed'),
             ('rejected', 'Rejected'),
             ('all', 'All'),
@@ -153,7 +152,6 @@ class _ServiceRequestsTabState extends ConsumerState<_ServiceRequestsTab> {
             data: (all) => {
               'all': all.length,
               'pending': all.where((r) => r.isPending).length,
-              'needs_catalog': all.where((r) => r.isNeedsCatalog).length,
               'completed': all.where((r) => r.isCompleted).length,
               'rejected': all.where((r) => r.isRejected).length,
             },

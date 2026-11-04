@@ -13,6 +13,12 @@ class VendorServiceRequestModel {
     this.parentRequestId,
     this.createdAt,
     this.isActive = false,
+    this.vendorCategoryId,
+    this.pricingType = 'fixed',
+    this.pricePerMinute,
+    this.durationMinutes,
+    this.discountType = 'none',
+    this.discountValue = 0,
   });
 
   final String id;
@@ -28,6 +34,16 @@ class VendorServiceRequestModel {
   final String? parentRequestId;
   final DateTime? createdAt;
   final bool isActive;
+  final String? vendorCategoryId;
+  final String pricingType; // 'fixed' | 'minutes_based' | 'duration_based'
+  final double? pricePerMinute;
+  final int? durationMinutes;
+  final String discountType;  // 'none' | 'percentage' | 'fixed'
+  final double discountValue;
+
+  bool get isMinutesBased => pricingType == 'minutes_based';
+  bool get isDurationBased => pricingType == 'duration_based';
+  bool get hasDiscount => discountType != 'none' && discountValue > 0;
 
   bool get isPending => status == 'pending';
   bool get isNeedsCatalog => status == 'needs_catalog';
@@ -90,6 +106,12 @@ class VendorServiceRequestModel {
           ? DateTime.tryParse(m['created_at'] as String)
           : null,
       isActive: m['is_active'] as bool? ?? false,
+      vendorCategoryId: m['vendor_category_id'] as String?,
+      pricingType: m['pricing_type'] as String? ?? 'fixed',
+      pricePerMinute: (m['price_per_minute'] as num?)?.toDouble(),
+      durationMinutes: (m['duration_minutes'] as num?)?.toInt(),
+      discountType: m['discount_type'] as String? ?? 'none',
+      discountValue: (m['discount_value'] as num?)?.toDouble() ?? 0,
     );
   }
 }

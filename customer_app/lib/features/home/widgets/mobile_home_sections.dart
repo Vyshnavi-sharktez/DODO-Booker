@@ -16,7 +16,12 @@ import '../../catalog/utils/catalog_launcher.dart';
 import '../models/landing_page_section.dart';
 import '../services/home_providers.dart';
 import '../services/home_service.dart';
+import 'content_grid_section.dart';
+import 'cta_section.dart';
+import 'faq_section.dart';
 import 'how_it_works_section.dart';
+import 'promo_banner_section.dart';
+import '../../vendor_catalog/widgets/vendor_catalog_section.dart';
 
 // ── Mobile Promo Banner (first section, above CMS sections) ──────────────────
 //
@@ -456,6 +461,21 @@ class MobileHomeSectionRenderer extends ConsumerWidget {
 
       case 'mobile_promo_banner':
         return const _MobileDailyOfferBanner();
+
+      case 'vendor_catalog':
+        return VendorCatalogSection(title: section.config['title'] as String?);
+
+      case 'content_grid':
+        return ContentGridSection(config: section.config);
+
+      case 'promo_banner':
+        return PromoBannerSection(config: section.config);
+
+      case 'faq':
+        return FaqSection(config: section.config);
+
+      case 'cta':
+        return CtaSection(config: section.config);
 
       default:
         return const SizedBox.shrink();

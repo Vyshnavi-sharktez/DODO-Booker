@@ -44,6 +44,7 @@ class VendorRealtimeSync {
   RealtimeChannel? _docsChannel;
   RealtimeChannel? _catalogChannel;
   RealtimeChannel? _vendorStatusChannel;
+  RealtimeChannel? _serviceRequestsChannel;
 
   // Same-value guards to prevent channel churn.
   String? _activeNotifVendorId;
@@ -51,6 +52,7 @@ class VendorRealtimeSync {
   String? _activeDocsVendorId;
   String? _activeSubVendorId;
   String? _activeStatusVendorId;
+  String? _activeServiceRequestsVendorId;
 
   VendorRealtimeSync(this._ref, this._client) {
     _subscribeBookings();
@@ -346,6 +348,44 @@ class VendorRealtimeSync {
     debugPrint('[DODO][VendorSync] vendor status channel subscribed for vendor=$vendorId');
   }
 
+  // ── Custom service requests ──────────────────────────────────────────────────
+  //
+  // Watches vendor_service_requests for this vendor so admin approve/reject
+  // actions are reflected immediately without a manual pull-to-refresh.
+
+  void resubscribeServiceRequests(String? vendorId) {
+    if (vendorId == _activeServiceRequestsVendorId) return;
+    _activeServiceRequestsVendorId = vendorId;
+
+    if (_serviceRequestsChannel != null) {
+      _client.removeChannel(_serviceRequestsChannel!);
+      _serviceRequestsChannel = null;
+    }
+    if (vendorId == null) return;
+
+    _serviceRequestsChannel = _client
+        .channel('dodo-vendor-service-requests-$vendorId')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'vendor_service_requests',
+          filter: PostgresChangeFilter(
+            type: PostgresChangeFilterType.eq,
+            column: 'vendor_id',
+            value: vendorId,
+          ),
+          callback: (_) {
+            debugPrint('[DODO][VendorSync] vendor_service_requests change → '
+                'invalidating myServiceRequestsProvider');
+            _ref.invalidate(myServiceRequestsProvider);
+          },
+        )
+        .subscribe((status, error) {
+          debugPrint('[DODO][VendorSync] service-requests channel status=$status error=$error');
+        });
+    debugPrint('[DODO][VendorSync] service-requests channel subscribed for vendor=$vendorId');
+  }
+
   // ── Lifecycle ───────────────────────────────────────────────────────────────
 
   void refetchAll() {
@@ -356,6 +396,7 @@ class VendorRealtimeSync {
     _ref.invalidate(catalogParentMapProvider);
     _ref.invalidate(vendorTrendingServicesProvider);
     _ref.invalidate(vendorDocumentsProvider);
+    _ref.invalidate(myServiceRequestsProvider);
     final vendorId = _activeWalletVendorId;
     if (vendorId != null) {
       _ref.invalidate(walletProvider(vendorId));
@@ -372,6 +413,7 @@ class VendorRealtimeSync {
     if (_docsChannel != null) _client.removeChannel(_docsChannel!);
     if (_catalogChannel != null) _client.removeChannel(_catalogChannel!);
     if (_vendorStatusChannel != null) _client.removeChannel(_vendorStatusChannel!);
+    if (_serviceRequestsChannel != null) _client.removeChannel(_serviceRequestsChannel!);
   }
 }
 
@@ -391,6 +433,7 @@ final vendorRealtimeSyncProvider = Provider<VendorRealtimeSync>((ref) {
       sync.resubscribeSubscription(user?.id);
       sync.resubscribeWallet(user?.id);
       sync.resubscribeDocs(user?.id);
+      sync.resubscribeServiceRequests(user?.id);
     },
     fireImmediately: true,
   );

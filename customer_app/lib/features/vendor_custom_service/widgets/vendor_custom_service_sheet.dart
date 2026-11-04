@@ -862,25 +862,70 @@ class _WebHeader extends StatelessWidget {
                           ),
                         ),
 
-                      // Price — always shows the lowest variant price
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.baseline,
-                        textBaseline: TextBaseline.alphabetic,
-                        children: [
-                          const Text('From',
-                              style: TextStyle(
-                                  fontSize: 13, color: _kMuted2)),
-                          const SizedBox(width: 8),
-                          Text(
-                            '₹${fromPrice.toInt()}',
-                            style: GoogleFonts.poppins(
-                                fontSize: 24,
-                                fontWeight: FontWeight.w800,
-                                color: _kInk,
-                                height: 1.0),
-                          ),
-                        ],
-                      ),
+                      // Price — shows discount badge for fixed pricing
+                      if (service.hasDiscount) ...[
+                        Row(
+                          children: [
+                            Text(
+                              '₹${service.basePrice!.toInt()}',
+                              style: const TextStyle(
+                                fontSize: 14,
+                                color: _kMuted2,
+                                decoration: TextDecoration.lineThrough,
+                                decorationColor: _kMuted2,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 8, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF22C55E).withAlpha(25),
+                                borderRadius: BorderRadius.circular(100),
+                                border: Border.all(
+                                    color: const Color(0xFF22C55E).withAlpha(80)),
+                              ),
+                              child: Text(
+                                service.discountType == 'percentage'
+                                    ? '${service.discountValue.toStringAsFixed(0)}% off'
+                                    : '₹${service.discountValue.toStringAsFixed(0)} off',
+                                style: const TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w700,
+                                  color: Color(0xFF16A34A),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          '₹${fromPrice.toInt()}',
+                          style: GoogleFonts.poppins(
+                              fontSize: 24,
+                              fontWeight: FontWeight.w800,
+                              color: _kInk,
+                              height: 1.0),
+                        ),
+                      ] else
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.baseline,
+                          textBaseline: TextBaseline.alphabetic,
+                          children: [
+                            const Text('From',
+                                style: TextStyle(
+                                    fontSize: 13, color: _kMuted2)),
+                            const SizedBox(width: 8),
+                            Text(
+                              '₹${fromPrice.toInt()}',
+                              style: GoogleFonts.poppins(
+                                  fontSize: 24,
+                                  fontWeight: FontWeight.w800,
+                                  color: _kInk,
+                                  height: 1.0),
+                            ),
+                          ],
+                        ),
                       if (service.warrantyEnabled && service.warrantyDays != null) ...[
                         const SizedBox(height: 10),
                         WarrantyBadge(
@@ -974,23 +1019,67 @@ class _ServiceContentBlock extends StatelessWidget {
             const SizedBox(height: 14),
           ] else
             const SizedBox(height: 8),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.baseline,
-            textBaseline: TextBaseline.alphabetic,
-            children: [
-              const Text('From',
-                  style: TextStyle(fontSize: 13, color: _kMuted2)),
-              const SizedBox(width: 8),
-              Text(
-                '₹${fromPrice.toInt()}',
-                style: GoogleFonts.poppins(
-                    fontSize: 22,
-                    fontWeight: FontWeight.w800,
-                    color: _kInk,
-                    height: 1.0),
-              ),
-            ],
-          ),
+          if (service.hasDiscount) ...[
+            Row(
+              children: [
+                Text(
+                  '₹${service.basePrice!.toInt()}',
+                  style: const TextStyle(
+                    fontSize: 14,
+                    color: _kMuted2,
+                    decoration: TextDecoration.lineThrough,
+                    decorationColor: _kMuted2,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF22C55E).withAlpha(25),
+                    borderRadius: BorderRadius.circular(100),
+                    border: Border.all(
+                        color: const Color(0xFF22C55E).withAlpha(80)),
+                  ),
+                  child: Text(
+                    service.discountType == 'percentage'
+                        ? '${service.discountValue.toStringAsFixed(0)}% off'
+                        : '₹${service.discountValue.toStringAsFixed(0)} off',
+                    style: const TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      color: Color(0xFF16A34A),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 4),
+            Text(
+              '₹${fromPrice.toInt()}',
+              style: GoogleFonts.poppins(
+                  fontSize: 22,
+                  fontWeight: FontWeight.w800,
+                  color: _kInk,
+                  height: 1.0),
+            ),
+          ] else
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.baseline,
+              textBaseline: TextBaseline.alphabetic,
+              children: [
+                const Text('From',
+                    style: TextStyle(fontSize: 13, color: _kMuted2)),
+                const SizedBox(width: 8),
+                Text(
+                  '₹${fromPrice.toInt()}',
+                  style: GoogleFonts.poppins(
+                      fontSize: 22,
+                      fontWeight: FontWeight.w800,
+                      color: _kInk,
+                      height: 1.0),
+                ),
+              ],
+            ),
           if (service.warrantyEnabled && service.warrantyDays != null) ...[
             const SizedBox(height: 10),
             WarrantyBadge(

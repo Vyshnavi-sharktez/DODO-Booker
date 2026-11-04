@@ -181,6 +181,12 @@ const _kNavGroups = <_NavGroup>[
         route: '/dashboard/vendor-tiers',
         requiredPermission: 'vendor.view',
       ),
+      _NavItem(
+        label: 'Vendor Root Categories',
+        icon: Icons.category_rounded,
+        route: '/dashboard/vendor-root-categories',
+        requiredPermission: 'vendor.view',
+      ),
     ],
   ),
   _NavGroup(

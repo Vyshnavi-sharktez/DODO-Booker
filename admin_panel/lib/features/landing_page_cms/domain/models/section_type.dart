@@ -19,7 +19,9 @@ enum SectionType {
   contentGrid,
   promoBanner,
   faq,
-  cta;
+  cta,
+  // ── Feature sections ─────────────────────────────────────────────────────
+  vendorCatalog;
 
   String get dbKey => switch (this) {
         SectionType.hero           => 'hero',
@@ -35,6 +37,7 @@ enum SectionType {
         SectionType.promoBanner    => 'promo_banner',
         SectionType.faq            => 'faq',
         SectionType.cta            => 'cta',
+        SectionType.vendorCatalog  => 'vendor_catalog',
       };
 
   String get displayName => switch (this) {
@@ -51,6 +54,7 @@ enum SectionType {
         SectionType.promoBanner    => 'Promotional Banner',
         SectionType.faq            => 'FAQ',
         SectionType.cta            => 'Call to Action',
+        SectionType.vendorCatalog  => 'Vendor Catalog Services',
       };
 
   IconData get icon => switch (this) {
@@ -67,6 +71,7 @@ enum SectionType {
         SectionType.promoBanner    => Icons.campaign_rounded,
         SectionType.faq            => Icons.help_outline_rounded,
         SectionType.cta            => Icons.ads_click_rounded,
+        SectionType.vendorCatalog  => Icons.storefront_rounded,
       };
 
   String get description => switch (this) {
@@ -83,6 +88,7 @@ enum SectionType {
         SectionType.promoBanner    => 'Promotional banner with optional image',
         SectionType.faq            => 'Expandable FAQ list',
         SectionType.cta            => 'Single call-to-action panel',
+        SectionType.vendorCatalog  => 'Vendor-owned category tiles — browse and book custom services',
       };
 
   bool get isCanonical => index < SectionType.contentGrid.index;
@@ -143,6 +149,7 @@ enum SectionType {
             'button_text': 'Book Now',
             'button_url': '/',
           },
+        SectionType.vendorCatalog => {'title': 'Vendor Services'},
       };
 
   static SectionType? fromDbKey(String key) {

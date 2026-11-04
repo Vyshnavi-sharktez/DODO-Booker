@@ -57,6 +57,9 @@ class CartItem {
   /// vendorId = the owning vendor, used for direct booking assignment at checkout.
   final String? customServiceId;
   final String? vendorId;
+  final String? vcsPricingType;      // 'fixed' | 'minutes_based'
+  final double? vcsPricePerMinute;
+  final int? vcsDurationMinutes;
 
   bool get isCustomService => customServiceId != null;
 
@@ -73,6 +76,9 @@ class CartItem {
     this.rootCategoryId,
     this.customServiceId,
     this.vendorId,
+    this.vcsPricingType,
+    this.vcsPricePerMinute,
+    this.vcsDurationMinutes,
     this.isAmc = false,
     this.amcPlanName,
     this.amcRecurrenceInterval,
@@ -136,6 +142,9 @@ class CartItem {
         rootCategoryId: rootCategoryId ?? this.rootCategoryId,
         customServiceId: customServiceId ?? this.customServiceId,
         vendorId: vendorId ?? this.vendorId,
+        vcsPricingType: vcsPricingType ?? this.vcsPricingType,
+        vcsPricePerMinute: vcsPricePerMinute ?? this.vcsPricePerMinute,
+        vcsDurationMinutes: vcsDurationMinutes ?? this.vcsDurationMinutes,
         isAmc: isAmc ?? this.isAmc,
         amcPlanName: amcPlanName ?? this.amcPlanName,
         amcRecurrenceInterval:
@@ -174,6 +183,9 @@ class CartItem {
         rootCategoryId: rootCategoryId,
         customServiceId: customServiceId,
         vendorId: vendorId,
+        vcsPricingType: vcsPricingType,
+        vcsPricePerMinute: vcsPricePerMinute,
+        vcsDurationMinutes: vcsDurationMinutes,
         isAmc: isAmc,
         amcPlanName: amcPlanName,
         amcRecurrenceInterval: amcRecurrenceInterval,
@@ -211,6 +223,9 @@ class CartItem {
         if (rootCategoryId != null) 'rootCategoryId': rootCategoryId,
         if (customServiceId != null) 'customServiceId': customServiceId,
         if (vendorId != null) 'vendorId': vendorId,
+        if (vcsPricingType != null) 'vcsPricingType': vcsPricingType,
+        if (vcsPricePerMinute != null) 'vcsPricePerMinute': vcsPricePerMinute,
+        if (vcsDurationMinutes != null) 'vcsDurationMinutes': vcsDurationMinutes,
         if (isAmc) 'isAmc': true,
         if (amcPlanName != null) 'amcPlanName': amcPlanName,
         if (amcRecurrenceInterval != null)
@@ -249,6 +264,9 @@ class CartItem {
         rootCategoryId: json['rootCategoryId'] as String?,
         customServiceId: json['customServiceId'] as String?,
         vendorId: json['vendorId'] as String?,
+        vcsPricingType: json['vcsPricingType'] as String?,
+        vcsPricePerMinute: (json['vcsPricePerMinute'] as num?)?.toDouble(),
+        vcsDurationMinutes: (json['vcsDurationMinutes'] as num?)?.toInt(),
         isAmc: json['isAmc'] as bool? ?? false,
         amcPlanName: json['amcPlanName'] as String?,
         amcRecurrenceInterval: json['amcRecurrenceInterval'] as String?,

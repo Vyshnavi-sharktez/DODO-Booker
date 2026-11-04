@@ -24,13 +24,14 @@ BEGIN
     RETURN NEW;
   END IF;
 
-  -- Verify the custom service is active and in a bookable state.
-  SELECT service_name INTO v_name
-  FROM vendor_service_requests
-  WHERE id             = NEW.custom_service_id
-    AND is_active      = TRUE
-    AND request_type   = 'new_service'
-    AND status         IN ('completed', 'pending_deletion');
+  -- Verify the custom service is active, in a bookable state, and belongs to an active vendor.
+  SELECT vsr.service_name INTO v_name
+  FROM vendor_service_requests vsr
+  JOIN vendors v ON v.id = vsr.vendor_id AND v.is_active = TRUE
+  WHERE vsr.id           = NEW.custom_service_id
+    AND vsr.is_active    = TRUE
+    AND vsr.request_type = 'new_service'
+    AND vsr.status       IN ('completed', 'pending_deletion');
 
   IF NOT FOUND THEN
     -- Fetch the name for the error message even if not active.

@@ -79,12 +79,15 @@ class CheckoutService {
     if (customServiceIds.isNotEmpty) {
       final rows = await _client
           .from('vendor_service_requests')
-          .select('id, service_name, is_active')
+          .select('id, service_name, is_active, vendors(is_active)')
           .inFilter('id', customServiceIds);
       for (final row in rows as List) {
-        final isActive = (row as Map<String, dynamic>)['is_active'] as bool? ?? false;
-        if (!isActive) {
-          final name = row['service_name'] as String? ?? 'A service';
+        final map = row as Map<String, dynamic>;
+        final isActive = map['is_active'] as bool? ?? false;
+        final vendorMap = map['vendors'] as Map<String, dynamic>?;
+        final vendorIsActive = vendorMap?['is_active'] as bool? ?? true;
+        if (!isActive || !vendorIsActive) {
+          final name = map['service_name'] as String? ?? 'A service';
           throw Exception(
             '"$name" is no longer available. Please remove it from your cart before checking out.',
           );
@@ -446,6 +449,16 @@ class CheckoutService {
               'total_price': item.totalPrice,
               if (!item.isCustomService && item.parentNodeId != null)
                 'catalog_parent_node_id': item.parentNodeId,
+              if (item.isCustomService && item.vcsPricingType != null)
+                'vendor_pricing_snapshot': {
+                  'vendor_id': item.vendorId,
+                  'pricing_type': item.vcsPricingType,
+                  if (item.vcsPricePerMinute != null)
+                    'price_per_minute': item.vcsPricePerMinute,
+                  if (item.vcsDurationMinutes != null)
+                    'duration_minutes': item.vcsDurationMinutes,
+                  'service_price': item.unitPrice,
+                },
             })
         .toList();
     if (rows.isNotEmpty) {

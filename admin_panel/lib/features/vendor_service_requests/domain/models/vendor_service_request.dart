@@ -11,6 +11,7 @@ class VendorServiceRequest {
     this.price,
     this.activePrice,
     this.newPrice,
+    this.newServiceName,
     this.imageUrl,
     required this.status,
     this.rejectionReason,
@@ -26,6 +27,9 @@ class VendorServiceRequest {
     this.includedItems = const [],
     this.excludedItems = const [],
     this.beforeAfterPairs = const [],
+    this.pricingType = 'fixed',
+    this.discountType = 'none',
+    this.discountValue = 0,
   });
 
   final String id;
@@ -37,6 +41,7 @@ class VendorServiceRequest {
   final double? price;
   final double? activePrice;
   final double? newPrice;
+  final String? newServiceName;
   final String? imageUrl;
   final String status; // pending | needs_catalog | completed | rejected | deleted | pending_deletion
   final String? rejectionReason;
@@ -52,6 +57,17 @@ class VendorServiceRequest {
   final List<String> includedItems;
   final List<String> excludedItems;
   final List<Map<String, String>> beforeAfterPairs;
+  final String pricingType;    // 'fixed' | 'minutes_based' | 'duration_based'
+  final String discountType;   // 'none' | 'percentage' | 'fixed'
+  final double discountValue;
+
+  bool get hasDiscount =>
+      pricingType == 'fixed' &&
+      discountType != 'none' &&
+      discountValue > 0 &&
+      price != null &&
+      activePrice != null &&
+      price! > activePrice!;
 
   bool get isPending => status == 'pending';
   bool get isNeedsCatalog => status == 'needs_catalog';
@@ -107,6 +123,7 @@ class VendorServiceRequest {
       price: (m['price'] as num?)?.toDouble(),
       activePrice: (m['active_price'] as num?)?.toDouble(),
       newPrice: (m['new_price'] as num?)?.toDouble(),
+      newServiceName: m['new_service_name'] as String?,
       imageUrl: m['image_url'] as String?,
       status: m['status'] as String? ?? 'pending',
       rejectionReason: m['rejection_reason'] as String?,
@@ -125,6 +142,9 @@ class VendorServiceRequest {
           .map((e) => Map<String, String>.from(
               (e as Map).map((k, v) => MapEntry(k.toString(), v.toString()))))
           .toList(),
+      pricingType: m['pricing_type'] as String? ?? 'fixed',
+      discountType: m['discount_type'] as String? ?? 'none',
+      discountValue: (m['discount_value'] as num?)?.toDouble() ?? 0,
     );
   }
 }
