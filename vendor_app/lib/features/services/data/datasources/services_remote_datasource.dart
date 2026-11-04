@@ -139,7 +139,9 @@ class ServicesRemoteDatasource {
         .select(
           'id, service_name, description, price, active_price, new_price, '
           'image_url, status, rejection_reason, request_type, '
-          'parent_request_id, is_active, created_at',
+          'parent_request_id, is_active, created_at, '
+          'vendor_category_id, pricing_type, price_per_minute, duration_minutes, '
+          'discount_type, discount_value',
         )
         .eq('vendor_id', vendorId)
         .order('created_at', ascending: false);
@@ -182,6 +184,12 @@ class ServicesRemoteDatasource {
     List<String> includedItems = const [],
     List<String> excludedItems = const [],
     List<Map<String, String>> beforeAfterPairs = const [],
+    String? vendorCategoryId,
+    String pricingType = 'fixed',
+    double? pricePerMinute,
+    int? durationMinutes,
+    String discountType = 'none',
+    double discountValue = 0,
   }) async {
     final row = await _client.from('vendor_service_requests').insert({
       'vendor_id': vendorId,
@@ -201,8 +209,75 @@ class ServicesRemoteDatasource {
       if (includedItems.isNotEmpty) 'included_items': includedItems,
       if (excludedItems.isNotEmpty) 'excluded_items': excludedItems,
       if (beforeAfterPairs.isNotEmpty) 'before_after_pairs': beforeAfterPairs,
+      if (vendorCategoryId != null) 'vendor_category_id': vendorCategoryId,
+      'pricing_type': pricingType,
+      if (pricingType == 'minutes_based' && pricePerMinute != null)
+        'price_per_minute': pricePerMinute,
+      if (pricingType == 'minutes_based' && durationMinutes != null)
+        'duration_minutes': durationMinutes,
+      'discount_type': discountType,
+      if (discountType != 'none') 'discount_value': discountValue,
     }).select('id').single();
     return row['id'] as String;
+  }
+
+  // ── Vendor-owned category CRUD ───────────────────────────────────────────────
+
+  Future<List<Map<String, dynamic>>> fetchMyVendorCategories() async {
+    final data = await _client.rpc('get_my_vendor_categories');
+    return List<Map<String, dynamic>>.from(data as List);
+  }
+
+  Future<String> createVendorCategory({
+    required String vendorId,
+    required String name,
+    String? iconUrl,
+  }) async {
+    final row = await _client.from('vendor_categories').insert({
+      'vendor_id': vendorId,
+      'name': name.trim(),
+      if (iconUrl != null) 'icon_url': iconUrl,
+    }).select('id').single();
+    return row['id'] as String;
+  }
+
+  Future<void> updateVendorCategory({
+    required String id,
+    required String name,
+    String? iconUrl,
+  }) async {
+    await _client.from('vendor_categories').update({
+      'name': name.trim(),
+      'icon_url': iconUrl,
+    }).eq('id', id);
+  }
+
+  Future<void> deleteVendorCategory(String id) async {
+    await _client.from('vendor_categories').delete().eq('id', id);
+  }
+
+  Future<int> countServicesInCategory(String categoryId) async {
+    final data = await _client
+        .from('vendor_service_requests')
+        .select('id')
+        .eq('vendor_category_id', categoryId)
+        .eq('request_type', 'new_service')
+        .eq('is_active', true);
+    return (data as List).length;
+  }
+
+  Future<String?> uploadCategoryIcon({
+    required String vendorId,
+    required Uint8List bytes,
+    required String mimeType,
+  }) async {
+    final path = '$vendorId/cat_${DateTime.now().millisecondsSinceEpoch}.jpg';
+    await _client.storage.from('vendor-requests').uploadBinary(
+      path,
+      bytes,
+      fileOptions: FileOptions(contentType: mimeType, upsert: false),
+    );
+    return _client.storage.from('vendor-requests').getPublicUrl(path);
   }
 
   Future<void> insertServiceAttributes(
@@ -250,6 +325,8 @@ class ServicesRemoteDatasource {
     required String parentRequestId,
     required String serviceName,
     required double newPrice,
+    String? newServiceName,
+    String? imageUrl,
   }) async {
     await _client.from('vendor_service_requests').insert({
       'vendor_id': vendorId,
@@ -257,7 +334,22 @@ class ServicesRemoteDatasource {
       'request_type': 'price_change',
       'parent_request_id': parentRequestId,
       'new_price': newPrice,
+      if (newServiceName != null) 'new_service_name': newServiceName,
+      if (imageUrl != null && imageUrl.isNotEmpty) 'image_url': imageUrl,
     });
+  }
+
+  Future<void> updateServiceRequestImage({
+    required String requestId,
+    required String imageUrl,
+  }) async {
+    await _client
+        .from('vendor_service_requests')
+        .update({
+          'image_url': imageUrl,
+          'updated_at': DateTime.now().toUtc().toIso8601String(),
+        })
+        .eq('id', requestId);
   }
 
   /// Marks an approved custom service as pending deletion (inline status update).

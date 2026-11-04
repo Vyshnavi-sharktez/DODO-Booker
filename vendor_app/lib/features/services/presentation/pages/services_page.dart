@@ -21,7 +21,9 @@ import '../providers/services_provider.dart';
 import '../widgets/service_card.dart';
 import '../widgets/vendor_search_bar.dart';
 import '../widgets/service_content_widgets.dart';
+import '../widgets/vendor_category_picker.dart';
 import '../widgets/vendor_service_config_dialog.dart';
+import '../../domain/models/vendor_category_model.dart';
 import 'vendor_service_detail_dialog.dart';
 
 // ── Category palette — assigned by root-category sort index ───────────────────
@@ -37,8 +39,6 @@ const _kCatColors = [
   Color(0xFFC0392B),
   Color(0xFF1ABC9C),
 ];
-
-const _kPreview = 4; // service rows shown before "View all X services →"
 
 IconData _iconForCategory(String name) {
   final n = name.toLowerCase();
@@ -458,10 +458,6 @@ class _ServicesPageState extends ConsumerState<ServicesPage> {
     );
   }
 
-  Future<void> _navigateToAdd(BuildContext context) async {
-    await context.push(RoutePaths.addService);
-    ref.invalidate(vendorServicesProvider);
-  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -2604,102 +2600,55 @@ class _CustomServiceRowState extends ConsumerState<_CustomServiceRow> {
     final vendor = ref.read(currentVendorUserProvider);
     if (vendor == null) return;
 
-    final priceCtrl = TextEditingController();
-    final confirmed = await showDialog<bool>(
+    final result = await showDialog<_EditServiceResult>(
       context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('Request Price Change'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Service: ${s.serviceName}',
-                style: const TextStyle(fontSize: 13, color: AppColors.textSecondary)),
-            const SizedBox(height: 4),
-            Text('Current price: ${s.formattedActivePrice}',
-                style: const TextStyle(fontSize: 13, color: AppColors.textSecondary)),
-            const SizedBox(height: 16),
-            TextField(
-              controller: priceCtrl,
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
-              autofocus: true,
-              decoration: const InputDecoration(
-                labelText: 'New price (₹)',
-                prefixText: '₹ ',
-              ),
-            ),
-          ],
-        ),
-        actionsPadding: const EdgeInsets.fromLTRB(24, 0, 24, 20),
-        actions: [
-          Row(
-            children: [
-              Expanded(
-                child: SizedBox(
-                  height: 44,
-                  child: OutlinedButton(
-                    onPressed: () => Navigator.of(context).pop(false),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: AppColors.textSecondary,
-                      side: const BorderSide(color: AppColors.border),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                    ),
-                    child: const Text('Cancel'),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: SizedBox(
-                  height: 44,
-                  child: FilledButton(
-                    onPressed: () => Navigator.of(context).pop(true),
-                    style: FilledButton.styleFrom(
-                      minimumSize: Size.zero,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                    ),
-                    child: const Text('Submit'),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
+      builder: (_) => _EditCustomServiceDialog(service: s),
     );
-    if (confirmed != true || !mounted) return;
-
-    final newPrice = double.tryParse(priceCtrl.text.trim());
-    if (newPrice == null || newPrice <= 0) {
-      if (mounted) {
-        showDialog<void>(
-          context: context,
-          builder: (ctx) => AlertDialog(
-            title: const Text('Invalid Price'),
-            content: const Text('Please enter a valid price greater than zero.'),
-            actions: [FilledButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('OK'))],
-          ),
-        );
-      }
-      return;
-    }
+    if (result == null || !mounted) return;
 
     setState(() => _busy = true);
     try {
-      await ref.read(servicesDatasourceProvider).submitPriceChangeRequest(
-            vendorId: vendor.id,
-            parentRequestId: s.id,
-            serviceName: s.serviceName,
-            newPrice: newPrice,
-          );
+      final ds = ref.read(servicesDatasourceProvider);
+      String? uploadedImageUrl;
+
+      if (result.pickedImageBytes != null && result.pickedFile != null) {
+        uploadedImageUrl = await ds.uploadServiceRequestImage(
+          vendorId: vendor.id,
+          bytes: result.pickedImageBytes!,
+          mimeType: result.pickedFile!.mimeType ?? 'image/jpeg',
+        );
+        if (uploadedImageUrl == null || uploadedImageUrl.isEmpty) {
+          throw Exception('Failed to upload image.');
+        }
+        await ds.updateServiceRequestImage(
+          requestId: s.id,
+          imageUrl: uploadedImageUrl,
+        );
+      }
+
+      final nameChanged = result.name != s.serviceName;
+      final priceChanged = result.price != s.activePrice;
+      if (nameChanged || priceChanged || uploadedImageUrl == null) {
+        await ds.submitPriceChangeRequest(
+          vendorId: vendor.id,
+          parentRequestId: s.id,
+          serviceName: s.serviceName,
+          newPrice: result.price,
+          newServiceName: nameChanged ? result.name : null,
+          imageUrl: uploadedImageUrl ?? s.imageUrl,
+        );
+      }
+
       if (mounted) {
         ref.invalidate(myServiceRequestsProvider);
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Price change request submitted.')),
+          SnackBar(
+            content: Text(
+              (nameChanged || priceChanged)
+                  ? 'Edit request submitted.'
+                  : 'Service image updated.',
+            ),
+          ),
         );
       }
     } catch (e) {
@@ -2822,9 +2771,11 @@ class _CustomServiceRowState extends ConsumerState<_CustomServiceRow> {
                               : Icons.toggle_off_rounded,
                           size: 36,
                         ),
-                        tooltip: s.isActive ? 'Deactivate' : 'Activate',
-                        color: s.isActive ? AppColors.success : AppColors.textHint,
-                        onPressed: _toggleActive,
+                        tooltip: pending
+                            ? 'Unavailable while deletion is pending'
+                            : s.isActive ? 'Deactivate' : 'Activate',
+                        color: (pending || !s.isActive) ? AppColors.textHint : AppColors.success,
+                        onPressed: pending ? null : _toggleActive,
                       ),
                       IconButton(
                         icon: const Icon(Icons.tune_rounded, size: 26),
@@ -2840,7 +2791,7 @@ class _CustomServiceRowState extends ConsumerState<_CustomServiceRow> {
                       ),
                       IconButton(
                         icon: const Icon(Icons.edit_outlined, size: 26),
-                        tooltip: pending ? 'Request pending' : 'Edit price',
+                        tooltip: pending ? 'Request pending' : 'Edit service',
                         color: (pending || !canCustomPrice)
                             ? AppColors.textHint
                             : AppColors.textSecondary,
@@ -2956,99 +2907,55 @@ class _CustomServiceNarrowCardState
     final vendor = ref.read(currentVendorUserProvider);
     if (vendor == null) return;
 
-    final priceCtrl = TextEditingController();
-    final confirmed = await showDialog<bool>(
+    final result = await showDialog<_EditServiceResult>(
       context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('Request Price Change'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Current price: ${s.formattedActivePrice}',
-                style: const TextStyle(fontSize: 13, color: AppColors.textSecondary)),
-            const SizedBox(height: 12),
-            TextField(
-              controller: priceCtrl,
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
-              autofocus: true,
-              decoration: const InputDecoration(
-                labelText: 'New price (₹)',
-                prefixText: '₹ ',
-              ),
-            ),
-          ],
-        ),
-        actionsPadding: const EdgeInsets.fromLTRB(24, 0, 24, 20),
-        actions: [
-          Row(
-            children: [
-              Expanded(
-                child: SizedBox(
-                  height: 44,
-                  child: OutlinedButton(
-                    onPressed: () => Navigator.of(context).pop(false),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: AppColors.textSecondary,
-                      side: const BorderSide(color: AppColors.border),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                    ),
-                    child: const Text('Cancel'),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: SizedBox(
-                  height: 44,
-                  child: FilledButton(
-                    onPressed: () => Navigator.of(context).pop(true),
-                    style: FilledButton.styleFrom(
-                      minimumSize: Size.zero,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                    ),
-                    child: const Text('Submit'),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
+      builder: (_) => _EditCustomServiceDialog(service: s),
     );
-    if (confirmed != true || !mounted) return;
-
-    final newPrice = double.tryParse(priceCtrl.text.trim());
-    if (newPrice == null || newPrice <= 0) {
-      if (mounted) {
-        showDialog<void>(
-          context: context,
-          builder: (ctx) => AlertDialog(
-            title: const Text('Invalid Price'),
-            content: const Text('Please enter a valid price greater than zero.'),
-            actions: [FilledButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('OK'))],
-          ),
-        );
-      }
-      return;
-    }
+    if (result == null || !mounted) return;
 
     setState(() => _busy = true);
     try {
-      await ref.read(servicesDatasourceProvider).submitPriceChangeRequest(
-            vendorId: vendor.id,
-            parentRequestId: s.id,
-            serviceName: s.serviceName,
-            newPrice: newPrice,
-          );
+      final ds = ref.read(servicesDatasourceProvider);
+      String? uploadedImageUrl;
+
+      if (result.pickedImageBytes != null && result.pickedFile != null) {
+        uploadedImageUrl = await ds.uploadServiceRequestImage(
+          vendorId: vendor.id,
+          bytes: result.pickedImageBytes!,
+          mimeType: result.pickedFile!.mimeType ?? 'image/jpeg',
+        );
+        if (uploadedImageUrl == null || uploadedImageUrl.isEmpty) {
+          throw Exception('Failed to upload image.');
+        }
+        await ds.updateServiceRequestImage(
+          requestId: s.id,
+          imageUrl: uploadedImageUrl,
+        );
+      }
+
+      final nameChanged = result.name != s.serviceName;
+      final priceChanged = result.price != s.activePrice;
+      if (nameChanged || priceChanged || uploadedImageUrl == null) {
+        await ds.submitPriceChangeRequest(
+          vendorId: vendor.id,
+          parentRequestId: s.id,
+          serviceName: s.serviceName,
+          newPrice: result.price,
+          newServiceName: nameChanged ? result.name : null,
+          imageUrl: uploadedImageUrl ?? s.imageUrl,
+        );
+      }
+
       if (mounted) {
         ref.invalidate(myServiceRequestsProvider);
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Price change request submitted.')),
+          SnackBar(
+            content: Text(
+              (nameChanged || priceChanged)
+                  ? 'Edit request submitted.'
+                  : 'Service image updated.',
+            ),
+          ),
         );
       }
     } catch (e) {
@@ -3164,9 +3071,11 @@ class _CustomServiceNarrowCardState
                         : Icons.toggle_off_rounded,
                     size: 22,
                   ),
-                  tooltip: s.isActive ? 'Deactivate' : 'Activate',
-                  color: s.isActive ? AppColors.success : AppColors.textHint,
-                  onPressed: _toggleActive,
+                  tooltip: pending
+                      ? 'Unavailable while deletion is pending'
+                      : s.isActive ? 'Deactivate' : 'Activate',
+                  color: (pending || !s.isActive) ? AppColors.textHint : AppColors.success,
+                  onPressed: pending ? null : _toggleActive,
                 ),
                 IconButton(
                   icon: const Icon(Icons.tune_rounded, size: 18),
@@ -3182,7 +3091,7 @@ class _CustomServiceNarrowCardState
                 ),
                 IconButton(
                   icon: const Icon(Icons.edit_outlined, size: 18),
-                  tooltip: pending ? 'Request pending' : 'Edit price',
+                  tooltip: pending ? 'Request pending' : 'Edit service',
                   color: (pending || !canCustomPrice) ? AppColors.textHint : AppColors.textSecondary,
                   onPressed: (pending || !canCustomPrice) ? null : _requestPriceChange,
                 ),
@@ -4771,11 +4680,21 @@ class _CreateServiceDialogState extends ConsumerState<_CreateServiceDialog> {
   final _nameCtrl = TextEditingController();
   final _descCtrl = TextEditingController();
   final _priceCtrl = TextEditingController();
+  final _discountCtrl = TextEditingController();
   final _picker = ImagePicker();
   XFile? _pickedFile;
   Uint8List? _pickedImageBytes;
   bool _submitting = false;
   String? _priceError;
+  String? _discountError;
+
+  // Pricing type: 'fixed' | 'duration_based'
+  String _pricingType = 'fixed';
+  // Discount for fixed pricing: 'none' | 'percentage' | 'fixed'
+  String _discountType = 'none';
+
+  // Vendor-owned category
+  VendorCategoryModel? _selectedCategory;
 
   // Content state
   List<String> _includedItems = [];
@@ -4789,33 +4708,36 @@ class _CreateServiceDialogState extends ConsumerState<_CreateServiceDialog> {
   final _warrantyExclusionsCtrl = TextEditingController();
   String? _warrantyError;
   final List<_PendingAttr> _pendingAttrs = [];
+  final List<_PendingAttr> _durationOptions = [];
 
   @override
   void initState() {
     super.initState();
     _priceCtrl.addListener(_onPriceChanged);
+    _discountCtrl.addListener(_onDiscountChanged);
     _tempServiceId = 'new_${DateTime.now().millisecondsSinceEpoch}';
   }
 
   void _onPriceChanged() {
     final text = _priceCtrl.text;
-    final String? error;
-    if (text.isEmpty) {
-      error = null; // clear error while user is re-typing from scratch
-    } else {
-      error = double.tryParse(text.trim()) == null
-          ? 'Price must contain numbers only.'
-          : null;
-    }
-    if (error != _priceError) setState(() => _priceError = error);
+    final String? error = text.isEmpty
+        ? null
+        : (double.tryParse(text.trim()) == null
+            ? 'Price must contain numbers only.'
+            : null);
+    setState(() => _priceError = error);
   }
+
+  void _onDiscountChanged() => setState(() {});
 
   @override
   void dispose() {
     _priceCtrl.removeListener(_onPriceChanged);
+    _discountCtrl.removeListener(_onDiscountChanged);
     _nameCtrl.dispose();
     _descCtrl.dispose();
     _priceCtrl.dispose();
+    _discountCtrl.dispose();
     _warrantyDaysCtrl.dispose();
     _warrantyCoversCtrl.dispose();
     _warrantyExclusionsCtrl.dispose();
@@ -4852,10 +4774,33 @@ class _CreateServiceDialogState extends ConsumerState<_CreateServiceDialog> {
       return;
     }
 
-    final priceText = _priceCtrl.text.trim();
-    if (priceText.isEmpty || double.tryParse(priceText) == null) {
-      setState(() => _priceError = 'Price must contain numbers only.');
-      return;
+    if (_pricingType == 'duration_based') {
+      if (_durationOptions.isEmpty) {
+        setState(() => _priceError = 'Add at least one pricing option.');
+        return;
+      }
+    } else {
+      final priceText = _priceCtrl.text.trim();
+      if (priceText.isEmpty || double.tryParse(priceText) == null) {
+        setState(() => _priceError = 'Price must contain numbers only.');
+        return;
+      }
+      final price = double.parse(priceText);
+      if (_discountType != 'none') {
+        final dv = double.tryParse(_discountCtrl.text.trim()) ?? 0;
+        if (dv <= 0) {
+          setState(() => _discountError = 'Enter a discount amount greater than zero.');
+          return;
+        }
+        if (_discountType == 'percentage' && dv >= 100) {
+          setState(() => _discountError = 'Percentage discount must be less than 100%.');
+          return;
+        }
+        if (_discountType == 'fixed' && dv >= price) {
+          setState(() => _discountError = 'Fixed discount cannot exceed the price.');
+          return;
+        }
+      }
     }
 
     if (_warrantyEnabled) {
@@ -4919,9 +4864,31 @@ class _CreateServiceDialogState extends ConsumerState<_CreateServiceDialog> {
         );
       }
 
-      final priceText = _priceCtrl.text.trim();
-      final price =
-          priceText.isNotEmpty ? double.tryParse(priceText) : null;
+      double? price;
+      String submittedDiscountType = 'none';
+      double submittedDiscountValue = 0;
+      List<_PendingAttr> attrsToInsert;
+
+      if (_pricingType == 'duration_based') {
+        price = _durationOptions.map((o) {
+          if (o.discountType == 'percentage' && o.discountValue > 0) {
+            return o.price * (1 - o.discountValue / 100);
+          }
+          if (o.discountType == 'flat' && o.discountValue > 0) {
+            return (o.price - o.discountValue).clamp(0.0, double.infinity);
+          }
+          return o.price;
+        }).reduce((a, b) => a < b ? a : b);
+        attrsToInsert = _durationOptions;
+      } else {
+        final priceText = _priceCtrl.text.trim();
+        price = priceText.isNotEmpty ? double.tryParse(priceText) : null;
+        submittedDiscountType = _discountType;
+        submittedDiscountValue = _discountType != 'none'
+            ? (double.tryParse(_discountCtrl.text.trim()) ?? 0)
+            : 0;
+        attrsToInsert = _pendingAttrs;
+      }
 
       final warrantyDays = _warrantyEnabled
           ? int.tryParse(_warrantyDaysCtrl.text.trim())
@@ -4947,11 +4914,15 @@ class _CreateServiceDialogState extends ConsumerState<_CreateServiceDialog> {
         includedItems: _includedItems,
         excludedItems: _excludedItems,
         beforeAfterPairs: _beforeAfterPairs,
+        vendorCategoryId: _selectedCategory?.id,
+        pricingType: _pricingType,
+        discountType: submittedDiscountType,
+        discountValue: submittedDiscountValue,
       );
-      if (_pendingAttrs.isNotEmpty) {
+      if (attrsToInsert.isNotEmpty) {
         await ds.insertServiceAttributes(
           requestId,
-          _pendingAttrs
+          attrsToInsert
               .map((a) => {
                     'name': a.name,
                     'price': a.price,
@@ -5003,6 +4974,25 @@ class _CreateServiceDialogState extends ConsumerState<_CreateServiceDialog> {
       builder: (_) => _PendingAttrDialog(existing: _pendingAttrs[index]),
     ).then((attr) {
       if (attr != null && mounted) setState(() => _pendingAttrs[index] = attr);
+    });
+  }
+
+  void _openAddDurationOption() {
+    showDialog<_PendingAttr?>(
+      context: context,
+      builder: (_) => const _PendingAttrDialog(isDuration: true),
+    ).then((opt) {
+      if (opt != null && mounted) setState(() => _durationOptions.add(opt));
+    });
+  }
+
+  void _openEditDurationOption(int index) {
+    showDialog<_PendingAttr?>(
+      context: context,
+      builder: (_) => _PendingAttrDialog(
+          existing: _durationOptions[index], isDuration: true),
+    ).then((opt) {
+      if (opt != null && mounted) setState(() => _durationOptions[index] = opt);
     });
   }
 
@@ -5239,6 +5229,17 @@ class _CreateServiceDialogState extends ConsumerState<_CreateServiceDialog> {
               const _DialogSectionLabel('1. Service Details'),
               const SizedBox(height: 12),
 
+              // Category (vendor-owned) — first, determines where service appears
+              _DialogFieldLabel('Category'),
+              const SizedBox(height: 6),
+              VendorCategoryPicker(
+                vendorId: ref.read(currentVendorUserProvider)?.id ?? '',
+                datasource: ref.read(servicesDatasourceProvider),
+                selected: _selectedCategory,
+                onSelect: (cat) => setState(() => _selectedCategory = cat),
+              ),
+              const SizedBox(height: 16),
+
               // Service Name
               _DialogFieldLabel('Service Name', required: true),
               const SizedBox(height: 6),
@@ -5258,21 +5259,302 @@ class _CreateServiceDialogState extends ConsumerState<_CreateServiceDialog> {
               ),
               const SizedBox(height: 16),
 
-              // Price
-              _DialogFieldLabel('Price', required: true),
-              const SizedBox(height: 6),
-              _DialogTextField(
-                controller: _priceCtrl,
-                hint: '0',
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                prefixText: '₹ ',
+              // Pricing Type
+              _DialogFieldLabel('Pricing Type', required: true),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Expanded(
+                    child: GestureDetector(
+                      onTap: () => setState(() {
+                        _pricingType = 'fixed';
+                        _priceError = null;
+                        _discountError = null;
+                      }),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(vertical: 10),
+                        decoration: BoxDecoration(
+                          color: _pricingType == 'fixed'
+                              ? AppColors.primary
+                              : const Color(0xFFF7FAFC),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(
+                            color: _pricingType == 'fixed'
+                                ? AppColors.primary
+                                : const Color(0xFFCBD5E0),
+                          ),
+                        ),
+                        child: Column(
+                          children: [
+                            Icon(
+                              Icons.currency_rupee_rounded,
+                              size: 18,
+                              color: _pricingType == 'fixed'
+                                  ? Colors.white
+                                  : AppColors.textSecondary,
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              'Fixed Price',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                color: _pricingType == 'fixed'
+                                    ? Colors.white
+                                    : AppColors.textPrimary,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: GestureDetector(
+                      onTap: () => setState(() {
+                        _pricingType = 'duration_based';
+                        _priceError = null;
+                        _discountError = null;
+                      }),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(vertical: 10),
+                        decoration: BoxDecoration(
+                          color: _pricingType == 'duration_based'
+                              ? AppColors.primary
+                              : const Color(0xFFF7FAFC),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(
+                            color: _pricingType == 'duration_based'
+                                ? AppColors.primary
+                                : const Color(0xFFCBD5E0),
+                          ),
+                        ),
+                        child: Column(
+                          children: [
+                            Icon(
+                              Icons.timer_outlined,
+                              size: 18,
+                              color: _pricingType == 'duration_based'
+                                  ? Colors.white
+                                  : AppColors.textSecondary,
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              'Duration-Based',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                color: _pricingType == 'duration_based'
+                                    ? Colors.white
+                                    : AppColors.textPrimary,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
               ),
-              if (_priceError != null) ...[
-                const SizedBox(height: 4),
-                Text(
-                  _priceError!,
-                  style: const TextStyle(
-                      fontSize: 11.5, color: AppColors.error),
+              const SizedBox(height: 16),
+
+              // Price fields (conditional)
+              if (_pricingType == 'fixed') ...[
+                _DialogFieldLabel('Price', required: true),
+                const SizedBox(height: 6),
+                _DialogTextField(
+                  controller: _priceCtrl,
+                  hint: '0',
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  prefixText: '₹ ',
+                ),
+                if (_priceError != null) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    _priceError!,
+                    style: const TextStyle(fontSize: 11.5, color: AppColors.error),
+                  ),
+                ],
+                const SizedBox(height: 12),
+                // Discount section
+                const Text(
+                  'DISCOUNT (OPTIONAL)',
+                  style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.textSecondary,
+                    letterSpacing: 0.8,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    for (final (type, label) in [
+                      ('none', 'No Discount'),
+                      ('percentage', '% Off'),
+                      ('fixed', '₹ Off'),
+                    ]) ...[
+                      Expanded(
+                        child: GestureDetector(
+                          onTap: () => setState(() {
+                            _discountType = type;
+                            _discountError = null;
+                            if (type == 'none') _discountCtrl.clear();
+                          }),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(vertical: 8),
+                            decoration: BoxDecoration(
+                              color: _discountType == type
+                                  ? AppColors.primary
+                                  : const Color(0xFFF7FAFC),
+                              borderRadius: BorderRadius.circular(7),
+                              border: Border.all(
+                                color: _discountType == type
+                                    ? AppColors.primary
+                                    : const Color(0xFFCBD5E0),
+                              ),
+                            ),
+                            child: Center(
+                              child: Text(
+                                label,
+                                style: TextStyle(
+                                  fontSize: 11.5,
+                                  fontWeight: FontWeight.w600,
+                                  color: _discountType == type
+                                      ? Colors.white
+                                      : AppColors.textPrimary,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                      if (type != 'fixed') const SizedBox(width: 6),
+                    ],
+                  ],
+                ),
+                if (_discountType != 'none') ...[
+                  const SizedBox(height: 10),
+                  _DialogTextField(
+                    controller: _discountCtrl,
+                    hint: '0',
+                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    prefixText: _discountType == 'fixed' ? '₹ ' : null,
+                    suffixText: _discountType == 'percentage' ? '%' : null,
+                  ),
+                  Builder(builder: (context) {
+                    final basePrice = double.tryParse(_priceCtrl.text.trim()) ?? 0;
+                    final dv = double.tryParse(_discountCtrl.text.trim()) ?? 0;
+                    if (basePrice <= 0 || dv <= 0) return const SizedBox.shrink();
+                    final double finalPrice;
+                    final String badge;
+                    if (_discountType == 'percentage') {
+                      finalPrice = basePrice * (1 - dv / 100);
+                      badge = '${dv.toStringAsFixed(0)}% off';
+                    } else {
+                      finalPrice = (basePrice - dv).clamp(0.0, double.infinity);
+                      badge = '₹${dv.toStringAsFixed(0)} off';
+                    }
+                    return Padding(
+                      padding: const EdgeInsets.only(top: 8),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: AppColors.success.withAlpha(18),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: AppColors.success.withAlpha(60)),
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  '₹${basePrice.toStringAsFixed(0)}',
+                                  style: const TextStyle(
+                                    fontSize: 11,
+                                    color: AppColors.textSecondary,
+                                    decoration: TextDecoration.lineThrough,
+                                    decorationColor: AppColors.textSecondary,
+                                  ),
+                                ),
+                                Text(
+                                  badge,
+                                  style: const TextStyle(
+                                    fontSize: 11,
+                                    color: AppColors.success,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            Text(
+                              '₹${finalPrice.toStringAsFixed(0)}',
+                              style: const TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w700,
+                                color: AppColors.success,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  }),
+                ],
+                if (_discountError != null) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    _discountError!,
+                    style: const TextStyle(fontSize: 11.5, color: AppColors.error),
+                  ),
+                ],
+              ] else ...[
+                // Duration-based: list of pricing options
+                if (_durationOptions.isEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: Text(
+                      'Add duration + price options below (e.g. "60 min – ₹500").',
+                      style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                    ),
+                  ),
+                if (_priceError != null)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 6),
+                    child: Text(
+                      _priceError!,
+                      style: const TextStyle(fontSize: 11.5, color: AppColors.error),
+                    ),
+                  ),
+                ..._durationOptions.asMap().entries.map((entry) {
+                  final i = entry.key;
+                  final opt = entry.value;
+                  return _PendingAttrRow(
+                    attr: opt,
+                    onEdit: () => _openEditDurationOption(i),
+                    onDelete: () => setState(() => _durationOptions.removeAt(i)),
+                  );
+                }),
+                if (_durationOptions.isNotEmpty) const SizedBox(height: 4),
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    onPressed: _openAddDurationOption,
+                    icon: const Icon(Icons.add_rounded, size: 15),
+                    label: const Text('Add Duration Option'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppColors.primary,
+                      side: const BorderSide(color: AppColors.primary),
+                      padding: const EdgeInsets.symmetric(vertical: 10),
+                      textStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    ),
+                  ),
                 ),
               ],
               const SizedBox(height: 16),
@@ -5399,6 +5681,7 @@ class _CreateServiceDialogState extends ConsumerState<_CreateServiceDialog> {
                       fontSize: 11.5, color: AppColors.error),
                 ),
               ],
+              if (_pricingType == 'fixed') ...[
               const SizedBox(height: 20),
               const Divider(height: 1),
               const SizedBox(height: 20),
@@ -5439,6 +5722,7 @@ class _CreateServiceDialogState extends ConsumerState<_CreateServiceDialog> {
                   ),
                 ),
               ),
+              ],
               const SizedBox(height: 24),
 
               // Actions
@@ -5540,12 +5824,14 @@ class _DialogTextField extends StatelessWidget {
     this.maxLines = 1,
     this.keyboardType,
     this.prefixText,
+    this.suffixText,
   });
   final TextEditingController controller;
   final String hint;
   final int maxLines;
   final TextInputType? keyboardType;
   final String? prefixText;
+  final String? suffixText;
 
   @override
   Widget build(BuildContext context) {
@@ -5557,6 +5843,7 @@ class _DialogTextField extends StatelessWidget {
       decoration: InputDecoration(
         hintText: hint,
         prefixText: prefixText,
+        suffixText: suffixText,
         hintStyle:
             const TextStyle(fontSize: 13, color: AppColors.textHint),
         filled: true,
@@ -5581,13 +5868,198 @@ class _DialogTextField extends StatelessWidget {
   }
 }
 
+class _EditServiceResult {
+  const _EditServiceResult({
+    required this.name,
+    required this.price,
+    this.pickedFile,
+    this.pickedImageBytes,
+  });
+
+  final String name;
+  final double price;
+  final XFile? pickedFile;
+  final Uint8List? pickedImageBytes;
+}
+
+class _EditCustomServiceDialog extends StatefulWidget {
+  const _EditCustomServiceDialog({required this.service});
+  final VendorServiceRequestModel service;
+
+  @override
+  State<_EditCustomServiceDialog> createState() =>
+      _EditCustomServiceDialogState();
+}
+
+class _EditCustomServiceDialogState extends State<_EditCustomServiceDialog> {
+  late final TextEditingController _nameCtrl;
+  late final TextEditingController _priceCtrl;
+  final _picker = ImagePicker();
+  XFile? _pickedFile;
+  Uint8List? _pickedImageBytes;
+  String? _nameError;
+  String? _priceError;
+
+  @override
+  void initState() {
+    super.initState();
+    _nameCtrl = TextEditingController(text: widget.service.serviceName);
+    _priceCtrl = TextEditingController(
+      text: widget.service.activePrice != null
+          ? widget.service.activePrice!.toStringAsFixed(0)
+          : '',
+    );
+  }
+
+  @override
+  void dispose() {
+    _nameCtrl.dispose();
+    _priceCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _pickImage() async {
+    final XFile? image = await _picker.pickImage(
+      source: ImageSource.gallery,
+      imageQuality: 80,
+      maxWidth: 1920,
+    );
+    if (image == null || !mounted) return;
+    final bytes = await image.readAsBytes();
+    if (mounted) {
+      setState(() {
+        _pickedFile = image;
+        _pickedImageBytes = bytes;
+      });
+    }
+  }
+
+  void _submit() {
+    final newName = _nameCtrl.text.trim();
+    final newPriceStr = _priceCtrl.text.trim();
+    final newPrice = double.tryParse(newPriceStr);
+
+    String? nameErr;
+    String? priceErr;
+    if (newName.isEmpty) {
+      nameErr = 'Service name cannot be empty.';
+    }
+    if (newPrice == null || newPrice <= 0) {
+      priceErr = 'Please enter a valid price greater than zero.';
+    }
+    if (nameErr != null || priceErr != null) {
+      setState(() {
+        _nameError = nameErr;
+        _priceError = priceErr;
+      });
+      return;
+    }
+
+    Navigator.of(context).pop(
+      _EditServiceResult(
+        name: newName,
+        price: newPrice!,
+        pickedFile: _pickedFile,
+        pickedImageBytes: _pickedImageBytes,
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Edit Service'),
+      content: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 400),
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              TextField(
+                controller: _nameCtrl,
+                textCapitalization: TextCapitalization.words,
+                autofocus: true,
+                decoration: InputDecoration(
+                  labelText: 'Service Name',
+                  errorText: _nameError,
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _priceCtrl,
+                keyboardType:
+                    const TextInputType.numberWithOptions(decimal: true),
+                decoration: InputDecoration(
+                  labelText: 'Price (₹)',
+                  prefixText: '₹ ',
+                  errorText: _priceError,
+                ),
+              ),
+              const SizedBox(height: 16),
+              const _DialogFieldLabel('Service Image'),
+              const SizedBox(height: 6),
+              _DialogImagePicker(
+                pickedBytes: _pickedImageBytes,
+                existingImageUrl: widget.service.imageUrl,
+                onTap: _pickImage,
+              ),
+            ],
+          ),
+        ),
+      ),
+      actionsPadding: const EdgeInsets.fromLTRB(24, 0, 24, 20),
+      actions: [
+        Row(
+          children: [
+            Expanded(
+              child: SizedBox(
+                height: 44,
+                child: OutlinedButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: AppColors.textSecondary,
+                    side: const BorderSide(color: AppColors.border),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                  child: const Text('Cancel'),
+                ),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: SizedBox(
+                height: 44,
+                child: FilledButton(
+                  onPressed: _submit,
+                  style: FilledButton.styleFrom(
+                    minimumSize: Size.zero,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                  child: const Text('Submit'),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
 class _DialogImagePicker extends StatelessWidget {
   const _DialogImagePicker({
     required this.pickedBytes,
     required this.onTap,
+    this.existingImageUrl,
   });
   final Uint8List? pickedBytes;
   final VoidCallback onTap;
+  final String? existingImageUrl;
 
   @override
   Widget build(BuildContext context) {
@@ -5601,6 +6073,47 @@ class _DialogImagePicker extends StatelessWidget {
               width: 72,
               height: 72,
               fit: BoxFit.cover,
+            ),
+          ),
+          const SizedBox(width: 12),
+          OutlinedButton.icon(
+            onPressed: onTap,
+            icon: const Icon(Icons.swap_horiz_rounded, size: 16),
+            label: const Text('Change'),
+            style: OutlinedButton.styleFrom(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8)),
+            ),
+          ),
+        ],
+      );
+    }
+    if (existingImageUrl != null && existingImageUrl!.isNotEmpty) {
+      return Row(
+        children: [
+          ClipRRect(
+            borderRadius: BorderRadius.circular(8),
+            child: Image.network(
+              existingImageUrl!,
+              width: 72,
+              height: 72,
+              fit: BoxFit.cover,
+              errorBuilder: (_, __, ___) => Container(
+                width: 72,
+                height: 72,
+                decoration: BoxDecoration(
+                  color: AppColors.background,
+                  border: Border.all(color: AppColors.border),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(
+                  Icons.broken_image_outlined,
+                  color: AppColors.textSecondary,
+                  size: 24,
+                ),
+              ),
             ),
           ),
           const SizedBox(width: 12),
@@ -6087,11 +6600,43 @@ class _PendingAttrRow extends StatelessWidget {
                 ),
                 if (attr.price > 0) ...[
                   const SizedBox(height: 2),
-                  Text(
-                    '₹${attr.price.toStringAsFixed(0)}',
-                    style: const TextStyle(
-                        fontSize: 12, color: AppColors.textSecondary),
-                  ),
+                  Builder(builder: (_) {
+                    final double finalP;
+                    if (attr.discountType == 'percentage' && attr.discountValue > 0) {
+                      finalP = attr.price * (1 - attr.discountValue / 100);
+                    } else if (attr.discountType == 'flat' && attr.discountValue > 0) {
+                      finalP = (attr.price - attr.discountValue).clamp(0.0, double.infinity);
+                    } else {
+                      finalP = attr.price;
+                    }
+                    final hasDiscount = finalP != attr.price;
+                    if (!hasDiscount) {
+                      return Text(
+                        '₹${attr.price.toStringAsFixed(0)}',
+                        style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                      );
+                    }
+                    return Row(children: [
+                      Text(
+                        '₹${attr.price.toStringAsFixed(0)}',
+                        style: const TextStyle(
+                          fontSize: 11,
+                          color: AppColors.textSecondary,
+                          decoration: TextDecoration.lineThrough,
+                          decorationColor: AppColors.textSecondary,
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        '₹${finalP.toStringAsFixed(0)}',
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: AppColors.textPrimary,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ]);
+                  }),
                 ],
               ],
             ),
@@ -6121,8 +6666,9 @@ class _PendingAttrRow extends StatelessWidget {
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _PendingAttrDialog extends StatefulWidget {
-  const _PendingAttrDialog({this.existing});
+  const _PendingAttrDialog({this.existing, this.isDuration = false});
   final _PendingAttr? existing;
+  final bool isDuration;
 
   @override
   State<_PendingAttrDialog> createState() => _PendingAttrDialogState();
@@ -6131,6 +6677,8 @@ class _PendingAttrDialog extends StatefulWidget {
 class _PendingAttrDialogState extends State<_PendingAttrDialog> {
   final _formKey = GlobalKey<FormState>();
   late final TextEditingController _name;
+  late final TextEditingController _durationAmount;
+  String _durationUnit = 'min';
   late final TextEditingController _price;
   late final TextEditingController _discountValue;
   String _discountType = 'percentage';
@@ -6147,11 +6695,21 @@ class _PendingAttrDialogState extends State<_PendingAttrDialog> {
         text: (e?.discountValue ?? 0) > 0
             ? e!.discountValue.toStringAsFixed(0)
             : '');
+    if (widget.isDuration) {
+      final parts = (e?.name ?? '').split(' ');
+      final amount = parts.isNotEmpty ? parts[0] : '';
+      final rawUnit = parts.length > 1 ? parts[1].toLowerCase() : '';
+      _durationUnit = rawUnit.startsWith('hr') ? 'hr' : 'min';
+      _durationAmount = TextEditingController(text: amount);
+    } else {
+      _durationAmount = TextEditingController();
+    }
   }
 
   @override
   void dispose() {
     _name.dispose();
+    _durationAmount.dispose();
     _price.dispose();
     _discountValue.dispose();
     super.dispose();
@@ -6206,7 +6764,9 @@ class _PendingAttrDialogState extends State<_PendingAttrDialog> {
                   ),
                   const SizedBox(width: 10),
                   Text(
-                    isEdit ? 'Edit Entry' : 'Add Entry',
+                    widget.isDuration
+                        ? (isEdit ? 'Edit Duration Option' : 'Add Duration Option')
+                        : (isEdit ? 'Edit Entry' : 'Add Entry'),
                     style: const TextStyle(
                         color: Colors.white,
                         fontSize: 16,
@@ -6228,14 +6788,77 @@ class _PendingAttrDialogState extends State<_PendingAttrDialog> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    TextFormField(
-                      controller: _name,
-                      decoration:
-                          _inputDeco('e.g. 2 ACs').copyWith(labelText: 'Name *'),
-                      textCapitalization: TextCapitalization.words,
-                      validator: (v) =>
-                          v == null || v.trim().isEmpty ? 'Required' : null,
-                    ),
+                    if (widget.isDuration) ...[
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(
+                            child: TextFormField(
+                              controller: _durationAmount,
+                              keyboardType: TextInputType.number,
+                              inputFormatters: [
+                                FilteringTextInputFormatter.digitsOnly
+                              ],
+                              decoration: _inputDeco('e.g. 60').copyWith(
+                                labelText: 'Duration *',
+                              ),
+                              validator: (v) {
+                                if (v == null || v.trim().isEmpty) {
+                                  return 'Required';
+                                }
+                                final n = int.tryParse(v.trim());
+                                if (n == null || n <= 0) {
+                                  return 'Enter a valid number';
+                                }
+                                return null;
+                              },
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          SizedBox(
+                            height: 48,
+                            child: ToggleButtons(
+                              isSelected: [
+                                _durationUnit == 'min',
+                                _durationUnit == 'hr',
+                              ],
+                              onPressed: (i) => setState(
+                                  () => _durationUnit = i == 0 ? 'min' : 'hr'),
+                              borderRadius: BorderRadius.circular(8),
+                              selectedColor: Colors.white,
+                              fillColor: AppColors.primary,
+                              color: AppColors.textSecondary,
+                              textStyle: const TextStyle(
+                                  fontSize: 13, fontWeight: FontWeight.w600),
+                              constraints: const BoxConstraints(
+                                  minWidth: 56, minHeight: 48, maxHeight: 48),
+                              children: const [
+                                Padding(
+                                  padding:
+                                      EdgeInsets.symmetric(horizontal: 12),
+                                  child: Text('Min'),
+                                ),
+                                Padding(
+                                  padding:
+                                      EdgeInsets.symmetric(horizontal: 12),
+                                  child: Text('Hr'),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ] else ...[
+                      TextFormField(
+                        controller: _name,
+                        decoration: _inputDeco('e.g. 2 ACs').copyWith(
+                          labelText: 'Name *',
+                        ),
+                        textCapitalization: TextCapitalization.words,
+                        validator: (v) =>
+                            v == null || v.trim().isEmpty ? 'Required' : null,
+                      ),
+                    ],
                     const SizedBox(height: 16),
                     TextFormField(
                       controller: _price,
@@ -6354,8 +6977,11 @@ class _PendingAttrDialogState extends State<_PendingAttrDialog> {
                   FilledButton(
                     onPressed: () {
                       if (!_formKey.currentState!.validate()) return;
+                      final resolvedName = widget.isDuration
+                          ? '${_durationAmount.text.trim()} $_durationUnit'
+                          : _name.text.trim();
                       Navigator.of(context).pop(_PendingAttr(
-                        name: _name.text.trim(),
+                        name: resolvedName,
                         price:
                             double.tryParse(_price.text.trim()) ?? 0.0,
                         discountType: _discountType,

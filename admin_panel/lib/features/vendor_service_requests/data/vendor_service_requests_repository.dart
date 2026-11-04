@@ -6,10 +6,11 @@ class VendorServiceRequestsRepository {
   final SupabaseClient _supabase;
 
   static const _columns =
-      'id, vendor_id, service_name, description, price, active_price, new_price, '
+      'id, vendor_id, service_name, description, price, active_price, new_price, new_service_name, '
       'image_url, status, rejection_reason, request_type, parent_request_id, '
       'is_active, warranty_enabled, warranty_days, warranty_covers, warranty_exclusions, '
       'included_items, excluded_items, before_after_pairs, '
+      'pricing_type, discount_type, discount_value, '
       'created_at, updated_at, vendors(id, business_name, vendor_tiers(id, name))';
 
   Future<List<VendorServiceRequest>> fetchAll() async {
@@ -52,7 +53,7 @@ class VendorServiceRequestsRepository {
   Future<void> complete(String id) async {
     await _supabase
         .from('vendor_service_requests')
-        .update({'status': 'completed'}).eq('id', id);
+        .update({'status': 'completed', 'is_active': true}).eq('id', id);
   }
 
   Future<void> reject(String id, {required String reason}) async {

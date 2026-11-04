@@ -60,6 +60,7 @@ import '../../features/service_addons/presentation/pages/addons_page.dart';
 import '../../features/app_branding/presentation/pages/app_branding_page.dart';
 import '../../features/campaigns/presentation/pages/campaigns_page.dart';
 import '../../features/call_config/presentation/pages/call_config_page.dart';
+import '../../features/vendor_root_categories/presentation/pages/vendor_root_categories_page.dart';
 import '../../shared/pages/unauthorized_page.dart';
 import '../rbac/permission_guard.dart';
 
@@ -559,6 +560,13 @@ final routerProvider = Provider<GoRouter>((ref) {
             name: 'callConfig',
             pageBuilder: (context, state) => const NoTransitionPage(
               child: CallConfigPage(),
+            ),
+          ),
+          GoRoute(
+            path: '/dashboard/vendor-root-categories',
+            name: 'vendorRootCategories',
+            pageBuilder: (context, state) => const NoTransitionPage(
+              child: VendorRootCategoriesPage(),
             ),
           ),
         ],

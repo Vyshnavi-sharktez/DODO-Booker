@@ -486,6 +486,8 @@ class _ServiceRequestDetailDialogState
         _DetailRow('Service Name', r.serviceName),
 
         if (r.isPriceChange) ...[
+          if (r.newServiceName != null && r.newServiceName!.isNotEmpty)
+            _DetailRow('Requested Name', r.newServiceName!),
           _DetailRow('Current Price', r.formattedPrice),
           _DetailRow('Requested Price', r.formattedNewPrice),
         ] else if (r.isDeleteService || r.isPendingDeletion) ...[
@@ -508,6 +510,15 @@ class _ServiceRequestDetailDialogState
           if (r.description != null && r.description!.isNotEmpty)
             _DetailRow('Description', r.description!),
           _DetailRow('Price', r.formattedPrice),
+          if (r.hasDiscount) ...[
+            _DetailRow(
+              'Discount',
+              r.discountType == 'percentage'
+                  ? '${r.discountValue.toStringAsFixed(0)}%'
+                  : '₹${r.discountValue.toStringAsFixed(0)} off',
+            ),
+            _DetailRow('Active (Discounted) Price', r.formattedActivePrice),
+          ],
           if (r.imageUrl != null) ...[
             const SizedBox(height: 16),
             ClipRRect(
@@ -617,6 +628,23 @@ class _ServiceRequestDetailDialogState
     );
   }
 
+  Future<void> _toggleActive(bool value) async {
+    setState(() => _busy = true);
+    try {
+      await ref
+          .read(vendorServiceRequestsNotifierProvider.notifier)
+          .toggleActive(widget.request.id, isActive: value);
+      if (mounted) Navigator.of(context).pop();
+    } catch (e) {
+      if (mounted)
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
+        );
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
   Widget _buildFooter(VendorServiceRequest r) {
     if (r.isCompleted || r.isRejected || r.isDeleted || r.isNeedsCatalog) {
       return _closeOnly();
@@ -690,8 +718,6 @@ class _ServiceRequestDetailDialogState
     final r = widget.request;
     final showQA = r.isCompleted && r.isNewService;
     return Row(
-      mainAxisAlignment:
-          showQA ? MainAxisAlignment.spaceBetween : MainAxisAlignment.end,
       children: [
         if (showQA)
           OutlinedButton.icon(
@@ -704,6 +730,28 @@ class _ServiceRequestDetailDialogState
             icon: const Icon(Icons.help_outline_rounded, size: 16),
             label: const Text('Customer Q&A'),
           ),
+        if (r.isCompleted) ...[
+          const SizedBox(width: 8),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                r.isActive ? 'Active' : 'Inactive',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: r.isActive ? AppColors.success : AppColors.textSecondary,
+                ),
+              ),
+              Switch(
+                value: r.isActive,
+                onChanged: _busy ? null : _toggleActive,
+                activeColor: AppColors.success,
+              ),
+            ],
+          ),
+        ],
+        const Spacer(),
         OutlinedButton(
           onPressed: () => Navigator.of(context).pop(),
           child: const Text('Close'),

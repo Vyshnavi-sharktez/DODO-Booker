@@ -16,6 +16,7 @@ import '../services/home_providers.dart';
 import '../services/landing_page_sections_provider.dart';
 import '../widgets/mobile_home_sections.dart';
 import '../widgets/section_renderer.dart';
+import '../../vendor_catalog/providers/vcs_providers.dart' show vcsCategoriesProvider;
 
 class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key, this.showMobileHeader = false});
@@ -30,6 +31,7 @@ class HomeScreen extends ConsumerWidget {
     ref.invalidate(popularServicesProvider);
     ref.invalidate(newServicesProvider);
     ref.invalidate(homeReviewsProvider);
+    ref.invalidate(vcsCategoriesProvider);
     try {
       await ref.read(landingPageSectionsProvider.future);
     } catch (_) {}

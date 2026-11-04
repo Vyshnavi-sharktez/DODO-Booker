@@ -35,6 +35,9 @@ import '../features/refund_queries/screens/refund_query_form_screen.dart';
 import '../features/refund_queries/screens/refund_query_detail_screen.dart';
 import '../features/refund_queries/models/booking_for_refund_model.dart';
 import '../features/support/screens/support_chat_screen.dart';
+import '../features/vendor_catalog/models/vcs_vendor_model.dart';
+import '../features/vendor_catalog/screens/vendor_list_screen.dart';
+import '../features/vendor_catalog/screens/vendor_detail_screen.dart';
 import '../models/booking_model.dart';
 import '../models/category_model.dart';
 import '../models/subcategory_model.dart';
@@ -109,6 +112,11 @@ class AppRoutes {
   static const String refundQueryForm = '/refund-queries/new';
   static const String refundQueryDetail = '/refund-queries/:id';
   static const String supportChat = '/support-chat';
+
+  // ── Vendor Catalog Services ────────────────────────────────────────────────
+  static const String vcVendorList = '/vendor-catalog/category/:categoryId';
+  static const String vcVendorDetail =
+      '/vendor-catalog/category/:categoryId/vendor/:vendorId';
 }
 
 final appRouter = GoRouter(
@@ -330,6 +338,35 @@ final appRouter = GoRouter(
           builder: (context, state) => SearchScreen(
             initialQuery: state.extra is String ? state.extra as String : '',
           ),
+        ),
+
+        // ── Vendor Catalog Services ──────────────────────────────────────────
+        GoRoute(
+          path: AppRoutes.vcVendorList,
+          builder: (context, state) {
+            final categoryId = state.pathParameters['categoryId']!;
+            final categoryName =
+                state.extra is String ? state.extra as String : 'Vendors';
+            return VendorListScreen(
+              categoryId: categoryId,
+              categoryName: categoryName,
+            );
+          },
+        ),
+        GoRoute(
+          path: AppRoutes.vcVendorDetail,
+          builder: (context, state) {
+            final vendorId = state.pathParameters['vendorId']!;
+            final categoryId = state.pathParameters['categoryId'];
+            final extra = state.extra as Map<String, dynamic>?;
+            return VendorDetailScreen(
+              vendorId: vendorId,
+              initialCategoryId: categoryId,
+              vendorName: extra?['vendorName'] as String?,
+              categoryName: extra?['categoryName'] as String?,
+              initialVendor: extra?['vendor'] as VcsVendorModel?,
+            );
+          },
         ),
       ],
     ),

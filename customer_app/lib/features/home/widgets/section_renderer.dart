@@ -20,6 +20,7 @@ import 'special_offers_section.dart';
 import 'sub_services_section.dart';
 import 'trending_services_section.dart';
 import 'why_dodo_section.dart';
+import '../../vendor_catalog/widgets/vendor_catalog_section.dart';
 
 // ── Navigation helper ─────────────────────────────────────────────────────────
 
@@ -61,6 +62,7 @@ class SectionRenderer extends StatelessWidget {
       'promo_banner'   => PromoBannerSection(config: section.config),
       'faq'            => FaqSection(config: section.config),
       'cta'            => CtaSection(config: section.config),
+      'vendor_catalog' => VendorCatalogSection(title: section.config['title'] as String?),
       _                => const SizedBox.shrink(),
     };
   }

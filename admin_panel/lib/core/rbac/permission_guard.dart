@@ -72,6 +72,7 @@ const Map<String, String> routePermissions = {
   '/app-branding': 'settings.read',
   '/campaigns': 'campaign.read',
   '/call-config': 'call.config',
+  '/vendor-root-categories': 'vendor.read',
 };
 
 // Dynamic route patterns: a prefix match maps to its module permission.
