@@ -196,4 +196,18 @@ class VendorsRepository {
         })
         .eq('id', id);
   }
+
+  Future<void> markAllAsPreferred({required double globalFee}) async {
+    await _supabase
+        .from('vendors')
+        .update({'is_preferred_vendor': true})
+        .eq('is_active', true);
+    if (globalFee > 0) {
+      await _supabase
+          .from('vendors')
+          .update({'preferred_vendor_fee': globalFee})
+          .eq('is_active', true)
+          .or('preferred_vendor_fee.is.null,preferred_vendor_fee.eq.0');
+    }
+  }
 }

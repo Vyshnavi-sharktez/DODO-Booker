@@ -21,12 +21,11 @@ class BookingsPage extends ConsumerStatefulWidget {
 }
 
 class _BookingsPageState extends ConsumerState<BookingsPage>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin {
   late final TabController _tabController;
+  late final TabController _instaHelpTabController;
   late final bool _isDodoTeam;
 
-  // Vendor: full pipeline including Assigned and Rejected tabs.
-  // DODO Team: skips Assigned (admin handles that) and Rejected (no reject action).
   static const _vendorTabs = [
     'Assigned',
     'In Progress',
@@ -34,10 +33,20 @@ class _BookingsPageState extends ConsumerState<BookingsPage>
     'Rejected',
     'Cancelled',
     'Today',
+    'InstaHelp',
   ];
   static const _dodoTabs = [
     'In Progress',
     'Completed',
+    'Cancelled',
+    'Today',
+    'InstaHelp',
+  ];
+  static const _instaHelpStatusTabs = [
+    'Assigned',
+    'In Progress',
+    'Completed',
+    'Rejected',
     'Cancelled',
     'Today',
   ];
@@ -53,17 +62,22 @@ class _BookingsPageState extends ConsumerState<BookingsPage>
       vsync: this,
       initialIndex: widget.initialTabIndex.clamp(0, _tabs.length - 1),
     );
+    _instaHelpTabController = TabController(
+      length: _instaHelpStatusTabs.length,
+      vsync: this,
+    );
   }
 
   @override
   void dispose() {
     _tabController.dispose();
+    _instaHelpTabController.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    ref.listen(activeBookingTrackerObserver, (_, __) {});
+    ref.listen(activeBookingTrackerObserver, (prev, next) {});
     final bookingsAsync = ref.watch(vendorBookingsProvider);
 
     return Column(
@@ -97,6 +111,7 @@ class _BookingsPageState extends ConsumerState<BookingsPage>
                         _buildBookingsList(bookings, {'completed'}),
                         _buildBookingsList(bookings, {'cancelled'}),
                         _buildTodayList(bookings),
+                        _buildInstaHelpTabView(bookings),
                       ]
                     : [
                         _buildBookingsList(bookings, {'assigned', 'accepted'}),
@@ -105,6 +120,7 @@ class _BookingsPageState extends ConsumerState<BookingsPage>
                         _buildBookingsList(bookings, {'rejected'}),
                         _buildBookingsList(bookings, {'cancelled'}),
                         _buildTodayList(bookings),
+                        _buildInstaHelpTabView(bookings),
                       ],
               ),
             ),
@@ -113,14 +129,17 @@ class _BookingsPageState extends ConsumerState<BookingsPage>
       );
   }
 
+  // ── Regular bookings (excludes InstaHelp) ─────────────────────────────────
+
   Widget _buildBookingsList(List<Booking> bookings, Set<String> statuses) {
     final primary = statuses.first;
     final filtered = bookings
         .where((b) =>
-            statuses.contains(b.status) ||
+            b.bookingSource != 'instahelp' &&
+            (statuses.contains(b.status) ||
             (statuses.contains('assigned') &&
                 b.isWarrantyRework &&
-                (b.status == 'pending' || b.status == 'assigned')))
+                (b.status == 'pending' || b.status == 'assigned'))))
         .toList();
     if (filtered.isEmpty) return _emptyState(primary);
     return RefreshIndicator(
@@ -137,6 +156,7 @@ class _BookingsPageState extends ConsumerState<BookingsPage>
   Widget _buildTodayList(List<Booking> bookings) {
     final now = DateTime.now();
     final filtered = bookings.where((b) {
+      if (b.bookingSource == 'instahelp') return false;
       final d = b.serviceDate;
       return d != null &&
           d.year == now.year &&
@@ -154,6 +174,91 @@ class _BookingsPageState extends ConsumerState<BookingsPage>
       ),
     );
   }
+
+  // ── InstaHelp tab with nested status sub-tabs ─────────────────────────────
+
+  Widget _buildInstaHelpTabView(List<Booking> bookings) {
+    final insta = bookings.where((b) => b.bookingSource == 'instahelp').toList();
+    return Column(
+      children: [
+        Material(
+          color: Theme.of(context).colorScheme.surface,
+          child: TabBar(
+            controller: _instaHelpTabController,
+            labelColor: AppColors.textPrimary,
+            unselectedLabelColor: AppColors.textSecondary,
+            indicatorColor: AppColors.textPrimary,
+            dividerColor: AppColors.border,
+            isScrollable: true,
+            tabAlignment: TabAlignment.start,
+            tabs: _instaHelpStatusTabs.map((t) => Tab(text: t)).toList(),
+          ),
+        ),
+        Expanded(
+          child: TabBarView(
+            controller: _instaHelpTabController,
+            children: [
+              _buildInstaList(insta, {'assigned', 'accepted'}),
+              _buildInstaList(insta, {'in_progress', 'en_route', 'awaiting_verification'}),
+              _buildInstaList(insta, {'completed'}),
+              _buildInstaList(insta, {'rejected'}),
+              _buildInstaList(insta, {'cancelled'}),
+              _buildInstaToday(insta),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildInstaList(List<Booking> bookings, Set<String> statuses) {
+    final filtered = bookings.where((b) => statuses.contains(b.status)).toList();
+    if (filtered.isEmpty) {
+      return EmptyStateView(
+        icon: Icons.flash_on_outlined,
+        title: 'No ${statuses.first.replaceAll('_', ' ')} InstaHelp bookings',
+        subtitle: null,
+      );
+    }
+    return RefreshIndicator(
+      onRefresh: () async => ref.invalidate(vendorBookingsProvider),
+      child: ListView.builder(
+        key: PageStorageKey<String>('vendor_insta_${statuses.first}'),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        itemCount: filtered.length,
+        itemBuilder: (_, i) => BookingCard(booking: filtered[i]),
+      ),
+    );
+  }
+
+  Widget _buildInstaToday(List<Booking> bookings) {
+    final now = DateTime.now();
+    final filtered = bookings.where((b) {
+      final d = b.serviceDate;
+      return d != null &&
+          d.year == now.year &&
+          d.month == now.month &&
+          d.day == now.day;
+    }).toList();
+    if (filtered.isEmpty) {
+      return const EmptyStateView(
+        icon: Icons.flash_on_outlined,
+        title: 'No InstaHelp bookings today',
+        subtitle: 'InstaHelp bookings scheduled for today will appear here.',
+      );
+    }
+    return RefreshIndicator(
+      onRefresh: () async => ref.invalidate(vendorBookingsProvider),
+      child: ListView.builder(
+        key: const PageStorageKey<String>('vendor_insta_today'),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        itemCount: filtered.length,
+        itemBuilder: (_, i) => BookingCard(booking: filtered[i]),
+      ),
+    );
+  }
+
+  // ── Empty states ──────────────────────────────────────────────────────────
 
   Widget _emptyState(String status) {
     if (status == 'today') {

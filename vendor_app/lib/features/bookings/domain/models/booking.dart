@@ -34,6 +34,7 @@ class Booking {
     this.dispatchStatus,
     this.lastDispatchAttemptAt,
     this.tierTimeoutSeconds = 60,
+    this.bookingSource,
   });
 
   final String id;
@@ -71,6 +72,8 @@ class Booking {
   final String? dispatchStatus;
   final DateTime? lastDispatchAttemptAt;
   final int tierTimeoutSeconds;
+
+  final String? bookingSource;
 
   bool get isDodoTeam => assignmentType == 'DODO Team';
 
@@ -153,6 +156,7 @@ class Booking {
           ? DateTime.tryParse(map['last_dispatch_attempt_at'] as String)
           : null,
       tierTimeoutSeconds: map['tier_timeout_seconds'] as int? ?? 60,
+      bookingSource: map['booking_source'] as String?,
     );
   }
 
@@ -200,6 +204,7 @@ class Booking {
       lastDispatchAttemptAt:
           lastDispatchAttemptAt ?? this.lastDispatchAttemptAt,
       tierTimeoutSeconds: tierTimeoutSeconds ?? this.tierTimeoutSeconds,
+      bookingSource: bookingSource,
     );
   }
 }

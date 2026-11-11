@@ -1031,7 +1031,7 @@ class _BookingsPageState extends ConsumerState<BookingsPage> {
   Widget build(BuildContext context) {
     final state = ref.watch(bookingsNotifierProvider);
     final allBookings = state.valueOrNull ?? [];
-    final normalCount = allBookings.where((b) => !b.isAmc && !b.isWarrantyRework).length;
+    final normalCount = allBookings.where((b) => !b.isAmc && !b.isWarrantyRework && !b.isInstaHelp).length;
     final reworkCount = allBookings.where((b) => b.isWarrantyRework).length;
     final vendors = ref.watch(vendorsNotifierProvider).valueOrNull ?? [];
     final settings = ref.watch(settingsNotifierProvider).valueOrNull ?? {};
@@ -1391,8 +1391,8 @@ class _BookingsPageState extends ConsumerState<BookingsPage> {
               ),
               data: (all) {
                 if (_tab == 0) {
-                  // ── Normal Bookings (exclude AMC and Warranty Rework) ──────
-                  final regular = all.where((b) => !b.isAmc && !b.isWarrantyRework).toList();
+                  // ── Normal Bookings (exclude AMC, Warranty Rework, and InstaHelp) ──────
+                  final regular = all.where((b) => !b.isAmc && !b.isWarrantyRework && !b.isInstaHelp).toList();
                   final filtered = _applyFilters(regular);
                   if (regular.isEmpty) {
                     return _EmptyState(

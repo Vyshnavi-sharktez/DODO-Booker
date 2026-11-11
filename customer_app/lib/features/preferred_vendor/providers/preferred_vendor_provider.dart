@@ -12,57 +12,86 @@ typedef _ServiceLocationKey = ({
   double? lng,
 });
 
-/// Returns preferred vendors configured for [serviceId] that serve the
-/// customer's [lat]/[lng] coordinates.  When coordinates are null, returns all
-/// configured vendors (admin preview / fallback).
+/// Returns preferred vendors for [serviceId] that serve the customer's
+/// [lat]/[lng]. Falls back to globally preferred vendors (is_preferred_vendor=true)
+/// when no per-node catalog config is set up.
 final preferredVendorsForServiceProvider = FutureProvider.autoDispose
     .family<List<PreferredVendorModel>, _ServiceLocationKey>((ref, key) async {
   final client = Supabase.instance.client;
 
+  // ── 1. Try per-node catalog config ───────────────────────────────────────
   final config = await client.rpc('resolve_catalog_module_config', params: {
     'p_module': 'preferred_vendors',
     'p_service_id': key.serviceId,
     'p_parent_id': key.parentNodeId,
   });
-  if (config == null) return [];
 
-  final cfg = Map<String, dynamic>.from(config as Map);
-  if (!(cfg['is_enabled'] as bool? ?? false)) return [];
+  if (config != null) {
+    final cfg = Map<String, dynamic>.from(config as Map);
+    if (cfg['is_enabled'] as bool? ?? false) {
+      List<String> vendorIds;
+      Map<String, dynamic>? vendorFees;
 
-  // Support both new format (vendors: [{id, fee}]) and old format (vendor_ids: [uuid])
-  List<String> vendorIds;
-  Map<String, dynamic>? vendorFees;
+      final vendorsArr = cfg['vendors'] as List<dynamic>?;
+      if (vendorsArr != null) {
+        vendorIds = vendorsArr.map((e) => (e as Map)['id'] as String).toList();
+        vendorFees = {
+          for (final e in vendorsArr.cast<Map<String, dynamic>>())
+            e['id'] as String: (e['fee'] as num?)?.toDouble() ?? 0.0,
+        };
+      } else {
+        vendorIds = (cfg['vendor_ids'] as List<dynamic>?)
+                ?.map((e) => e.toString())
+                .toList() ??
+            [];
+        vendorFees = null;
+      }
 
-  final vendorsArr = cfg['vendors'] as List<dynamic>?;
-  if (vendorsArr != null) {
-    vendorIds =
-        vendorsArr.map((e) => (e as Map)['id'] as String).toList();
-    vendorFees = {
-      for (final e in vendorsArr.cast<Map<String, dynamic>>())
-        e['id'] as String: (e['fee'] as num?)?.toDouble() ?? 0.0,
-    };
-  } else {
-    vendorIds = (cfg['vendor_ids'] as List<dynamic>?)
-            ?.map((e) => e.toString())
-            .toList() ??
-        [];
-    vendorFees = null;
+      if (vendorIds.isNotEmpty) {
+        final rpcParams = <String, dynamic>{
+          'p_vendor_ids': vendorIds,
+          'p_lat': key.lat,
+          'p_lng': key.lng,
+          'p_service_ids': [key.serviceId],
+        };
+        if (vendorFees != null) rpcParams['p_vendor_fees'] = vendorFees;
+
+        final result = await client.rpc(
+          'get_preferred_vendors_by_ids_and_location',
+          params: rpcParams,
+        );
+        if (result != null) {
+          final vendors = (result as List<dynamic>)
+              .map((r) => PreferredVendorModel.fromMap(r as Map<String, dynamic>))
+              .toList();
+          if (vendors.isNotEmpty) return vendors;
+        }
+      }
+    }
   }
 
-  if (vendorIds.isEmpty) return [];
+  // ── 2. Fallback: global is_preferred_vendor flag ──────────────────────────
+  if (key.lat == null || key.lng == null) return [];
+  final fallback = await client.rpc(
+    'get_global_preferred_vendors_by_location',
+    params: {'p_lat': key.lat, 'p_lng': key.lng},
+  );
+  if (fallback == null) return [];
+  return (fallback as List<dynamic>)
+      .map((r) => PreferredVendorModel.fromMap(r as Map<String, dynamic>))
+      .toList();
+});
 
-  final rpcParams = <String, dynamic>{
-    'p_vendor_ids': vendorIds,
-    'p_lat': key.lat,
-    'p_lng': key.lng,
-    // Only show vendors who have an active vendor_services row for this service.
-    'p_service_ids': [key.serviceId],
-  };
-  if (vendorFees != null) rpcParams['p_vendor_fees'] = vendorFees;
+// ── Global preferred vendors (no service filter — used by InstaHelp) ─────────
 
+typedef _LocationKey = ({double lat, double lng});
+
+final globalPreferredVendorsProvider = FutureProvider.autoDispose
+    .family<List<PreferredVendorModel>, _LocationKey>((ref, key) async {
+  final client = Supabase.instance.client;
   final result = await client.rpc(
-    'get_preferred_vendors_by_ids_and_location',
-    params: rpcParams,
+    'get_global_preferred_vendors_by_location',
+    params: {'p_lat': key.lat, 'p_lng': key.lng},
   );
   if (result == null) return [];
   return (result as List<dynamic>)

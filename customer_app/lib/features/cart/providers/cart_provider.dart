@@ -53,13 +53,12 @@ CartItem? findMatchingCartItem(
   return null;
 }
 
-/// Result returned by [CartNotifier.addToCart].
+/// Result returned by [CartNotifier.addToCart] and [CartNotifier.addCustomServiceToCart].
 enum CartAddResult {
   /// Item added to the active cart (or an existing identical item was merged).
   added,
   /// A new cart was automatically started because the service belongs to a
-  /// different root category. The previous cart has been saved and is shown
-  /// in the cart screen's saved-carts strip.
+  /// different root category or vendor. The previous cart has been saved.
   newCartStarted,
 }
 
@@ -261,11 +260,32 @@ class CartNotifier extends StateNotifier<List<CartItem>> {
 
     bool cartSwitched = false;
 
-    // ── Category-aware cart separation ────────────────────────────────────────
+    // ── Auto-switch: VCS cart → DODO ─────────────────────────────────────────
+    // When the active cart holds vendor custom services, save it under its
+    // vendor key and restore any previously saved DODO cart for this category.
+    if (state.any((i) => i.isCustomService)) {
+      final savedNotifier = _ref.read(savedCartsProvider.notifier);
+      final currentSaved = _ref.read(savedCartsProvider);
+      final activeVendorId =
+          state.map((i) => i.vendorId).whereType<String>().firstOrNull;
+      if (activeVendorId != null) {
+        savedNotifier.saveCart('vcs_$activeVendorId', state);
+      }
+      if (rootCategoryId == null || !currentSaved.containsKey(rootCategoryId)) {
+        savedNotifier.trimToOne();
+      }
+      state = (rootCategoryId != null
+              ? savedNotifier.takeCart(rootCategoryId)
+              : null) ??
+          [];
+      cartSwitched = true;
+    }
+
+    // ── DODO category-aware cart separation ───────────────────────────────────
     // When the new item belongs to a different root category than the active
-    // cart, persist the active cart and restore the saved cart for the target
-    // category (or start with an empty cart if none was saved yet).
-    if (rootCategoryId != null && state.isNotEmpty) {
+    // DODO cart, persist the active cart and restore the saved one (or start
+    // fresh). Skipped when the cart was already switched above.
+    if (!cartSwitched && rootCategoryId != null && state.isNotEmpty) {
       final activeRootId = state
           .where((i) => i.rootCategoryId != null)
           .map((i) => i.rootCategoryId!)
@@ -273,12 +293,8 @@ class CartNotifier extends StateNotifier<List<CartItem>> {
 
       if (activeRootId != null && activeRootId != rootCategoryId) {
         final savedNotifier = _ref.read(savedCartsProvider.notifier);
-        // Snapshot before save so we know which categories were already saved.
         final currentSaved = _ref.read(savedCartsProvider);
         savedNotifier.saveCart(activeRootId, state);
-        // If the incoming category was not already saved, this switch would
-        // produce a 3rd cart. Evict the oldest saved cart first so the total
-        // (1 active + 1 saved) never exceeds 2.
         if (!currentSaved.containsKey(rootCategoryId)) {
           savedNotifier.trimToOne();
         }
@@ -378,17 +394,58 @@ class CartNotifier extends StateNotifier<List<CartItem>> {
   }
 
   /// Adds a vendor custom service to the cart.
-  /// Custom service items use [customServiceId] at checkout and are NOT synced
-  /// to the remote cart_items table (which has a catalog_nodes FK on service_id).
   ///
-  /// Pass [unitPrice] and [quantity] to override the service's base price and
-  /// default quantity of 1. If the service is already in the cart the existing
-  /// item is updated in-place (supports variant/qty changes without duplicate items).
-  void addCustomServiceToCart(
+  /// Auto-switching rules (mirrors the DODO category-switching behaviour):
+  /// - If the active cart has DODO items, save it under its rootCategoryId and
+  ///   restore any previously saved cart for this vendor (or start fresh).
+  /// - If the active cart has VCS items from a different vendor, save it under
+  ///   that vendor's key and restore the saved cart for this vendor.
+  /// - Same-vendor services coexist freely regardless of root category.
+  ///
+  /// Returns [CartAddResult.newCartStarted] when the cart was switched, or
+  /// [CartAddResult.added] otherwise.
+  CartAddResult addCustomServiceToCart(
     VendorCustomServiceModel service, {
     double? unitPrice,
     int quantity = 1,
   }) {
+    bool cartSwitched = false;
+
+    // ── Auto-switch: DODO cart → VCS ─────────────────────────────────────────
+    if (state.any((i) => !i.isCustomService)) {
+      final savedNotifier = _ref.read(savedCartsProvider.notifier);
+      final currentSaved = _ref.read(savedCartsProvider);
+      final activeRootId = state
+          .where((i) => i.rootCategoryId != null)
+          .map((i) => i.rootCategoryId!)
+          .firstOrNull;
+      if (activeRootId != null) {
+        savedNotifier.saveCart(activeRootId, state);
+      }
+      final newKey = 'vcs_${service.vendorId}';
+      if (!currentSaved.containsKey(newKey)) {
+        savedNotifier.trimToOne();
+      }
+      state = savedNotifier.takeCart(newKey) ?? [];
+      cartSwitched = true;
+    } else if (state.isNotEmpty) {
+      // ── VCS vendor-aware cart separation ───────────────────────────────────
+      final activeVendorId =
+          state.map((i) => i.vendorId).whereType<String>().firstOrNull;
+      if (activeVendorId != null && activeVendorId != service.vendorId) {
+        final vcsKey = 'vcs_$activeVendorId';
+        final newKey = 'vcs_${service.vendorId}';
+        final savedNotifier = _ref.read(savedCartsProvider.notifier);
+        final currentSaved = _ref.read(savedCartsProvider);
+        savedNotifier.saveCart(vcsKey, state);
+        if (!currentSaved.containsKey(newKey)) {
+          savedNotifier.trimToOne();
+        }
+        state = savedNotifier.takeCart(newKey) ?? [];
+        cartSwitched = true;
+      }
+    }
+
     final price = unitPrice ?? service.activePrice;
     final existing =
         state.where((i) => i.customServiceId == service.id).firstOrNull;
@@ -401,7 +458,7 @@ class CartNotifier extends StateNotifier<List<CartItem>> {
             item,
       ];
       _save();
-      return;
+      return cartSwitched ? CartAddResult.newCartStarted : CartAddResult.added;
     }
     final bookingId = '${service.id}_${DateTime.now().millisecondsSinceEpoch}';
     final newItem = CartItem(
@@ -420,6 +477,7 @@ class CartNotifier extends StateNotifier<List<CartItem>> {
     state = [...state, newItem];
     _save();
     // Remote sync skipped: cart_items.service_id is a FK to catalog_nodes.
+    return cartSwitched ? CartAddResult.newCartStarted : CartAddResult.added;
   }
 
   void updateAddons(
@@ -569,21 +627,40 @@ class CartNotifier extends StateNotifier<List<CartItem>> {
   /// no items are lost. The target cart is removed from [savedCartsProvider]
   /// and becomes the new active cart. The remote cart_items table is updated to
   /// reflect the new active selection.
-  void switchToCart(String rootCategoryId) {
+  /// Returns the save key for the current active cart:
+  /// - `'vcs_${vendorId}'` for a VCS cart
+  /// - `rootCategoryId` for a DODO cart
+  /// - `null` when the cart is empty or the key cannot be determined
+  String? _activeCartKey() {
+    if (state.isEmpty) return null;
+    if (state.every((i) => i.isCustomService)) {
+      final vendorId =
+          state.map((i) => i.vendorId).whereType<String>().firstOrNull;
+      return vendorId != null ? 'vcs_$vendorId' : null;
+    }
+    return state
+        .where((i) => i.rootCategoryId != null)
+        .map((i) => i.rootCategoryId!)
+        .firstOrNull;
+  }
+
+  void switchToCart(String cartKey) {
     final newItems =
-        _ref.read(savedCartsProvider.notifier).takeCart(rootCategoryId);
+        _ref.read(savedCartsProvider.notifier).takeCart(cartKey);
     if (newItems == null || newItems.isEmpty) return;
 
     if (state.isNotEmpty) {
-      final activeRootId = state
-          .where((i) => i.rootCategoryId != null)
-          .map((i) => i.rootCategoryId!)
-          .firstOrNull;
-      if (activeRootId != null) {
-        _ref.read(savedCartsProvider.notifier).saveCart(activeRootId, state);
-        _ref
-            .read(globalCartAddonsProvider.notifier)
-            .swapForCategory(activeRootId, rootCategoryId);
+      final activeKey = _activeCartKey();
+      if (activeKey != null) {
+        _ref.read(savedCartsProvider.notifier).saveCart(activeKey, state);
+        // Swap global addons only for DODO↔DODO switches.
+        final isDodoDodo =
+            !cartKey.startsWith('vcs_') && !activeKey.startsWith('vcs_');
+        if (isDodoDodo) {
+          _ref
+              .read(globalCartAddonsProvider.notifier)
+              .swapForCategory(activeKey, cartKey);
+        }
       }
     }
 

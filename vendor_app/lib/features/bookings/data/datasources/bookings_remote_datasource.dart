@@ -9,7 +9,7 @@ class BookingsRemoteDatasource {
 
   static const _select = '''
     id, booking_number, customer_id, vendor_id, dodo_team_id,
-    assignment_type, service_date,
+    assignment_type, service_date, booking_source,
     status, subtotal, discount_amount, total_amount, service_charge_amount,
     address, notes, created_at, rejection_reason, rejected_at,
     completion_otp, otp_verified_at, payment_method,
@@ -19,6 +19,7 @@ class BookingsRemoteDatasource {
     customers(full_name),
     booking_items(
       service_id,
+      service_name,
       quantity,
       unit_price,
       total_price,

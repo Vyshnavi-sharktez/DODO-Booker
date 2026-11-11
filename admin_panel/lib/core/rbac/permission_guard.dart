@@ -32,6 +32,7 @@ const Map<String, String> routePermissions = {
   '/vendors': 'vendor.read',
   '/dodo-teams': 'dodo_team.read',
   '/bookings': 'booking.read',
+  '/instahelp-orders': 'booking.read',
   '/customers': 'customer.read',
   '/abandoned-carts': 'customer.read',
   '/coupons': 'coupon.read',
@@ -65,6 +66,7 @@ const Map<String, String> routePermissions = {
   '/gps-analytics': 'booking.read',
   '/vendor-service-requests': 'vendor.read',
   '/vendor-catalog': 'vendor.read',
+  '/vendor-instahelp': 'vendor.read',
   '/refunds': 'refund.view',
   '/support': 'support.read',
   '/notifications': 'notification.read',
@@ -73,6 +75,7 @@ const Map<String, String> routePermissions = {
   '/campaigns': 'campaign.read',
   '/call-config': 'call.config',
   '/vendor-root-categories': 'vendor.read',
+  '/instahelp': 'settings.manage',
 };
 
 // Dynamic route patterns: a prefix match maps to its module permission.

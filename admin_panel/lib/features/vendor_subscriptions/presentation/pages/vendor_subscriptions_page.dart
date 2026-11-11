@@ -11,6 +11,8 @@ import '../../domain/models/vendor_subscription.dart';
 import '../widgets/plan_form_dialog.dart';
 import '../widgets/vendor_subscription_dialog.dart';
 import '../../../../core/widgets/pagination_bar.dart';
+import '../../../settings/application/providers/settings_providers.dart';
+import '../../../settings/presentation/widgets/settings_section_card.dart';
 
 // ── Status colours ────────────────────────────────────────────────────────────
 
@@ -282,7 +284,7 @@ class _VendorSubscriptionsPageState
                   onOpenDialog: _openSubDialog,
                 ),
                 const _DashboardTab(),
-                const _SettingsPlaceholderTab(),
+                const _InstaHelpSubscriptionSettingsTab(),
                 _SubscriptionPlansTab(
                   onEditGlobal: _openPlanForm,
                   onOpenCatalog: _openCatalogConfigDialog,
@@ -920,27 +922,92 @@ class _StatCard extends StatelessWidget {
   }
 }
 
-// ── Settings Placeholder Tab ──────────────────────────────────────────────────
+// ── InstaHelp Subscription Settings Tab ──────────────────────────────────────
 
-class _SettingsPlaceholderTab extends StatelessWidget {
-  const _SettingsPlaceholderTab();
+class _InstaHelpSubscriptionSettingsTab extends ConsumerWidget {
+  const _InstaHelpSubscriptionSettingsTab();
+
+  static const _section = SettingSectionDef(
+    id: 'instahelp_subscription',
+    title: 'InstaHelp Subscription Settings',
+    description: 'Configure vendor subscription enforcement for InstaHelp bookings',
+    icon: Icons.flash_on_rounded,
+    color: Color(0xFF2B6CB0),
+    fields: [
+      SettingFieldDef(
+        key: 'instahelp_subscription_enabled',
+        label: 'Enable InstaHelp Subscription Module',
+        hint: 'Master switch — apply subscription rules to InstaHelp bookings',
+        type: SettingFieldType.toggle,
+      ),
+      SettingFieldDef(
+        key: 'instahelp_subscription_require_active',
+        label: 'Require Active Subscription',
+        hint: 'Block vendors without an active subscription from accepting InstaHelp jobs',
+        type: SettingFieldType.toggle,
+      ),
+      SettingFieldDef(
+        key: 'instahelp_subscription_allow_free_vendors',
+        label: 'Allow Free Vendors',
+        hint: 'Vendors without a subscription may still accept InstaHelp jobs (up to allowance)',
+        type: SettingFieldType.toggle,
+      ),
+      SettingFieldDef(
+        key: 'instahelp_subscription_free_order_allowance',
+        label: 'Free Order Allowance',
+        hint: 'InstaHelp jobs a free vendor can complete before being restricted',
+        type: SettingFieldType.integer,
+        unit: 'jobs',
+        min: 0,
+        max: 500,
+      ),
+      SettingFieldDef(
+        key: 'instahelp_subscription_order_counting_method',
+        label: 'Order Counting Method',
+        hint: 'Which bookings count towards the free allowance',
+        type: SettingFieldType.dropdown,
+        options: ['completed', 'accepted', 'all'],
+      ),
+      SettingFieldDef(
+        key: 'instahelp_subscription_auto_restrict',
+        label: 'Auto-Restrict After Allowance',
+        hint: 'Automatically restrict vendor once free order allowance is exhausted',
+        type: SettingFieldType.toggle,
+      ),
+      SettingFieldDef(
+        key: 'instahelp_subscription_grace_period_days',
+        label: 'Subscription Grace Period',
+        hint: 'Days after expiry before InstaHelp restrictions are enforced',
+        type: SettingFieldType.integer,
+        unit: 'days',
+        min: 0,
+        max: 30,
+      ),
+      SettingFieldDef(
+        key: 'instahelp_subscription_expiry_enforcement',
+        label: 'Enforce on Expiry',
+        hint: 'Block vendors with expired subscriptions from InstaHelp assignments',
+        type: SettingFieldType.toggle,
+      ),
+    ],
+  );
 
   @override
-  Widget build(BuildContext context) {
-    return const Center(
-      child: Padding(
-        padding: EdgeInsets.all(32),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.settings_rounded, size: 48, color: AppColors.textSecondary),
-            SizedBox(height: 14),
-            Text(
-              'Subscription settings are managed in\nSettings → Subscription Settings',
-              textAlign: TextAlign.center,
-              style: TextStyle(color: AppColors.textSecondary, fontSize: 14),
-            ),
-          ],
+  Widget build(BuildContext context, WidgetRef ref) {
+    final settingsAsync = ref.watch(settingsNotifierProvider);
+    return settingsAsync.when(
+      loading: () => const Center(child: CircularProgressIndicator()),
+      error: (e, _) => Center(
+        child: Text(
+          'Failed to load settings: $e',
+          style: const TextStyle(color: AppColors.error),
+        ),
+      ),
+      data: (_) => SingleChildScrollView(
+        padding: const EdgeInsets.all(24),
+        child: SettingsSectionCard(
+          key: const ValueKey('instahelp_subscription'),
+          section: _section,
         ),
       ),
     );

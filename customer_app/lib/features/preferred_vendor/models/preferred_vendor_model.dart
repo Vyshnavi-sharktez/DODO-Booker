@@ -3,12 +3,14 @@ class PreferredVendorModel {
   final String businessName;
   final double? rating;
   final double preferredVendorFee;
+  final double instahelpPreferredVendorFee;
 
   const PreferredVendorModel({
     required this.id,
     required this.businessName,
     this.rating,
     required this.preferredVendorFee,
+    this.instahelpPreferredVendorFee = 0.0,
   });
 
   factory PreferredVendorModel.fromMap(Map<String, dynamic> map) {
@@ -18,6 +20,8 @@ class PreferredVendorModel {
       rating: (map['rating'] as num?)?.toDouble(),
       preferredVendorFee:
           (map['preferred_vendor_fee'] as num?)?.toDouble() ?? 0.0,
+      instahelpPreferredVendorFee:
+          (map['instahelp_preferred_vendor_fee'] as num?)?.toDouble() ?? 0.0,
     );
   }
 }

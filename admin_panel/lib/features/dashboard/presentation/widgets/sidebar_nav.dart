@@ -47,7 +47,6 @@ const _kNotifications = _NavItem(
   requiredPermission: 'settings.manage',
 );
 
-
 // ── Grouped navigation structure ─────────────────────────────────────────────
 
 const _kNavGroups = <_NavGroup>[
@@ -101,6 +100,12 @@ const _kNavGroups = <_NavGroup>[
         label: 'Bookings',
         icon: Icons.book_online_rounded,
         route: '/dashboard/bookings',
+        requiredPermission: 'booking.view',
+      ),
+      _NavItem(
+        label: 'InstaHelp Orders',
+        icon: Icons.flash_on_rounded,
+        route: '/dashboard/instahelp-orders',
         requiredPermission: 'booking.view',
       ),
       _NavItem(
@@ -167,6 +172,12 @@ const _kNavGroups = <_NavGroup>[
         label: 'Vendor Custom Services',
         icon: Icons.storefront_rounded,
         route: '/dashboard/vendor-catalog',
+        requiredPermission: 'vendor.view',
+      ),
+      _NavItem(
+        label: 'Vendor InstaHelp',
+        icon: Icons.flash_on_rounded,
+        route: '/dashboard/vendor-instahelp',
         requiredPermission: 'vendor.view',
       ),
       _NavItem(

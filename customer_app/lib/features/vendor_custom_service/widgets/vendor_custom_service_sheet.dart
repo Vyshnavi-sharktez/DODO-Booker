@@ -23,6 +23,17 @@ const _kGold = Color(0xFFF4A81D);
 const _kBorder = Color(0xFFECE7DE);
 const _kBg = Color(0xFFFBF8F3);
 
+void _handleVcsCartResult(BuildContext context, CartAddResult result) {
+  if (result == CartAddResult.newCartStarted) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('New cart started — previous cart saved'),
+        duration: Duration(seconds: 3),
+      ),
+    );
+  }
+}
+
 // ── Entry point (kept for existing call sites) ────────────────────────────────
 
 class VendorCustomServiceSheet {
@@ -599,13 +610,16 @@ class _WebScaffold extends ConsumerWidget {
             MouseRegion(
               cursor: SystemMouseCursors.click,
               child: GestureDetector(
-                onTap: () => ref
-                    .read(cartProvider.notifier)
-                    .addCustomServiceToCart(
-                      service,
-                      unitPrice: hasVariants ? effectiveUnitPrice : null,
-                      quantity: hasVariants ? effectiveQty : 1,
-                    ),
+                onTap: () {
+                  final result = ref
+                      .read(cartProvider.notifier)
+                      .addCustomServiceToCart(
+                        service,
+                        unitPrice: hasVariants ? effectiveUnitPrice : null,
+                        quantity: hasVariants ? effectiveQty : 1,
+                      );
+                  _handleVcsCartResult(context, result);
+                },
                 child: Container(
                   padding: const EdgeInsets.symmetric(
                       horizontal: 24, vertical: 13),
@@ -1428,13 +1442,16 @@ class _MobileBookingBar extends ConsumerWidget {
               child: GestureDetector(
                 onTap: inCart
                     ? () => openCheckout(context, ref)
-                    : () => ref
-                        .read(cartProvider.notifier)
-                        .addCustomServiceToCart(
-                          service,
-                          unitPrice: effectiveUnitPrice,
-                          quantity: effectiveQty,
-                        ),
+                    : () {
+                        final result = ref
+                            .read(cartProvider.notifier)
+                            .addCustomServiceToCart(
+                              service,
+                              unitPrice: effectiveUnitPrice,
+                              quantity: effectiveQty,
+                            );
+                        _handleVcsCartResult(context, result);
+                      },
                 child: Container(
                   padding: const EdgeInsets.symmetric(vertical: 13),
                   decoration: BoxDecoration(

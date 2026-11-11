@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../../../core/theme/app_theme.dart';
+import '../../../../core/widgets/image_upload_field.dart';
 import '../../domain/models/vendor_root_category.dart';
 
 class CategoryFormDialog extends StatefulWidget {
@@ -41,8 +42,8 @@ class CategoryFormDialog extends StatefulWidget {
 class _CategoryFormDialogState extends State<CategoryFormDialog> {
   final _formKey = GlobalKey<FormState>();
   late final TextEditingController _nameCtrl;
-  late final TextEditingController _iconCtrl;
   late final TextEditingController _sortCtrl;
+  String? _iconUrl;
   bool _saving = false;
   String? _error;
 
@@ -53,14 +54,13 @@ class _CategoryFormDialogState extends State<CategoryFormDialog> {
     super.initState();
     final e = widget.existing;
     _nameCtrl = TextEditingController(text: e?.name ?? '');
-    _iconCtrl = TextEditingController(text: e?.iconUrl ?? '');
     _sortCtrl = TextEditingController(text: (e?.sortOrder ?? 0).toString());
+    _iconUrl = e?.iconUrl;
   }
 
   @override
   void dispose() {
     _nameCtrl.dispose();
-    _iconCtrl.dispose();
     _sortCtrl.dispose();
     super.dispose();
   }
@@ -72,11 +72,10 @@ class _CategoryFormDialogState extends State<CategoryFormDialog> {
       _error = null;
     });
     try {
-      final iconUrl = _iconCtrl.text.trim().isEmpty ? null : _iconCtrl.text.trim();
       final sortOrder = int.tryParse(_sortCtrl.text.trim()) ?? 0;
       await widget.onSave(
         name: _nameCtrl.text.trim(),
-        iconUrl: iconUrl,
+        iconUrl: _iconUrl,
         sortOrder: sortOrder,
       );
       if (mounted) Navigator.of(context).pop();
@@ -116,13 +115,12 @@ class _CategoryFormDialogState extends State<CategoryFormDialog> {
                 },
               ),
               const SizedBox(height: 16),
-              TextFormField(
-                controller: _iconCtrl,
-                decoration: const InputDecoration(
-                  labelText: 'Icon URL (optional)',
-                  hintText: 'https://…',
-                  border: OutlineInputBorder(),
-                ),
+              ImageUploadField(
+                label: 'Category Image (optional)',
+                value: _iconUrl,
+                onChanged: (url) => setState(() => _iconUrl = url),
+                bucket: 'catalog-images',
+                pathPrefix: 'vendor-root-categories/',
               ),
               const SizedBox(height: 16),
               TextFormField(

@@ -69,6 +69,73 @@ class _VendorsPageState extends ConsumerState<VendorsPage> {
       ..sort();
   }
 
+  Future<void> _showMarkAllPreferredDialog() async {
+    final feeCtrl = TextEditingController();
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Mark All Vendors as Preferred'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Global Preferred Vendor Fee (₹)',
+              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+            ),
+            const SizedBox(height: 4),
+            const Text(
+              'Applied to vendors with no custom fee. Vendors with their own fee keep it.',
+              style: TextStyle(fontSize: 11, color: Colors.grey),
+            ),
+            const SizedBox(height: 8),
+            TextField(
+              controller: feeCtrl,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              decoration: const InputDecoration(
+                hintText: '0.00',
+                prefixText: '₹ ',
+                isDense: true,
+                border: OutlineInputBorder(),
+                contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Confirm'),
+          ),
+        ],
+      ),
+    );
+    final globalFee = double.tryParse(feeCtrl.text) ?? 0.0;
+    feeCtrl.dispose();
+    if (result != true) return;
+    try {
+      await ref.read(vendorsRepositoryProvider).markAllAsPreferred(
+            globalFee: globalFee,
+          );
+      await ref.read(vendorsNotifierProvider.notifier).refresh();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('All active vendors marked as preferred.')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e')),
+        );
+      }
+    }
+  }
+
   void _openCreate() {
     showDialog(
       context: context,
@@ -285,6 +352,12 @@ class _VendorsPageState extends ConsumerState<VendorsPage> {
                     ),
                     icon: const Icon(Icons.upload_file_rounded, size: 16),
                     label: const Text('Bulk Upload'),
+                  ),
+                  const SizedBox(width: 10),
+                  OutlinedButton.icon(
+                    onPressed: _showMarkAllPreferredDialog,
+                    icon: const Icon(Icons.star_rounded, size: 16),
+                    label: const Text('Mark All Preferred'),
                   ),
                   const SizedBox(width: 10),
                   FilledButton.icon(

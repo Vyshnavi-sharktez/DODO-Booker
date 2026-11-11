@@ -8,6 +8,7 @@ import '../../../service_scheduling/presentation/widgets/service_scheduling_dial
 import '../../../vendor_service_requests/data/vendor_service_requests_repository.dart';
 import '../../../vendor_service_requests/domain/models/vendor_service_request.dart';
 import '../../../vendor_service_requests/presentation/widgets/service_request_detail_dialog.dart';
+import '../widgets/admin_create_service_dialog.dart';
 import '../widgets/custom_service_config_dialog.dart';
 import '../widgets/custom_service_edit_dialog.dart';
 import '../widgets/custom_service_reviews_dialog.dart';
@@ -197,7 +198,16 @@ class _VendorCatalogPageState extends ConsumerState<VendorCatalogPage> {
           Expanded(
             child: selectedVendorId == null
                 ? const _EmptySelection()
-                : _VendorServiceList(vendorId: selectedVendorId),
+                : Builder(builder: (context) {
+                    final vendorName = vendorsAsync.valueOrNull
+                            ?.firstWhere(
+                              (v) => v['id'] == selectedVendorId,
+                              orElse: () => {'business_name': ''},
+                            )['business_name'] as String? ??
+                        '';
+                    return _VendorServiceList(
+                        vendorId: selectedVendorId, vendorName: vendorName);
+                  }),
           ),
         ],
       ),
@@ -208,13 +218,19 @@ class _VendorCatalogPageState extends ConsumerState<VendorCatalogPage> {
 // ── Vendor service list ───────────────────────────────────────────────────────
 
 class _VendorServiceList extends ConsumerWidget {
-  const _VendorServiceList({required this.vendorId});
+  const _VendorServiceList({
+    required this.vendorId,
+    required this.vendorName,
+  });
   final String vendorId;
+  final String vendorName;
+
+  void _onRefresh(WidgetRef ref) =>
+      ref.invalidate(_vendorCatalogProvider(vendorId));
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final asyncServices =
-        ref.watch(_vendorCatalogProvider(vendorId));
+    final asyncServices = ref.watch(_vendorCatalogProvider(vendorId));
 
     return asyncServices.when(
       loading: () => const Center(child: CircularProgressIndicator()),
@@ -233,62 +249,178 @@ class _VendorServiceList extends ConsumerWidget {
                     color: AppColors.textSecondary, fontSize: 12)),
             const SizedBox(height: 16),
             OutlinedButton(
-              onPressed: () =>
-                  ref.invalidate(_vendorCatalogProvider(vendorId)),
+              onPressed: () => _onRefresh(ref),
               child: const Text('Retry'),
             ),
           ],
         ),
       ),
       data: (services) {
-        if (services.isEmpty) {
-          return const Center(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(Icons.storefront_outlined,
-                    size: 56, color: AppColors.textSecondary),
-                SizedBox(height: 16),
-                Text('No active custom services',
-                    style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w500,
-                        color: AppColors.textSecondary)),
-                SizedBox(height: 4),
-                Text(
-                  'This vendor has no approved custom services yet.',
-                  style:
-                      TextStyle(fontSize: 13, color: AppColors.textSecondary),
-                ),
-              ],
-            ),
-          );
+        // Group by category name
+        final Map<String, List<_CatalogEntry>> grouped = {};
+        for (final entry in services) {
+          final key =
+              entry.service.vendorCategoryName ?? 'Uncategorized';
+          grouped.putIfAbsent(key, () => []).add(entry);
         }
+        final categoryNames = grouped.keys.toList()
+          ..sort((a, b) {
+            if (a == 'Uncategorized') return 1;
+            if (b == 'Uncategorized') return -1;
+            return a.compareTo(b);
+          });
 
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const _PanelHeader(title: 'Custom Services'),
-            Expanded(
-              child: RefreshIndicator(
-                onRefresh: () async =>
-                    ref.invalidate(_vendorCatalogProvider(vendorId)),
-                child: ListView.separated(
-                  padding: const EdgeInsets.all(16),
-                  itemCount: services.length,
-                  separatorBuilder: (_, _) => const SizedBox(height: 10),
-                  itemBuilder: (_, i) => _ServiceCard(
-                    service: services[i].service,
-                    pendingEdit: services[i].pendingEdit,
-                    onUpdated: () =>
-                        ref.invalidate(_vendorCatalogProvider(vendorId)),
-                  ),
+            _PanelHeader(
+              title: 'Custom Services',
+              trailing: FilledButton.icon(
+                onPressed: () => AdminCreateServiceDialog.show(
+                  context,
+                  vendorId: vendorId,
+                  vendorName: vendorName,
+                  onCreated: () => _onRefresh(ref),
+                ),
+                icon: const Icon(Icons.add, size: 16),
+                label: const Text('Create Service'),
+                style: FilledButton.styleFrom(
+                  backgroundColor: AppColors.primary,
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 14, vertical: 8),
+                  visualDensity: VisualDensity.compact,
+                  textStyle: const TextStyle(fontSize: 13),
                 ),
               ),
             ),
+            if (services.isEmpty)
+              Expanded(
+                child: Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.storefront_outlined,
+                          size: 56, color: AppColors.textSecondary),
+                      const SizedBox(height: 16),
+                      const Text('No active custom services',
+                          style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w500,
+                              color: AppColors.textSecondary)),
+                      const SizedBox(height: 4),
+                      const Text(
+                        'This vendor has no approved custom services yet.',
+                        style: TextStyle(
+                            fontSize: 13, color: AppColors.textSecondary),
+                      ),
+                      const SizedBox(height: 20),
+                      FilledButton.icon(
+                        onPressed: () => AdminCreateServiceDialog.show(
+                          context,
+                          vendorId: vendorId,
+                          vendorName: vendorName,
+                          onCreated: () => _onRefresh(ref),
+                        ),
+                        icon: const Icon(Icons.add, size: 16),
+                        label: const Text('Create First Service'),
+                      ),
+                    ],
+                  ),
+                ),
+              )
+            else
+              Expanded(
+                child: RefreshIndicator(
+                  onRefresh: () async => _onRefresh(ref),
+                  child: ListView.builder(
+                    padding: const EdgeInsets.all(16),
+                    itemCount: categoryNames.length,
+                    itemBuilder: (_, catIdx) {
+                      final catName = categoryNames[catIdx];
+                      final entries = grouped[catName]!;
+                      return _CategoryGroup(
+                        categoryName: catName,
+                        entries: entries,
+                        onUpdated: () => _onRefresh(ref),
+                      );
+                    },
+                  ),
+                ),
+              ),
           ],
         );
       },
+    );
+  }
+}
+
+// ── Category group ────────────────────────────────────────────────────────────
+
+class _CategoryGroup extends StatelessWidget {
+  const _CategoryGroup({
+    required this.categoryName,
+    required this.entries,
+    required this.onUpdated,
+  });
+  final String categoryName;
+  final List<_CatalogEntry> entries;
+  final VoidCallback onUpdated;
+
+  @override
+  Widget build(BuildContext context) {
+    return Theme(
+      data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+      child: ExpansionTile(
+        initiallyExpanded: true,
+        tilePadding:
+            const EdgeInsets.symmetric(horizontal: 4, vertical: 0),
+        childrenPadding: EdgeInsets.zero,
+        title: Row(
+          children: [
+            Text(
+              categoryName,
+              style: const TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+                color: AppColors.textPrimary,
+              ),
+            ),
+            const SizedBox(width: 8),
+            Container(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+              decoration: BoxDecoration(
+                color: AppColors.border,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Text(
+                '${entries.length}',
+                style: const TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.textSecondary),
+              ),
+            ),
+          ],
+        ),
+        children: [
+          ...List.generate(entries.length, (i) {
+            final spacing = i < entries.length - 1
+                ? const SizedBox(height: 10)
+                : const SizedBox(height: 16);
+            return Column(
+              children: [
+                _ServiceCard(
+                  service: entries[i].service,
+                  pendingEdit: entries[i].pendingEdit,
+                  onUpdated: onUpdated,
+                ),
+                spacing,
+              ],
+            );
+          }),
+        ],
+      ),
     );
   }
 }
@@ -922,24 +1054,33 @@ class _DeletionPendingChip extends StatelessWidget {
 // ── Shared helpers ────────────────────────────────────────────────────────────
 
 class _PanelHeader extends StatelessWidget {
-  const _PanelHeader({required this.title});
+  const _PanelHeader({required this.title, this.trailing});
   final String title;
+  final Widget? trailing;
 
   @override
   Widget build(BuildContext context) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      padding: const EdgeInsets.fromLTRB(16, 10, 12, 10),
       decoration: const BoxDecoration(
         border: Border(bottom: BorderSide(color: AppColors.border)),
       ),
-      child: Text(
-        title,
-        style: const TextStyle(
-          fontSize: 14,
-          fontWeight: FontWeight.w700,
-          color: AppColors.textPrimary,
-        ),
+      child: Row(
+        children: [
+          Text(
+            title,
+            style: const TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w700,
+              color: AppColors.textPrimary,
+            ),
+          ),
+          if (trailing != null) ...[
+            const Spacer(),
+            trailing!,
+          ],
+        ],
       ),
     );
   }

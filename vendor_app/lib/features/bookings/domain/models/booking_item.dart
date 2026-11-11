@@ -15,9 +15,12 @@ class BookingItem {
 
   factory BookingItem.fromMap(Map<String, dynamic> map) {
     final service = (map['catalog_nodes'] ?? map['services']) as Map<String, dynamic>?;
+    final name = (service?['name'] as String?)?.isNotEmpty == true
+        ? service!['name'] as String
+        : (map['service_name'] as String?) ?? '';
     return BookingItem(
       serviceId: (map['service_id'] as String?) ?? '',
-      serviceName: (service?['name'] as String?) ?? '',
+      serviceName: name,
       quantity: (map['quantity'] as int?) ?? 1,
       unitPrice: (map['unit_price'] as num?)?.toDouble() ?? 0.0,
       totalPrice: (map['total_price'] as num?)?.toDouble() ?? 0.0,

@@ -42,4 +42,23 @@ class VendorRootCategoriesNotifier
     await _repo.delete(id);
     ref.invalidateSelf();
   }
+
+  Future<void> reorderCategories(List<VendorRootCategory> orderedList) async {
+    final updates = <Future<void>>[];
+    for (var i = 0; i < orderedList.length; i++) {
+      final cat = orderedList[i];
+      if (cat.sortOrder != i) {
+        updates.add(_repo.update(
+          id: cat.id,
+          name: cat.name,
+          iconUrl: cat.iconUrl,
+          sortOrder: i,
+        ));
+      }
+    }
+    if (updates.isNotEmpty) {
+      await Future.wait(updates);
+      ref.invalidateSelf();
+    }
+  }
 }

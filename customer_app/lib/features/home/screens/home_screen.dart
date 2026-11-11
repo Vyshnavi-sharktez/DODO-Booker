@@ -390,3 +390,4 @@ class _MobileSearchPill extends StatelessWidget {
     );
   }
 }
+

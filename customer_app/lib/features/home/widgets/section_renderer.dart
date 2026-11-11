@@ -5,6 +5,7 @@ import '../../../features/catalog/models/catalog_node_model.dart';
 import '../../../features/catalog/utils/catalog_launcher.dart';
 import '../../../routes/app_router.dart';
 import '../../booking/services/coupon_providers.dart';
+import '../../instahelp/widgets/instahelp_home_tile.dart';
 import '../models/landing_page_section.dart';
 import '../services/home_providers.dart';
 import 'content_grid_section.dart';
@@ -63,6 +64,10 @@ class SectionRenderer extends StatelessWidget {
       'faq'            => FaqSection(config: section.config),
       'cta'            => CtaSection(config: section.config),
       'vendor_catalog' => VendorCatalogSection(title: section.config['title'] as String?),
+      'instahelp'      => const Padding(
+                            padding: EdgeInsets.symmetric(vertical: 8),
+                            child: InstaHelpHomeTile(),
+                          ),
       _                => const SizedBox.shrink(),
     };
   }

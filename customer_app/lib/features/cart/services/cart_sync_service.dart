@@ -107,7 +107,7 @@ class CartSyncService {
       if (customerId == null) return [];
       final rows = await _client
           .from('cart_items')
-          .select('service_id, parent_node_id, service_name, image_url, unit_price, quantity')
+          .select('service_id, parent_node_id, service_name, unit_price, quantity')
           .eq('customer_id', customerId);
 
       final items = rows as List<dynamic>;
@@ -135,7 +135,6 @@ class CartSyncService {
               serviceId: sid,
               parentNodeId: pnid,
               serviceName: r['service_name'] as String,
-              imageUrl: r['image_url'] as String?,
               unitPrice: (r['unit_price'] as num).toDouble(),
               quantity: r['quantity'] as int,
               minimumOrderAmount: minAmtMap[sid],

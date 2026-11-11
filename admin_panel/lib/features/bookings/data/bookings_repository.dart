@@ -26,7 +26,8 @@ const _reviewSelect = '''
     total_price,
     catalog_nodes!booking_items_service_id_catalog_fkey(id, name)
   ),
-  amc_contracts!amc_contract_id(visits_completed, num_visits, total_visits, created_at, service_interval, status, cancellation_reason, cancellation_remarks, cancellation_requested_at, quantity)
+  amc_contracts!amc_contract_id(visits_completed, num_visits, total_visits, created_at, service_interval, status, cancellation_reason, cancellation_remarks, cancellation_requested_at, quantity),
+  instahelp_bookings!booking_id(surge_fee_amount, service_charge_amount, gst_percent, gst_amount)
 ''';
 
 // Valid assignment_type values that match the DB schema.

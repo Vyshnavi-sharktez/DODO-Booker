@@ -36,6 +36,7 @@ class VendorScaffold extends ConsumerWidget {
     if (location == RoutePaths.profile)          return 'My Profile';
     if (location == RoutePaths.documents)        return 'My Documents';
     if (location == RoutePaths.settings)         return 'Settings';
+    if (location == RoutePaths.instahelp)        return 'InstaHelp';
     if (location == RoutePaths.subscription)     return 'My Subscription';
     if (location == RoutePaths.browsePlans)      return 'Browse Plans';
     if (location == RoutePaths.planConfirmation) return 'Confirm Plan';
@@ -65,6 +66,12 @@ class VendorScaffold extends ConsumerWidget {
       label: 'Services',
       icon: Icons.home_repair_service_outlined,
       selectedIcon: Icons.home_repair_service_rounded,
+    ),
+    _NavTab(
+      path: RoutePaths.instahelp,
+      label: 'InstaHelp',
+      icon: Icons.flash_on_outlined,
+      selectedIcon: Icons.flash_on_rounded,
     ),
     _NavTab(
       path: RoutePaths.profile,
@@ -123,7 +130,8 @@ class VendorScaffold extends ConsumerWidget {
     final isTabPage = location == RoutePaths.dashboard ||
         location == RoutePaths.bookings ||
         location == RoutePaths.services ||
-        location == RoutePaths.settings;
+        location == RoutePaths.settings ||
+        location == RoutePaths.instahelp;
 
     void openPanel() =>
         ref.read(vendorProfilePanelProvider.notifier).state = true;

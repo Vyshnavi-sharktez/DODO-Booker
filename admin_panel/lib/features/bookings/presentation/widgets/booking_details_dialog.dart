@@ -1008,6 +1008,13 @@ class _ServicesCard extends StatelessWidget {
                     value: _currency.format(booking.taxAmount),
                   ),
                 ],
+                if (booking.surgeAmount > 0) ...[
+                  const SizedBox(height: 6),
+                  _PriceRow(
+                    label: 'Surge Fee',
+                    value: _currency.format(booking.surgeAmount),
+                  ),
+                ],
                 if (booking.serviceChargeAmount > 0) ...[
                   const SizedBox(height: 6),
                   _PriceRow(
@@ -3688,9 +3695,10 @@ String _truncateId(String id) {
 }
 
 String _taxLabel(Booking booking) {
-  final base = booking.subtotal - booking.discountAmount;
-  if (booking.taxAmount <= 0 || base <= 0) return 'Tax (GST 10%)';
-  final rate = booking.taxAmount / base * 100;
+  final taxableBase = booking.subtotal - booking.discountAmount +
+      booking.surgeAmount + booking.serviceChargeAmount;
+  if (booking.taxAmount <= 0 || taxableBase <= 0) return 'Tax (GST)';
+  final rate = booking.taxAmount / taxableBase * 100;
   final rounded = (rate * 10).round() / 10;
   final label = rounded == rounded.truncate().toDouble()
       ? '${rounded.toInt()}%'

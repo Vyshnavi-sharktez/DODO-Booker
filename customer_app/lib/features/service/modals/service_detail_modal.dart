@@ -382,7 +382,7 @@ class _ModalBookingBar extends ConsumerWidget {
       if (!context.mounted || !authed) return;
     }
 
-    ref.read(cartProvider.notifier).addToCart(
+    final result = ref.read(cartProvider.notifier).addToCart(
           CatalogNodeModel.fromServiceModel(service),
           priceAdjustment: amcPlan != null ? 0.0 : priceAdjustment + addonsTotal,
           amcPlan: amcPlan,

@@ -325,6 +325,7 @@ class ServicesRemoteDatasource {
     required String parentRequestId,
     required String serviceName,
     required double newPrice,
+    double? currentPrice,
     String? newServiceName,
     String? imageUrl,
   }) async {
@@ -334,7 +335,8 @@ class ServicesRemoteDatasource {
       'request_type': 'price_change',
       'parent_request_id': parentRequestId,
       'new_price': newPrice,
-      if (newServiceName != null) 'new_service_name': newServiceName,
+      'price': ?currentPrice,
+      'new_service_name': ?newServiceName,
       if (imageUrl != null && imageUrl.isNotEmpty) 'image_url': imageUrl,
     });
   }

@@ -66,6 +66,27 @@ class _VendorRootCategoriesPageState
     );
   }
 
+  void _moveUp(VendorRootCategory cat, List<VendorRootCategory> all) {
+    final idx = all.indexOf(cat);
+    if (idx <= 0) return;
+    final reordered = [...all]..removeAt(idx)..insert(idx - 1, cat);
+    ref.read(vendorRootCategoriesProvider.notifier).reorderCategories(reordered);
+  }
+
+  void _moveDown(VendorRootCategory cat, List<VendorRootCategory> all) {
+    final idx = all.indexOf(cat);
+    if (idx >= all.length - 1) return;
+    final reordered = [...all]..removeAt(idx)..insert(idx + 1, cat);
+    ref.read(vendorRootCategoriesProvider.notifier).reorderCategories(reordered);
+  }
+
+  void _moveTo(VendorRootCategory cat, List<VendorRootCategory> all, int targetIndex) {
+    final idx = all.indexOf(cat);
+    if (idx == targetIndex) return;
+    final reordered = [...all]..removeAt(idx)..insert(targetIndex, cat);
+    ref.read(vendorRootCategoriesProvider.notifier).reorderCategories(reordered);
+  }
+
   @override
   Widget build(BuildContext context) {
     final async = ref.watch(vendorRootCategoriesProvider);
@@ -94,8 +115,13 @@ class _VendorRootCategoriesPageState
                 if (rows.isEmpty) return const _NoResults();
                 return _CategoryTable(
                   rows: rows,
+                  all: all,
+                  showPositionControls: _query.isEmpty,
                   onEdit: _openEdit,
                   onDelete: (cat) => _openDelete(cat, all),
+                  onMoveUp: (cat) => _moveUp(cat, all),
+                  onMoveDown: (cat) => _moveDown(cat, all),
+                  onMoveTo: (cat, target) => _moveTo(cat, all, target),
                 );
               },
             ),
@@ -183,12 +209,22 @@ class _Header extends StatelessWidget {
 class _CategoryTable extends StatelessWidget {
   const _CategoryTable({
     required this.rows,
+    required this.all,
+    required this.showPositionControls,
     required this.onEdit,
     required this.onDelete,
+    required this.onMoveUp,
+    required this.onMoveDown,
+    required this.onMoveTo,
   });
   final List<VendorRootCategory> rows;
+  final List<VendorRootCategory> all;
+  final bool showPositionControls;
   final ValueChanged<VendorRootCategory> onEdit;
   final ValueChanged<VendorRootCategory> onDelete;
+  final ValueChanged<VendorRootCategory> onMoveUp;
+  final ValueChanged<VendorRootCategory> onMoveDown;
+  final void Function(VendorRootCategory cat, int targetIndex) onMoveTo;
 
   @override
   Widget build(BuildContext context) {
@@ -216,8 +252,8 @@ class _CategoryTable extends StatelessWidget {
                 child: _ColHeader('Vendors', align: TextAlign.center),
               ),
               SizedBox(
-                width: 90,
-                child: _ColHeader('Sort Order', align: TextAlign.center),
+                width: 110,
+                child: _ColHeader('Position', align: TextAlign.center),
               ),
               SizedBox(width: 80, child: _ColHeader('Actions', align: TextAlign.center)),
             ],
@@ -240,8 +276,14 @@ class _CategoryTable extends StatelessWidget {
                 if (i > 0) const Divider(height: 1, color: AppColors.border),
                 _CategoryRow(
                   category: rows[i],
+                  position: all.indexOf(rows[i]),
+                  siblingCount: all.length,
+                  showPositionControls: showPositionControls,
                   onEdit: onEdit,
                   onDelete: onDelete,
+                  onMoveUp: onMoveUp,
+                  onMoveDown: onMoveDown,
+                  onMoveTo: onMoveTo,
                 ),
               ],
             ],
@@ -283,12 +325,24 @@ class _ColHeader extends StatelessWidget {
 class _CategoryRow extends StatefulWidget {
   const _CategoryRow({
     required this.category,
+    required this.position,
+    required this.siblingCount,
+    required this.showPositionControls,
     required this.onEdit,
     required this.onDelete,
+    required this.onMoveUp,
+    required this.onMoveDown,
+    required this.onMoveTo,
   });
   final VendorRootCategory category;
+  final int position;
+  final int siblingCount;
+  final bool showPositionControls;
   final ValueChanged<VendorRootCategory> onEdit;
   final ValueChanged<VendorRootCategory> onDelete;
+  final ValueChanged<VendorRootCategory> onMoveUp;
+  final ValueChanged<VendorRootCategory> onMoveDown;
+  final void Function(VendorRootCategory cat, int targetIndex) onMoveTo;
 
   @override
   State<_CategoryRow> createState() => _CategoryRowState();
@@ -312,7 +366,7 @@ class _CategoryRowState extends State<_CategoryRow> {
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         child: Row(
           children: [
-            // Name + icon
+            // Name + thumbnail
             Expanded(
               flex: 4,
               child: Row(
@@ -320,31 +374,14 @@ class _CategoryRowState extends State<_CategoryRow> {
                   _CategoryAvatar(category: cat),
                   const SizedBox(width: 12),
                   Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          cat.name,
-                          style: const TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600,
-                            color: AppColors.textPrimary,
-                          ),
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        if (cat.iconUrl != null) ...[
-                          const SizedBox(height: 2),
-                          Text(
-                            cat.iconUrl!,
-                            style: const TextStyle(
-                                fontSize: 10,
-                                color: AppColors.textSecondary),
-                            overflow: TextOverflow.ellipsis,
-                            maxLines: 1,
-                          ),
-                        ],
-                      ],
+                    child: Text(
+                      cat.name,
+                      style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.textPrimary,
+                      ),
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
                 ],
@@ -354,14 +391,8 @@ class _CategoryRowState extends State<_CategoryRow> {
             Expanded(
               flex: 2,
               child: cat.isAdminCreated
-                  ? _Badge(
-                      label: 'Admin',
-                      color: AppColors.accent,
-                    )
-                  : _Badge(
-                      label: 'Vendor',
-                      color: AppColors.textSecondary,
-                    ),
+                  ? _Badge(label: 'Admin', color: AppColors.accent)
+                  : _Badge(label: 'Vendor', color: AppColors.textSecondary),
             ),
             // Service count
             SizedBox(
@@ -397,15 +428,40 @@ class _CategoryRowState extends State<_CategoryRow> {
                 ),
               ),
             ),
-            // Sort order
+            // Position controls
             SizedBox(
-              width: 90,
-              child: Text(
-                cat.sortOrder.toString(),
-                textAlign: TextAlign.center,
-                style: const TextStyle(
-                    fontSize: 13, color: AppColors.textSecondary),
-              ),
+              width: 110,
+              child: widget.showPositionControls && widget.siblingCount > 1
+                  ? Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        _ArrowBtn(
+                          icon: Icons.keyboard_arrow_up_rounded,
+                          tooltip: 'Move up',
+                          enabled: widget.position > 0,
+                          onTap: () => widget.onMoveUp(cat),
+                        ),
+                        const SizedBox(width: 2),
+                        _PositionBadge(
+                          position: widget.position,
+                          siblingCount: widget.siblingCount,
+                          onSelect: (target) => widget.onMoveTo(cat, target),
+                        ),
+                        const SizedBox(width: 2),
+                        _ArrowBtn(
+                          icon: Icons.keyboard_arrow_down_rounded,
+                          tooltip: 'Move down',
+                          enabled: widget.position < widget.siblingCount - 1,
+                          onTap: () => widget.onMoveDown(cat),
+                        ),
+                      ],
+                    )
+                  : Text(
+                      (widget.position + 1).toString(),
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                          fontSize: 13, color: AppColors.textSecondary),
+                    ),
             ),
             // Actions
             SizedBox(
@@ -434,6 +490,115 @@ class _CategoryRowState extends State<_CategoryRow> {
     );
   }
 }
+
+// ── Position controls ─────────────────────────────────────────────────────────
+
+class _ArrowBtn extends StatelessWidget {
+  const _ArrowBtn({
+    required this.icon,
+    required this.tooltip,
+    required this.enabled,
+    required this.onTap,
+  });
+  final IconData icon;
+  final String tooltip;
+  final bool enabled;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: tooltip,
+      child: InkWell(
+        onTap: enabled ? onTap : null,
+        borderRadius: BorderRadius.circular(4),
+        child: Padding(
+          padding: const EdgeInsets.all(2),
+          child: Icon(
+            icon,
+            size: 18,
+            color: enabled ? AppColors.textSecondary : AppColors.border,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _PositionBadge extends StatelessWidget {
+  const _PositionBadge({
+    required this.position,
+    required this.siblingCount,
+    required this.onSelect,
+  });
+  final int position;
+  final int siblingCount;
+  final void Function(int targetIndex) onSelect;
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: 'Jump to position',
+      child: PopupMenuButton<int>(
+        tooltip: '',
+        onSelected: (target) async {
+          final confirmed = await showDialog<bool>(
+            context: context,
+            builder: (ctx) => AlertDialog(
+              title: const Text('Move to Position'),
+              content: Text(
+                  'Move this category to position ${target + 1}?'),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(ctx).pop(false),
+                  child: const Text('Cancel'),
+                ),
+                FilledButton(
+                  onPressed: () => Navigator.of(ctx).pop(true),
+                  child: const Text('Move'),
+                ),
+              ],
+            ),
+          );
+          if (confirmed == true) onSelect(target);
+        },
+        offset: const Offset(0, 28),
+        itemBuilder: (_) => [
+          for (int p = 0; p < siblingCount; p++)
+            if (p != position)
+              PopupMenuItem<int>(
+                value: p,
+                height: 36,
+                child: Text(
+                  'Position ${p + 1}',
+                  style: const TextStyle(fontSize: 13),
+                ),
+              ),
+        ],
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+          decoration: BoxDecoration(
+            color: AppColors.primary.withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(6),
+            border: Border.all(
+              color: AppColors.primary.withValues(alpha: 0.25),
+            ),
+          ),
+          child: Text(
+            '${position + 1}',
+            style: const TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+              color: AppColors.primary,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ── Avatar ────────────────────────────────────────────────────────────────────
 
 class _CategoryAvatar extends StatelessWidget {
   const _CategoryAvatar({required this.category});

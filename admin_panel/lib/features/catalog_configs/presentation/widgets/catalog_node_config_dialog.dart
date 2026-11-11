@@ -171,7 +171,9 @@ class _CatalogNodeConfigDialogState extends ConsumerState<CatalogNodeConfigDialo
   Set<String> _pvSelectedIds = {};
   Map<String, double> _pvVendorFees = {};
   final Map<String, TextEditingController> _pvFeeControllers = {};
-  List<Map<String, dynamic>> _pvVendors = []; // loaded from DB
+  List<Map<String, dynamic>> _pvVendors = [];    // is_preferred_vendor = true
+  List<Map<String, dynamic>> _pvAllVendors = []; // all active vendors
+  bool _pvShowAll = false;
 
   // Refund Period override
   final _refundPeriodCtrl = TextEditingController();
@@ -311,14 +313,20 @@ class _CatalogNodeConfigDialogState extends ConsumerState<CatalogNodeConfigDialo
 
       // Load vendors available for the preferred_vendors picker (one-time)
       if (_pvVendors.isEmpty) {
-        final vendorRows = await Supabase.instance.client
+        final preferredRows = await Supabase.instance.client
             .from('vendors')
             .select('id, business_name, preferred_vendor_fee, rating')
             .eq('is_preferred_vendor', true)
             .eq('is_active', true)
             .order('business_name');
-        _pvVendors = (vendorRows as List<dynamic>)
-            .cast<Map<String, dynamic>>();
+        _pvVendors = (preferredRows as List<dynamic>).cast<Map<String, dynamic>>();
+
+        final allRows = await Supabase.instance.client
+            .from('vendors')
+            .select('id, business_name, preferred_vendor_fee, rating')
+            .eq('is_active', true)
+            .order('business_name');
+        _pvAllVendors = (allRows as List<dynamic>).cast<Map<String, dynamic>>();
       }
 
       // Fetch global master-switch states for modules that have them
@@ -2492,6 +2500,7 @@ class _CatalogNodeConfigDialogState extends ConsumerState<CatalogNodeConfigDialo
   }
 
   Widget _buildPreferredVendorsFields() {
+    final visibleVendors = _pvShowAll ? _pvAllVendors : _pvVendors;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -2509,10 +2518,23 @@ class _CatalogNodeConfigDialogState extends ConsumerState<CatalogNodeConfigDialo
           onChanged: (v) => setState(() => _pvEnabled = v),
         ),
         if (_pvEnabled) ...[
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            dense: true,
+            title: const Text('Show All Vendors',
+                style: TextStyle(fontSize: 13)),
+            subtitle: const Text(
+              'List all active vendors, not just those marked as Preferred Vendor',
+              style: TextStyle(fontSize: 11),
+            ),
+            value: _pvShowAll,
+            activeColor: AppColors.primary,
+            onChanged: (v) => setState(() => _pvShowAll = v),
+          ),
           const SizedBox(height: 12),
           _label('Available Vendors'),
           const SizedBox(height: 8),
-          if (_pvVendors.isEmpty)
+          if (visibleVendors.isEmpty)
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
@@ -2520,10 +2542,12 @@ class _CatalogNodeConfigDialogState extends ConsumerState<CatalogNodeConfigDialo
                 borderRadius: BorderRadius.circular(8),
                 border: Border.all(color: AppColors.border),
               ),
-              child: const Text(
-                'No preferred vendors found. Enable "Preferred Vendor" on '
-                'vendor profiles first.',
-                style: TextStyle(
+              child: Text(
+                _pvShowAll
+                    ? 'No active vendors found.'
+                    : 'No preferred vendors found. Enable "Preferred Vendor" on '
+                        'vendor profiles first, or turn on "Show All Vendors" above.',
+                style: const TextStyle(
                     fontSize: 12, color: AppColors.textSecondary),
               ),
             )
@@ -2531,7 +2555,7 @@ class _CatalogNodeConfigDialogState extends ConsumerState<CatalogNodeConfigDialo
             Wrap(
               spacing: 8,
               runSpacing: 8,
-              children: _pvVendors.map((v) {
+              children: visibleVendors.map((v) {
                 final id = v['id'] as String;
                 final name = v['business_name'] as String? ?? '';
                 final isSelected = _pvSelectedIds.contains(id);
@@ -2564,7 +2588,7 @@ class _CatalogNodeConfigDialogState extends ConsumerState<CatalogNodeConfigDialo
             const SizedBox(height: 16),
             _label('Additional Fee per Vendor (₹)'),
             const SizedBox(height: 8),
-            ..._pvVendors
+            ...visibleVendors
                 .where((v) => _pvSelectedIds.contains(v['id'] as String))
                 .map((v) {
               final id = v['id'] as String;

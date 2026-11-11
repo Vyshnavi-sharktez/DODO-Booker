@@ -8,7 +8,9 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/widgets/app_header.dart';
 import '../../cart/providers/cart_provider.dart';
+import '../../cart/widgets/cart_side_panel.dart';
 import '../../category/services/category_providers.dart';
+import '../../instahelp/widgets/instahelp_sheet.dart';
 import '../../profile/utils/profile_launcher.dart';
 import '../../vendor_custom_service/models/vendor_custom_service_model.dart';
 import '../../vendor_custom_service/widgets/vendor_custom_service_sheet.dart';
@@ -23,6 +25,8 @@ class VendorDetailScreen extends ConsumerStatefulWidget {
     this.vendorName,
     this.categoryName,
     this.initialVendor,
+    this.showInstaHelp = false,
+    this.initialInstaHelpTab = 0,
   });
 
   final String vendorId;
@@ -30,6 +34,8 @@ class VendorDetailScreen extends ConsumerStatefulWidget {
   final String? vendorName;
   final String? categoryName;
   final VcsVendorModel? initialVendor;
+  final bool showInstaHelp;
+  final int initialInstaHelpTab;
 
   @override
   ConsumerState<VendorDetailScreen> createState() => _VendorDetailScreenState();
@@ -38,6 +44,15 @@ class VendorDetailScreen extends ConsumerStatefulWidget {
 class _VendorDetailScreenState extends ConsumerState<VendorDetailScreen> {
   final Set<String> _selectedCategories = {};
   String? _selectedServiceChip; // null = "All"
+  int? _selectedInstaHelpTab;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.showInstaHelp) {
+      _selectedInstaHelpTab = widget.initialInstaHelpTab;
+    }
+  }
 
   void _clearAll() => setState(() {
         _selectedCategories.clear();
@@ -156,6 +171,8 @@ class _VendorDetailScreenState extends ConsumerState<VendorDetailScreen> {
     final vendorServiceNames = _extractVendorServiceNames(allServices);
     final isWide = MediaQuery.sizeOf(context).width >= 768;
     final horizontalPad = isWide ? 20.0 : 16.0;
+    final cartItems = ref.watch(cartProvider);
+    final hasCart = isWide && cartItems.isNotEmpty;
 
     final pageBody = Column(
       children: [
@@ -185,9 +202,20 @@ class _VendorDetailScreenState extends ConsumerState<VendorDetailScreen> {
                         : _selectedCategories.add(c);
                   }),
                   onClearAll: _clearAll,
+                  showInstaHelp: widget.showInstaHelp,
+                  initialInstaHelpTab: _selectedInstaHelpTab ?? widget.initialInstaHelpTab,
+                  onInstaHelpModeTap: (tab) => setState(() => _selectedInstaHelpTab = tab),
                 ),
               Expanded(
-                child: servicesAsync.when(
+                child: (widget.showInstaHelp && _selectedInstaHelpTab != null)
+                    ? InstaHelpContent(
+                        key: ValueKey(_selectedInstaHelpTab),
+                        initialTab: _selectedInstaHelpTab!,
+                        vendorId: widget.vendorId,
+                        assignedVendorId: widget.vendorId,
+                        onClose: () => setState(() => _selectedInstaHelpTab = null),
+                      )
+                    : servicesAsync.when(
                   loading: () =>
                       const Center(child: CircularProgressIndicator()),
                   error: (e, _) => Center(
@@ -406,11 +434,22 @@ class _VendorDetailScreenState extends ConsumerState<VendorDetailScreen> {
                               ),
                             ),
                           ),
+
+                        SliverToBoxAdapter(
+                          child: SizedBox(height: isWide ? 40 : 88),
+                        ),
                       ],
                     );
                   },
                 ),
               ),
+              if (hasCart) ...[
+                Container(width: 1, color: AppColors.border),
+                SizedBox(
+                  width: kCartSidePanelWidth,
+                  child: const CartSidePanel(),
+                ),
+              ],
             ],
           ),
         ),
@@ -421,7 +460,12 @@ class _VendorDetailScreenState extends ConsumerState<VendorDetailScreen> {
       backgroundColor: AppColors.background,
       appBar: isWide
           ? AppHeader(
-              onLogoTap: () => context.go('/'),
+              onLogoTap: () {
+                if (widget.showInstaHelp) {
+                  Navigator.of(context).popUntil((r) => r.isFirst);
+                }
+                context.go('/');
+              },
               onProfileTap: () => openProfile(context),
             )
           : null,
@@ -484,6 +528,12 @@ class _VendorDetailScreenState extends ConsumerState<VendorDetailScreen> {
                         _clearAll();
                       },
                       isModal: true,
+                      showInstaHelp: widget.showInstaHelp,
+                      initialInstaHelpTab: _selectedInstaHelpTab ?? widget.initialInstaHelpTab,
+                      onInstaHelpModeTap: (tab) {
+                        Navigator.of(sheetCtx).pop();
+                        setState(() => _selectedInstaHelpTab = tab);
+                      },
                     ),
                   ),
                   Container(
@@ -705,6 +755,9 @@ class _VendorDetailFilterSidebar extends StatelessWidget {
     required this.onToggleCategory,
     required this.onClearAll,
     this.isModal = false,
+    this.showInstaHelp = false,
+    this.onInstaHelpModeTap,
+    this.initialInstaHelpTab = 0,
   });
 
   final List<String> vendorCategories;
@@ -712,6 +765,9 @@ class _VendorDetailFilterSidebar extends StatelessWidget {
   final void Function(String) onToggleCategory;
   final VoidCallback onClearAll;
   final bool isModal;
+  final bool showInstaHelp;
+  final void Function(int)? onInstaHelpModeTap;
+  final int initialInstaHelpTab;
 
   @override
   Widget build(BuildContext context) {
@@ -768,6 +824,51 @@ class _VendorDetailFilterSidebar extends StatelessWidget {
               checked: selectedCategories.contains(c),
               onTap: () => onToggleCategory(c),
             )),
+        if (showInstaHelp && onInstaHelpModeTap != null) ...[
+          const SizedBox(height: 16),
+          const Divider(color: AppColors.border, height: 1),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              Container(
+                width: 24,
+                height: 24,
+                decoration: BoxDecoration(
+                  color: AppColors.primary,
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: const Icon(Icons.flash_on_rounded,
+                    color: AppColors.gold, size: 14),
+              ),
+              const SizedBox(width: 8),
+              const _SectionTitle('InstaHelp'),
+            ],
+          ),
+          const SizedBox(height: 10),
+          _InstaHelpModeRow(
+            tabIndex: 0,
+            label: 'Scheduled',
+            icon: Icons.calendar_today_rounded,
+            highlighted: initialInstaHelpTab == 0,
+            onTap: () => onInstaHelpModeTap!(0),
+          ),
+          const SizedBox(height: 8),
+          _InstaHelpModeRow(
+            tabIndex: 1,
+            label: 'Instant',
+            icon: Icons.flash_on_rounded,
+            highlighted: initialInstaHelpTab == 1,
+            onTap: () => onInstaHelpModeTap!(1),
+          ),
+          const SizedBox(height: 8),
+          _InstaHelpModeRow(
+            tabIndex: 2,
+            label: 'Car Wash',
+            icon: Icons.local_car_wash_rounded,
+            highlighted: initialInstaHelpTab == 2,
+            onTap: () => onInstaHelpModeTap!(2),
+          ),
+        ],
       ],
     );
 
@@ -1221,7 +1322,7 @@ class _ServiceCardState extends ConsumerState<_ServiceCard> {
                           loadingBuilder: (_, child, p) => p == null
                               ? child
                               : const ColoredBox(color: Color(0xFFF1ECE1)),
-                          errorBuilder: (_, __, ___) =>
+                          errorBuilder: (_, _, _) =>
                               const _ServicePlaceholder(),
                         )
                       : const _ServicePlaceholder(),
@@ -1304,4 +1405,75 @@ class _ServicePlaceholder extends StatelessWidget {
         child: const Icon(Icons.home_repair_service_rounded,
             size: 32, color: AppColors.textHint),
       );
+}
+
+class _InstaHelpModeRow extends StatelessWidget {
+  final int tabIndex;
+  final String label;
+  final IconData icon;
+  final bool highlighted;
+  final VoidCallback onTap;
+
+  const _InstaHelpModeRow({
+    required this.tabIndex,
+    required this.label,
+    required this.icon,
+    required this.highlighted,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        decoration: BoxDecoration(
+          color: highlighted
+              ? AppColors.primary.withAlpha(12)
+              : AppColors.surface,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: highlighted ? AppColors.primary : AppColors.border,
+            width: highlighted ? 1.5 : 1.0,
+          ),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                color: highlighted
+                    ? AppColors.primary.withAlpha(20)
+                    : AppColors.surfaceVariant,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(icon,
+                  size: 18,
+                  color: highlighted
+                      ? AppColors.primary
+                      : AppColors.textSecondary),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                label,
+                style: GoogleFonts.poppins(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: highlighted
+                      ? AppColors.primary
+                      : AppColors.textPrimary,
+                ),
+              ),
+            ),
+            const Icon(Icons.arrow_forward_ios_rounded,
+                size: 14, color: AppColors.textHint),
+          ],
+        ),
+      ),
+    );
+  }
 }

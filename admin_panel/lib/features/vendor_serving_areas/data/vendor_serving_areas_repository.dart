@@ -135,6 +135,14 @@ class VendorServingAreasRepository {
         .toList();
   }
 
+  /// Removes all vendor assignments for a service area (called before deleting the area).
+  Future<void> deleteAssignmentsForArea(String areaId) async {
+    await _client
+        .from('vendor_serving_area_assignments')
+        .delete()
+        .eq('serving_area_id', areaId);
+  }
+
   /// Returns `{serving_area_id → Set(vendor_id)}` for every assignment row.
   Future<Map<String, Set<String>>> fetchAllAssignments() async {
     final rows = await _client

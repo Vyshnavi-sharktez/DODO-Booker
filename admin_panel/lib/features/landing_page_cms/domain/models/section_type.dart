@@ -21,7 +21,8 @@ enum SectionType {
   faq,
   cta,
   // ── Feature sections ─────────────────────────────────────────────────────
-  vendorCatalog;
+  vendorCatalog,
+  instahelp;
 
   String get dbKey => switch (this) {
         SectionType.hero           => 'hero',
@@ -38,6 +39,7 @@ enum SectionType {
         SectionType.faq            => 'faq',
         SectionType.cta            => 'cta',
         SectionType.vendorCatalog  => 'vendor_catalog',
+        SectionType.instahelp      => 'instahelp',
       };
 
   String get displayName => switch (this) {
@@ -55,6 +57,7 @@ enum SectionType {
         SectionType.faq            => 'FAQ',
         SectionType.cta            => 'Call to Action',
         SectionType.vendorCatalog  => 'Vendor Catalog Services',
+        SectionType.instahelp      => 'InstaHelp',
       };
 
   IconData get icon => switch (this) {
@@ -72,6 +75,7 @@ enum SectionType {
         SectionType.faq            => Icons.help_outline_rounded,
         SectionType.cta            => Icons.ads_click_rounded,
         SectionType.vendorCatalog  => Icons.storefront_rounded,
+        SectionType.instahelp      => Icons.flash_on_rounded,
       };
 
   String get description => switch (this) {
@@ -89,6 +93,7 @@ enum SectionType {
         SectionType.faq            => 'Expandable FAQ list',
         SectionType.cta            => 'Single call-to-action panel',
         SectionType.vendorCatalog  => 'Vendor-owned category tiles — browse and book custom services',
+        SectionType.instahelp      => 'On-demand house help — Schedule or Instant mode booking',
       };
 
   bool get isCanonical => index < SectionType.contentGrid.index;
@@ -150,6 +155,7 @@ enum SectionType {
             'button_url': '/',
           },
         SectionType.vendorCatalog => {'title': 'Vendor Services'},
+        SectionType.instahelp     => {},
       };
 
   static SectionType? fromDbKey(String key) {

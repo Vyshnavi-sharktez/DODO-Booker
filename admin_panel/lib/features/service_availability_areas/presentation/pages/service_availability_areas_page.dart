@@ -4,6 +4,7 @@ import '../../../../core/theme/app_theme.dart';
 import '../../application/providers/service_availability_areas_providers.dart';
 import '../../domain/models/service_availability_area.dart';
 import '../widgets/service_availability_area_dialog.dart';
+import '../../../vendor_serving_areas/application/providers/vendor_serving_areas_providers.dart';
 
 class ServiceAvailabilityAreasPage extends ConsumerStatefulWidget {
   const ServiceAvailabilityAreasPage({super.key});
@@ -117,11 +118,61 @@ class _ServiceAvailabilityAreasPageState
   }
 
   Future<void> _confirmDelete(ServiceAvailabilityArea area) async {
+    // Fetch vendor count before showing the dialog
+    int vendorCount;
+    try {
+      vendorCount = await ref
+          .read(vendorServingAreasRepositoryProvider)
+          .countAssignments(area.id);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('Could not check vendor assignments: $e'),
+        backgroundColor: AppColors.error,
+      ));
+      return;
+    }
+    if (!mounted) return;
+
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
         title: const Text('Delete Service Area?'),
-        content: Text('Delete "${area.name}"? This cannot be undone.'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Are you sure you want to delete "${area.name}"? This cannot be undone.'),
+            if (vendorCount > 0) ...[
+              const SizedBox(height: 14),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: AppColors.error.withAlpha(18),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: AppColors.error.withAlpha(60)),
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(Icons.warning_rounded,
+                        color: AppColors.error, size: 18),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        '$vendorCount vendor${vendorCount == 1 ? '' : 's'} '
+                        '${vendorCount == 1 ? 'is' : 'are'} currently assigned to this area. '
+                        'Deleting will remove this area from their serving zones.',
+                        style: TextStyle(
+                            fontSize: 13, color: AppColors.error),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ],
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(dialogContext).pop(false),
@@ -130,7 +181,7 @@ class _ServiceAvailabilityAreasPageState
           FilledButton(
             onPressed: () => Navigator.of(dialogContext).pop(true),
             style: FilledButton.styleFrom(backgroundColor: AppColors.error),
-            child: const Text('Delete'),
+            child: Text(vendorCount > 0 ? 'Delete & Remove from Vendors' : 'Delete'),
           ),
         ],
       ),
@@ -138,13 +189,19 @@ class _ServiceAvailabilityAreasPageState
     if (confirmed != true || !mounted) return;
 
     try {
-      await ref
-          .read(serviceAvailabilityAreasRepositoryProvider)
-          .delete(area.id);
+      final vendorRepo = ref.read(vendorServingAreasRepositoryProvider);
+      final areaRepo = ref.read(serviceAvailabilityAreasRepositoryProvider);
+      if (vendorCount > 0) {
+        await vendorRepo.deleteAssignmentsForArea(area.id);
+      }
+      await areaRepo.delete(area.id);
       ref.invalidate(serviceAvailabilityAreasProvider);
       if (!mounted) return;
+      final suffix = vendorCount > 0
+          ? ' and removed from $vendorCount vendor${vendorCount == 1 ? '' : 's'}'
+          : '';
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text('"${area.name}" deleted.'),
+        content: Text('"${area.name}" deleted$suffix.'),
         backgroundColor: AppColors.success,
       ));
     } catch (e) {

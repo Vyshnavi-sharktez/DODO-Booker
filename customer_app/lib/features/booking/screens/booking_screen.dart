@@ -32,8 +32,9 @@ class _BookingScreenState extends ConsumerState<BookingScreen> {
   BookingModel? _booking;
   bool _isCreating = false;
   String? _errorMessage;
-  // Prevents showing the restriction dialog multiple times on initial load.
   bool _restrictionDialogShown = false;
+
+  static const int _totalSteps = 3;
 
   bool get _canContinue {
     if (_step == 0) return _address != null;
@@ -41,7 +42,8 @@ class _BookingScreenState extends ConsumerState<BookingScreen> {
     return true;
   }
 
-  String get _buttonLabel => _step == 2 ? 'Confirm Booking' : 'Continue';
+  String get _buttonLabel =>
+      _step == _totalSteps - 1 ? 'Confirm Booking' : 'Continue';
 
   void _showBookingRestrictedDialog() {
     if (!mounted) return;
@@ -49,13 +51,11 @@ class _BookingScreenState extends ConsumerState<BookingScreen> {
   }
 
   Future<void> _onNext() async {
-    if (_step < 2) {
+    if (_step < _totalSteps - 1) {
       setState(() => _step++);
       return;
     }
 
-    // Proactive check — avoids the network round-trip if we already know
-    // the account is inactive from the cached profile.
     final profile = ref.read(profileProvider).valueOrNull;
     if (profile != null && !profile.isActive) {
       _showBookingRestrictedDialog();
@@ -77,7 +77,7 @@ class _BookingScreenState extends ConsumerState<BookingScreen> {
       setState(() {
         _booking = booking;
         _isCreating = false;
-        _step = 3;
+        _step = _totalSteps;
       });
     } catch (e) {
       if (!mounted) return;
@@ -131,8 +131,7 @@ class _BookingScreenState extends ConsumerState<BookingScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // Success screen takes over the entire scaffold.
-    if (_step == 3 && _booking != null) {
+    if (_step == _totalSteps && _booking != null) {
       return BookingSuccessScreen(
         booking: _booking!,
         onViewBookings: () => context.go('/'),
@@ -140,9 +139,6 @@ class _BookingScreenState extends ConsumerState<BookingScreen> {
       );
     }
 
-    // Proactive restriction check: as soon as the profile resolves and we
-    // know the customer is inactive, show the dialog once so they don't need
-    // to reach the summary step to find out.
     final profile = ref.watch(profileProvider).valueOrNull;
     if (profile != null && !profile.isActive && !_restrictionDialogShown) {
       _restrictionDialogShown = true;
@@ -154,23 +150,21 @@ class _BookingScreenState extends ConsumerState<BookingScreen> {
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
-        title: Text(widget.service.name, overflow: TextOverflow.ellipsis),
+        title: Text(
+          widget.service.name,
+          overflow: TextOverflow.ellipsis,
+        ),
         leading: BackButton(onPressed: _onBack),
       ),
       body: Column(
         children: [
-          // Stepper
           Container(
             color: AppColors.surface,
             padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
             child: BookingStepper(currentStep: _step),
           ),
           const Divider(height: 1),
-
-          // Step content
           Expanded(child: _buildStepContent()),
-
-          // Error banner (non-restriction errors only)
           if (_errorMessage != null)
             Container(
               width: double.infinity,
@@ -259,4 +253,3 @@ class _BottomBar extends StatelessWidget {
     );
   }
 }
-
