@@ -117,6 +117,7 @@ class MyBookingModel {
   final double baseAmount;
   final double taxAmount;
   final double serviceChargeAmount;
+  final double surgeAmount;
   final double totalAmount;
   final String status;
   final String assignmentType; // 'Unassigned' | 'External Vendor' | 'DODO Team'
@@ -131,6 +132,7 @@ class MyBookingModel {
   final List<BookingStatusEvent> timeline;
   final bool hasReview;
   final bool isAmc;
+  final bool isInstaHelp;
   final String? amcContractId;
   final String? amcPlanName;
   final String? amcRecurrenceInterval;
@@ -156,6 +158,7 @@ class MyBookingModel {
     required this.baseAmount,
     required this.taxAmount,
     this.serviceChargeAmount = 0.0,
+    this.surgeAmount = 0.0,
     required this.totalAmount,
     required this.status,
     this.assignmentType = 'Unassigned',
@@ -170,6 +173,7 @@ class MyBookingModel {
     this.timeline = const [],
     this.hasReview = false,
     this.isAmc = false,
+    this.isInstaHelp = false,
     this.amcContractId,
     this.amcPlanName,
     this.amcRecurrenceInterval,
@@ -327,7 +331,20 @@ class MyBookingModel {
           ((json['base_amount'] ?? json['subtotal']) as num?)?.toDouble() ??
               0.0,
       taxAmount: (json['tax_amount'] as num?)?.toDouble() ?? 0.0,
-      serviceChargeAmount: (json['service_charge_amount'] as num?)?.toDouble() ?? 0.0,
+      serviceChargeAmount: (() {
+        final mainSC = (json['service_charge_amount'] as num?)?.toDouble() ?? 0.0;
+        if (mainSC > 0) return mainSC;
+        final ih = json['instahelp_bookings'];
+        if (ih is Map) return (ih['service_charge_amount'] as num?)?.toDouble() ?? 0.0;
+        if (ih is List && (ih as List).isNotEmpty) return (ih.first['service_charge_amount'] as num?)?.toDouble() ?? 0.0;
+        return 0.0;
+      })(),
+      surgeAmount: (() {
+        final ih = json['instahelp_bookings'];
+        if (ih is Map) return (ih['surge_fee_amount'] as num?)?.toDouble() ?? 0.0;
+        if (ih is List && (ih as List).isNotEmpty) return (ih.first['surge_fee_amount'] as num?)?.toDouble() ?? 0.0;
+        return 0.0;
+      })(),
       totalAmount: (json['total_amount'] as num?)?.toDouble() ?? 0.0,
       status: status,
       assignmentType: assignmentType,
@@ -352,6 +369,12 @@ class MyBookingModel {
           ),
       hasReview: json['has_review'] as bool? ?? false,
       isAmc: json['is_amc'] as bool? ?? false,
+      isInstaHelp: (() {
+        final ih = json['instahelp_bookings'];
+        if (ih is Map) return true;
+        if (ih is List) return (ih as List).isNotEmpty;
+        return false;
+      })(),
       amcContractId: json['amc_contract_id'] as String?,
       amcPlanName: json['amc_plan_name'] as String?,
       amcRecurrenceInterval: json['amc_recurrence_interval'] as String?,

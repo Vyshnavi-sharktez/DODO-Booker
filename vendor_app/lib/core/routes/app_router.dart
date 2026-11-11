@@ -27,6 +27,7 @@ import '../../features/subscription/presentation/pages/subscription_page.dart';
 import '../../features/subscription/presentation/pages/browse_plans_page.dart';
 import '../../features/subscription/presentation/pages/plan_confirmation_page.dart';
 import '../../features/subscription/presentation/pages/payment_page.dart';
+import '../../features/instahelp/presentation/pages/instahelp_page.dart';
 
 // Bridges Riverpod auth state into a Listenable so GoRouter re-evaluates its
 // redirect whenever auth state changes (e.g. session restored on cold start).
@@ -168,6 +169,11 @@ final routerProvider = Provider<GoRouter>((ref) {
             path: RoutePaths.settings,
             name: RouteNames.settings,
             builder: (context, state) => const SettingsPage(),
+          ),
+          GoRoute(
+            path: RoutePaths.instahelp,
+            name: RouteNames.instahelp,
+            builder: (context, state) => const VendorInstaHelpPage(),
           ),
           GoRoute(
             path: RoutePaths.subscription,

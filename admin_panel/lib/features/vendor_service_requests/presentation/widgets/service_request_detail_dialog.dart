@@ -730,7 +730,7 @@ class _ServiceRequestDetailDialogState
             icon: const Icon(Icons.help_outline_rounded, size: 16),
             label: const Text('Customer Q&A'),
           ),
-        if (r.isCompleted) ...[
+        if (r.isCompleted && !r.isPriceChange) ...[
           const SizedBox(width: 8),
           Row(
             mainAxisSize: MainAxisSize.min,

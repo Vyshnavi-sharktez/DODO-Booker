@@ -126,7 +126,7 @@ class _OtpPageState extends ConsumerState<OtpPage> {
                       size: 20,
                     ),
                     tooltip: 'Back to login',
-                    onPressed: () => context.goNamed(RouteNames.login),
+                    onPressed: () => ref.read(authControllerProvider.notifier).cancelOtp(),
                   ),
                 ),
               ),

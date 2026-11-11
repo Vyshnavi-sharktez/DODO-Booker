@@ -2634,6 +2634,7 @@ class _CustomServiceRowState extends ConsumerState<_CustomServiceRow> {
           parentRequestId: s.id,
           serviceName: s.serviceName,
           newPrice: result.price,
+          currentPrice: s.activePrice,
           newServiceName: nameChanged ? result.name : null,
           imageUrl: uploadedImageUrl ?? s.imageUrl,
         );
@@ -2941,6 +2942,7 @@ class _CustomServiceNarrowCardState
           parentRequestId: s.id,
           serviceName: s.serviceName,
           newPrice: result.price,
+          currentPrice: s.activePrice,
           newServiceName: nameChanged ? result.name : null,
           imageUrl: uploadedImageUrl ?? s.imageUrl,
         );
@@ -4818,9 +4820,24 @@ class _CreateServiceDialogState extends ConsumerState<_CreateServiceDialog> {
 
     setState(() => _submitting = true);
     try {
-      // Enforce max_custom_services limit before inserting.
+      // Enforce subscription gate + max_custom_services limit before inserting.
       final sub = ref.read(mySubscriptionProvider).valueOrNull;
-      if (sub?.plan?.isMaxCustomServicesEnabled == false) {
+      if (sub == null || !sub.isActive) {
+        if (mounted) {
+          showDialog<void>(
+            context: context,
+            builder: (ctx) => AlertDialog(
+              title: const Text('Subscription Required'),
+              content: const Text(
+                  'An active subscription is required to create custom services. '
+                  'Please subscribe or contact support.'),
+              actions: [FilledButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('OK'))],
+            ),
+          );
+        }
+        return;
+      }
+      if (sub.plan?.isMaxCustomServicesEnabled == false) {
         if (mounted) {
           showDialog<void>(
             context: context,
@@ -4833,7 +4850,7 @@ class _CreateServiceDialogState extends ConsumerState<_CreateServiceDialog> {
         }
         return;
       }
-      final limit = sub?.plan?.maxCustomServices;
+      final limit = sub.plan?.maxCustomServices;
       if (limit != null) {
         final requests = ref.read(myServiceRequestsProvider).valueOrNull ?? [];
         final usedCount =

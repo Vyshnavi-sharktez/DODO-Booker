@@ -21,6 +21,7 @@ import 'cta_section.dart';
 import 'faq_section.dart';
 import 'how_it_works_section.dart';
 import 'promo_banner_section.dart';
+import '../../instahelp/widgets/instahelp_home_tile.dart';
 import '../../vendor_catalog/widgets/vendor_catalog_section.dart';
 
 // ── Mobile Promo Banner (first section, above CMS sections) ──────────────────
@@ -461,6 +462,12 @@ class MobileHomeSectionRenderer extends ConsumerWidget {
 
       case 'mobile_promo_banner':
         return const _MobileDailyOfferBanner();
+
+      case 'instahelp':
+        return const Padding(
+          padding: EdgeInsets.symmetric(vertical: 8),
+          child: InstaHelpHomeTile(),
+        );
 
       case 'vendor_catalog':
         return VendorCatalogSection(title: section.config['title'] as String?);

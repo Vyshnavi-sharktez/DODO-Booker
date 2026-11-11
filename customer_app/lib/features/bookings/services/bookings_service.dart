@@ -33,7 +33,8 @@ class BookingsService {
       total_price,
       catalog_nodes!booking_items_service_id_catalog_fkey(id, name),
       vendor_service_requests!booking_items_custom_service_id_fkey(id, service_name)
-    )
+    ),
+    instahelp_bookings!booking_id(surge_fee_amount, service_charge_amount, gst_percent, gst_amount)
   ''';
 
   Future<String> _getCustomerId() async {

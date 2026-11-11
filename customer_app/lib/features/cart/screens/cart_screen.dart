@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/constants/app_colors.dart';
-import '../../../core/utils/service_image_registry.dart';
 import '../../../core/widgets/clickable.dart';
 import '../../../core/widgets/page_sheet.dart';
 import '../models/cart_item.dart';
@@ -14,7 +13,7 @@ import '../widgets/service_unavailable_dialog.dart';
 import '../../auth/utils/auth_modal_gate.dart';
 import '../../catalog/models/catalog_node_model.dart';
 import '../../catalog/providers/catalog_providers.dart';
-import '../../catalog/utils/catalog_launcher.dart';
+import '../../catalog/widgets/service_recommendation_card.dart';
 import '../../home/services/home_providers.dart';
 import '../../tax/models/tax_settings_model.dart';
 import '../../tax/providers/tax_provider.dart';
@@ -272,7 +271,7 @@ class _SavedCartsStrip extends ConsumerWidget {
                   Padding(
                     padding: const EdgeInsets.only(right: 8),
                     child: _SavedCartChip(
-                      rootCategoryId: entry.key,
+                      cartKey: entry.key,
                       items: entry.value,
                     ),
                   ),
@@ -286,28 +285,37 @@ class _SavedCartsStrip extends ConsumerWidget {
 }
 
 class _SavedCartChip extends ConsumerWidget {
-  final String rootCategoryId;
+  final String cartKey;
   final List<CartItem> items;
 
   const _SavedCartChip({
-    required this.rootCategoryId,
+    required this.cartKey,
     required this.items,
   });
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final nodeAsync = ref.watch(catalogNodeProvider(rootCategoryId));
-    final name = nodeAsync.valueOrNull?.name;
+    final isVcs = cartKey.startsWith('vcs_');
+    // For DODO carts look up the root category name; for VCS use the vendor name
+    // already on the first item (or fall back to the first word of the service name).
+    final nodeAsync =
+        isVcs ? null : ref.watch(catalogNodeProvider(cartKey)).valueOrNull;
     final totalQty = items.fold<int>(0, (s, i) => s + i.quantity);
-    final label = name != null
-        ? '$name ($totalQty ${totalQty == 1 ? 'item' : 'items'})'
-        : '${items.first.serviceName.split(' ').first} ($totalQty)';
+    final String label;
+    if (isVcs) {
+      final display = items.first.serviceName.split(' ').first;
+      label = '$display ($totalQty ${totalQty == 1 ? 'item' : 'items'})';
+    } else {
+      final name = nodeAsync?.name;
+      label = name != null
+          ? '$name ($totalQty ${totalQty == 1 ? 'item' : 'items'})'
+          : '${items.first.serviceName.split(' ').first} ($totalQty)';
+    }
 
     return ActionChip(
       avatar: const Icon(Icons.shopping_cart_outlined, size: 14),
       label: Text(label),
-      onPressed: () =>
-          ref.read(cartProvider.notifier).switchToCart(rootCategoryId),
+      onPressed: () => ref.read(cartProvider.notifier).switchToCart(cartKey),
       backgroundColor: AppColors.primaryLight,
       side: const BorderSide(color: AppColors.primary, width: 0.8),
       labelStyle: Theme.of(context).textTheme.labelMedium?.copyWith(
@@ -1964,7 +1972,7 @@ class _CartRecommendations extends ConsumerWidget {
             padding: const EdgeInsets.only(right: 4),
             itemCount: nodes.length,
             separatorBuilder: (_, _) => const SizedBox(width: 12),
-            itemBuilder: (ctx, i) => _RecommendationCard(node: nodes[i]),
+            itemBuilder: (ctx, i) => ServiceRecommendationCard(node: nodes[i]),
           ),
         ),
       ],
@@ -1972,246 +1980,3 @@ class _CartRecommendations extends ConsumerWidget {
   }
 }
 
-class _RecommendationCard extends StatelessWidget {
-  const _RecommendationCard({required this.node});
-  final CatalogNodeModel node;
-
-  @override
-  Widget build(BuildContext context) {
-    final imageUrl = ServiceImageRegistry.resolveMobile(
-      node.mobileImageUrl,
-      node.imageUrl,
-      node.name,
-    );
-    final price = node.finalPrice ?? node.basePrice;
-
-    return SizedBox(
-      width: 162,
-      child: GestureDetector(
-        onTap: () => openCatalogNode(context, node, parentId: node.parentId),
-        child: Container(
-          decoration: BoxDecoration(
-            color: AppColors.surface,
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: AppColors.border, width: 0.8),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withAlpha(10),
-                blurRadius: 8,
-                offset: const Offset(0, 2),
-              ),
-            ],
-          ),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(13),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // ── Hero image ───────────────────────────────────────────
-                SizedBox(
-                  height: 96,
-                  width: double.infinity,
-                  child: imageUrl != null
-                    ? Image.network(
-                        imageUrl,
-                        fit: BoxFit.cover,
-                        errorBuilder: (_, __, ___) => Container(
-                          color: AppColors.primaryLight,
-                          alignment: Alignment.center,
-                          child: const Icon(
-                            Icons.home_repair_service_rounded,
-                            size: 34,
-                            color: AppColors.primary,
-                          ),
-                        ),
-                      )
-                    : Container(
-                        color: AppColors.primaryLight,
-                        alignment: Alignment.center,
-                        child: const Icon(
-                          Icons.home_repair_service_rounded,
-                          size: 34,
-                          color: AppColors.primary,
-                        ),
-                      ),
-                ),
-
-                // ── Content ──────────────────────────────────────────────
-                Expanded(
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        // Name
-                        Text(
-                          node.name,
-                          style: const TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                            color: AppColors.textPrimary,
-                            height: 1.3,
-                          ),
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-
-                        const SizedBox(height: 4),
-
-                        // Price
-                        if (price != null)
-                          Row(
-                            crossAxisAlignment: CrossAxisAlignment.baseline,
-                            textBaseline: TextBaseline.alphabetic,
-                            children: [
-                              Text(
-                                '₹${price.toInt()}',
-                                style: const TextStyle(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w800,
-                                  color: AppColors.textPrimary,
-                                ),
-                              ),
-                              if (node.hasDiscount && node.basePrice != null) ...[
-                                const SizedBox(width: 4),
-                                Text(
-                                  '₹${node.basePrice!.toInt()}',
-                                  style: const TextStyle(
-                                    fontSize: 10,
-                                    color: AppColors.textHint,
-                                    decoration: TextDecoration.lineThrough,
-                                    decorationColor: AppColors.textHint,
-                                  ),
-                                ),
-                              ],
-                            ],
-                          ),
-
-                        // Rating
-                        if (node.rating > 0 && node.reviewCount > 0) ...[
-                          const SizedBox(height: 3),
-                          Row(
-                            children: [
-                              const Icon(
-                                Icons.star_rounded,
-                                size: 12,
-                                color: AppColors.gold,
-                              ),
-                              const SizedBox(width: 2),
-                              Text(
-                                node.rating.toStringAsFixed(1),
-                                style: const TextStyle(
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w500,
-                                  color: AppColors.textSecondary,
-                                ),
-                              ),
-                              const SizedBox(width: 3),
-                              Text(
-                                '(${node.reviewCount})',
-                                style: const TextStyle(
-                                  fontSize: 10,
-                                  color: AppColors.textHint,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
-
-                        const Spacer(),
-
-                        // Action buttons
-                        Row(
-                          children: [
-                            Expanded(
-                              child: _RecButton(
-                                label: 'View',
-                                filled: false,
-                                onTap: () => openCatalogNode(
-                                  context,
-                                  node,
-                                  parentId: node.parentId,
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 6),
-                            Expanded(
-                              child: _RecButton(
-                                label: 'Add',
-                                filled: true,
-                                onTap: () => openCatalogNode(
-                                  context,
-                                  node,
-                                  parentId: node.parentId,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _RecButton extends StatelessWidget {
-  const _RecButton({
-    required this.label,
-    required this.filled,
-    required this.onTap,
-  });
-  final String label;
-  final bool filled;
-  final VoidCallback onTap;
-
-  static const _shape = RoundedRectangleBorder(
-    borderRadius: BorderRadius.all(Radius.circular(8)),
-  );
-  static const _textStyle =
-      TextStyle(fontSize: 11, fontWeight: FontWeight.w600);
-
-  @override
-  Widget build(BuildContext context) {
-    if (filled) {
-      return SizedBox(
-        height: 28,
-        child: FilledButton(
-          onPressed: onTap,
-          style: FilledButton.styleFrom(
-            backgroundColor: AppColors.primary,
-            foregroundColor: Colors.white,
-            padding: EdgeInsets.zero,
-            minimumSize: const Size(0, 28),
-            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-            textStyle: _textStyle,
-            shape: _shape,
-          ),
-          child: Text(label),
-        ),
-      );
-    }
-    return SizedBox(
-      height: 28,
-      child: OutlinedButton(
-        onPressed: onTap,
-        style: OutlinedButton.styleFrom(
-          foregroundColor: AppColors.textPrimary,
-          side: const BorderSide(color: AppColors.border, width: 0.8),
-          padding: EdgeInsets.zero,
-          minimumSize: const Size(0, 28),
-          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-          textStyle: _textStyle,
-          shape: _shape,
-        ),
-        child: Text(label),
-      ),
-    );
-  }
-}

@@ -73,6 +73,7 @@ class Booking {
   final double taxAmount;
   final double discountAmount;
   final double serviceChargeAmount;
+  final double surgeAmount;
   final double totalAmount;
   final String? couponCode;
   final String? address;
@@ -95,6 +96,8 @@ class Booking {
   final DateTime? codConfirmedAt;
   final String? upiReference;
   final bool isAmc;
+  final bool isInstaHelp;
+  final String? bookingSource; // 'catalog_vendor' | 'preferred_vendor' | 'instahelp' | null
   final String? amcPlanName;
   final String? amcRecurrenceInterval;
   final String? amcContractId;
@@ -136,6 +139,7 @@ class Booking {
     this.taxAmount = 0.0,
     required this.discountAmount,
     this.serviceChargeAmount = 0.0,
+    this.surgeAmount = 0.0,
     required this.totalAmount,
     this.couponCode,
     this.address,
@@ -158,6 +162,8 @@ class Booking {
     this.codConfirmedAt,
     this.upiReference,
     this.isAmc = false,
+    this.isInstaHelp = false,
+    this.bookingSource,
     this.amcPlanName,
     this.amcRecurrenceInterval,
     this.amcContractId,
@@ -289,7 +295,20 @@ class Booking {
       subtotal: (map['subtotal'] as num?)?.toDouble() ?? 0.0,
       taxAmount: (map['tax_amount'] as num?)?.toDouble() ?? 0.0,
       discountAmount: (map['discount_amount'] as num?)?.toDouble() ?? 0.0,
-      serviceChargeAmount: (map['service_charge_amount'] as num?)?.toDouble() ?? 0.0,
+      serviceChargeAmount: (() {
+        final mainSC = (map['service_charge_amount'] as num?)?.toDouble() ?? 0.0;
+        if (mainSC > 0) return mainSC;
+        final ih = map['instahelp_bookings'];
+        if (ih is Map) return (ih['service_charge_amount'] as num?)?.toDouble() ?? 0.0;
+        if (ih is List && ih.isNotEmpty) return (ih.first['service_charge_amount'] as num?)?.toDouble() ?? 0.0;
+        return 0.0;
+      })(),
+      surgeAmount: (() {
+        final ih = map['instahelp_bookings'];
+        if (ih is Map) return (ih['surge_fee_amount'] as num?)?.toDouble() ?? 0.0;
+        if (ih is List && ih.isNotEmpty) return (ih.first['surge_fee_amount'] as num?)?.toDouble() ?? 0.0;
+        return 0.0;
+      })(),
       totalAmount: (map['total_amount'] as num?)?.toDouble() ?? 0.0,
       couponCode: map['coupon_code'] as String?,
       address: map['address'] as String?,
@@ -320,6 +339,13 @@ class Booking {
           : null,
       upiReference: map['upi_reference'] as String?,
       isAmc: map['is_amc'] as bool? ?? false,
+      bookingSource: map['booking_source'] as String?,
+      isInstaHelp: () {
+        final ih = map['instahelp_bookings'];
+        if (ih is List) return ih.isNotEmpty;
+        if (ih is Map) return true;
+        return false;
+      }(),
       amcPlanName: map['amc_plan_name'] as String?,
       amcRecurrenceInterval: map['amc_recurrence_interval'] as String?,
       amcContractId: map['amc_contract_id'] as String?,
@@ -409,6 +435,7 @@ class Booking {
       taxAmount: taxAmount,
       discountAmount: discountAmount,
       serviceChargeAmount: serviceChargeAmount,
+      surgeAmount: surgeAmount,
       totalAmount: totalAmount,
       couponCode: couponCode,
       address: address ?? this.address,
@@ -430,6 +457,8 @@ class Booking {
       codNotCollectedReason: codNotCollectedReason ?? this.codNotCollectedReason,
       codConfirmedAt: codConfirmedAt ?? this.codConfirmedAt,
       isAmc: isAmc,
+      isInstaHelp: isInstaHelp,
+      bookingSource: bookingSource,
       amcPlanName: amcPlanName,
       amcRecurrenceInterval: amcRecurrenceInterval,
       amcContractId: amcContractId,

@@ -33,6 +33,8 @@ class _SectionListTileState extends State<SectionListTile> {
     final typeLabel = sectionType?.displayName ?? widget.section.sectionType;
     final typeIcon = sectionType?.icon ?? Icons.widgets_rounded;
     final isCanonical = sectionType?.isCanonical ?? false;
+    final isInstaHelp = widget.section.sectionType == 'instahelp';
+    const _kGold = Color(0xFFFFB800);
 
     return MouseRegion(
       onEnter: (_) => setState(() => _hovered = true),
@@ -42,15 +44,24 @@ class _SectionListTileState extends State<SectionListTile> {
         margin: const EdgeInsets.only(bottom: 8),
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         decoration: BoxDecoration(
-          color: _hovered
-              ? AppColors.background
-              : AppColors.surface,
+          color: isInstaHelp
+              ? (_hovered
+                  ? const Color(0xFFFFFBF0)
+                  : const Color(0xFFFFFDF5))
+              : (_hovered ? AppColors.background : AppColors.surface),
           borderRadius: BorderRadius.circular(10),
-          border: Border.all(
-            color: widget.section.isEnabled
-                ? AppColors.border
-                : AppColors.border.withValues(alpha: 0.5),
-          ),
+          border: isInstaHelp
+              ? Border.all(
+                  color: widget.section.isEnabled
+                      ? _kGold
+                      : _kGold.withValues(alpha: 0.4),
+                  width: 1.5,
+                )
+              : Border.all(
+                  color: widget.section.isEnabled
+                      ? AppColors.border
+                      : AppColors.border.withValues(alpha: 0.5),
+                ),
           boxShadow: _hovered
               ? [
                   BoxShadow(
@@ -121,15 +132,21 @@ class _SectionListTileState extends State<SectionListTile> {
               width: 36,
               height: 36,
               decoration: BoxDecoration(
-                color: isCanonical
-                    ? AppColors.accent.withValues(alpha: 0.1)
-                    : AppColors.border.withValues(alpha: 0.5),
+                color: isInstaHelp
+                    ? _kGold.withValues(alpha: 0.12)
+                    : (isCanonical
+                        ? AppColors.accent.withValues(alpha: 0.1)
+                        : AppColors.border.withValues(alpha: 0.5)),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Icon(
                 typeIcon,
                 size: 18,
-                color: isCanonical ? AppColors.accent : AppColors.textSecondary,
+                color: isInstaHelp
+                    ? _kGold
+                    : (isCanonical
+                        ? AppColors.accent
+                        : AppColors.textSecondary),
               ),
             ),
             const SizedBox(width: 12),

@@ -901,10 +901,16 @@ class _PaymentCard extends StatelessWidget {
 
   const _PaymentCard({required this.booking});
 
-  static String _taxLabel(double taxAmount, double base) {
-    if (taxAmount > 0 && base > 0) {
-      final rate = (taxAmount / base * 100).round();
-      return 'GST ($rate%)';
+  static String _taxLabel(double taxAmount, double base,
+      double surgeAmount, double serviceChargeAmount) {
+    final taxableBase = base + surgeAmount + serviceChargeAmount;
+    if (taxAmount > 0 && taxableBase > 0) {
+      final rate = taxAmount / taxableBase * 100;
+      final rounded = (rate * 10).round() / 10;
+      final label = rounded == rounded.truncate().toDouble()
+          ? '${rounded.toInt()}%'
+          : '$rounded%';
+      return 'GST ($label)';
     }
     return 'GST';
   }
@@ -922,10 +928,17 @@ class _PaymentCard extends StatelessWidget {
           tt: tt,
         ),
         _PaymentRow(
-          label: _taxLabel(booking.taxAmount, booking.baseAmount),
+          label: _taxLabel(booking.taxAmount, booking.baseAmount,
+              booking.surgeAmount, booking.serviceChargeAmount),
           value: '₹${booking.taxAmount.toStringAsFixed(2)}',
           tt: tt,
         ),
+        if (booking.surgeAmount > 0)
+          _PaymentRow(
+            label: 'Surge Fee',
+            value: '₹${booking.surgeAmount.toStringAsFixed(2)}',
+            tt: tt,
+          ),
         if (booking.serviceChargeAmount > 0)
           _PaymentRow(
             label: 'Service Charge',
@@ -1579,9 +1592,9 @@ class _OtpDisplayCardState extends ConsumerState<_OtpDisplayCard> {
             // DODO UPI payment section — shown for COD bookings so customer can pay
             if (widget.paymentMethod == 'cash' ||
                 widget.paymentMethod == 'cod')
-              ref.watch(dodoUpiPaymentInfoProvider).maybeWhen(
+              ref.watch(dodoUpiConfigProvider).maybeWhen(
                 data: (cfg) {
-                  if (cfg == null) return const SizedBox.shrink();
+                  if (cfg == null || !cfg.isEnabled) return const SizedBox.shrink();
                   return Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [

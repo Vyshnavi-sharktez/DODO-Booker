@@ -162,7 +162,24 @@ class _CatalogNodeScreenState extends ConsumerState<CatalogNodeScreen> {
     final isWeb = width >= 768;
 
     // Root is this node when it has no parents; otherwise inherited from caller.
-    final effectiveRootId = node.isRoot ? node.id : widget.rootCategoryId;
+    // When not provided (e.g. opened from search/home), auto-resolve by fetching
+    // the parent node so we can walk up the 3-level hierarchy.
+    final parentForRoot =
+        (!node.isRoot && widget.rootCategoryId == null && node.parentId != null)
+            ? ref.watch(catalogNodeProvider(node.parentId!)).valueOrNull
+            : null;
+    final String? effectiveRootId;
+    if (node.isRoot) {
+      effectiveRootId = node.id;
+    } else if (widget.rootCategoryId != null) {
+      effectiveRootId = widget.rootCategoryId;
+    } else if (parentForRoot != null) {
+      // Parent is root → use it; otherwise parent's parent is root (3-level tree).
+      effectiveRootId =
+          parentForRoot.isRoot ? parentForRoot.id : parentForRoot.parentId;
+    } else {
+      effectiveRootId = null;
+    }
 
     final children =
         ref.watch(catalogNodeChildrenProvider(node.id)).valueOrNull ?? [];

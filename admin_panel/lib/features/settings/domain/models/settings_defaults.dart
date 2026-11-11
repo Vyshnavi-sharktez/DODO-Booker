@@ -57,4 +57,14 @@ const Map<String, String> kSettingDefaults = {
   'subscription_reminder_days': '7',
   'subscription_auto_disable_cod': 'false',
   'subscription_auto_disable_assignment': 'false',
+
+  // InstaHelp Subscription
+  'instahelp_subscription_enabled': 'false',
+  'instahelp_subscription_require_active': 'false',
+  'instahelp_subscription_allow_free_vendors': 'false',
+  'instahelp_subscription_free_order_allowance': '0',
+  'instahelp_subscription_order_counting_method': 'completed',
+  'instahelp_subscription_auto_restrict': 'true',
+  'instahelp_subscription_grace_period_days': '0',
+  'instahelp_subscription_expiry_enforcement': 'true',
 };

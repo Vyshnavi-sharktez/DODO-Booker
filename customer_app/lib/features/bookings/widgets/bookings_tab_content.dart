@@ -27,55 +27,49 @@ class _AmcEntry extends _Entry {
 class BookingTabContent extends ConsumerWidget {
   final BookingsTab tab;
   final Future<void> Function() onRefresh;
+  final bool instaHelpOnly;
 
   const BookingTabContent({
     super.key,
     required this.tab,
     required this.onRefresh,
+    this.instaHelpOnly = false,
   });
 
   List<_Entry> _filter(ProcessedBookings data) {
     final entries = <_Entry>[];
+    final source = instaHelpOnly ? data.instaHelp : data.regular;
 
     switch (tab) {
       case BookingsTab.upcoming:
-        // All upcoming bookings — including uncertain-payment ones — shown
-        // inline. Uncertain bookings (pending + unverified) remain protected
-        // here until their payment outcome is resolved.
-        entries.addAll(
-          data.regular.where((b) => b.isUpcoming).map(_RegularEntry.new),
-        );
-        entries.addAll(
-          data.amcContracts.where((c) => c.isUpcoming).map(_AmcEntry.new),
-        );
+        entries.addAll(source.where((b) => b.isUpcoming).map(_RegularEntry.new));
+        if (!instaHelpOnly) {
+          entries.addAll(
+              data.amcContracts.where((c) => c.isUpcoming).map(_AmcEntry.new));
+        }
       case BookingsTab.ongoing:
-        entries.addAll(
-          data.regular.where((b) => b.isOngoing).map(_RegularEntry.new),
-        );
-        entries.addAll(
-          data.amcContracts.where((c) => c.isOngoing).map(_AmcEntry.new),
-        );
+        entries.addAll(source.where((b) => b.isOngoing).map(_RegularEntry.new));
+        if (!instaHelpOnly) {
+          entries.addAll(
+              data.amcContracts.where((c) => c.isOngoing).map(_AmcEntry.new));
+        }
       case BookingsTab.completed:
         entries.addAll(
-          data.regular.where((b) => b.isCompleted).map(_RegularEntry.new),
-        );
-        entries.addAll(
-          data.amcContracts.where((c) => c.isCompleted).map(_AmcEntry.new),
-        );
+            source.where((b) => b.isCompleted).map(_RegularEntry.new));
+        if (!instaHelpOnly) {
+          entries.addAll(
+              data.amcContracts.where((c) => c.isCompleted).map(_AmcEntry.new));
+        }
       case BookingsTab.cancelled:
         entries.addAll(
-          data.regular.where((b) => b.isCancelled).map(_RegularEntry.new),
-        );
-        entries.addAll(
-          data.amcContracts.where((c) => c.isCancelled).map(_AmcEntry.new),
-        );
+            source.where((b) => b.isCancelled).map(_RegularEntry.new));
+        if (!instaHelpOnly) {
+          entries.addAll(
+              data.amcContracts.where((c) => c.isCancelled).map(_AmcEntry.new));
+        }
       case BookingsTab.failed:
-        // Definitive Razorpay/online payment failures: status=cancelled +
-        // payment_status=failed (set by DB trigger). AMC contracts cannot
-        // have payment failures in the same way, so only regular bookings.
         entries.addAll(
-          data.regular.where((b) => b.isPaymentFailed).map(_RegularEntry.new),
-        );
+            source.where((b) => b.isPaymentFailed).map(_RegularEntry.new));
     }
 
     return entries;

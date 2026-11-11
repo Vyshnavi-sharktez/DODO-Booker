@@ -48,10 +48,12 @@ final bookingRefundStatusProvider = FutureProvider.autoDispose
 class ProcessedBookings {
   final List<MyBookingModel> regular;
   final List<AmcContractSummary> amcContracts;
+  final List<MyBookingModel> instaHelp;
 
   const ProcessedBookings({
     required this.regular,
     required this.amcContracts,
+    this.instaHelp = const [],
   });
 }
 
@@ -59,13 +61,15 @@ final processedBookingsProvider =
     FutureProvider<ProcessedBookings>((ref) async {
   final bookings = await ref.watch(myBookingsProvider.future);
 
-  final regular = bookings.where((b) => !b.isAmc).toList();
+  final instaHelp = bookings.where((b) => b.isInstaHelp).toList();
+  final regular = bookings.where((b) => !b.isAmc && !b.isInstaHelp).toList();
   final amcBookings = bookings
       .where((b) => b.isAmc && b.amcContractId != null)
       .toList();
 
   if (amcBookings.isEmpty) {
-    return ProcessedBookings(regular: regular, amcContracts: []);
+    return ProcessedBookings(
+        regular: regular, amcContracts: [], instaHelp: instaHelp);
   }
 
   // Group AMC visit bookings by contract ID.
@@ -120,5 +124,6 @@ final processedBookingsProvider =
     );
   }).toList();
 
-  return ProcessedBookings(regular: regular, amcContracts: amcContracts);
+  return ProcessedBookings(
+      regular: regular, amcContracts: amcContracts, instaHelp: instaHelp);
 });

@@ -26,6 +26,9 @@ class AssigneeCandidate {
   // True when this vendor's active subscription plan does not include
   // allow_booking_assignment. Selection is disabled in the assignment dialog.
   final bool ineligibleForAssignment;
+  // True when the booking is InstaHelp and this vendor's subscription does not
+  // include allow_instahelp = true. Selection is disabled in the assignment dialog.
+  final bool ineligibleForInstaHelp;
   // True when the vendor is assigned to a serving area that covers the booking location.
   final bool isInArea;
 
@@ -40,6 +43,7 @@ class AssigneeCandidate {
     this.vendorTier,
     this.ineligibleForCod = false,
     this.ineligibleForAssignment = false,
+    this.ineligibleForInstaHelp = false,
     this.isInArea = false,
   });
 
@@ -48,6 +52,7 @@ class AssigneeCandidate {
     double? distanceKm,
     bool ineligibleForCod = false,
     bool ineligibleForAssignment = false,
+    bool ineligibleForInstaHelp = false,
     bool isInArea = false,
   }) =>
       AssigneeCandidate(
@@ -63,6 +68,7 @@ class AssigneeCandidate {
         vendorTier: v.vendorTier,
         ineligibleForCod: ineligibleForCod,
         ineligibleForAssignment: ineligibleForAssignment,
+        ineligibleForInstaHelp: ineligibleForInstaHelp,
         isInArea: isInArea,
       );
 
@@ -231,6 +237,7 @@ class VendorAssignmentService {
     Set<String> busyVendorIds = const {},
     Set<String> codIneligibleVendorIds = const {},
     Set<String> assignmentIneligibleVendorIds = const {},
+    Set<String> instaHelpIneligibleVendorIds = const {},
   }) {
     // All active vendors feed the Show All list (includes offline).
     final allActiveVendors = vendors.where((v) => v.isActive).toList();
@@ -241,6 +248,7 @@ class VendorAssignmentService {
     AssigneeCandidate toCandidate(Vendor v, {bool isInArea = false}) {
       final ineligibleCod = codIneligibleVendorIds.contains(v.id);
       final ineligibleAssignment = assignmentIneligibleVendorIds.contains(v.id);
+      final ineligibleInstaHelp = instaHelpIneligibleVendorIds.contains(v.id);
       if (busyVendorIds.contains(v.id)) {
         return AssigneeCandidate(
           id: v.id,
@@ -253,6 +261,7 @@ class VendorAssignmentService {
           vendorTier: v.vendorTier,
           ineligibleForCod: ineligibleCod,
           ineligibleForAssignment: ineligibleAssignment,
+          ineligibleForInstaHelp: ineligibleInstaHelp,
           isInArea: isInArea,
         );
       }
@@ -260,6 +269,7 @@ class VendorAssignmentService {
         v,
         ineligibleForCod: ineligibleCod,
         ineligibleForAssignment: ineligibleAssignment,
+        ineligibleForInstaHelp: ineligibleInstaHelp,
         isInArea: isInArea,
       );
     }

@@ -357,6 +357,29 @@ class CheckoutService {
       }
     }
 
+    // Determine booking source for catalog vendor items (VSR with vcsPricingType set).
+    final isCatalogVendorBooking =
+        customServiceVendorId != null &&
+        items.any((i) => i.isCustomService && i.vcsPricingType != null);
+
+    // Pre-flight validation for catalog vendor bookings: check vendor is active,
+    // COD-eligible (if applicable), and subscription-permitted before inserting.
+    if (isCatalogVendorBooking) {
+      final validation = await _client.rpc(
+        'validate_catalog_vendor_for_booking',
+        params: {
+          'p_vendor_id': customServiceVendorId,
+          'p_payment_method': paymentMethod,
+        },
+      );
+      final valid = (validation as Map<String, dynamic>)['valid'] as bool? ?? false;
+      if (!valid) {
+        final message = (validation)['message'] as String? ??
+            'This service provider is currently unavailable. Please try another provider.';
+        throw Exception(message);
+      }
+    }
+
     final Map<String, dynamic> bookingData;
     if (pendingVisitId != null) {
       await _client.from('bookings').update({
@@ -378,6 +401,7 @@ class CheckoutService {
         'vendor_id': ?effectiveVendorId,
         if (pvFee > 0) 'preferred_vendor_fee_amount': pvFee,
         if (serviceCharge > 0) 'service_charge_amount': serviceCharge,
+        if (isCatalogVendorBooking) 'booking_source': 'catalog_vendor',
       }).eq('id', pendingVisitId);
       bookingData = Map<String, dynamic>.from(
         await _client.from('bookings').select().eq('id', pendingVisitId).single(),
@@ -412,6 +436,7 @@ class CheckoutService {
         // Set vendor_id so booking skips admin assignment queue (preferred vendor or custom service vendor).
         'vendor_id': ?effectiveVendorId,
         if (pvFee > 0) 'preferred_vendor_fee_amount': pvFee,
+        if (isCatalogVendorBooking) 'booking_source': 'catalog_vendor',
         if (amcItem != null) ...{
           'is_amc': true,
           'amc_plan_name': amcItem.amcPlanName ?? amcItem.serviceName,
@@ -536,7 +561,7 @@ class CheckoutService {
       try {
         await _client.from('notifications').insert({
           'user_type': 'vendor',
-          'user_id': preferredVendorId,
+          'user_id': effectiveVendorId,
           'title': 'New Booking Assigned',
           'message': 'You have been assigned booking #$bookingNumber.',
           'notification_type': 'vendor_assigned',
@@ -544,7 +569,7 @@ class CheckoutService {
           'entity_type': 'booking',
           'entity_id': bookingId,
         });
-        debugPrint('[DODO][PV Assignment] Vendor notification sent → vendor=$preferredVendorId booking=$bookingNumber');
+        debugPrint('[DODO][PV Assignment] Vendor notification sent → vendor=$effectiveVendorId booking=$bookingNumber');
       } catch (e) {
         debugPrint('[DODO][PV Assignment] Warning: vendor notification failed (non-fatal): $e');
       }

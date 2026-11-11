@@ -128,6 +128,14 @@ const List<SubscriptionFeature> kSubscriptionFeatures = [
     defaultValue: 0.0,
     // Enforcement: not yet wired up — stored and displayed only.
   ),
+  SubscriptionFeature(
+    key: SubscriptionFeatureKeys.allowInstaHelp,
+    label: 'InstaHelp',
+    description: 'Vendor can receive and fulfil InstaHelp bookings.',
+    type: SubscriptionFeatureType.toggle,
+    defaultValue: false,
+    // Enforcement: not yet wired up — stored and displayed only.
+  ),
 ];
 
 /// Typed constants for every feature key.
@@ -145,4 +153,6 @@ abstract final class SubscriptionFeatureKeys {
   static const String reducedCommissionPct = 'reduced_commission_pct';
   static const String allowCustomPrice = 'allow_custom_price';
   static const String maxCustomServices = 'max_custom_services';
+  static const String allowInstaHelp = 'allow_instahelp';
+  static const String allowVendorCatalog = 'allow_vendor_catalog';
 }

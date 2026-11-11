@@ -954,7 +954,8 @@ class _DesktopListCard extends ConsumerWidget {
           parentNodeId: parentId,
           rootCategoryId: rootCategoryId,
         );
-    if (result == CartAddResult.newCartStarted) _showNewCartStartedSnackBar(context);
+    if (result == CartAddResult.newCartStarted)
+      _showNewCartStartedSnackBar(context);
   }
 
   String _formatReviews(int count) {

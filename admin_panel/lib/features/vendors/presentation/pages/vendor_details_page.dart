@@ -349,14 +349,15 @@ class _OverviewTab extends ConsumerWidget {
                   ? AppColors.success
                   : AppColors.textSecondary,
             ),
-            if (vendor.isPreferredVendor)
+            if (vendor.isPreferredVendor) ...[
               _InfoCell(
                 icon: Icons.currency_rupee_rounded,
-                label: 'Preferred Vendor Fee',
+                label: 'Preferred Fee (Normal)',
                 value: vendor.preferredVendorFee > 0
                     ? '₹${vendor.preferredVendorFee.toStringAsFixed(2)}'
                     : '—',
               ),
+            ],
             Builder(builder: (context) {
               final pendingAsync =
                   ref.watch(vendorPendingSettlementProvider(vendor.id));

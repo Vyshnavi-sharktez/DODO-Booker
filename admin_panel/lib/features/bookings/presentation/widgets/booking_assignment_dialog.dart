@@ -118,6 +118,23 @@ final _vendorAssignmentBlockedProvider =
   return blocked;
 });
 
+/// Returns the set of active vendor IDs eligible for InstaHelp booking assignment.
+/// Calls the get_instahelp_eligible_vendor_ids() SQL RPC which evaluates:
+///   - instahelp_subscription_enabled master switch
+///   - free-order allowance (vendor has orders_used < allowance)
+///   - active subscription with allow_instahelp = true (with grace-period / expiry rules)
+///   - allow_free_vendors fallback for unsubscribed vendors
+/// Only watched when instahelp_subscription_enabled = true and the booking is InstaHelp.
+final _vendorInstaHelpEligibleProvider =
+    FutureProvider.autoDispose<Set<String>>((ref) async {
+  final rows = await Supabase.instance.client
+      .rpc('get_instahelp_eligible_vendor_ids');
+  return {
+    for (final r in rows as List)
+      if (r != null) r.toString(),
+  };
+});
+
 /// Returns the set of vendor IDs that cover every service in the given list,
 /// either by exact service_id match or by having registered a parent/ancestor
 /// node.  Delegates to the get_eligible_vendor_ids_for_services RPC so that
@@ -238,6 +255,10 @@ class _BookingAssignmentDialogState
   double? _walletErrBalance;
   double? _walletErrMinimum;
 
+  // Generic save error inline state — populated when the DB rejects an assignment
+  // for reasons other than wallet balance (e.g. COD ineligibility, InstaHelp ineligibility).
+  String? _saveErrMessage;
+
   bool get _bookingHasAddress =>
       widget.booking.address != null &&
       widget.booking.address!.trim().isNotEmpty;
@@ -279,6 +300,10 @@ class _BookingAssignmentDialogState
     _walletErrVendorId = null;
     _walletErrBalance = null;
     _walletErrMinimum = null;
+  }
+
+  void _clearSaveError() {
+    if (_saveErrMessage != null) setState(() => _saveErrMessage = null);
   }
 
   bool _dispatching = false;
@@ -334,6 +359,43 @@ class _BookingAssignmentDialogState
     } finally {
       if (mounted) setState(() => _dispatching = false);
     }
+  }
+
+  Widget _buildCatalogVendorBanner() {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 14),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.success.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: AppColors.success.withValues(alpha: 0.25)),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.store_rounded, color: AppColors.success, size: 22),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Vendor Catalog Booking',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 13,
+                    color: AppColors.success,
+                  ),
+                ),
+                Text(
+                  'Directly assigned to the catalog service provider. Auto-dispatch is disabled.',
+                  style: TextStyle(fontSize: 11, color: AppColors.textSecondary),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   Widget _buildAutoDispatchBanner() {
@@ -574,19 +636,25 @@ class _BookingAssignmentDialogState
             _walletErrMinimum = double.tryParse(m?.group(2) ?? '');
           });
         } else {
-          final message = switch (e) {
-            PostgrestException(:final code) when code == 'P0001' =>
-              'This vendor cannot accept COD bookings. '
-                  'Ensure they have an active subscription with COD permission.',
-            PostgrestException(:final message) => message,
-            _ => e.toString().replaceFirst('Exception: ', ''),
-          };
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(message),
-              backgroundColor: AppColors.error,
-            ),
-          );
+          String message;
+          if (e is PostgrestException && e.code == 'P0001') {
+            final lower = e.message.toLowerCase();
+            if (lower.contains('instahelp')) {
+              message = 'This vendor is not eligible for InstaHelp bookings. '
+                  'Ensure they have an active subscription with InstaHelp '
+                  'permission or free orders remaining.';
+            } else if (lower.contains('cod')) {
+              message = 'This vendor cannot accept COD bookings. '
+                  'Ensure they have an active subscription with COD permission.';
+            } else {
+              message = e.message;
+            }
+          } else if (e is PostgrestException) {
+            message = e.message;
+          } else {
+            message = e.toString().replaceFirst('Exception: ', '');
+          }
+          if (mounted) setState(() => _saveErrMessage = message);
         }
       }
     } finally {
@@ -631,6 +699,18 @@ class _BookingAssignmentDialogState
         ? ref.watch(_vendorAssignmentBlockedProvider).valueOrNull ??
             const <String>{}
         : const <String>{};
+
+    // InstaHelp enforcement: vendors ineligible for InstaHelp are blocked.
+    // Eligibility combines free-order allowance + subscription permission + expiry
+    // rules — all evaluated server-side via get_instahelp_eligible_vendor_ids().
+    // Active only when the booking is InstaHelp AND the instahelp module is enabled.
+    final isInstaHelpBooking = widget.booking.isInstaHelp;
+    final instaHelpEnforced =
+        isInstaHelpBooking &&
+        settings['instahelp_subscription_enabled'] == 'true';
+    final instaHelpEligibleIds = instaHelpEnforced
+        ? ref.watch(_vendorInstaHelpEligibleProvider).valueOrNull
+        : null;
 
     // Today in IST (Asia/Kolkata = UTC+05:30) for workload counts.
     final todayIst = _isoDateFmt.format(
@@ -696,6 +776,17 @@ class _BookingAssignmentDialogState
             .toSet()
         : const <String>{};
 
+    // Vendors without allow_instahelp on their active subscription are ineligible
+    // for InstaHelp assignment. Empty when enforcement is off or data still loading.
+    final instaHelpIneligibleVendorIds =
+        (instaHelpEnforced && instaHelpEligibleIds != null)
+            ? allVendors
+                .where(
+                    (v) => v.isActive && !instaHelpEligibleIds.contains(v.id))
+                .map((v) => v.id)
+                .toSet()
+            : const <String>{};
+
     // True when service eligibility data is loaded and confirms that no vendor
     // in the system provides every service on this booking.  Used to show a
     // more accurate empty-state message than the generic area message.
@@ -712,6 +803,7 @@ class _BookingAssignmentDialogState
       busyVendorIds: busyVendorIds,
       codIneligibleVendorIds: codIneligibleVendorIds,
       assignmentIneligibleVendorIds: assignmentBlockedIds,
+      instaHelpIneligibleVendorIds: instaHelpIneligibleVendorIds,
     );
 
     final teamResult = VendorAssignmentService.rankTeamAssignees(
@@ -745,7 +837,9 @@ class _BookingAssignmentDialogState
                           result: vendorResult,
                           isLoading: vendorsAsync.isLoading ||
                               servingAreasAsync.isLoading ||
-                              assignmentsAsync.isLoading,
+                              assignmentsAsync.isLoading ||
+                              (instaHelpEnforced &&
+                                  ref.watch(_vendorInstaHelpEligibleProvider).isLoading),
                           hasError: vendorsAsync.hasError ||
                               servingAreasAsync.hasError ||
                               assignmentsAsync.hasError,
@@ -809,6 +903,16 @@ class _BookingAssignmentDialogState
                           },
                         ),
                       ],
+
+                      if (_saveErrMessage != null)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 12),
+                          child: _InfoBanner(
+                            icon: Icons.error_outline_rounded,
+                            color: AppColors.error,
+                            message: _saveErrMessage!,
+                          ),
+                        ),
 
                       const SizedBox(height: 20),
 
@@ -1004,6 +1108,7 @@ class _BookingAssignmentDialogState
                     setState(() {
                       _geoOverride = recIsOutOfArea;
                       if (recVendor.id != _walletErrVendorId) _clearWalletError();
+                      _clearSaveError();
                       _vendorId = recVendor.id;
                     });
                   },
@@ -1104,6 +1209,7 @@ class _BookingAssignmentDialogState
               onSelect: (id) => setState(() {
                 final next = _vendorId == id ? '' : id;
                 if (next != _walletErrVendorId) _clearWalletError();
+                _clearSaveError();
                 _vendorId = next;
               }),
             ),
@@ -1192,7 +1298,10 @@ class _BookingAssignmentDialogState
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _buildAutoDispatchBanner(),
+        if (widget.booking.bookingSource == 'catalog_vendor')
+          _buildCatalogVendorBanner()
+        else
+          _buildAutoDispatchBanner(),
         if (widget.booking.dispatchStatus != 'idle')
           _buildAssignmentHistorySection(),
         ?codBanner,
@@ -1221,6 +1330,7 @@ class _BookingAssignmentDialogState
           vendorAreasMap: vendorAreasMap,
           onSelect: (id) => setState(() {
             if (id != _walletErrVendorId) _clearWalletError();
+            _clearSaveError();
             _vendorId = id;
           }),
         ),
@@ -1554,7 +1664,8 @@ class _BookingAssignmentDialogState
       final blocked = _saving ||
           isBusy ||
           candidate.ineligibleForCod ||
-          candidate.ineligibleForAssignment;
+          candidate.ineligibleForAssignment ||
+          candidate.ineligibleForInstaHelp;
       final todayCount = candidate.kind == AssigneeKind.vendor
           ? (todayBookingCounts[candidate.id] ?? 0)
           : null;
@@ -1774,92 +1885,128 @@ class _AssigneeCandidateCard extends StatelessWidget {
           const SizedBox(height: 8),
 
           // ── Meta row (rating · primary status) ───────────────────────────
-          // COD ineligibility is the primary status. Busy is shown as a
-          // secondary line beneath it when both conditions apply, so the admin
-          // sees both reasons the vendor cannot receive this booking.
-          Row(
+          // Each ineligibility reason is shown independently so multiple
+          // reasons (e.g. InstaHelp + COD) are all visible at once.
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              if (candidate.rating != null) ...[
-                const Icon(Icons.star_rounded,
-                    size: 13, color: Color(0xFFD69E2E)),
-                const SizedBox(width: 3),
-                Text(
-                  candidate.rating!.toStringAsFixed(1),
-                  style: TextStyle(
-                      fontSize: 12, color: AppColors.textPrimary),
-                ),
-                const SizedBox(width: 12),
-              ] else if (candidate.kind == AssigneeKind.vendor) ...[
-                Text(
-                  'No rating',
-                  style: TextStyle(
-                      fontSize: 12, color: AppColors.textSecondary),
-                ),
-                const SizedBox(width: 12),
-              ],
+              // Rating / status row
+              Row(
+                children: [
+                  if (candidate.rating != null) ...[
+                    const Icon(Icons.star_rounded,
+                        size: 13, color: Color(0xFFD69E2E)),
+                    const SizedBox(width: 3),
+                    Text(
+                      candidate.rating!.toStringAsFixed(1),
+                      style: TextStyle(
+                          fontSize: 12, color: AppColors.textPrimary),
+                    ),
+                    const SizedBox(width: 12),
+                  ] else if (candidate.kind == AssigneeKind.vendor) ...[
+                    Text(
+                      'No rating',
+                      style: TextStyle(
+                          fontSize: 12, color: AppColors.textSecondary),
+                    ),
+                    const SizedBox(width: 12),
+                  ],
+                  if (!candidate.ineligibleForAssignment &&
+                      !candidate.ineligibleForInstaHelp &&
+                      !candidate.ineligibleForCod) ...[
+                    Container(
+                      width: 6,
+                      height: 6,
+                      decoration: BoxDecoration(
+                        color: statusColor,
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      statusLabel,
+                      style: TextStyle(fontSize: 12, color: statusColor),
+                    ),
+                  ],
+                ],
+              ),
               if (candidate.ineligibleForAssignment) ...[
-                Icon(Icons.assignment_late_rounded,
-                    size: 13, color: AppColors.error),
-                const SizedBox(width: 4),
-                Flexible(
-                  child: Text(
-                    'Assignment Not Permitted · Plan Required',
-                    style: TextStyle(fontSize: 12, color: AppColors.error),
-                    overflow: TextOverflow.ellipsis,
-                  ),
+                const SizedBox(height: 3),
+                Row(
+                  children: [
+                    Icon(Icons.assignment_late_rounded,
+                        size: 13, color: AppColors.error),
+                    const SizedBox(width: 4),
+                    Flexible(
+                      child: Text(
+                        'Assignment Not Permitted · Plan Required',
+                        style: TextStyle(fontSize: 12, color: AppColors.error),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
                 ),
-              ] else if (candidate.ineligibleForCod) ...[
-                Icon(Icons.credit_card_off_rounded,
-                    size: 13, color: AppColors.error),
-                const SizedBox(width: 4),
-                Flexible(
-                  child: Text(
-                    'No Active Subscription · COD Not Allowed',
-                    style: TextStyle(fontSize: 12, color: AppColors.error),
-                    overflow: TextOverflow.ellipsis,
-                  ),
+              ],
+              if (candidate.ineligibleForInstaHelp) ...[
+                const SizedBox(height: 3),
+                Row(
+                  children: [
+                    Icon(Icons.flash_off_rounded,
+                        size: 13, color: AppColors.error),
+                    const SizedBox(width: 4),
+                    Flexible(
+                      child: Text(
+                        'InstaHelp Not in Plan · No Free Orders',
+                        style: TextStyle(fontSize: 12, color: AppColors.error),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
                 ),
-              ] else ...[
-                Container(
-                  width: 6,
-                  height: 6,
-                  decoration: BoxDecoration(
-                    color: statusColor,
-                    shape: BoxShape.circle,
-                  ),
+              ],
+              if (candidate.ineligibleForCod) ...[
+                const SizedBox(height: 3),
+                Row(
+                  children: [
+                    Icon(Icons.credit_card_off_rounded,
+                        size: 13, color: AppColors.error),
+                    const SizedBox(width: 4),
+                    Flexible(
+                      child: Text(
+                        'No Active Subscription · COD Not Allowed',
+                        style: TextStyle(fontSize: 12, color: AppColors.error),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
                 ),
-                const SizedBox(width: 4),
-                Text(
-                  statusLabel,
-                  style: TextStyle(fontSize: 12, color: statusColor),
+              ],
+              if ((candidate.ineligibleForCod ||
+                      candidate.ineligibleForAssignment ||
+                      candidate.ineligibleForInstaHelp) &&
+                  candidate.status == AssigneeStatus.busy) ...[
+                const SizedBox(height: 3),
+                Row(
+                  children: [
+                    Container(
+                      width: 6,
+                      height: 6,
+                      decoration: const BoxDecoration(
+                        color: Color(0xFFD69E2E),
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      'Also busy on this date',
+                      style: TextStyle(
+                          fontSize: 11, color: AppColors.textSecondary),
+                    ),
+                  ],
                 ),
               ],
             ],
           ),
-          // Secondary busy indicator — only shown when the vendor is also busy,
-          // so the admin knows they are blocked for two independent reasons.
-          if ((candidate.ineligibleForCod || candidate.ineligibleForAssignment) &&
-              candidate.status == AssigneeStatus.busy) ...[
-            const SizedBox(height: 4),
-            Row(
-              children: [
-                Container(
-                  width: 6,
-                  height: 6,
-                  decoration: const BoxDecoration(
-                    color: Color(0xFFD69E2E),
-                    shape: BoxShape.circle,
-                  ),
-                ),
-                const SizedBox(width: 4),
-                Text(
-                  'Also busy on this date',
-                  style: TextStyle(
-                      fontSize: 11, color: AppColors.textSecondary),
-                ),
-              ],
-            ),
-          ],
           if (todayCount case final count?) ...[
             const SizedBox(height: 6),
             Row(

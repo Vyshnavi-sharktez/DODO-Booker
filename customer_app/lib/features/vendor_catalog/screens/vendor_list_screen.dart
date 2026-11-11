@@ -708,7 +708,7 @@ class _FilterSidebar extends StatelessWidget {
   final int? minDiscount;
   final void Function(int?) onDiscountChanged;
   final RangeValues? selectedPriceRange;
-  final void Function(RangeValues) onPriceRangeChanged;
+  final void Function(RangeValues?) onPriceRangeChanged;
   final VcsCategoryFilterData? filterData;
   final VoidCallback onClearAll;
   final bool isModal;
@@ -720,21 +720,6 @@ class _FilterSidebar extends StatelessWidget {
     (40, '40% and above'),
   ];
 
-  static String _formatCurrency(double value) {
-    final n = value.round();
-    final s = n.toString();
-    if (s.length <= 3) return '₹$s';
-    final last3 = s.substring(s.length - 3);
-    var rest = s.substring(0, s.length - 3);
-    final parts = <String>[];
-    while (rest.length > 2) {
-      parts.insert(0, rest.substring(rest.length - 2));
-      rest = rest.substring(0, rest.length - 2);
-    }
-    if (rest.isNotEmpty) parts.insert(0, rest);
-    return '₹${parts.join(',')},$last3';
-  }
-
   @override
   Widget build(BuildContext context) {
     final serviceNames = filterData?.rootCategoriesMap.keys.toList() ?? [];
@@ -743,14 +728,6 @@ class _FilterSidebar extends StatelessWidget {
     final hasPriceBounds = rawMin != null && rawMax != null;
     final (sliderMin, sliderMax) =
         _VendorListScreenState._sliderBounds(filterData);
-    final RangeValues currentRange = hasPriceBounds
-        ? _VendorListScreenState._resolvePriceRange(
-            selectedPriceRange,
-            sliderMin,
-            sliderMax,
-          )
-        : const RangeValues(0, 1000);
-
     final listView = ListView(
       padding: const EdgeInsets.all(16),
       children: [
@@ -826,36 +803,14 @@ class _FilterSidebar extends StatelessWidget {
         const Divider(color: AppColors.border, height: 1),
         const SizedBox(height: 14),
         const _SectionTitle('Price Range'),
-        const SizedBox(height: 8),
-        if (hasPriceBounds) ...[
-          Text(
-            '${_formatCurrency(currentRange.start)} – ${_formatCurrency(currentRange.end)}',
-            style: GoogleFonts.inter(
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
-              color: AppColors.textPrimary,
-            ),
+        const SizedBox(height: 10),
+        if (hasPriceBounds)
+          _PriceRangeSection(
+            sliderMin: sliderMin,
+            sliderMax: sliderMax,
+            selectedRange: selectedPriceRange,
+            onChanged: onPriceRangeChanged,
           ),
-          const SizedBox(height: 4),
-          SliderTheme(
-            data: SliderTheme.of(context).copyWith(
-              activeTrackColor: AppColors.primary,
-              inactiveTrackColor: AppColors.border,
-              thumbColor: AppColors.primary,
-              overlayColor: AppColors.primary.withAlpha(24),
-              trackHeight: 3.5,
-              rangeThumbShape: const RoundRangeSliderThumbShape(
-                enabledThumbRadius: 8,
-              ),
-            ),
-            child: RangeSlider(
-              values: currentRange,
-              min: sliderMin,
-              max: sliderMax,
-              onChanged: onPriceRangeChanged,
-            ),
-          ),
-        ],
       ],
     );
 
@@ -1309,6 +1264,235 @@ class _ErrorState extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+// ── Price Range section (preset chips + dual slider) ─────────────────────────
+
+class _PriceRangeSection extends StatelessWidget {
+  const _PriceRangeSection({
+    required this.sliderMin,
+    required this.sliderMax,
+    required this.selectedRange,
+    required this.onChanged,
+  });
+
+  final double sliderMin;
+  final double sliderMax;
+  final RangeValues? selectedRange;
+  final void Function(RangeValues?) onChanged;
+
+  static const _black = Color(0xFF171717);
+  static const _presetLabels = ['All', '< ₹300', '₹300 – ₹600', '> ₹600'];
+
+  RangeValues get _currentRange {
+    if (selectedRange == null) return RangeValues(sliderMin, sliderMax);
+    final s = selectedRange!.start.clamp(sliderMin, sliderMax);
+    final e = selectedRange!.end.clamp(s, sliderMax);
+    return RangeValues(s, e);
+  }
+
+  RangeValues _presetToRange(int idx) {
+    switch (idx) {
+      case 1:
+        return RangeValues(sliderMin, math.min(300.0, sliderMax));
+      case 2:
+        return RangeValues(
+          math.max(300.0, sliderMin),
+          math.min(600.0, sliderMax),
+        );
+      case 3:
+        return RangeValues(math.max(600.0, sliderMin), sliderMax);
+      default:
+        return RangeValues(sliderMin, sliderMax);
+    }
+  }
+
+  int? get _activePreset {
+    if (selectedRange == null) return 0;
+    final r = _currentRange;
+    if (r.start.round() <= sliderMin.round() &&
+        r.end.round() >= sliderMax.round()) {
+      return 0;
+    }
+    for (int i = 1; i <= 3; i++) {
+      final pr = _presetToRange(i);
+      if (r.start.round() == pr.start.round() &&
+          r.end.round() == pr.end.round()) {
+        return i;
+      }
+    }
+    return null;
+  }
+
+  static String _fmt(double value) {
+    final n = value.round();
+    if (n >= 1000) {
+      final k = n ~/ 1000;
+      final rem = n % 1000;
+      if (rem == 0) return '₹${k}k';
+    }
+    return '₹$n';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final range = _currentRange;
+    final activePreset = _activePreset;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        // Preset chips
+        Wrap(
+          spacing: 6,
+          runSpacing: 6,
+          children: List.generate(
+            _presetLabels.length,
+            (i) => _PricePresetChip(
+              label: _presetLabels[i],
+              isSelected: activePreset == i,
+              onTap: () => i == 0 ? onChanged(null) : onChanged(_presetToRange(i)),
+            ),
+          ),
+        ),
+        const SizedBox(height: 14),
+        // Current min / max values above slider
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              _fmt(range.start),
+              style: GoogleFonts.inter(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: _black,
+              ),
+            ),
+            Text(
+              _fmt(range.end),
+              style: GoogleFonts.inter(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: _black,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 2),
+        // Dual-range slider
+        SliderTheme(
+          data: SliderTheme.of(context).copyWith(
+            activeTrackColor: _black,
+            inactiveTrackColor: const Color(0xFFE5E7EB),
+            thumbColor: Colors.white,
+            overlayColor: Colors.black.withAlpha(15),
+            trackHeight: 3.5,
+            rangeThumbShape: const _BorderedRangeThumbShape(),
+          ),
+          child: RangeSlider(
+            values: range,
+            min: sliderMin,
+            max: sliderMax,
+            onChanged: (r) => onChanged(r),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// ── Preset chip ───────────────────────────────────────────────────────────────
+
+class _PricePresetChip extends StatelessWidget {
+  const _PricePresetChip({
+    required this.label,
+    required this.isSelected,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool isSelected;
+  final VoidCallback onTap;
+
+  static const _black = Color(0xFF171717);
+
+  @override
+  Widget build(BuildContext context) {
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      child: GestureDetector(
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 150),
+          padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 5),
+          decoration: BoxDecoration(
+            color: isSelected ? _black : Colors.white,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: isSelected ? _black : const Color(0xFFD1D5DB),
+            ),
+          ),
+          child: Text(
+            label,
+            style: GoogleFonts.inter(
+              fontSize: 11,
+              fontWeight: FontWeight.w500,
+              color: isSelected ? Colors.white : _black,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ── Custom range slider thumb: white fill + dark border ───────────────────────
+
+class _BorderedRangeThumbShape extends RangeSliderThumbShape {
+  const _BorderedRangeThumbShape();
+
+  static const double _r = 9.0;
+
+  @override
+  Size getPreferredSize(bool isEnabled, bool isDiscrete) =>
+      Size.fromRadius(_r);
+
+  @override
+  void paint(
+    PaintingContext context,
+    Offset center, {
+    required Animation<double> activationAnimation,
+    required Animation<double> enableAnimation,
+    bool isDiscrete = false,
+    bool isEnabled = false,
+    bool isOnTop = false,
+    required SliderThemeData sliderTheme,
+    TextDirection? textDirection,
+    Thumb? thumb,
+    bool isPressed = false,
+  }) {
+    final canvas = context.canvas;
+    // Drop shadow
+    canvas.drawCircle(
+      center.translate(0, 1),
+      _r,
+      Paint()
+        ..color = Colors.black.withAlpha(30)
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3),
+    );
+    // White fill
+    canvas.drawCircle(center, _r, Paint()..color = Colors.white);
+    // Dark border
+    canvas.drawCircle(
+      center,
+      _r - 0.75,
+      Paint()
+        ..color = const Color(0xFF171717)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.5,
     );
   }
 }

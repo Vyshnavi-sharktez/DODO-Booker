@@ -30,6 +30,8 @@ class VendorServiceRequest {
     this.pricingType = 'fixed',
     this.discountType = 'none',
     this.discountValue = 0,
+    this.vendorCategoryId,
+    this.vendorCategoryName,
   });
 
   final String id;
@@ -60,6 +62,8 @@ class VendorServiceRequest {
   final String pricingType;    // 'fixed' | 'minutes_based' | 'duration_based'
   final String discountType;   // 'none' | 'percentage' | 'fixed'
   final double discountValue;
+  final String? vendorCategoryId;
+  final String? vendorCategoryName;
 
   bool get hasDiscount =>
       pricingType == 'fixed' &&
@@ -145,6 +149,8 @@ class VendorServiceRequest {
       pricingType: m['pricing_type'] as String? ?? 'fixed',
       discountType: m['discount_type'] as String? ?? 'none',
       discountValue: (m['discount_value'] as num?)?.toDouble() ?? 0,
+      vendorCategoryId: m['vendor_category_id'] as String?,
+      vendorCategoryName: (m['vendor_categories'] as Map<String, dynamic>?)?['name'] as String?,
     );
   }
 }

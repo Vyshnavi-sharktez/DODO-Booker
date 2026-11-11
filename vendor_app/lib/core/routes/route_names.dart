@@ -18,6 +18,7 @@ abstract final class RouteNames {
   static const String planConfirmation = 'planConfirmation';
   static const String payment = 'payment';
   static const String accountInactive = 'accountInactive';
+  static const String instahelp = 'instahelp';
 }
 
 abstract final class RoutePaths {
@@ -40,4 +41,5 @@ abstract final class RoutePaths {
   static const String planConfirmation = '/subscription/confirm';
   static const String payment = '/subscription/payment';
   static const String accountInactive = '/account-inactive';
+  static const String instahelp = '/instahelp';
 }

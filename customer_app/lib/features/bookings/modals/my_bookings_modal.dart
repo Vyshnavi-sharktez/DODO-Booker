@@ -15,10 +15,12 @@ class MyBookingsModal extends ConsumerStatefulWidget {
 }
 
 class _MyBookingsModalState extends ConsumerState<MyBookingsModal>
-    with SingleTickerProviderStateMixin {
-  late TabController _tabController;
+    with TickerProviderStateMixin {
+  late TabController _topController;
+  late TabController _ordersController;
+  late TabController _instaHelpController;
 
-  static const _tabs = [
+  static const _statusTabs = [
     (BookingsTab.upcoming, 'Upcoming'),
     (BookingsTab.ongoing, 'Ongoing'),
     (BookingsTab.completed, 'Completed'),
@@ -29,12 +31,17 @@ class _MyBookingsModalState extends ConsumerState<MyBookingsModal>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: _tabs.length, vsync: this);
+    _topController = TabController(length: 2, vsync: this);
+    _ordersController = TabController(length: _statusTabs.length, vsync: this);
+    _instaHelpController =
+        TabController(length: _statusTabs.length, vsync: this);
   }
 
   @override
   void dispose() {
-    _tabController.dispose();
+    _topController.dispose();
+    _ordersController.dispose();
+    _instaHelpController.dispose();
     super.dispose();
   }
 
@@ -45,30 +52,98 @@ class _MyBookingsModalState extends ConsumerState<MyBookingsModal>
     } catch (_) {}
   }
 
+  Widget _statusTabBar(TabController controller) => Container(
+        color: AppColors.surface,
+        child: TabBar(
+          controller: controller,
+          isScrollable: false,
+          labelStyle:
+              const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+          unselectedLabelStyle:
+              const TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
+          indicatorColor: AppColors.primary,
+          labelColor: AppColors.primary,
+          unselectedLabelColor: AppColors.textSecondary,
+          tabs: _statusTabs.map((t) => Tab(text: t.$2)).toList(),
+        ),
+      );
+
   @override
   Widget build(BuildContext context) {
     return Column(
       children: [
+        // ── Top-level tabs: My Orders | InstaHelp ──────────────────────────
         Container(
           color: AppColors.surface,
           child: TabBar(
-            controller: _tabController,
+            controller: _topController,
             isScrollable: false,
-            labelStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
-            unselectedLabelStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
+            labelStyle:
+                const TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
+            unselectedLabelStyle:
+                const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
             indicatorColor: AppColors.primary,
+            indicatorWeight: 3,
             labelColor: AppColors.primary,
             unselectedLabelColor: AppColors.textSecondary,
-            tabs: _tabs.map((t) => Tab(text: t.$2)).toList(),
+            tabs: const [
+              Tab(text: 'My Orders'),
+              Tab(
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.flash_on_rounded, size: 14),
+                    SizedBox(width: 4),
+                    Text('InstaHelp'),
+                  ],
+                ),
+              ),
+            ],
           ),
         ),
         const Divider(height: 1),
         Expanded(
           child: TabBarView(
-            controller: _tabController,
-            children: _tabs
-                .map((t) => BookingTabContent(tab: t.$1, onRefresh: _refresh))
-                .toList(),
+            controller: _topController,
+            children: [
+              // ── My Orders section ───────────────────────────────────────
+              Column(
+                children: [
+                  _statusTabBar(_ordersController),
+                  const Divider(height: 1),
+                  Expanded(
+                    child: TabBarView(
+                      controller: _ordersController,
+                      children: _statusTabs
+                          .map((t) => BookingTabContent(
+                                tab: t.$1,
+                                onRefresh: _refresh,
+                              ))
+                          .toList(),
+                    ),
+                  ),
+                ],
+              ),
+              // ── InstaHelp section ────────────────────────────────────────
+              Column(
+                children: [
+                  _statusTabBar(_instaHelpController),
+                  const Divider(height: 1),
+                  Expanded(
+                    child: TabBarView(
+                      controller: _instaHelpController,
+                      children: _statusTabs
+                          .map((t) => BookingTabContent(
+                                tab: t.$1,
+                                onRefresh: _refresh,
+                                instaHelpOnly: true,
+                              ))
+                          .toList(),
+                    ),
+                  ),
+                ],
+              ),
+            ],
           ),
         ),
       ],

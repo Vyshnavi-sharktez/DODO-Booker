@@ -694,13 +694,13 @@ class _VendorFormDialogState extends State<VendorFormDialog> {
                         dense: true,
                       ),
 
-                      // Preferred Vendor Fee — shown only when toggle is on
+                      // Preferred Vendor Fees — shown only when toggle is on
                       if (_isPreferredVendor) ...[
                         const SizedBox(height: 8),
                         TextFormField(
                           controller: _preferredVendorFee,
                           decoration: const InputDecoration(
-                            labelText: 'Preferred Vendor Fee (₹)',
+                            labelText: 'Preferred Vendor Fee — Normal Bookings (₹)',
                             hintText: '0.00',
                             prefixIcon: Icon(Icons.currency_rupee_rounded),
                             helperText:
@@ -715,9 +715,7 @@ class _VendorFormDialogState extends State<VendorFormDialog> {
                           validator: (v) {
                             if (v == null || v.trim().isEmpty) return null;
                             final f = double.tryParse(v.trim());
-                            if (f == null || f < 0) {
-                              return 'Enter a valid amount';
-                            }
+                            if (f == null || f < 0) return 'Enter a valid amount';
                             return null;
                           },
                         ),

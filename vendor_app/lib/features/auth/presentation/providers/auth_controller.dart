@@ -132,6 +132,10 @@ class AuthController extends StateNotifier<AuthState> {
     return 'Something went wrong. Please try again.';
   }
 
+  void cancelOtp() {
+    state = const AuthUnauthenticated();
+  }
+
   Future<void> signOut() async {
     final currentUser =
         state is AuthAuthenticated ? (state as AuthAuthenticated).user : null;

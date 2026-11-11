@@ -39,6 +39,12 @@ final vcsCategoriesProvider =
         table: 'vendor_service_requests',
         callback: (_) => fetch(),
       )
+      .onPostgresChanges(
+        event: PostgresChangeEvent.all,
+        schema: 'public',
+        table: 'catalog_nodes',
+        callback: (_) => fetch(),
+      )
       .subscribe();
 
   ref.onDispose(() {
