@@ -89,22 +89,36 @@ class InstaHelpContent extends ConsumerStatefulWidget {
 }
 
 class _InstaHelpContentState extends ConsumerState<InstaHelpContent>
-    with SingleTickerProviderStateMixin {
-  late TabController _tab;
+    with TickerProviderStateMixin {
+  TabController? _tab;
+  int _tabCount = 0;
+  int _currentTabIndex = 0;
+
+  // Called synchronously during build — safe because _tab is consumed later
+  // in the same build call, never before this point.
+  void _rebuildTab(List<Map<String, String>> modes) {
+    final count = modes.length;
+    if (count == _tabCount) return;
+    final initial = count > 0 ? _currentTabIndex.clamp(0, count - 1) : 0;
+    _tab?.dispose();
+    _tabCount = count;
+    if (count > 0) {
+      _tab = TabController(length: count, vsync: this, initialIndex: initial);
+      _tab!.addListener(() { if (_tab != null) _currentTabIndex = _tab!.index; });
+    } else {
+      _tab = null;
+    }
+  }
 
   @override
   void initState() {
     super.initState();
-    _tab = TabController(
-      length: 3,
-      vsync: this,
-      initialIndex: widget.initialTab.clamp(0, 2),
-    );
+    _currentTabIndex = widget.initialTab;
   }
 
   @override
   void dispose() {
-    _tab.dispose();
+    _tab?.dispose();
     super.dispose();
   }
 
@@ -112,6 +126,10 @@ class _InstaHelpContentState extends ConsumerState<InstaHelpContent>
   Widget build(BuildContext context) {
     final modeIdsAsync = ref.watch(instaHelpVendorModeIdsProvider(widget.vendorId));
     final isMobile = MediaQuery.sizeOf(context).width < 768;
+
+    // Synchronously align TabController length with loaded modes.
+    // No post-frame needed: _tab is used only after this point in the same build.
+    modeIdsAsync.whenData(_rebuildTab);
 
     final Widget body = modeIdsAsync.when(
       loading: () => const Center(child: CircularProgressIndicator()),
@@ -139,11 +157,8 @@ class _InstaHelpContentState extends ConsumerState<InstaHelpContent>
           ),
         ),
       ),
-      data: (modeIds) {
-        final scheduledId = modeIds['scheduled'];
-        final instantId = modeIds['instant'];
-        final carWashId = modeIds['car_wash'];
-        if (scheduledId == null && instantId == null && carWashId == null) {
+      data: (modes) {
+        if (modes.isEmpty) {
           return const Center(
             child: Padding(
               padding: EdgeInsets.all(20),
@@ -154,7 +169,6 @@ class _InstaHelpContentState extends ConsumerState<InstaHelpContent>
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // Tab bar
             Container(
               margin: const EdgeInsets.symmetric(horizontal: 20),
               padding: const EdgeInsets.all(4),
@@ -163,7 +177,7 @@ class _InstaHelpContentState extends ConsumerState<InstaHelpContent>
                 borderRadius: BorderRadius.circular(12),
               ),
               child: TabBar(
-                controller: _tab,
+                controller: _tab!,
                 labelStyle: GoogleFonts.poppins(
                     fontSize: 13.5, fontWeight: FontWeight.w600),
                 unselectedLabelStyle: GoogleFonts.poppins(
@@ -182,37 +196,33 @@ class _InstaHelpContentState extends ConsumerState<InstaHelpContent>
                 indicatorSize: TabBarIndicatorSize.tab,
                 dividerColor: Colors.transparent,
                 mouseCursor: SystemMouseCursors.click,
-                tabs: const [
-                  Tab(height: 36, text: 'Scheduled'),
-                  Tab(height: 36, text: 'Instant'),
-                  Tab(height: 36, text: 'Car Wash'),
-                ],
+                tabs: modes.map((m) {
+                  final label = switch (m['modeType']) {
+                    'scheduled' => 'Scheduled',
+                    'instant'   => 'Instant',
+                    'car_wash'  => 'Car Wash',
+                    _           => m['modeType'] ?? '',
+                  };
+                  return Tab(height: 36, text: label);
+                }).toList(),
               ),
             ),
             const SizedBox(height: 6),
             Expanded(
               child: TabBarView(
-                controller: _tab,
-                children: [
-                  if (scheduledId != null)
-                    _ScheduledContent(
-                        modeId: scheduledId,
-                        assignedVendorId: widget.assignedVendorId)
-                  else
-                    const Center(child: Text('Not available')),
-                  if (instantId != null)
-                    _InstantContent(
-                        modeId: instantId,
-                        assignedVendorId: widget.assignedVendorId)
-                  else
-                    const Center(child: Text('Not available')),
-                  if (carWashId != null)
-                    _InstantContent(
-                        modeId: carWashId,
-                        assignedVendorId: widget.assignedVendorId)
-                  else
-                    const Center(child: Text('Not available')),
-                ],
+                controller: _tab!,
+                children: modes.map((m) {
+                  final modeId = m['id']!;
+                  final modeType = m['modeType']!;
+                  if (modeType == 'scheduled') {
+                    return _ScheduledContent(
+                        modeId: modeId,
+                        assignedVendorId: widget.assignedVendorId);
+                  }
+                  return _InstantContent(
+                      modeId: modeId,
+                      assignedVendorId: widget.assignedVendorId);
+                }).toList(),
               ),
             ),
           ],

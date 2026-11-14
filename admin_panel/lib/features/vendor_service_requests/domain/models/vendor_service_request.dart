@@ -32,6 +32,9 @@ class VendorServiceRequest {
     this.discountValue = 0,
     this.vendorCategoryId,
     this.vendorCategoryName,
+    this.modeId,
+    this.instaHelpResourceId,
+    this.requestData,
   });
 
   final String id;
@@ -64,6 +67,21 @@ class VendorServiceRequest {
   final double discountValue;
   final String? vendorCategoryId;
   final String? vendorCategoryName;
+  final String? modeId;
+  final String? instaHelpResourceId;
+  final Map<String, dynamic>? requestData;
+
+  bool get isInstaHelp => requestType.startsWith('instahelp_');
+  bool get isInstaHelpDuration =>
+      requestType == 'instahelp_new_duration' ||
+      requestType == 'instahelp_edit_duration' ||
+      requestType == 'instahelp_delete_duration';
+  bool get isInstaHelpActivity =>
+      requestType == 'instahelp_new_activity' ||
+      requestType == 'instahelp_edit_activity' ||
+      requestType == 'instahelp_delete_activity';
+  bool get isInstaHelpSlotConfig => requestType == 'instahelp_slot_config';
+  bool get isInstaHelpFinancialConfig => requestType == 'instahelp_financial_config';
 
   bool get hasDiscount =>
       pricingType == 'fixed' &&
@@ -98,7 +116,14 @@ class VendorServiceRequest {
         'price_change' => 'Price Change',
         'delete_service' => 'Deletion',
         'edit_service' => 'Edit Proposal',
-        // new_service rows that are awaiting deletion approval
+        'instahelp_new_duration' => 'New Duration',
+        'instahelp_edit_duration' => 'Edit Duration',
+        'instahelp_delete_duration' => 'Delete Duration',
+        'instahelp_new_activity' => 'New Activity',
+        'instahelp_edit_activity' => 'Edit Activity',
+        'instahelp_delete_activity' => 'Delete Activity',
+        'instahelp_slot_config' => 'Slot Config',
+        'instahelp_financial_config' => 'Financial Config',
         _ => isPendingDeletion ? 'Deletion Request' : 'New Service',
       };
 
@@ -151,6 +176,11 @@ class VendorServiceRequest {
       discountValue: (m['discount_value'] as num?)?.toDouble() ?? 0,
       vendorCategoryId: m['vendor_category_id'] as String?,
       vendorCategoryName: (m['vendor_categories'] as Map<String, dynamic>?)?['name'] as String?,
+      modeId: m['mode_id'] as String?,
+      instaHelpResourceId: m['instahelp_resource_id'] as String?,
+      requestData: m['request_data'] != null
+          ? Map<String, dynamic>.from(m['request_data'] as Map)
+          : null,
     );
   }
 }

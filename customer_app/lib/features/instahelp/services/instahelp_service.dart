@@ -12,24 +12,24 @@ class InstaHelpService {
   static const _phoneKey = 'dodo_auth_phone';
   final _client = Supabase.instance.client;
 
-  /// Fetches global (admin-managed) mode IDs when [vendorId] is null,
-  /// or vendor-specific mode IDs when [vendorId] is provided.
-  Future<Map<String, String>> fetchModeIds({String? vendorId}) async {
-    var query = _client
+  static const _modeOrder = {'scheduled': 0, 'instant': 1, 'car_wash': 2};
+
+  /// Returns active modes in fixed order: scheduled → instant → car_wash.
+  /// Each entry: {'modeType': ..., 'id': ...}
+  Future<List<Map<String, String>>> fetchModeIds({String? vendorId}) async {
+    final baseQuery = _client
         .from('instahelp_modes')
         .select('id, mode_type')
         .eq('is_active', true);
-    if (vendorId != null) {
-      query = query.eq('vendor_id', vendorId);
-    } else {
-      query = query.isFilter('vendor_id', null);
-    }
-    final rows = await query;
-    final result = <String, String>{};
-    for (final r in rows as List) {
+    final rows = await (vendorId != null
+            ? baseQuery.eq('vendor_id', vendorId)
+            : baseQuery.isFilter('vendor_id', null));
+    final result = (rows as List).map((r) {
       final map = r as Map<String, dynamic>;
-      result[map['mode_type'] as String] = map['id'] as String;
-    }
+      return {'modeType': map['mode_type'] as String, 'id': map['id'] as String};
+    }).toList();
+    result.sort((a, b) =>
+        (_modeOrder[a['modeType']] ?? 9).compareTo(_modeOrder[b['modeType']] ?? 9));
     return result;
   }
 
@@ -113,7 +113,7 @@ class InstaHelpService {
       return (isAvailable: true, message: null);
     }
     if (!(config['is_active'] as bool)) {
-      return (isAvailable: false, message: null);
+      return (isAvailable: true, message: null);
     }
 
     // Dart weekday: Mon=1..Sun=7 → Postgres DOW: Sun=0..Sat=6
@@ -143,7 +143,7 @@ class InstaHelpService {
         .eq('mode_id', modeId)
         .maybeSingle();
     if (data == null) return null;
-    return InstaHelpFinancialConfigModel.fromMap(data as Map<String, dynamic>);
+    return InstaHelpFinancialConfigModel.fromMap(data);
   }
 
   Stream<InstaHelpFinancialConfigModel?> streamFinancialConfig(
@@ -154,8 +154,7 @@ class InstaHelpService {
         .eq('mode_id', modeId)
         .map((rows) => rows.isEmpty
             ? null
-            : InstaHelpFinancialConfigModel.fromMap(
-                rows.first as Map<String, dynamic>))
+            : InstaHelpFinancialConfigModel.fromMap(rows.first))
         .handleError((e) {
       debugPrint('[InstaHelp] streamFinancialConfig error: $e');
     });

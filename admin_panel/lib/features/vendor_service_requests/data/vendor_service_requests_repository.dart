@@ -11,6 +11,7 @@ class VendorServiceRequestsRepository {
       'is_active, warranty_enabled, warranty_days, warranty_covers, warranty_exclusions, '
       'included_items, excluded_items, before_after_pairs, '
       'pricing_type, discount_type, discount_value, vendor_category_id, '
+      'mode_id, instahelp_resource_id, request_data, '
       'created_at, updated_at, vendors(id, business_name, vendor_tiers(id, name)), '
       'vendor_categories(id, name)';
 
@@ -47,6 +48,12 @@ class VendorServiceRequestsRepository {
 
   Future<void> accept(String id) async {
     await _supabase.rpc('admin_accept_service_request', params: {
+      'p_request_id': id,
+    });
+  }
+
+  Future<void> acceptInstaHelp(String id) async {
+    await _supabase.rpc('admin_accept_instahelp_request', params: {
       'p_request_id': id,
     });
   }

@@ -218,8 +218,10 @@ class _SupportChatScreenState extends ConsumerState<SupportChatScreen> {
             ref.invalidate(supportMessagesProvider(convId));
           },
         )
-        // Listens for conversation status changes (admin closes → "chat closed"
-        // banner appears immediately without needing a manual refresh).
+        // Listens for conversation status changes (bot/admin closes → "chat closed"
+        // banner appears immediately). Uses direct fetch by ID — NOT
+        // getOrCreateConversation — so a closed conversation stays closed instead
+        // of being immediately replaced by a new open one.
         .onPostgresChanges(
           event: PostgresChangeEvent.update,
           schema: 'public',
@@ -231,7 +233,20 @@ class _SupportChatScreenState extends ConsumerState<SupportChatScreen> {
           ),
           callback: (_) {
             if (!mounted) return;
-            ref.invalidate(supportConversationProvider);
+            ref.read(supportChatServiceProvider)
+                .fetchConversationById(convId)
+                .then((conv) {
+              if (conv == null || !mounted) return;
+              setState(() {
+                _conversation = conv;
+                if (!conv.isClosed) {
+                  _activatingNewChat = false;
+                  _inputEnabled = true;
+                } else if (!_activatingNewChat) {
+                  _inputEnabled = false;
+                }
+              });
+            });
           },
         )
         .subscribe();
@@ -1000,10 +1015,12 @@ class _MessageList extends ConsumerWidget {
                 children: [
                   if (showDateSep) _DateSeparator(msg.createdAt),
                   if (showUnread) const _UnreadDivider(),
-                  _MessageBubble(
-                    message: msg,
-                    service: service,
-                  ),
+                  msg.isSystem
+                      ? _SystemEventLabel(message: msg)
+                      : _MessageBubble(
+                          message: msg,
+                          service: service,
+                        ),
                 ],
               );
             }
@@ -1285,6 +1302,37 @@ class _NewMsgBadge extends StatelessWidget {
 
 const _kAdminBubbleColor = Colors.white;
 
+// ── System event label (centered pill, e.g. "An agent has joined") ────────────
+
+class _SystemEventLabel extends StatelessWidget {
+  final SupportMessage message;
+  const _SystemEventLabel({required this.message});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Center(
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+          decoration: BoxDecoration(
+            color: const Color(0xFFF0F4F8),
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: Text(
+            message.message,
+            style: const TextStyle(
+              fontSize: 11,
+              color: Color(0xFF718096),
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _MessageBubble extends StatelessWidget {
   final SupportMessage message;
   final SupportChatService service;
@@ -1312,7 +1360,7 @@ class _MessageBubble extends StatelessWidget {
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 4),
                 child: Text(
-                  isCustomer ? 'You' : 'Support',
+                  isCustomer ? 'You' : (message.senderName ?? 'Support'),
                   style: const TextStyle(
                     fontSize: 11,
                     fontWeight: FontWeight.w600,

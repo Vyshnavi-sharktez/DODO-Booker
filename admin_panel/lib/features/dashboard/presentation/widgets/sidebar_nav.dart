@@ -331,6 +331,12 @@ const _kNavGroups = <_NavGroup>[
         requiredPermission: 'settings.manage',
       ),
       _NavItem(
+        label: 'Support Bot',
+        icon: Icons.smart_toy_rounded,
+        route: '/dashboard/bot-config',
+        requiredPermission: 'settings.manage',
+      ),
+      _NavItem(
         label: 'Push Notifications',
         icon: Icons.notifications_active_rounded,
         route: '/dashboard/push-config',

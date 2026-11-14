@@ -9,11 +9,11 @@ import '../../../vendor_subscriptions/domain/models/subscription_plan.dart'
 import '../../../vendor_subscriptions/domain/subscription_feature_registry.dart';
 
 // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-// CustomServiceConfigDialog - 7-tab module configuration for a vendor custom
+// CustomServiceConfigDialog - 6-tab module configuration for a vendor custom
 // service (vendor_service_requests row).
 //
-// Tabs: Tax Â· Loyalty Â· Scheduling Â· Platform Commission Â· Surge Fee Â·
-//       Preferred Vendors Â· Vendor Subscription
+// Tabs: Tax · Loyalty · Scheduling · Platform Commission · Surge Fee ·
+//       Vendor Subscription
 //
 // Module configs are stored in catalog_node_configs.custom_service_id.
 // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
@@ -86,13 +86,6 @@ class _CustomServiceConfigDialogState extends State<CustomServiceConfigDialog>
   String _surgeType = 'percentage';
   final _surgeNameCtrl = TextEditingController(text: 'Surge Fee');
 
-  // -- Preferred vendors ---------------------------------------------------------
-  bool _pvEnabled = false;
-  Set<String> _pvSelectedIds = {};
-  Map<String, double> _pvVendorFees = {};
-  final Map<String, TextEditingController> _pvFeeControllers = {};
-  List<Map<String, dynamic>> _pvVendors = [];
-
   // -- Vendor Subscription -------------------------------------------------------
   bool _vsEnabled = false;
   final _vsNameCtrl = TextEditingController();
@@ -113,18 +106,18 @@ class _CustomServiceConfigDialogState extends State<CustomServiceConfigDialog>
 
   static const _modules = [
     'tax', 'loyalty', 'scheduling', 'commission',
-    'surge', 'preferred_vendors', 'vendor_subscription',
+    'surge', 'vendor_subscription',
   ];
   static const _tabLabels = [
     'Tax', 'Loyalty', 'Scheduling', 'Platform Commission',
-    'Surge Fee', 'Preferred Vendors', 'Vendor Subscription',
+    'Surge Fee', 'Vendor Subscription',
   ];
   static const _dayLabels = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 7, vsync: this);
+    _tabController = TabController(length: 6, vsync: this);
     _loadData();
   }
 
@@ -140,9 +133,6 @@ class _CustomServiceConfigDialogState extends State<CustomServiceConfigDialog>
     _commValueCtrl.dispose();
     _surgeValueCtrl.dispose();
     _surgeNameCtrl.dispose();
-    for (final ctrl in _pvFeeControllers.values) {
-      ctrl.dispose();
-    }
     _vsNameCtrl.dispose();
     _vsDescCtrl.dispose();
     _vsDurationCtrl.dispose();
@@ -162,16 +152,6 @@ class _CustomServiceConfigDialogState extends State<CustomServiceConfigDialog>
           await _repo.fetchForCustomService(widget.customServiceId);
       for (final m in _modules) {
         _configs[m] = cfgRows.where((c) => c.module == m).firstOrNull;
-      }
-
-      if (_pvVendors.isEmpty) {
-        final rows = await Supabase.instance.client
-            .from('vendors')
-            .select('id, business_name, preferred_vendor_fee, rating')
-            .eq('is_preferred_vendor', true)
-            .eq('is_active', true)
-            .order('business_name');
-        _pvVendors = (rows as List).cast<Map<String, dynamic>>();
       }
 
       try {
@@ -228,7 +208,6 @@ class _CustomServiceConfigDialogState extends State<CustomServiceConfigDialog>
     _populateScheduling();
     _populateCommission();
     _populateSurge();
-    _populatePreferredVendors();
     _populateVendorSubscription();
   }
 
@@ -288,53 +267,6 @@ class _CustomServiceConfigDialogState extends State<CustomServiceConfigDialog>
       _surgeType = cfg.config['surge_type'] as String? ?? 'percentage';
       _surgeValueCtrl.text =
           (cfg.config['surge_value'] as num?)?.toString() ?? '';
-    }
-  }
-
-  void _populatePreferredVendors() {
-    final cfg = _configs['preferred_vendors'];
-    if (cfg != null) {
-      _pvEnabled = cfg.config['is_enabled'] as bool? ?? false;
-      final vendorsArr = cfg.config['vendors'] as List<dynamic>?;
-      if (vendorsArr != null) {
-        _pvSelectedIds =
-            vendorsArr.map((e) => (e as Map)['id'] as String).toSet();
-        _pvVendorFees = {
-          for (final e in vendorsArr.cast<Map<String, dynamic>>())
-            e['id'] as String: (e['fee'] as num?)?.toDouble() ?? 0.0,
-        };
-      } else {
-        _pvSelectedIds = (cfg.config['vendor_ids'] as List<dynamic>?)
-                ?.map((e) => e.toString())
-                .toSet() ??
-            {};
-        _pvVendorFees = {
-          for (final id in _pvSelectedIds)
-            id: (_pvVendors
-                        .where((v) => v['id'] == id)
-                        .firstOrNull?['preferred_vendor_fee'] as num?)
-                    ?.toDouble() ??
-                0.0,
-        };
-      }
-    } else {
-      _pvEnabled = false;
-      _pvSelectedIds = {};
-      _pvVendorFees = {};
-    }
-    _syncPvFeeControllers();
-  }
-
-  void _syncPvFeeControllers() {
-    for (final id in _pvSelectedIds) {
-      final fee = _pvVendorFees[id] ?? 0.0;
-      final existing = _pvFeeControllers[id];
-      if (existing != null) {
-        existing.text = fee.toStringAsFixed(0);
-      } else {
-        _pvFeeControllers[id] =
-            TextEditingController(text: fee.toStringAsFixed(0));
-      }
     }
   }
 
@@ -487,19 +419,6 @@ class _CustomServiceConfigDialogState extends State<CustomServiceConfigDialog>
               : _surgeNameCtrl.text.trim(),
           'surge_type': _surgeType,
           'surge_value': double.tryParse(_surgeValueCtrl.text.trim()) ?? 0.0,
-        };
-      case 'preferred_vendors':
-        for (final id in _pvSelectedIds) {
-          final ctrl = _pvFeeControllers[id];
-          if (ctrl != null) {
-            _pvVendorFees[id] = double.tryParse(ctrl.text.trim()) ?? 0.0;
-          }
-        }
-        return {
-          'is_enabled': _pvEnabled,
-          'vendors': _pvSelectedIds
-              .map((id) => {'id': id, 'fee': _pvVendorFees[id] ?? 0.0})
-              .toList(),
         };
       case 'vendor_subscription':
         final perms = <String, dynamic>{};
@@ -747,8 +666,6 @@ class _CustomServiceConfigDialogState extends State<CustomServiceConfigDialog>
         return _buildCommissionFields();
       case 'surge':
         return _buildSurgeFields();
-      case 'preferred_vendors':
-        return _buildPreferredVendorsFields();
       case 'vendor_subscription':
         return _buildVendorSubscriptionFields();
       default:
@@ -956,122 +873,6 @@ class _CustomServiceConfigDialogState extends State<CustomServiceConfigDialog>
             FilteringTextInputFormatter.allow(RegExp(r'[0-9.]')),
           ],
         ),
-      ],
-    );
-  }
-
-  Widget _buildPreferredVendorsFields() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        SwitchListTile(
-          contentPadding: EdgeInsets.zero,
-          dense: true,
-          title: const Text('Enable Preferred Vendors',
-              style: TextStyle(fontSize: 13)),
-          subtitle: const Text(
-            'Show a vendor selection section at checkout for this service',
-            style: TextStyle(fontSize: 11),
-          ),
-          value: _pvEnabled,
-          activeColor: AppColors.primary,
-          onChanged: (v) => setState(() => _pvEnabled = v),
-        ),
-        if (_pvEnabled) ...[
-          const SizedBox(height: 12),
-          _label('Available Vendors'),
-          const SizedBox(height: 8),
-          if (_pvVendors.isEmpty)
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: AppColors.background,
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: AppColors.border),
-              ),
-              child: const Text(
-                'No preferred vendors found. Enable "Preferred Vendor" on '
-                'vendor profiles first.',
-                style:
-                    TextStyle(fontSize: 12, color: AppColors.textSecondary),
-              ),
-            )
-          else
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: _pvVendors.map((v) {
-                final id = v['id'] as String;
-                final name = v['business_name'] as String? ?? '';
-                final isSelected = _pvSelectedIds.contains(id);
-                return FilterChip(
-                  label:
-                      Text(name, style: const TextStyle(fontSize: 12)),
-                  selected: isSelected,
-                  selectedColor: AppColors.primary.withValues(alpha: 0.15),
-                  checkmarkColor: AppColors.primary,
-                  onSelected: (val) => setState(() {
-                    if (val) {
-                      _pvSelectedIds.add(id);
-                      if (!_pvFeeControllers.containsKey(id)) {
-                        final globalFee =
-                            (v['preferred_vendor_fee'] as num?)
-                                    ?.toDouble() ??
-                                0.0;
-                        _pvVendorFees[id] = globalFee;
-                        _pvFeeControllers[id] = TextEditingController(
-                            text: globalFee.toStringAsFixed(0));
-                      }
-                    } else {
-                      _pvSelectedIds.remove(id);
-                    }
-                  }),
-                );
-              }).toList(),
-            ),
-
-          if (_pvSelectedIds.isNotEmpty) ...[
-            const SizedBox(height: 16),
-            _label('Additional Fee per Vendor (₹)'),
-            const SizedBox(height: 8),
-            ..._pvVendors
-                .where((v) => _pvSelectedIds.contains(v['id'] as String))
-                .map((v) {
-              final id = v['id'] as String;
-              final name = v['business_name'] as String? ?? '';
-              final ctrl = _pvFeeControllers[id];
-              if (ctrl == null) return const SizedBox.shrink();
-              return Padding(
-                padding: const EdgeInsets.only(bottom: 8),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Text(name,
-                          style: const TextStyle(
-                              fontSize: 13, color: AppColors.textPrimary)),
-                    ),
-                    const SizedBox(width: 12),
-                    SizedBox(
-                      width: 110,
-                      child: TextField(
-                        controller: ctrl,
-                        decoration:
-                            _inputDeco('e.g. 200').copyWith(prefixText: '₹ '),
-                        keyboardType:
-                            const TextInputType.numberWithOptions(decimal: true),
-                        inputFormatters: [
-                          FilteringTextInputFormatter.allow(RegExp(r'[0-9.]')),
-                        ],
-                        onChanged: (val) =>
-                            _pvVendorFees[id] = double.tryParse(val) ?? 0.0,
-                      ),
-                    ),
-                  ],
-                ),
-              );
-            }),
-          ],
-        ],
       ],
     );
   }

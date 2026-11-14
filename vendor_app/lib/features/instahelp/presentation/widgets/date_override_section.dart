@@ -280,8 +280,6 @@ class _DateOverrideDialogState extends State<_DateOverrideDialog> {
   bool _saving = false;
   String? _error;
 
-  static final _dateFmt = DateFormat('d MMM yyyy');
-
   @override
   void initState() {
     super.initState();

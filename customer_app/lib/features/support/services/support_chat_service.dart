@@ -35,6 +35,16 @@ class SupportChatService {
     return row['id'] as String;
   }
 
+  Future<SupportConversation?> fetchConversationById(String conversationId) async {
+    final row = await _client
+        .from('support_conversations')
+        .select()
+        .eq('id', conversationId)
+        .maybeSingle();
+    if (row == null) return null;
+    return SupportConversation.fromMap(row as Map<String, dynamic>);
+  }
+
   Future<SupportConversation> getOrCreateConversation() async {
     final customerId = await _getCustomerId();
     final result = await _client.rpc(

@@ -15,6 +15,7 @@ class SupportMessage {
   final String? attachmentType;
   final String? contextType;
   final String? contextId;
+  final String? senderName;
 
   const SupportMessage({
     required this.id,
@@ -29,6 +30,7 @@ class SupportMessage {
     this.attachmentType,
     this.contextType,
     this.contextId,
+    this.senderName,
   });
 
   factory SupportMessage.fromMap(Map<String, dynamic> m) {
@@ -45,10 +47,12 @@ class SupportMessage {
       attachmentType: m['attachment_type'] as String?,
       contextType: m['context_type'] as String?,
       contextId: m['context_id'] as String?,
+      senderName: m['sender_name'] as String?,
     );
   }
 
   bool get isFromCustomer => senderType == 'customer';
+  bool get isSystem => senderType == 'system';
   bool get hasAttachment =>
       attachmentUrl != null && attachmentUrl!.isNotEmpty;
   bool get hasContext => contextType != null && contextId != null;
