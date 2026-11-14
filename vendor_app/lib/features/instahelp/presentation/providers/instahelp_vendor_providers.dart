@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../../core/network/supabase_client_provider.dart';
 import '../../data/instahelp_vendor_repository.dart';
 import '../../domain/models/instahelp_mode.dart';
@@ -11,6 +12,59 @@ import '../../domain/models/instahelp_date_override.dart';
 final instaHelpVendorRepoProvider = Provider<InstaHelpVendorRepository>((ref) {
   return InstaHelpVendorRepository(ref.watch(supabaseClientProvider));
 });
+
+// ── Realtime requests (pending + rejected) for a mode ────────────────────────
+
+class VendorInstaHelpRequestsNotifier
+    extends StateNotifier<AsyncValue<List<Map<String, dynamic>>>> {
+  final InstaHelpVendorRepository _repo;
+  final SupabaseClient _supabase;
+  final String _modeId;
+  RealtimeChannel? _channel;
+  int _gen = 0;
+
+  VendorInstaHelpRequestsNotifier(this._repo, this._supabase, this._modeId)
+      : super(const AsyncValue.loading()) {
+    _load();
+    _subscribe();
+  }
+
+  Future<void> _load() async {
+    final gen = ++_gen;
+    if (!state.hasValue) state = const AsyncValue.loading();
+    final result = await AsyncValue.guard(() => _repo.fetchModeRequests(_modeId));
+    if (_gen == gen && mounted) state = result;
+  }
+
+  void _subscribe() {
+    _channel = _supabase
+        .channel('vendor-ih-requests-$_modeId')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'vendor_service_requests',
+          callback: (_) => _load(),
+        )
+        .subscribe();
+  }
+
+  @override
+  void dispose() {
+    if (_channel != null) _supabase.removeChannel(_channel!);
+    super.dispose();
+  }
+}
+
+final vendorInstaHelpRequestsProvider = StateNotifierProvider.autoDispose.family<
+    VendorInstaHelpRequestsNotifier,
+    AsyncValue<List<Map<String, dynamic>>>,
+    String>(
+  (ref, modeId) => VendorInstaHelpRequestsNotifier(
+    ref.watch(instaHelpVendorRepoProvider),
+    ref.watch(supabaseClientProvider),
+    modeId,
+  ),
+);
 
 // ── Modes ─────────────────────────────────────────────────────────────────────
 
@@ -38,12 +92,29 @@ class VendorModesNotifier extends StateNotifier<AsyncValue<List<InstaHelpMode>>>
     if (current != null) {
       state = AsyncValue.data(
         current.map((m) => m.id == modeId
-            ? InstaHelpMode(id: m.id, modeType: m.modeType, isActive: isActive, vendorId: m.vendorId)
+            ? m.copyWith(isActive: isActive)
             : m).toList(),
       );
     }
     try {
       await _repo.toggleModeActive(modeId, isActive: isActive);
+    } catch (_) {
+      await _load();
+      rethrow;
+    }
+  }
+
+  Future<void> reorder(List<InstaHelpMode> ordered) async {
+    final items = <({String id, int sortOrder})>[];
+    for (var i = 0; i < ordered.length; i++) {
+      if (ordered[i].sortOrder != i) items.add((id: ordered[i].id, sortOrder: i));
+    }
+    if (items.isEmpty) return;
+    state = AsyncValue.data([
+      for (var i = 0; i < ordered.length; i++) ordered[i].copyWith(sortOrder: i),
+    ]);
+    try {
+      await _repo.reorderModes(items);
     } catch (_) {
       await _load();
       rethrow;
@@ -62,15 +133,44 @@ class VendorDurationsNotifier
     extends StateNotifier<AsyncValue<List<InstaHelpDuration>>> {
   final InstaHelpVendorRepository _repo;
   final String _modeId;
+  final Ref _ref;
+  final SupabaseClient _supabase;
+  RealtimeChannel? _channel;
+  int _gen = 0;
 
-  VendorDurationsNotifier(this._repo, this._modeId)
+  VendorDurationsNotifier(this._repo, this._modeId, this._ref, this._supabase)
       : super(const AsyncValue.loading()) {
     _load();
+    _subscribe();
   }
 
   Future<void> _load() async {
-    state = const AsyncValue.loading();
-    state = await AsyncValue.guard(() => _repo.fetchDurations(_modeId));
+    final gen = ++_gen;
+    if (!state.hasValue) state = const AsyncValue.loading();
+    final result = await AsyncValue.guard(() => _repo.fetchDurations(_modeId));
+    if (_gen == gen && mounted) state = result;
+  }
+
+  void _subscribe() {
+    _channel = _supabase
+        .channel('vendor-ih-durations-$_modeId')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'instahelp_durations',
+          callback: (_) => _load(),
+        )
+        .subscribe();
+  }
+
+  @override
+  void dispose() {
+    if (_channel != null) _supabase.removeChannel(_channel!);
+    super.dispose();
+  }
+
+  void _invalidatePending() {
+    if (mounted) _ref.invalidate(vendorInstaHelpRequestsProvider(_modeId));
   }
 
   Future<void> create({
@@ -103,7 +203,7 @@ class VendorDurationsNotifier
       slotIntervalMinutes: slotIntervalMinutes,
       maxBookingsPerSlot: maxBookingsPerSlot,
     );
-    await _load();
+    _invalidatePending();
   }
 
   Future<void> update(String id, {
@@ -130,27 +230,17 @@ class VendorDurationsNotifier
       slotIntervalMinutes: slotIntervalMinutes,
       maxBookingsPerSlot: maxBookingsPerSlot,
     );
-    await _load();
+    _invalidatePending();
   }
 
   Future<void> toggleActive(String id, {required bool isActive}) async {
-    final current = state.valueOrNull;
-    if (current != null) {
-      state = AsyncValue.data(
-        current.map((d) => d.id == id ? d.copyWith(isActive: isActive) : d).toList(),
-      );
-    }
-    try {
-      await _repo.toggleDurationActive(id, isActive: isActive);
-    } catch (_) {
-      await _load();
-      rethrow;
-    }
+    await _repo.toggleDurationActive(id, isActive: isActive);
+    _invalidatePending();
   }
 
   Future<void> delete(String id) async {
     await _repo.deleteDuration(id);
-    await _load();
+    _invalidatePending();
   }
 
   Future<void> reorder(List<InstaHelpDuration> ordered) async {
@@ -173,7 +263,8 @@ class VendorDurationsNotifier
 
 final vendorDurationsProvider = StateNotifierProvider.family<
     VendorDurationsNotifier, AsyncValue<List<InstaHelpDuration>>, String>(
-  (ref, modeId) => VendorDurationsNotifier(ref.watch(instaHelpVendorRepoProvider), modeId),
+  (ref, modeId) => VendorDurationsNotifier(
+    ref.watch(instaHelpVendorRepoProvider), modeId, ref, ref.watch(supabaseClientProvider)),
 );
 
 // ── Activities ─────────────────────────────────────────────────────────────────
@@ -182,15 +273,44 @@ class VendorActivitiesNotifier
     extends StateNotifier<AsyncValue<List<InstaHelpActivity>>> {
   final InstaHelpVendorRepository _repo;
   final String _modeId;
+  final Ref _ref;
+  final SupabaseClient _supabase;
+  RealtimeChannel? _channel;
+  int _gen = 0;
 
-  VendorActivitiesNotifier(this._repo, this._modeId)
+  VendorActivitiesNotifier(this._repo, this._modeId, this._ref, this._supabase)
       : super(const AsyncValue.loading()) {
     _load();
+    _subscribe();
   }
 
   Future<void> _load() async {
-    state = const AsyncValue.loading();
-    state = await AsyncValue.guard(() => _repo.fetchActivities(_modeId));
+    final gen = ++_gen;
+    if (!state.hasValue) state = const AsyncValue.loading();
+    final result = await AsyncValue.guard(() => _repo.fetchActivities(_modeId));
+    if (_gen == gen && mounted) state = result;
+  }
+
+  void _subscribe() {
+    _channel = _supabase
+        .channel('vendor-ih-activities-$_modeId')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'instahelp_activities',
+          callback: (_) => _load(),
+        )
+        .subscribe();
+  }
+
+  @override
+  void dispose() {
+    if (_channel != null) _supabase.removeChannel(_channel!);
+    super.dispose();
+  }
+
+  void _invalidatePending() {
+    if (mounted) _ref.invalidate(vendorInstaHelpRequestsProvider(_modeId));
   }
 
   Future<void> create({
@@ -210,7 +330,7 @@ class VendorActivitiesNotifier
       isActive: isActive,
       sortOrder: nextOrder,
     );
-    await _load();
+    _invalidatePending();
   }
 
   Future<void> update(String id, {
@@ -225,27 +345,17 @@ class VendorActivitiesNotifier
       excludedItems: excludedItems,
       isActive: isActive,
     );
-    await _load();
+    _invalidatePending();
   }
 
   Future<void> toggleActive(String id, {required bool isActive}) async {
-    final current = state.valueOrNull;
-    if (current != null) {
-      state = AsyncValue.data(
-        current.map((a) => a.id == id ? a.copyWith(isActive: isActive) : a).toList(),
-      );
-    }
-    try {
-      await _repo.toggleActivityActive(id, isActive: isActive);
-    } catch (_) {
-      await _load();
-      rethrow;
-    }
+    await _repo.toggleActivityActive(id, isActive: isActive);
+    _invalidatePending();
   }
 
   Future<void> delete(String id) async {
     await _repo.deleteActivity(id);
-    await _load();
+    _invalidatePending();
   }
 
   Future<void> reorder(List<InstaHelpActivity> ordered) async {
@@ -268,7 +378,8 @@ class VendorActivitiesNotifier
 
 final vendorActivitiesProvider = StateNotifierProvider.family<
     VendorActivitiesNotifier, AsyncValue<List<InstaHelpActivity>>, String>(
-  (ref, modeId) => VendorActivitiesNotifier(ref.watch(instaHelpVendorRepoProvider), modeId),
+  (ref, modeId) => VendorActivitiesNotifier(
+    ref.watch(instaHelpVendorRepoProvider), modeId, ref, ref.watch(supabaseClientProvider)),
 );
 
 // ── Slot Config ────────────────────────────────────────────────────────────────
@@ -277,15 +388,40 @@ class VendorSlotConfigNotifier
     extends StateNotifier<AsyncValue<InstaHelpSlotConfig?>> {
   final InstaHelpVendorRepository _repo;
   final String _modeId;
+  final Ref _ref;
+  final SupabaseClient _supabase;
+  RealtimeChannel? _channel;
+  int _gen = 0;
 
-  VendorSlotConfigNotifier(this._repo, this._modeId)
+  VendorSlotConfigNotifier(this._repo, this._modeId, this._ref, this._supabase)
       : super(const AsyncValue.loading()) {
     _load();
+    _subscribe();
   }
 
   Future<void> _load() async {
-    state = const AsyncValue.loading();
-    state = await AsyncValue.guard(() => _repo.fetchSlotConfig(_modeId));
+    final gen = ++_gen;
+    if (!state.hasValue) state = const AsyncValue.loading();
+    final result = await AsyncValue.guard(() => _repo.fetchSlotConfig(_modeId));
+    if (_gen == gen && mounted) state = result;
+  }
+
+  void _subscribe() {
+    _channel = _supabase
+        .channel('vendor-ih-slotconfig-$_modeId')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'instahelp_slot_config',
+          callback: (_) => _load(),
+        )
+        .subscribe();
+  }
+
+  @override
+  void dispose() {
+    if (_channel != null) _supabase.removeChannel(_channel!);
+    super.dispose();
   }
 
   Future<void> save({
@@ -304,13 +440,19 @@ class VendorSlotConfigNotifier
       maxBookingsPerSlot: maxBookingsPerSlot,
       isActive: isActive,
     );
-    await _load();
+    if (mounted) _ref.invalidate(vendorInstaHelpRequestsProvider(_modeId));
+  }
+
+  Future<void> delete() async {
+    await _repo.deleteSlotConfig(_modeId);
+    if (mounted) _ref.invalidate(vendorInstaHelpRequestsProvider(_modeId));
   }
 }
 
 final vendorSlotConfigProvider = StateNotifierProvider.family<
     VendorSlotConfigNotifier, AsyncValue<InstaHelpSlotConfig?>, String>(
-  (ref, modeId) => VendorSlotConfigNotifier(ref.watch(instaHelpVendorRepoProvider), modeId),
+  (ref, modeId) => VendorSlotConfigNotifier(
+    ref.watch(instaHelpVendorRepoProvider), modeId, ref, ref.watch(supabaseClientProvider)),
 );
 
 // ── Financial Config ───────────────────────────────────────────────────────────
@@ -319,15 +461,40 @@ class VendorFinancialConfigNotifier
     extends StateNotifier<AsyncValue<InstaHelpFinancialConfig?>> {
   final InstaHelpVendorRepository _repo;
   final String _modeId;
+  final Ref _ref;
+  final SupabaseClient _supabase;
+  RealtimeChannel? _channel;
+  int _gen = 0;
 
-  VendorFinancialConfigNotifier(this._repo, this._modeId)
+  VendorFinancialConfigNotifier(this._repo, this._modeId, this._ref, this._supabase)
       : super(const AsyncValue.loading()) {
     _load();
+    _subscribe();
   }
 
   Future<void> _load() async {
-    state = const AsyncValue.loading();
-    state = await AsyncValue.guard(() => _repo.fetchFinancialConfig(_modeId));
+    final gen = ++_gen;
+    if (!state.hasValue) state = const AsyncValue.loading();
+    final result = await AsyncValue.guard(() => _repo.fetchFinancialConfig(_modeId));
+    if (_gen == gen && mounted) state = result;
+  }
+
+  void _subscribe() {
+    _channel = _supabase
+        .channel('vendor-ih-financialconfig-$_modeId')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'instahelp_financial_config',
+          callback: (_) => _load(),
+        )
+        .subscribe();
+  }
+
+  @override
+  void dispose() {
+    if (_channel != null) _supabase.removeChannel(_channel!);
+    super.dispose();
   }
 
   Future<void> save({
@@ -348,13 +515,14 @@ class VendorFinancialConfigNotifier
       serviceChargeType: serviceChargeType,
       serviceChargeValue: serviceChargeValue,
     );
-    await _load();
+    if (mounted) _ref.invalidate(vendorInstaHelpRequestsProvider(_modeId));
   }
 }
 
 final vendorFinancialConfigProvider = StateNotifierProvider.family<
     VendorFinancialConfigNotifier, AsyncValue<InstaHelpFinancialConfig?>, String>(
-  (ref, modeId) => VendorFinancialConfigNotifier(ref.watch(instaHelpVendorRepoProvider), modeId),
+  (ref, modeId) => VendorFinancialConfigNotifier(
+    ref.watch(instaHelpVendorRepoProvider), modeId, ref, ref.watch(supabaseClientProvider)),
 );
 
 final vendorInstaHelpEligibilityProvider = FutureProvider.family<bool, String>(

@@ -37,6 +37,7 @@ import '../../features/payment_config/presentation/pages/payment_config_page.dar
 import '../../features/invoice_config/presentation/pages/invoice_config_page.dart';
 import '../../features/payment_config/presentation/pages/upi_config_page.dart';
 import '../../features/whatsapp_config/presentation/pages/whatsapp_config_page.dart';
+import '../../features/bot_config/presentation/pages/bot_config_page.dart';
 import '../../features/sms_config/presentation/pages/sms_config_page.dart';
 import '../../features/push_config/presentation/pages/push_config_page.dart';
 import '../../features/vendor_subscriptions/presentation/pages/vendor_subscriptions_page.dart';
@@ -450,6 +451,13 @@ final routerProvider = Provider<GoRouter>((ref) {
             name: 'whatsappConfig',
             pageBuilder: (context, state) => const NoTransitionPage(
               child: WhatsappConfigPage(),
+            ),
+          ),
+          GoRoute(
+            path: '/dashboard/bot-config',
+            name: 'botConfig',
+            pageBuilder: (context, state) => const NoTransitionPage(
+              child: BotConfigPage(),
             ),
           ),
           GoRoute(

@@ -1313,6 +1313,10 @@ class _MyServicesWideState extends ConsumerState<_MyServicesWide> {
       ...customServices.where((r) => r.isPendingDeletion).map((r) => r.id),
     };
 
+    final vendorCategories =
+        ref.watch(myVendorCategoriesProvider).valueOrNull ?? [];
+    final catNameMap = {for (final c in vendorCategories) c.id: c.name};
+
     final pendingQuestionsCount = vendorId.isEmpty
         ? 0
         : ref
@@ -1387,62 +1391,8 @@ class _MyServicesWideState extends ConsumerState<_MyServicesWide> {
               ),
 
               // ── 1: Custom Services ────────────────────────────────────────
-              customServices.isEmpty
-                  ? EmptyStateView(
-                      icon: Icons.tune_rounded,
-                      title: 'No custom services yet',
-                      subtitle:
-                          'Use "Create Service" to submit a new custom service for admin approval.',
-                    )
-                  : ListView(
-                      padding: const EdgeInsets.all(24),
-                      children: [
-                        Container(
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: AppColors.border),
-                          ),
-                          clipBehavior: Clip.antiAlias,
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              Padding(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 20, vertical: 12),
-                                child: Row(
-                                  children: const [
-                                    Expanded(
-                                        flex: 3,
-                                        child: _ColHeader('SERVICE NAME')),
-                                    SizedBox(
-                                        width: 120, child: _ColHeader('PRICE')),
-                                    SizedBox(
-                                        width: 160, child: _ColHeader('')),
-                                  ],
-                                ),
-                              ),
-                              const Divider(height: 1, color: AppColors.border),
-                              for (int i = 0;
-                                  i < customServices.length;
-                                  i++) ...[
-                                if (i > 0)
-                                  const Divider(
-                                      height: 1,
-                                      color: AppColors.border,
-                                      indent: 20,
-                                      endIndent: 20),
-                                _CustomServiceRow(
-                                  service: customServices[i],
-                                  hasPendingAction: pendingActionFor
-                                      .contains(customServices[i].id),
-                                ),
-                              ],
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
+              _buildWideCustomServices(
+                  customServices, pendingActionFor, catNameMap),
 
               // ── 2: Questions ──────────────────────────────────────────────
               vendorId.isEmpty
@@ -1451,6 +1401,55 @@ class _MyServicesWideState extends ConsumerState<_MyServicesWide> {
             ],
           ),
         ),
+      ],
+    );
+  }
+
+  Widget _buildWideCustomServices(
+    List<VendorServiceRequestModel> services,
+    Set<String> pendingActionFor,
+    Map<String, String> catNameMap,
+  ) {
+    if (services.isEmpty) {
+      return EmptyStateView(
+        icon: Icons.tune_rounded,
+        title: 'No custom services yet',
+        subtitle:
+            'Use "Create Service" to submit a new custom service for admin approval.',
+      );
+    }
+    final grouped = <String, List<VendorServiceRequestModel>>{};
+    final uncategorized = <VendorServiceRequestModel>[];
+    for (final s in services) {
+      if (s.vendorCategoryId != null) {
+        grouped.putIfAbsent(s.vendorCategoryId!, () => []).add(s);
+      } else {
+        uncategorized.add(s);
+      }
+    }
+    final entries = grouped.entries.toList()
+      ..sort((a, b) =>
+          (catNameMap[a.key] ?? '').compareTo(catNameMap[b.key] ?? ''));
+
+    return ListView(
+      padding: const EdgeInsets.all(24),
+      children: [
+        for (int i = 0; i < entries.length; i++) ...[
+          _CustomWideCategorySection(
+            categoryName: catNameMap[entries[i].key] ?? entries[i].key,
+            catColor: _kCatColors[i % _kCatColors.length],
+            services: entries[i].value,
+            pendingActionFor: pendingActionFor,
+          ),
+          const SizedBox(height: 12),
+        ],
+        if (uncategorized.isNotEmpty)
+          _CustomWideCategorySection(
+            categoryName: 'Uncategorized',
+            catColor: _kCatColors[entries.length % _kCatColors.length],
+            services: uncategorized,
+            pendingActionFor: pendingActionFor,
+          ),
       ],
     );
   }
@@ -2297,6 +2296,10 @@ class _MyServicesNarrowState extends ConsumerState<_MyServicesNarrow> {
       ...customServices.where((r) => r.isPendingDeletion).map((r) => r.id),
     };
 
+    final vendorCategories =
+        ref.watch(myVendorCategoriesProvider).valueOrNull ?? [];
+    final catNameMap = {for (final c in vendorCategories) c.id: c.name};
+
     final dodoCount = servicesAsync.valueOrNull?.length ?? 0;
     final pendingQuestionsCount = vendorId.isEmpty
         ? 0
@@ -2373,31 +2376,8 @@ class _MyServicesNarrowState extends ConsumerState<_MyServicesNarrow> {
               ),
 
               // ── 1: Custom Services ────────────────────────────────────
-              customServices.isEmpty
-                  ? EmptyStateView(
-                      icon: Icons.tune_rounded,
-                      title: 'No custom services yet',
-                      subtitle:
-                          'Use "Create Service" to submit a new service for admin approval.',
-                    )
-                  : RefreshIndicator(
-                      onRefresh: () async =>
-                          ref.invalidate(myServiceRequestsProvider),
-                      child: ListView.separated(
-                        padding: const EdgeInsets.symmetric(vertical: 8),
-                        itemCount: customServices.length,
-                        separatorBuilder: (_, __) => const Divider(
-                            height: 1,
-                            color: AppColors.border,
-                            indent: 16,
-                            endIndent: 16),
-                        itemBuilder: (_, i) => _CustomServiceNarrowCard(
-                          service: customServices[i],
-                          hasPendingAction: pendingActionFor
-                              .contains(customServices[i].id),
-                        ),
-                      ),
-                    ),
+              _buildNarrowCustomServices(
+                  customServices, pendingActionFor, catNameMap),
 
               // ── 2: Questions ──────────────────────────────────────────────
               vendorId.isEmpty
@@ -2407,6 +2387,72 @@ class _MyServicesNarrowState extends ConsumerState<_MyServicesNarrow> {
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildNarrowCustomServices(
+    List<VendorServiceRequestModel> services,
+    Set<String> pendingActionFor,
+    Map<String, String> catNameMap,
+  ) {
+    if (services.isEmpty) {
+      return EmptyStateView(
+        icon: Icons.tune_rounded,
+        title: 'No custom services yet',
+        subtitle:
+            'Use "Create Service" to submit a new service for admin approval.',
+      );
+    }
+    final grouped = <String, List<VendorServiceRequestModel>>{};
+    final uncategorized = <VendorServiceRequestModel>[];
+    for (final s in services) {
+      if (s.vendorCategoryId != null) {
+        grouped.putIfAbsent(s.vendorCategoryId!, () => []).add(s);
+      } else {
+        uncategorized.add(s);
+      }
+    }
+    final entries = grouped.entries.toList()
+      ..sort((a, b) =>
+          (catNameMap[a.key] ?? '').compareTo(catNameMap[b.key] ?? ''));
+
+    final allGroups = [
+      ...entries.asMap().entries.map((e) => (
+            name: catNameMap[e.value.key] ?? e.value.key,
+            color: _kCatColors[e.key % _kCatColors.length],
+            services: e.value.value,
+          )),
+      if (uncategorized.isNotEmpty)
+        (
+          name: 'Uncategorized',
+          color: _kCatColors[entries.length % _kCatColors.length],
+          services: uncategorized,
+        ),
+    ];
+
+    return RefreshIndicator(
+      onRefresh: () async => ref.invalidate(myServiceRequestsProvider),
+      child: ListView(
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        children: [
+          for (final group in allGroups) ...[
+            _CustomNarrowCategoryHeader(
+                name: group.name, color: group.color),
+            for (final s in group.services) ...[
+              _CustomServiceNarrowCard(
+                service: s,
+                hasPendingAction: pendingActionFor.contains(s.id),
+              ),
+              const Divider(
+                  height: 1,
+                  color: AppColors.border,
+                  indent: 16,
+                  endIndent: 16),
+            ],
+            const SizedBox(height: 8),
+          ],
+        ],
+      ),
     );
   }
 }
@@ -2506,6 +2552,167 @@ class _SubTab extends StatelessWidget {
   }
 }
 
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Custom Services — category section (wide)
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _CustomWideCategorySection extends StatefulWidget {
+  const _CustomWideCategorySection({
+    required this.categoryName,
+    required this.catColor,
+    required this.services,
+    required this.pendingActionFor,
+  });
+
+  final String categoryName;
+  final Color catColor;
+  final List<VendorServiceRequestModel> services;
+  final Set<String> pendingActionFor;
+
+  @override
+  State<_CustomWideCategorySection> createState() =>
+      _CustomWideCategorySectionState();
+}
+
+class _CustomWideCategorySectionState
+    extends State<_CustomWideCategorySection> {
+  bool _expanded = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final count = widget.services.length;
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.border),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          InkWell(
+            onTap: () => setState(() => _expanded = !_expanded),
+            child: Padding(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
+              child: Row(
+                children: [
+                  Container(
+                    width: 34,
+                    height: 34,
+                    decoration: BoxDecoration(
+                      color: widget.catColor.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Icon(Icons.tune_rounded,
+                        size: 17, color: widget.catColor),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      widget.categoryName,
+                      style: const TextStyle(
+                        fontSize: 14.5,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.textPrimary,
+                      ),
+                    ),
+                  ),
+                  Text(
+                    '$count service${count == 1 ? '' : 's'}',
+                    style: const TextStyle(
+                        fontSize: 12.5, color: AppColors.textSecondary),
+                  ),
+                  const SizedBox(width: 12),
+                  AnimatedRotation(
+                    turns: _expanded ? 0.5 : 0,
+                    duration: const Duration(milliseconds: 200),
+                    child: const Icon(Icons.keyboard_arrow_down_rounded,
+                        size: 20, color: AppColors.textHint),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          if (_expanded) ...[
+            const Divider(height: 1, color: AppColors.border),
+            Padding(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+              child: Row(
+                children: const [
+                  Expanded(flex: 3, child: _ColHeader('SERVICE NAME')),
+                  SizedBox(width: 120, child: _ColHeader('PRICE')),
+                  SizedBox(width: 160, child: _ColHeader('')),
+                ],
+              ),
+            ),
+            const Divider(height: 1, color: AppColors.border),
+            for (int i = 0; i < widget.services.length; i++) ...[
+              if (i > 0)
+                const Divider(
+                    height: 1,
+                    color: AppColors.border,
+                    indent: 20,
+                    endIndent: 20),
+              _CustomServiceRow(
+                service: widget.services[i],
+                hasPendingAction:
+                    widget.pendingActionFor.contains(widget.services[i].id),
+              ),
+            ],
+            const SizedBox(height: 4),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Custom Services — category header (narrow)
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _CustomNarrowCategoryHeader extends StatelessWidget {
+  const _CustomNarrowCategoryHeader({
+    required this.name,
+    required this.color,
+  });
+
+  final String name;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+      child: Row(
+        children: [
+          Container(
+            width: 28,
+            height: 28,
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: Icon(Icons.tune_rounded, size: 14, color: color),
+          ),
+          const SizedBox(width: 10),
+          Text(
+            name,
+            style: const TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
+              color: AppColors.textPrimary,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Custom Service row — wide layout

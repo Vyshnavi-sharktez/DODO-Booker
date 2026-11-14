@@ -38,6 +38,25 @@ class _ServiceRequestDetailDialogState
     if (widget.request.isEditService) _loadParent();
   }
 
+  // ── InstaHelp accept ──────────────────────────────────────────────────────
+  Future<void> _instaHelpAccept() async {
+    setState(() => _busy = true);
+    try {
+      await ref
+          .read(vendorServiceRequestsNotifierProvider.notifier)
+          .acceptInstaHelp(widget.request.id);
+      if (mounted) Navigator.of(context).pop();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e'), backgroundColor: AppColors.error),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
   Future<void> _loadAttrs() async {
     try {
       final data = await Supabase.instance.client
@@ -132,8 +151,11 @@ class _ServiceRequestDetailDialogState
     return true;
   }
 
-  // Dynamic title for edit_service proposals.
+  // Dynamic title.
   String get _dialogTitle {
+    if (widget.request.isInstaHelp) {
+      return '${widget.request.requestTypeLabel} — Pending Review';
+    }
     if (!widget.request.isEditService) return widget.request.requestTypeLabel;
     if (_parentLoading || _liveParent == null) return 'Service Edit Pending Review';
     if (_changedSections.length == 1) {
@@ -225,13 +247,15 @@ class _ServiceRequestDetailDialogState
               child: Row(
                 children: [
                   Icon(
-                    r.isEditService
-                        ? Icons.edit_note_rounded
-                        : r.isDeleteService || r.isPendingDeletion
-                            ? Icons.delete_outline_rounded
-                            : r.isPriceChange
-                                ? Icons.edit_outlined
-                                : Icons.inbox_rounded,
+                    r.isInstaHelp
+                        ? Icons.flash_on_rounded
+                        : r.isEditService
+                            ? Icons.edit_note_rounded
+                            : r.isDeleteService || r.isPendingDeletion
+                                ? Icons.delete_outline_rounded
+                                : r.isPriceChange
+                                    ? Icons.edit_outlined
+                                    : Icons.inbox_rounded,
                     color: Colors.white,
                     size: 20,
                   ),
@@ -260,9 +284,11 @@ class _ServiceRequestDetailDialogState
             Flexible(
               child: SingleChildScrollView(
                 padding: const EdgeInsets.all(24),
-                child: r.isEditService
-                    ? _buildEditServiceBody(r)
-                    : _buildBody(r),
+                child: r.isInstaHelp
+                    ? _buildInstaHelpBody(r)
+                    : r.isEditService
+                        ? _buildEditServiceBody(r)
+                        : _buildBody(r),
               ),
             ),
 
@@ -278,6 +304,139 @@ class _ServiceRequestDetailDialogState
           ],
         ),
       ),
+    );
+  }
+
+  // ── InstaHelp body ─────────────────────────────────────────────────────────
+
+  Widget _buildInstaHelpBody(VendorServiceRequest r) {
+    final data = r.requestData ?? {};
+
+    Widget dataSection() {
+      final rows = <Widget>[];
+
+      if (r.isInstaHelpDuration) {
+        final label = data['label'] as String? ?? r.serviceName;
+        final minutes = data['duration_minutes'] as int?;
+        final price = (data['price'] as num?)?.toDouble();
+        final discountType = data['discount_type'] as String? ?? 'none';
+        final discountValue = (data['discount_value'] as num?)?.toDouble() ?? 0;
+        final isActive = data['is_active'] as bool? ?? true;
+        final slotStart = data['slot_start_time'] as String?;
+        final slotEnd = data['slot_end_time'] as String?;
+        final interval = data['slot_interval_minutes'] as int?;
+        final maxBook = data['max_bookings_per_slot'] as int?;
+
+        rows.add(_DetailRow('Label', label));
+        if (minutes != null) rows.add(_DetailRow('Duration', '$minutes min'));
+        if (price != null) rows.add(_DetailRow('Price', '₹${price.toStringAsFixed(0)}'));
+        if (discountType != 'none' && discountValue > 0) {
+          rows.add(_DetailRow('Discount',
+              discountType == 'percentage' ? '${discountValue.toStringAsFixed(0)}%' : '₹${discountValue.toStringAsFixed(0)} off'));
+        }
+        rows.add(_DetailRow('Active', isActive ? 'Yes' : 'No'));
+        if (slotStart != null) rows.add(_DetailRow('Slot Times', '$slotStart – $slotEnd'));
+        if (interval != null) rows.add(_DetailRow('Slot Interval', '$interval min'));
+        if (maxBook != null) rows.add(_DetailRow('Max Bookings/Slot', '$maxBook'));
+      } else if (r.isInstaHelpActivity) {
+        final title = data['title'] as String? ?? r.serviceName;
+        final included = (data['included_items'] as List?)?.cast<String>() ?? [];
+        final excluded = (data['excluded_items'] as List?)?.cast<String>() ?? [];
+        final isActive = data['is_active'] as bool? ?? true;
+
+        rows.add(_DetailRow('Title', title));
+        rows.add(_DetailRow('Active', isActive ? 'Yes' : 'No'));
+        if (included.isNotEmpty) {
+          rows.add(Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: _BulletList(label: 'Included Items', items: included),
+          ));
+        }
+        if (excluded.isNotEmpty) {
+          rows.add(Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: _BulletList(label: 'Excluded Items', items: excluded),
+          ));
+        }
+      } else if (r.isInstaHelpSlotConfig) {
+        final days = (data['working_days'] as List?)?.map((e) => e.toString()).toList() ?? [];
+        const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+        final dayLabels = days.map((d) {
+          final i = int.tryParse(d) ?? -1;
+          return (i >= 0 && i < 7) ? dayNames[i] : d;
+        }).join(', ');
+        rows.add(_DetailRow('Working Days', dayLabels.isEmpty ? '—' : dayLabels));
+        rows.add(_DetailRow('Start Time', data['start_time'] as String? ?? '—'));
+        rows.add(_DetailRow('End Time', data['end_time'] as String? ?? '—'));
+        rows.add(_DetailRow('Slot Interval', '${data['slot_interval_minutes'] ?? '—'} min'));
+        rows.add(_DetailRow('Max Bookings/Slot', '${data['max_bookings_per_slot'] ?? '—'}'));
+        rows.add(_DetailRow('Active', (data['is_active'] as bool? ?? true) ? 'Yes' : 'No'));
+      } else if (r.isInstaHelpFinancialConfig) {
+        rows.add(_DetailRow('GST', '${data['gst_percent'] ?? 0}%'));
+        rows.add(_DetailRow('Surge Fee', (data['surge_fee_enabled'] as bool? ?? false) ? 'Enabled' : 'Disabled'));
+        if (data['surge_fee_enabled'] == true) {
+          final sfType = data['surge_fee_type'] as String? ?? 'percentage';
+          final sfVal = (data['surge_fee_value'] as num?)?.toDouble() ?? 0;
+          rows.add(_DetailRow('Surge Value', sfType == 'percentage' ? '${sfVal.toStringAsFixed(0)}%' : '₹${sfVal.toStringAsFixed(0)}'));
+        }
+        rows.add(_DetailRow('Service Charge', (data['service_charge_enabled'] as bool? ?? false) ? 'Enabled' : 'Disabled'));
+        if (data['service_charge_enabled'] == true) {
+          final scType = data['service_charge_type'] as String? ?? 'percentage';
+          final scVal = (data['service_charge_value'] as num?)?.toDouble() ?? 0;
+          rows.add(_DetailRow('Charge Value', scType == 'percentage' ? '${scVal.toStringAsFixed(0)}%' : '₹${scVal.toStringAsFixed(0)}'));
+        }
+      }
+
+      if (rows.isEmpty) return const SizedBox.shrink();
+
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const _SectionLabel('Request Details'),
+          const SizedBox(height: 12),
+          ...rows,
+        ],
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _StatusBadge(status: r.status),
+        const SizedBox(height: 20),
+
+        const _SectionLabel('Vendor'),
+        const SizedBox(height: 12),
+        _DetailRow('Business', r.vendorName),
+        if (r.vendorTier != null) _DetailRow('Tier', r.vendorTier!),
+        _DetailRow('Submitted', r.formattedDate),
+        const SizedBox(height: 20),
+
+        dataSection(),
+
+        if (r.isRejected &&
+            r.rejectionReason != null &&
+            r.rejectionReason!.isNotEmpty) ...[
+          const SizedBox(height: 20),
+          const _SectionLabel('Rejection Reason'),
+          const SizedBox(height: 8),
+          _ReasonBox(reason: r.rejectionReason!),
+        ],
+
+        if (_showRejectForm) ...[
+          const SizedBox(height: 20),
+          const _SectionLabel('Rejection Reason *'),
+          const SizedBox(height: 8),
+          TextFormField(
+            controller: _reasonCtrl,
+            maxLines: 3,
+            autofocus: true,
+            decoration: const InputDecoration(
+              hintText: 'Explain why this request is being rejected…',
+            ),
+          ),
+        ],
+      ],
     );
   }
 
@@ -680,8 +839,11 @@ class _ServiceRequestDetailDialogState
       );
     }
 
-    final isDeletion = r.isDeleteService || r.isPendingDeletion;
+    final isDeletion = r.isDeleteService || r.isPendingDeletion ||
+        r.requestType == 'instahelp_delete_duration' ||
+        r.requestType == 'instahelp_delete_activity';
     final acceptLabel = isDeletion ? 'Approve Deletion' : 'Accept';
+    final onAccept = r.isInstaHelp ? _instaHelpAccept : _serviceAccept;
 
     return Row(
       mainAxisAlignment: MainAxisAlignment.end,
@@ -697,7 +859,7 @@ class _ServiceRequestDetailDialogState
         ),
         const SizedBox(width: 12),
         FilledButton(
-          onPressed: _busy ? null : _serviceAccept,
+          onPressed: _busy ? null : onAccept,
           style: FilledButton.styleFrom(
             backgroundColor: isDeletion ? AppColors.error : AppColors.primary,
           ),

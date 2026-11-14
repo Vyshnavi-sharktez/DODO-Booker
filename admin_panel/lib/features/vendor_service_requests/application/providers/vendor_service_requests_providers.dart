@@ -45,6 +45,11 @@ class VendorServiceRequestsNotifier
     await _load();
   }
 
+  Future<void> acceptInstaHelp(String id) async {
+    await _repo.acceptInstaHelp(id);
+    await _load();
+  }
+
   Future<void> complete(String id) async {
     await _repo.complete(id);
     await _load();

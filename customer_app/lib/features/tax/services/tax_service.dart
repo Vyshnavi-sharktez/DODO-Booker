@@ -67,7 +67,35 @@ class TaxService {
         debugPrint('[DODO][Tax] RPC exception: $e — using global');
       }
     } else {
-      debugPrint('[DODO][Tax] parentNodeId is null — using global');
+      // Vendor custom service — check catalog_node_configs with custom_service_id
+      try {
+        final row = await _client
+            .from('catalog_node_configs')
+            .select('config')
+            .eq('module', 'tax')
+            .eq('custom_service_id', serviceId)
+            .maybeSingle();
+        if (row != null) {
+          final cfg = Map<String, dynamic>.from(row['config'] as Map);
+          if (cfg['is_enabled'] == true) {
+            final model = TaxSettingsModel(
+              isEnabled: true,
+              taxName: (cfg['tax_name'] as String?) ?? globalModel.taxName,
+              taxType: (cfg['tax_type'] as String?) ?? globalModel.taxType,
+              taxValue: (cfg['tax_value'] as num?)?.toDouble() ?? globalModel.taxValue,
+              applyOnServices: true,
+              applyOnAddons: true,
+              applyOnPackages: false,
+              displaySeparately: true,
+            );
+            debugPrint('[DODO][Tax] → custom_service config: ${model.taxValue}% (${model.taxName})');
+            return model;
+          }
+        }
+        debugPrint('[DODO][Tax] no custom_service config found — using global');
+      } catch (e) {
+        debugPrint('[DODO][Tax] custom_service lookup exception: $e — using global');
+      }
     }
     debugPrint('[DODO][Tax] → global result: ${globalModel.taxValue}% (${globalModel.taxName})');
     return globalModel;

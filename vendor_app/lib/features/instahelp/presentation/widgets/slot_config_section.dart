@@ -35,6 +35,55 @@ class VendorSlotConfigSection extends ConsumerWidget {
     );
   }
 
+  Future<void> _confirmDelete(BuildContext context, WidgetRef ref) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        title: const Text('Delete Slot Configuration?',
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+        content: const Text(
+          'This will submit a request to remove the global slot configuration. Slots will then fall back to per-duration settings.',
+          style: TextStyle(fontSize: 13),
+        ),
+        actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+        actions: [
+          Row(mainAxisAlignment: MainAxisAlignment.end, children: [
+            OutlinedButton(
+              onPressed: () => Navigator.of(ctx).pop(false),
+              style: OutlinedButton.styleFrom(
+                minimumSize: const Size(90, 40),
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+              ),
+              child: const Text('Cancel'),
+            ),
+            const SizedBox(width: 8),
+            FilledButton(
+              onPressed: () => Navigator.of(ctx).pop(true),
+              style: FilledButton.styleFrom(
+                backgroundColor: AppColors.error,
+                minimumSize: const Size(90, 40),
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+              ),
+              child: const Text('Delete'),
+            ),
+          ]),
+        ],
+      ),
+    );
+    if (confirmed == true && context.mounted) {
+      try {
+        await ref.read(vendorSlotConfigProvider(modeId).notifier).delete();
+      } catch (e) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(e.toString()), backgroundColor: AppColors.error),
+          );
+        }
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final configAsync = ref.watch(vendorSlotConfigProvider(modeId));
@@ -59,18 +108,36 @@ class VendorSlotConfigSection extends ConsumerWidget {
               configAsync.when(
                 loading: () => const SizedBox.shrink(),
                 error: (_, _) => const SizedBox.shrink(),
-                data: (config) => FilledButton.icon(
-                  onPressed: () => _openEdit(context, ref, config),
-                  icon: const Icon(Icons.edit_rounded, size: 16),
-                  label: Text(config == null ? 'Configure' : 'Edit'),
-                  style: FilledButton.styleFrom(
-                    backgroundColor: AppColors.primary,
-                    minimumSize: const Size(0, 40),
-                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                    textStyle: const TextStyle(fontSize: 13),
+                data: (config) => Row(mainAxisSize: MainAxisSize.min, children: [
+                  if (config != null) ...[
+                    OutlinedButton.icon(
+                      onPressed: () => _confirmDelete(context, ref),
+                      icon: const Icon(Icons.delete_outline_rounded, size: 15),
+                      label: const Text('Delete'),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: AppColors.error,
+                        side: const BorderSide(color: AppColors.error),
+                        minimumSize: const Size(0, 40),
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                        textStyle: const TextStyle(fontSize: 13),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                  ],
+                  FilledButton.icon(
+                    onPressed: () => _openEdit(context, ref, config),
+                    icon: const Icon(Icons.edit_rounded, size: 16),
+                    label: Text(config == null ? 'Configure' : 'Edit'),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: AppColors.primary,
+                      minimumSize: const Size(0, 40),
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                      textStyle: const TextStyle(fontSize: 13),
+                    ),
                   ),
-                ),
+                ]),
               ),
             ]),
           ),
@@ -144,6 +211,35 @@ class _Chip extends StatelessWidget {
   }
 }
 
+// ── Time picker tile ──────────────────────────────────────────────────────────
+
+class _TimePicker extends StatelessWidget {
+  final String label;
+  final TimeOfDay time;
+  final VoidCallback onTap;
+  const _TimePicker({required this.label, required this.time, required this.onTap});
+
+  String get _display =>
+      '${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}';
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(8),
+      child: InputDecorator(
+        decoration: InputDecoration(
+          labelText: label,
+          border: const OutlineInputBorder(),
+          isDense: true,
+          suffixIcon: const Icon(Icons.access_time_rounded, size: 18),
+        ),
+        child: Text(_display, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+      ),
+    );
+  }
+}
+
 // ── Slot config dialog ────────────────────────────────────────────────────────
 
 typedef _SlotConfigSaveCallback = Future<void> Function({
@@ -165,8 +261,8 @@ class _SlotConfigDialog extends StatefulWidget {
 }
 
 class _SlotConfigDialogState extends State<_SlotConfigDialog> {
-  final _startCtrl = TextEditingController();
-  final _endCtrl = TextEditingController();
+  late TimeOfDay _startTime;
+  late TimeOfDay _endTime;
   final _intervalCtrl = TextEditingController();
   final _maxCtrl = TextEditingController();
   late Set<int> _workingDays;
@@ -174,25 +270,47 @@ class _SlotConfigDialogState extends State<_SlotConfigDialog> {
   bool _saving = false;
   String? _error;
 
+  static TimeOfDay _parseTime(String? s, TimeOfDay fallback) {
+    if (s == null) return fallback;
+    final parts = s.split(':');
+    if (parts.length != 2) return fallback;
+    final h = int.tryParse(parts[0]);
+    final m = int.tryParse(parts[1]);
+    return (h != null && m != null) ? TimeOfDay(hour: h, minute: m) : fallback;
+  }
+
+  static String _formatTime(TimeOfDay t) =>
+      '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
+
   @override
   void initState() {
     super.initState();
     final e = widget.existing;
     _workingDays = e != null ? Set.of(e.workingDays) : {0, 1, 2, 3, 4, 5, 6};
     _isActive = e?.isActive ?? true;
-    _startCtrl.text = e?.startTime ?? '08:00';
-    _endCtrl.text = e?.endTime ?? '20:00';
+    _startTime = _parseTime(e?.startTime, const TimeOfDay(hour: 8, minute: 0));
+    _endTime = _parseTime(e?.endTime, const TimeOfDay(hour: 20, minute: 0));
     _intervalCtrl.text = (e?.slotIntervalMinutes ?? 60).toString();
     _maxCtrl.text = (e?.maxBookingsPerSlot ?? 10).toString();
   }
 
   @override
   void dispose() {
-    _startCtrl.dispose();
-    _endCtrl.dispose();
     _intervalCtrl.dispose();
     _maxCtrl.dispose();
     super.dispose();
+  }
+
+  Future<void> _pickTime({required bool isStart}) async {
+    final picked = await showTimePicker(
+      context: context,
+      initialTime: isStart ? _startTime : _endTime,
+      initialEntryMode: TimePickerEntryMode.dial,
+      helpText: isStart ? 'Select start time' : 'Select end time',
+    );
+    if (picked != null) {
+      setState(() { isStart ? _startTime = picked : _endTime = picked; });
+    }
   }
 
   Future<void> _save() async {
@@ -205,8 +323,8 @@ class _SlotConfigDialogState extends State<_SlotConfigDialog> {
     try {
       await widget.onSave(
         workingDays: _workingDays.toList()..sort(),
-        startTime: _startCtrl.text.trim(),
-        endTime: _endCtrl.text.trim(),
+        startTime: _formatTime(_startTime),
+        endTime: _formatTime(_endTime),
         slotIntervalMinutes: interval,
         maxBookingsPerSlot: max,
         isActive: _isActive,
@@ -251,16 +369,16 @@ class _SlotConfigDialogState extends State<_SlotConfigDialog> {
               ),
               const SizedBox(height: 16),
               Row(children: [
-                Expanded(child: TextField(
-                  controller: _startCtrl,
-                  decoration: const InputDecoration(labelText: 'Start (HH:MM)', hintText: '08:00', border: OutlineInputBorder(), isDense: true),
-                  keyboardType: TextInputType.datetime,
+                Expanded(child: _TimePicker(
+                  label: 'Start Time',
+                  time: _startTime,
+                  onTap: () => _pickTime(isStart: true),
                 )),
                 const SizedBox(width: 12),
-                Expanded(child: TextField(
-                  controller: _endCtrl,
-                  decoration: const InputDecoration(labelText: 'End (HH:MM)', hintText: '20:00', border: OutlineInputBorder(), isDense: true),
-                  keyboardType: TextInputType.datetime,
+                Expanded(child: _TimePicker(
+                  label: 'End Time',
+                  time: _endTime,
+                  onTap: () => _pickTime(isStart: false),
                 )),
               ]),
               const SizedBox(height: 12),

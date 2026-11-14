@@ -5,6 +5,7 @@ import '../../data/datasources/services_remote_datasource.dart';
 import '../../data/repositories/services_repository_impl.dart';
 import '../../domain/models/assigned_service.dart';
 import '../../domain/models/catalog_service.dart';
+import '../../domain/models/vendor_category_model.dart';
 import '../../domain/models/vendor_service_request_model.dart';
 import '../../domain/repositories/i_services_repository.dart';
 import '../../domain/usecases/assign_services_usecase.dart';
@@ -83,6 +84,14 @@ final myServiceRequestsProvider =
       .read(servicesDatasourceProvider)
       .fetchMyServiceRequests(user.id);
   return rows.map(VendorServiceRequestModel.fromMap).toList();
+});
+
+final myVendorCategoriesProvider =
+    FutureProvider.autoDispose<List<VendorCategoryModel>>((ref) async {
+  final rows = await ref
+      .read(servicesDatasourceProvider)
+      .fetchMyVendorCategories();
+  return rows.map(VendorCategoryModel.fromMap).toList();
 });
 
 final vendorTrendingServicesProvider = FutureProvider<List<CatalogService>>(

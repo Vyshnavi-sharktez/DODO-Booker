@@ -51,6 +51,7 @@ const Map<String, String> routePermissions = {
   '/payment-config': 'settings.read',
   '/upi-config': 'settings.read',
   '/whatsapp-config': 'settings.read',
+  '/bot-config': 'settings.read',
   '/push-config': 'settings.read',
   '/sms-config': 'settings.read',
   '/vendor-subscriptions': 'vendor.read',

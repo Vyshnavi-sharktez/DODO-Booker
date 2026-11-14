@@ -4,7 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../../core/constants/app_colors.dart';
 
-// ── Local attribute models ──────────────────────────────────────────────────
+// â”€â”€ Local attribute models â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class _AttrOption {
   final String id;
@@ -46,9 +46,9 @@ class _Attr {
       );
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 // VendorServiceConfigDialog
-// ═══════════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
 class VendorServiceConfigDialog extends StatefulWidget {
   final String serviceId;
@@ -93,7 +93,39 @@ class _VendorServiceConfigDialogState extends State<VendorServiceConfigDialog>
   bool _attrsLoading = true;
   List<_Attr> _attrs = [];
 
-  // Live (approved) snapshots – used to detect which tabs have pending diffs.
+  // â”€â”€ Catalog module configs â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  bool _configsLoading = true;
+  bool _configsSaving = false;
+  String? _configsError;
+  // existing config row ids per module (null = no override saved)
+  final Map<String, String?> _configIds = {};
+
+  // Tax
+  String _taxType = 'percentage';
+  final _taxNameCtrl = TextEditingController(text: 'GST');
+  final _taxValueCtrl = TextEditingController();
+
+  // Loyalty
+  bool _loyaltyEarnEnabled = true;
+  String _loyaltyRule = 'global';
+  final _loyaltyFixedCtrl = TextEditingController();
+  final _loyaltyPercentCtrl = TextEditingController();
+
+  // Scheduling
+  bool _schedEnabled = true;
+  final List<bool> _schedDays = List.filled(7, false);
+  final _schedMaxCtrl = TextEditingController(text: '5');
+  final _schedIntervalHours = TextEditingController(text: '0');
+  final _schedIntervalMinutes = TextEditingController(text: '30');
+  String? _schedStartTime;
+  String? _schedEndTime;
+
+  // Surge
+  String _surgeType = 'percentage';
+  final _surgeNameCtrl = TextEditingController(text: 'Surge Fee');
+  final _surgeValueCtrl = TextEditingController();
+
+  // Live (approved) snapshots â€“ used to detect which tabs have pending diffs.
   // Populated only when a pending proposal exists.
   List<String>? _liveIncluded;
   List<String>? _liveExcluded;
@@ -107,8 +139,11 @@ class _VendorServiceConfigDialogState extends State<VendorServiceConfigDialog>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 3, vsync: this);
-    _loadContent(); // chains to _loadAttrs() so _pendingEditId is resolved first
+    _tabController = TabController(length: 7, vsync: this);
+    _loadContent(); // chains to _loadAttrs()
+    _loadCatalogConfigs();
+    _schedIntervalHours.addListener(() => setState(() {}));
+    _schedIntervalMinutes.addListener(() => setState(() {}));
   }
 
   @override
@@ -117,10 +152,19 @@ class _VendorServiceConfigDialogState extends State<VendorServiceConfigDialog>
     _warrantyDaysCtrl.dispose();
     _warrantyCoversCtrl.dispose();
     _warrantyExclusionsCtrl.dispose();
+    _taxNameCtrl.dispose();
+    _taxValueCtrl.dispose();
+    _loyaltyFixedCtrl.dispose();
+    _loyaltyPercentCtrl.dispose();
+    _schedMaxCtrl.dispose();
+    _schedIntervalHours.dispose();
+    _schedIntervalMinutes.dispose();
+    _surgeNameCtrl.dispose();
+    _surgeValueCtrl.dispose();
     super.dispose();
   }
 
-  // ── Content ────────────────────────────────────────────────────────────────
+  // â”€â”€ Content â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   Future<void> _loadContent() async {
     try {
@@ -310,7 +354,7 @@ class _VendorServiceConfigDialogState extends State<VendorServiceConfigDialog>
     }
   }
 
-  // ── Warranty ───────────────────────────────────────────────────────────────
+  // â”€â”€ Warranty â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   Future<void> _saveWarranty() async {
     if (_warrantySaving) return;
@@ -352,7 +396,7 @@ class _VendorServiceConfigDialogState extends State<VendorServiceConfigDialog>
     }
   }
 
-  // ── Attributes ─────────────────────────────────────────────────────────────
+  // â”€â”€ Attributes â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   Future<void> _loadAttrs() async {
     try {
@@ -538,7 +582,7 @@ class _VendorServiceConfigDialogState extends State<VendorServiceConfigDialog>
     }
   }
 
-  // ── Per-tab diff detection ─────────────────────────────────────────────────
+  // â”€â”€ Per-tab diff detection â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   bool get _contentHasPendingDiff {
     if (_pendingEditId == null || _liveIncluded == null) return false;
@@ -602,7 +646,7 @@ class _VendorServiceConfigDialogState extends State<VendorServiceConfigDialog>
     return true;
   }
 
-  // ── Pending banner ─────────────────────────────────────────────────────────
+  // â”€â”€ Pending banner â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   Widget _pendingBanner(bool show) {
     if (!show) return const SizedBox.shrink();
@@ -632,7 +676,250 @@ class _VendorServiceConfigDialogState extends State<VendorServiceConfigDialog>
     );
   }
 
-  // ── Build ──────────────────────────────────────────────────────────────────
+  // â”€â”€ Catalog module configs â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+
+  static const _cfgModules = ['tax', 'loyalty', 'scheduling', 'surge'];
+
+  Future<void> _loadCatalogConfigs() async {
+    try {
+      final rows = await _db
+          .from('catalog_node_configs')
+          .select()
+          .eq('custom_service_id', widget.serviceId);
+      if (!mounted) return;
+      for (final row in rows as List) {
+        final m = row as Map<String, dynamic>;
+        final module = m['module'] as String;
+        final config = (m['config'] as Map?)?.cast<String, dynamic>() ?? {};
+        _configIds[module] = m['id'] as String;
+        _populateCatalogConfig(module, config);
+      }
+      setState(() => _configsLoading = false);
+    } catch (_) {
+      if (mounted) setState(() => _configsLoading = false);
+    }
+  }
+
+  void _populateCatalogConfig(String module, Map<String, dynamic> cfg) {
+    switch (module) {
+      case 'tax':
+        _taxNameCtrl.text = cfg['tax_name'] as String? ?? 'GST';
+        _taxType = cfg['tax_type'] as String? ?? 'percentage';
+        _taxValueCtrl.text = (cfg['tax_value'] as num?)?.toString() ?? '';
+      case 'loyalty':
+        _loyaltyEarnEnabled = cfg['earn_enabled'] as bool? ?? true;
+        _loyaltyRule = cfg['earn_rule'] as String? ?? 'global';
+        _loyaltyFixedCtrl.text = (cfg['fixed_points'] as num?)?.toString() ?? '';
+        _loyaltyPercentCtrl.text = (cfg['earn_per_100'] as num?)?.toString() ?? '';
+      case 'scheduling':
+        _schedEnabled = cfg['is_enabled'] as bool? ?? true;
+        final days = (cfg['working_days'] as List<dynamic>?)
+                ?.map((e) => (e as num).toInt())
+                .toSet() ??
+            {};
+        for (int i = 0; i < 7; i++) {
+          _schedDays[i] = days.contains(i);
+        }
+        _schedMaxCtrl.text = (cfg['max_bookings_per_slot'] as num?)?.toString() ?? '5';
+        _schedStartTime = cfg['slot_start_time'] as String?;
+        _schedEndTime = cfg['slot_end_time'] as String?;
+        _schedIntervalHours.text = (cfg['slot_interval_hours'] as num?)?.toString() ?? '0';
+        _schedIntervalMinutes.text = (cfg['slot_interval_minutes'] as num?)?.toString() ?? '30';
+      case 'surge':
+        _surgeNameCtrl.text = cfg['surge_name'] as String? ?? 'Surge Fee';
+        _surgeType = cfg['surge_type'] as String? ?? 'percentage';
+        _surgeValueCtrl.text = (cfg['surge_value'] as num?)?.toString() ?? '';
+    }
+  }
+
+  Map<String, dynamic> _buildCatalogConfig(String module) {
+    switch (module) {
+      case 'tax':
+        return {
+          'tax_name': _taxNameCtrl.text.trim().isEmpty ? 'GST' : _taxNameCtrl.text.trim(),
+          'tax_type': _taxType,
+          'tax_value': double.tryParse(_taxValueCtrl.text.trim()) ?? 0.0,
+        };
+      case 'loyalty':
+        return {
+          'earn_enabled': _loyaltyEarnEnabled,
+          'earn_rule': _loyaltyRule,
+          'fixed_points': int.tryParse(_loyaltyFixedCtrl.text.trim()),
+          'earn_per_100': int.tryParse(_loyaltyPercentCtrl.text.trim()),
+        };
+      case 'scheduling':
+        final days = <int>[];
+        for (int i = 0; i < 7; i++) {
+          if (_schedDays[i]) days.add(i);
+        }
+        final iH = int.tryParse(_schedIntervalHours.text.trim()) ?? 0;
+        final iM = int.tryParse(_schedIntervalMinutes.text.trim()) ?? 0;
+        return {
+          'is_enabled': _schedEnabled,
+          'working_days': days,
+          'max_bookings_per_slot': int.tryParse(_schedMaxCtrl.text.trim()) ?? 5,
+          'slots': _schedGeneratedSlots,
+          'slot_start_time': _schedStartTime,
+          'slot_end_time': _schedEndTime,
+          'slot_interval_hours': iH,
+          'slot_interval_minutes': iM,
+        };
+      case 'surge':
+        return {
+          'surge_name': _surgeNameCtrl.text.trim().isEmpty ? 'Surge Fee' : _surgeNameCtrl.text.trim(),
+          'surge_type': _surgeType,
+          'surge_value': double.tryParse(_surgeValueCtrl.text.trim()) ?? 0.0,
+        };
+      default:
+        return {};
+    }
+  }
+
+  Future<void> _saveCatalogConfig(String module) async {
+    if (_configsSaving) return;
+    if (module == 'scheduling' && _schedEnabled) {
+      final iH = int.tryParse(_schedIntervalHours.text.trim()) ?? 0;
+      final iM = int.tryParse(_schedIntervalMinutes.text.trim()) ?? 0;
+      if (_schedStartTime == null || _schedEndTime == null || iH * 60 + iM <= 0) {
+        setState(() => _configsError = 'Set start time, end time, and interval.');
+        return;
+      }
+      if (_schedGeneratedSlots.isEmpty) {
+        setState(() => _configsError = 'End time must be after start time.');
+        return;
+      }
+    }
+    setState(() { _configsSaving = true; _configsError = null; });
+    try {
+      final config = _buildCatalogConfig(module);
+      final existingId = _configIds[module];
+      if (existingId != null) {
+        await _db.from('catalog_node_configs').update({
+          'config': config,
+          'is_enabled': true,
+        }).eq('id', existingId);
+      } else {
+        final row = await _db.from('catalog_node_configs').insert({
+          'module': module,
+          'custom_service_id': widget.serviceId,
+          'config': config,
+          'is_enabled': true,
+        }).select('id').single();
+        _configIds[module] = row['id'] as String;
+      }
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('${_moduleLabel(module)} settings saved.')),
+        );
+      }
+    } catch (e) {
+      if (mounted) setState(() => _configsError = e.toString());
+    } finally {
+      if (mounted) setState(() => _configsSaving = false);
+    }
+  }
+
+  String _moduleLabel(String module) => switch (module) {
+        'tax' => 'Tax',
+        'loyalty' => 'Loyalty',
+        'scheduling' => 'Scheduling',
+        'surge' => 'Surge Fee',
+        _ => module,
+      };
+
+  // Scheduling helpers
+  List<String> get _schedGeneratedSlots {
+    if (_schedStartTime == null || _schedEndTime == null) return [];
+    final h = int.tryParse(_schedIntervalHours.text.trim()) ?? 0;
+    final m = int.tryParse(_schedIntervalMinutes.text.trim()) ?? 0;
+    return _generateSlots(_schedStartTime!, _schedEndTime!, h, m);
+  }
+
+  List<String> _generateSlots(String start, String end, int hours, int minutes) {
+    final startMin = _toMinutes(start);
+    final endMin = _toMinutes(end);
+    final interval = hours * 60 + minutes;
+    if (interval <= 0 || startMin >= endMin) return [];
+    final slots = <String>[];
+    var current = startMin;
+    while (current < endMin) {
+      slots.add(_minutesToLabel(current));
+      current += interval;
+    }
+    return slots;
+  }
+
+  int _toMinutes(String label) {
+    final parts = label.trim().split(' ');
+    if (parts.length < 2) return 0;
+    final timeParts = parts[0].split(':');
+    if (timeParts.length < 2) return 0;
+    var h = int.tryParse(timeParts[0]) ?? 0;
+    final m = int.tryParse(timeParts[1]) ?? 0;
+    final isPm = parts[1].toUpperCase() == 'PM';
+    if (isPm && h != 12) h += 12;
+    if (!isPm && h == 12) h = 0;
+    return h * 60 + m;
+  }
+
+  String _minutesToLabel(int totalMinutes) {
+    final hour24 = totalMinutes ~/ 60;
+    final minute = totalMinutes % 60;
+    final isPm = hour24 >= 12;
+    var hour12 = hour24 % 12;
+    if (hour12 == 0) hour12 = 12;
+    return '${hour12.toString().padLeft(2, '0')}:${minute.toString().padLeft(2, '0')} ${isPm ? 'PM' : 'AM'}';
+  }
+
+  String _formatSchedTime(TimeOfDay t) {
+    final isPm = t.hour >= 12;
+    var h = t.hour % 12;
+    if (h == 0) h = 12;
+    return '${h.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')} ${isPm ? 'PM' : 'AM'}';
+  }
+
+  TimeOfDay _parseSchedTime(String label) {
+    final parts = label.trim().split(' ');
+    if (parts.length < 2) return const TimeOfDay(hour: 0, minute: 0);
+    final timeParts = parts[0].split(':');
+    var h = int.tryParse(timeParts[0]) ?? 0;
+    final m = int.tryParse(timeParts.length > 1 ? timeParts[1] : '0') ?? 0;
+    final isPm = parts[1].toUpperCase() == 'PM';
+    if (isPm && h != 12) h += 12;
+    if (!isPm && h == 12) h = 0;
+    return TimeOfDay(hour: h, minute: m);
+  }
+
+  Widget _schedTimeRow({required String? value, required VoidCallback onTap}) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(
+          border: Border.all(
+            color: value != null ? AppColors.primary : AppColors.border,
+            width: value != null ? 1.4 : 0.8,
+          ),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Row(
+          children: [
+            Icon(Icons.access_time_rounded, size: 16,
+                color: value != null ? AppColors.primary : AppColors.textSecondary),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(value ?? 'Tap to set',
+                  style: TextStyle(
+                      fontSize: 13,
+                      color: value != null ? AppColors.textPrimary : AppColors.textSecondary)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // â”€â”€ Build â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   @override
   Widget build(BuildContext context) {
@@ -696,6 +983,10 @@ class _VendorServiceConfigDialogState extends State<VendorServiceConfigDialog>
                 Tab(text: 'Content'),
                 Tab(text: 'Warranty'),
                 Tab(text: 'Attributes / Variants'),
+                Tab(text: 'Tax'),
+                Tab(text: 'Loyalty'),
+                Tab(text: 'Scheduling'),
+                Tab(text: 'Surge Fee'),
               ],
             ),
 
@@ -707,6 +998,10 @@ class _VendorServiceConfigDialogState extends State<VendorServiceConfigDialog>
                   _buildContentTab(),
                   _buildWarrantyTab(),
                   _buildAttributesTab(),
+                  _buildTaxTab(),
+                  _buildLoyaltyTab(),
+                  _buildSchedulingTab(),
+                  _buildSurgeTab(),
                 ],
               ),
             ),
@@ -875,7 +1170,7 @@ class _VendorServiceConfigDialogState extends State<VendorServiceConfigDialog>
               controller: _warrantyCoversCtrl,
               maxLines: 4,
               decoration: inputDeco('Warranty Covers').copyWith(
-                hintText: 'One item per line…',
+                hintText: 'One item per lineâ€¦',
                 alignLabelWithHint: true,
               ),
             ),
@@ -884,7 +1179,7 @@ class _VendorServiceConfigDialogState extends State<VendorServiceConfigDialog>
               controller: _warrantyExclusionsCtrl,
               maxLines: 4,
               decoration: inputDeco('Warranty Does Not Cover').copyWith(
-                hintText: 'One item per line…',
+                hintText: 'One item per lineâ€¦',
                 alignLabelWithHint: true,
               ),
             ),
@@ -955,7 +1250,7 @@ class _VendorServiceConfigDialogState extends State<VendorServiceConfigDialog>
                       Text('No entries yet.',
                           style: TextStyle(color: AppColors.textSecondary)),
                       SizedBox(height: 4),
-                      Text('e.g. "1 AC – ₹800", "2 ACs – ₹1500"',
+                      Text('e.g. "1 AC â€“ â‚¹800", "2 ACs â€“ â‚¹1500"',
                           style: TextStyle(
                               fontSize: 12, color: AppColors.textHint)),
                     ],
@@ -975,11 +1270,307 @@ class _VendorServiceConfigDialogState extends State<VendorServiceConfigDialog>
       ],
     );
   }
+
+  // â”€â”€ Catalog module tab helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+
+  InputDecoration _cfgInputDeco(String label) => InputDecoration(
+        labelText: label,
+        isDense: true,
+        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8),
+            borderSide: const BorderSide(color: AppColors.border, width: 0.8)),
+        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8),
+            borderSide: const BorderSide(color: AppColors.border, width: 0.8)),
+        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8),
+            borderSide: const BorderSide(color: AppColors.primary, width: 1.4)),
+      );
+
+  Widget _cfgLabel(String text) => Text(text,
+      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600,
+          color: AppColors.textPrimary));
+
+  Widget _cfgSaveRow(String module) {
+    return Row(
+      children: [
+        if (_configsError != null)
+          Expanded(
+            child: Text(_configsError!,
+                style: const TextStyle(color: AppColors.error, fontSize: 12)),
+          )
+        else
+          const Spacer(),
+        const SizedBox(width: 12),
+        FilledButton(
+          onPressed: _configsSaving ? null : () => _saveCatalogConfig(module),
+          style: FilledButton.styleFrom(
+            backgroundColor: AppColors.primary,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            minimumSize: const Size(100, 44),
+          ),
+          child: _configsSaving
+              ? const SizedBox(width: 16, height: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+              : const Text('Save', style: TextStyle(fontWeight: FontWeight.w600)),
+        ),
+      ],
+    );
+  }
+
+  // â”€â”€ Tax tab â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+
+  Widget _buildTaxTab() {
+    if (_configsLoading) return const Center(child: CircularProgressIndicator());
+    return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _cfgLabel('Tax Name'),
+          const SizedBox(height: 4),
+          TextField(controller: _taxNameCtrl, decoration: _cfgInputDeco('e.g. GST')),
+          const SizedBox(height: 12),
+          _cfgLabel('Tax Type'),
+          const SizedBox(height: 4),
+          SegmentedButton<String>(
+            segments: const [
+              ButtonSegment(value: 'percentage', label: Text('Percentage (%)')),
+              ButtonSegment(value: 'fixed', label: Text('Fixed (â‚¹)')),
+            ],
+            selected: {_taxType},
+            onSelectionChanged: (s) => setState(() => _taxType = s.first),
+          ),
+          const SizedBox(height: 12),
+          _cfgLabel(_taxType == 'percentage' ? 'Tax Rate (%)' : 'Fixed Amount (â‚¹)'),
+          const SizedBox(height: 4),
+          TextField(
+            controller: _taxValueCtrl,
+            decoration: _cfgInputDeco(_taxType == 'percentage' ? 'e.g. 12' : 'e.g. 50'),
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9.]'))],
+          ),
+          const SizedBox(height: 20),
+          _cfgSaveRow('tax'),
+        ],
+      ),
+    );
+  }
+
+  // â”€â”€ Loyalty tab â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+
+  Widget _buildLoyaltyTab() {
+    if (_configsLoading) return const Center(child: CircularProgressIndicator());
+    return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            title: const Text('Loyalty Earn Enabled', style: TextStyle(fontSize: 13)),
+            value: _loyaltyEarnEnabled,
+            activeColor: AppColors.primary,
+            onChanged: (v) => setState(() => _loyaltyEarnEnabled = v),
+          ),
+          const SizedBox(height: 8),
+          _cfgLabel('Earn Rule'),
+          const SizedBox(height: 4),
+          DropdownButtonFormField<String>(
+            value: _loyaltyRule,
+            decoration: _cfgInputDeco(''),
+            items: const [
+              DropdownMenuItem(value: 'global', child: Text('Global rate')),
+              DropdownMenuItem(value: 'fixed', child: Text('Fixed points')),
+              DropdownMenuItem(value: 'percentage', child: Text('Points per â‚¹100')),
+            ],
+            onChanged: (v) => setState(() => _loyaltyRule = v ?? 'global'),
+          ),
+          if (_loyaltyRule == 'fixed') ...[
+            const SizedBox(height: 12),
+            _cfgLabel('Fixed Points per Booking'),
+            const SizedBox(height: 4),
+            TextField(
+              controller: _loyaltyFixedCtrl,
+              decoration: _cfgInputDeco('e.g. 50'),
+              keyboardType: TextInputType.number,
+              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+            ),
+          ] else if (_loyaltyRule == 'percentage') ...[
+            const SizedBox(height: 12),
+            _cfgLabel('Points per â‚¹100 spent'),
+            const SizedBox(height: 4),
+            TextField(
+              controller: _loyaltyPercentCtrl,
+              decoration: _cfgInputDeco('e.g. 5'),
+              keyboardType: TextInputType.number,
+              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+            ),
+          ],
+          const SizedBox(height: 20),
+          _cfgSaveRow('loyalty'),
+        ],
+      ),
+    );
+  }
+
+  // â”€â”€ Scheduling tab â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+
+  static const _dayLabels = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+  Widget _buildSchedulingTab() {
+    if (_configsLoading) return const Center(child: CircularProgressIndicator());
+    final slots = _schedGeneratedSlots;
+    return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            title: const Text('Scheduling Enabled', style: TextStyle(fontSize: 13)),
+            value: _schedEnabled,
+            activeColor: AppColors.primary,
+            onChanged: (v) => setState(() => _schedEnabled = v),
+          ),
+          const SizedBox(height: 12),
+          _cfgLabel('Working Days'),
+          const SizedBox(height: 6),
+          Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            children: List.generate(7, (i) {
+              final selected = _schedDays[i];
+              return FilterChip(
+                label: Text(_dayLabels[i]),
+                selected: selected,
+                onSelected: (v) => setState(() => _schedDays[i] = v),
+                selectedColor: AppColors.primary.withValues(alpha: 0.15),
+                checkmarkColor: AppColors.primary,
+                labelStyle: TextStyle(
+                    fontSize: 12,
+                    color: selected ? AppColors.primary : AppColors.textSecondary),
+              );
+            }),
+          ),
+          const SizedBox(height: 12),
+          _cfgLabel('Start Time'),
+          const SizedBox(height: 4),
+          _schedTimeRow(
+            value: _schedStartTime,
+            onTap: () async {
+              final initial = _schedStartTime != null
+                  ? _parseSchedTime(_schedStartTime!)
+                  : const TimeOfDay(hour: 9, minute: 0);
+              final picked = await showTimePicker(context: context, initialTime: initial);
+              if (picked != null && mounted) setState(() => _schedStartTime = _formatSchedTime(picked));
+            },
+          ),
+          const SizedBox(height: 12),
+          _cfgLabel('End Time'),
+          const SizedBox(height: 4),
+          _schedTimeRow(
+            value: _schedEndTime,
+            onTap: () async {
+              final initial = _schedEndTime != null
+                  ? _parseSchedTime(_schedEndTime!)
+                  : const TimeOfDay(hour: 18, minute: 0);
+              final picked = await showTimePicker(context: context, initialTime: initial);
+              if (picked != null && mounted) setState(() => _schedEndTime = _formatSchedTime(picked));
+            },
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  _cfgLabel('Interval Hours'),
+                  const SizedBox(height: 4),
+                  TextField(
+                    controller: _schedIntervalHours,
+                    decoration: _cfgInputDeco('0'),
+                    keyboardType: TextInputType.number,
+                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                  ),
+                ]),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  _cfgLabel('Interval Minutes'),
+                  const SizedBox(height: 4),
+                  TextField(
+                    controller: _schedIntervalMinutes,
+                    decoration: _cfgInputDeco('30'),
+                    keyboardType: TextInputType.number,
+                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                  ),
+                ]),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          _cfgLabel('Max Bookings per Slot'),
+          const SizedBox(height: 4),
+          TextField(
+            controller: _schedMaxCtrl,
+            decoration: _cfgInputDeco('e.g. 5'),
+            keyboardType: TextInputType.number,
+            inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+          ),
+          if (slots.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            Text('Preview: ${slots.take(5).join(', ')}${slots.length > 5 ? '  +${slots.length - 5} more' : ''}',
+                style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+          ],
+          const SizedBox(height: 20),
+          _cfgSaveRow('scheduling'),
+        ],
+      ),
+    );
+  }
+
+  // â”€â”€ Surge tab â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+
+  Widget _buildSurgeTab() {
+    if (_configsLoading) return const Center(child: CircularProgressIndicator());
+    return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _cfgLabel('Charge Name'),
+          const SizedBox(height: 4),
+          TextField(controller: _surgeNameCtrl, decoration: _cfgInputDeco('e.g. Surge Fee')),
+          const SizedBox(height: 12),
+          _cfgLabel('Surge Type'),
+          const SizedBox(height: 4),
+          SegmentedButton<String>(
+            segments: const [
+              ButtonSegment(value: 'percentage', label: Text('Percentage (%)')),
+              ButtonSegment(value: 'fixed', label: Text('Fixed (â‚¹)')),
+            ],
+            selected: {_surgeType},
+            onSelectionChanged: (s) => setState(() => _surgeType = s.first),
+          ),
+          const SizedBox(height: 12),
+          _cfgLabel(_surgeType == 'percentage' ? 'Surge Rate (%)' : 'Fixed Amount (â‚¹)'),
+          const SizedBox(height: 4),
+          TextField(
+            controller: _surgeValueCtrl,
+            decoration: _cfgInputDeco(_surgeType == 'percentage' ? 'e.g. 15' : 'e.g. 100'),
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9.]'))],
+          ),
+          const SizedBox(height: 20),
+          _cfgSaveRow('surge'),
+        ],
+      ),
+    );
+  }
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 // Section header
-// ═══════════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
 class _SectionHeader extends StatelessWidget {
   const _SectionHeader({
@@ -1009,9 +1600,9 @@ class _SectionHeader extends StatelessWidget {
   }
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 // Editable text list
-// ═══════════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
 class _EditableItemList extends StatefulWidget {
   const _EditableItemList({
@@ -1212,7 +1803,7 @@ class _EditableItemListState extends State<_EditableItemList> {
                     decoration: const InputDecoration(
                       isDense: true,
                       border: InputBorder.none,
-                      hintText: 'Enter item…',
+                      hintText: 'Enter itemâ€¦',
                       contentPadding: EdgeInsets.symmetric(vertical: 10),
                     ),
                     onSubmitted: (_) => _commit(),
@@ -1254,9 +1845,9 @@ class _EditableItemListState extends State<_EditableItemList> {
   }
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 // Before & After image pair editor
-// ═══════════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
 class _BeforeAfterEditor extends StatefulWidget {
   const _BeforeAfterEditor({
@@ -1417,9 +2008,9 @@ class _BeforeAfterEditorState extends State<_BeforeAfterEditor> {
   }
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 // Image upload field
-// ═══════════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
 const _kVendorContentBucket = 'vendor-requests';
 
@@ -1594,9 +2185,9 @@ class _ImageUploadFieldState extends State<_ImageUploadField> {
   }
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 // Attribute row
-// ═══════════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
 class _AttributeRow extends StatelessWidget {
   const _AttributeRow({
@@ -1637,7 +2228,7 @@ class _AttributeRow extends StatelessWidget {
                 if (price > 0) ...[
                   const SizedBox(height: 2),
                   Text(
-                    '₹${price.toStringAsFixed(0)}',
+                    'â‚¹${price.toStringAsFixed(0)}',
                     style: const TextStyle(
                         fontSize: 12, color: AppColors.textSecondary),
                   ),
@@ -1667,9 +2258,9 @@ class _AttributeRow extends StatelessWidget {
   }
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 // Attribute form dialog (Add / Edit entry)
-// ═══════════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
 class _AttrFormDialog extends StatefulWidget {
   const _AttrFormDialog({
@@ -1883,8 +2474,8 @@ class _AttrFormDialogState extends State<_AttrFormDialog> {
                             RegExp(r'^\d*\.?\d{0,2}')),
                       ],
                       decoration: _inputDeco('e.g. 2000').copyWith(
-                        labelText: 'Price (₹) *',
-                        prefixText: '₹ ',
+                        labelText: 'Price (â‚¹) *',
+                        prefixText: 'â‚¹ ',
                       ),
                       validator: (v) {
                         if (v == null || v.trim().isEmpty) return 'Required';
@@ -1932,7 +2523,7 @@ class _AttrFormDialogState extends State<_AttrFormDialog> {
                             ),
                             Padding(
                               padding: EdgeInsets.symmetric(horizontal: 10),
-                              child: Text('₹'),
+                              child: Text('â‚¹'),
                             ),
                           ],
                         ),
@@ -1953,11 +2544,11 @@ class _AttrFormDialogState extends State<_AttrFormDialog> {
                               decoration: _inputDeco(
                                 _discountType == 'percentage'
                                     ? 'Discount %'
-                                    : 'Discount ₹',
+                                    : 'Discount â‚¹',
                               ).copyWith(
                                 prefixText: _discountType == 'percentage'
                                     ? null
-                                    : '₹ ',
+                                    : 'â‚¹ ',
                                 suffixText: _discountType == 'percentage'
                                     ? '%'
                                     : null,

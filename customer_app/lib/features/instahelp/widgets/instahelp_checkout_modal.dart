@@ -1031,52 +1031,6 @@ class _SummaryRow extends StatelessWidget {
       );
 }
 
-// ── Price row ─────────────────────────────────────────────────────────────────
-
-class _PriceRow extends StatelessWidget {
-  final String label;
-  final double amount;
-  final NumberFormat fmt;
-  final bool primary;
-  const _PriceRow({
-    required this.label,
-    required this.amount,
-    required this.fmt,
-    this.primary = false,
-  });
-
-  @override
-  Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.symmetric(vertical: 2),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text(
-              label,
-              style: GoogleFonts.poppins(
-                fontSize: 12,
-                color: primary
-                    ? AppColors.textPrimary
-                    : AppColors.textSecondary,
-                fontWeight:
-                    primary ? FontWeight.w600 : FontWeight.w400,
-              ),
-            ),
-            Text(
-              fmt.format(amount),
-              style: GoogleFonts.poppins(
-                fontSize: 12,
-                color: primary
-                    ? AppColors.textPrimary
-                    : AppColors.textSecondary,
-                fontWeight:
-                    primary ? FontWeight.w600 : FontWeight.w400,
-              ),
-            ),
-          ],
-        ),
-      );
-}
 
 // ── Preferred vendor card (InstaHelp checkout) ────────────────────────────────
 

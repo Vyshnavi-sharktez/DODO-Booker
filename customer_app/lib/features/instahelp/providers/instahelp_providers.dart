@@ -13,9 +13,9 @@ final instaHelpServiceProvider = Provider<InstaHelpService>(
   (_) => InstaHelpService(),
 );
 
-// Vendor-specific modes — vendor_id = vendorId
+// Vendor-specific modes in sort_order — [{modeType, id}, ...]
 final instaHelpVendorModeIdsProvider =
-    FutureProvider.autoDispose.family<Map<String, String>, String>(
+    FutureProvider.autoDispose.family<List<Map<String, String>>, String>(
         (ref, vendorId) async {
   return ref.read(instaHelpServiceProvider).fetchModeIds(vendorId: vendorId);
 });
