@@ -55,6 +55,10 @@ class CouponsNotifier extends StateNotifier<AsyncValue<List<Coupon>>> {
       selectedCustomerIds: selectedCustomerIds,
       maxOrderWiseLimit: maxOrderWiseLimit,
     );
+    if (isActive) {
+      // Fire-and-forget; errors are caught inside the method
+      _repo.sendCouponNotification(created);
+    }
     final current = state.valueOrNull ?? [];
     state = AsyncValue.data([created, ...current]);
   }

@@ -227,7 +227,7 @@ class _QuestionSheetState extends State<_QuestionSheet> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text('Ask a Question',
-              style: GoogleFonts.poppins(
+              style: GoogleFonts.inter(
                   fontSize: 16,
                   fontWeight: FontWeight.w700,
                   color: AppColors.textPrimary)),
@@ -310,3 +310,5 @@ class _QuestionSheetState extends State<_QuestionSheet> {
     }
   }
 }
+
+

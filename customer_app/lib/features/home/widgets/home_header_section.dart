@@ -132,7 +132,7 @@ class _Logo extends StatelessWidget {
         const SizedBox(width: 10),
         Text(
           'DODO\nBOOKER',
-          style: GoogleFonts.poppins(
+          style: GoogleFonts.inter(
             fontSize: 15,
             fontWeight: FontWeight.w800,
             color: Colors.white,
@@ -272,7 +272,7 @@ class _GetAppButtonState extends State<_GetAppButton> {
           ),
           child: Text(
             'Get App',
-            style: GoogleFonts.poppins(
+            style: GoogleFonts.inter(
               fontSize: 13,
               fontWeight: FontWeight.w600,
               color: Colors.white,
@@ -327,7 +327,7 @@ class _AvatarButton extends StatelessWidget {
               child: initials.isNotEmpty
                   ? Text(
                       initials,
-                      style: GoogleFonts.poppins(
+                      style: GoogleFonts.inter(
                         fontSize: 12,
                         fontWeight: FontWeight.w700,
                         color: AppColors.gold,
@@ -345,3 +345,5 @@ class _AvatarButton extends StatelessWidget {
     );
   }
 }
+
+

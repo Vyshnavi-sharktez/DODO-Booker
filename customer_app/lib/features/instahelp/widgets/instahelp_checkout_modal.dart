@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
@@ -64,7 +64,7 @@ class InstaHelpCheckoutModal extends ConsumerStatefulWidget {
           backgroundColor: AppColors.background,
           appBar: AppBar(
             title: Text('Checkout',
-                style: GoogleFonts.poppins(fontWeight: FontWeight.w700)),
+                style: GoogleFonts.inter(fontWeight: FontWeight.w700)),
             backgroundColor: AppColors.surface,
             elevation: 0,
           ),
@@ -393,7 +393,7 @@ class _InstaHelpCheckoutModalState
                 title: 'Order Summary',
                 trailing: Text(
                   '1',
-                  style: GoogleFonts.poppins(
+                  style: GoogleFonts.inter(
                     fontSize: 13,
                     color: AppColors.textSecondary,
                   ),
@@ -419,14 +419,14 @@ class _InstaHelpCheckoutModalState
                             children: [
                               Text(
                                 'InstaHelp – ${widget.duration.label}',
-                                style: GoogleFonts.poppins(
+                                style: GoogleFonts.inter(
                                   fontSize: 14,
                                   fontWeight: FontWeight.w600,
                                 ),
                               ),
                               Text(
                                 _fmt.format(basePrice),
-                                style: GoogleFonts.poppins(
+                                style: GoogleFonts.inter(
                                   fontSize: 12,
                                   color: AppColors.textSecondary,
                                 ),
@@ -436,7 +436,7 @@ class _InstaHelpCheckoutModalState
                         ),
                         Text(
                           _fmt.format(basePrice),
-                          style: GoogleFonts.poppins(
+                          style: GoogleFonts.inter(
                             fontSize: 15,
                             fontWeight: FontWeight.w700,
                             color: AppColors.primary,
@@ -498,7 +498,7 @@ class _InstaHelpCheckoutModalState
                                     children: [
                                       Text(
                                         addr.label,
-                                        style: GoogleFonts.poppins(
+                                        style: GoogleFonts.inter(
                                           fontSize: 14,
                                           fontWeight: FontWeight.w600,
                                         ),
@@ -517,7 +517,7 @@ class _InstaHelpCheckoutModalState
                                           ),
                                           child: Text(
                                             'Default',
-                                            style: GoogleFonts.poppins(
+                                            style: GoogleFonts.inter(
                                               fontSize: 10,
                                               color: AppColors.primary,
                                               fontWeight: FontWeight.w600,
@@ -529,7 +529,7 @@ class _InstaHelpCheckoutModalState
                                   ),
                                   Text(
                                     addr.fullAddress,
-                                    style: GoogleFonts.poppins(
+                                    style: GoogleFonts.inter(
                                       fontSize: 12,
                                       color: AppColors.textSecondary,
                                     ),
@@ -602,7 +602,7 @@ class _InstaHelpCheckoutModalState
                                   _selectedDate != null
                                       ? _formatDate(_selectedDate!)
                                       : 'Select a date',
-                                  style: GoogleFonts.poppins(
+                                  style: GoogleFonts.inter(
                                     fontSize: 14,
                                     color: _selectedDate != null
                                         ? AppColors.textPrimary
@@ -632,7 +632,7 @@ class _InstaHelpCheckoutModalState
                       : (_selectedDate == null
                           ? Text(
                               'Select a date first.',
-                              style: GoogleFonts.poppins(
+                              style: GoogleFonts.inter(
                                   fontSize: 13,
                                   color: AppColors.textHint),
                             )
@@ -663,7 +663,7 @@ class _InstaHelpCheckoutModalState
                                     ),
                                     child: Text(
                                       slot,
-                                      style: GoogleFonts.poppins(
+                                      style: GoogleFonts.inter(
                                         fontSize: 12,
                                         fontWeight: isSel
                                             ? FontWeight.w700
@@ -721,7 +721,7 @@ class _InstaHelpCheckoutModalState
                                 vendors.length > 1
                                     ? 'Scroll to see all ${vendors.length} options'
                                     : 'Select a preferred vendor for personalized service',
-                                style: GoogleFonts.poppins(
+                                style: GoogleFonts.inter(
                                   fontSize: 12,
                                   color: AppColors.textHint,
                                 ),
@@ -798,7 +798,7 @@ class _InstaHelpCheckoutModalState
                           const SizedBox(width: 10),
                           Text(
                             'Calculating...',
-                            style: GoogleFonts.poppins(
+                            style: GoogleFonts.inter(
                               fontSize: 13,
                               color: AppColors.textSecondary,
                             ),
@@ -846,14 +846,14 @@ class _InstaHelpCheckoutModalState
                             children: [
                               Text(
                                 'Total',
-                                style: GoogleFonts.poppins(
+                                style: GoogleFonts.inter(
                                   fontSize: 15,
                                   fontWeight: FontWeight.w700,
                                 ),
                               ),
                               Text(
                                 _fmt.format(totalPrice),
-                                style: GoogleFonts.poppins(
+                                style: GoogleFonts.inter(
                                   fontSize: 16,
                                   fontWeight: FontWeight.w800,
                                   color: AppColors.primary,
@@ -907,7 +907,7 @@ class _InstaHelpCheckoutModalState
                 children: [
                   Text(
                     _fmt.format(totalPrice),
-                    style: GoogleFonts.poppins(
+                    style: GoogleFonts.inter(
                       fontSize: 20,
                       fontWeight: FontWeight.w800,
                       color: AppColors.primary,
@@ -915,7 +915,7 @@ class _InstaHelpCheckoutModalState
                   ),
                   Text(
                     'incl. taxes & fees',
-                    style: GoogleFonts.poppins(
+                    style: GoogleFonts.inter(
                       fontSize: 11,
                       color: AppColors.textSecondary,
                     ),
@@ -943,7 +943,7 @@ class _InstaHelpCheckoutModalState
                         )
                       : Text(
                           'Place Booking',
-                          style: GoogleFonts.poppins(
+                          style: GoogleFonts.inter(
                               fontSize: 15, fontWeight: FontWeight.w700),
                         ),
                 ),
@@ -971,7 +971,7 @@ class _ReadOnlyRow extends StatelessWidget {
         const SizedBox(width: 10),
         Text(
           text,
-          style: GoogleFonts.poppins(
+          style: GoogleFonts.inter(
             fontSize: 14,
             fontWeight: FontWeight.w600,
             color: AppColors.textPrimary,
@@ -986,7 +986,7 @@ class _ReadOnlyRow extends StatelessWidget {
           ),
           child: Text(
             'Set',
-            style: GoogleFonts.poppins(
+            style: GoogleFonts.inter(
               fontSize: 10,
               color: AppColors.primary,
               fontWeight: FontWeight.w600,
@@ -1013,14 +1013,14 @@ class _SummaryRow extends StatelessWidget {
           children: [
             Text(
               label,
-              style: GoogleFonts.poppins(
+              style: GoogleFonts.inter(
                 fontSize: 13,
                 color: AppColors.textSecondary,
               ),
             ),
             Text(
               value,
-              style: GoogleFonts.poppins(
+              style: GoogleFonts.inter(
                 fontSize: 13,
                 color: AppColors.textPrimary,
                 fontWeight: FontWeight.w500,
@@ -1087,7 +1087,7 @@ class _PvCard extends ConsumerWidget {
                 Expanded(
                   child: Text(
                     label,
-                    style: GoogleFonts.poppins(
+                    style: GoogleFonts.inter(
                       fontSize: 12,
                       fontWeight: FontWeight.w700,
                       color: effectiveSel
@@ -1127,7 +1127,7 @@ class _PvCard extends ConsumerWidget {
               const SizedBox(height: 2),
               Text(
                 sublabel!,
-                style: GoogleFonts.poppins(
+                style: GoogleFonts.inter(
                   fontSize: 10,
                   color: AppColors.textHint,
                 ),
@@ -1137,7 +1137,7 @@ class _PvCard extends ConsumerWidget {
             if (fee != null)
               Text(
                 fee!,
-                style: GoogleFonts.poppins(
+                style: GoogleFonts.inter(
                   fontSize: 11,
                   fontWeight: FontWeight.w700,
                   color:
@@ -1208,7 +1208,7 @@ class _SectionCard extends StatelessWidget {
             children: [
               Text(
                 title,
-                style: GoogleFonts.poppins(
+                style: GoogleFonts.inter(
                   fontSize: 13,
                   fontWeight: FontWeight.w700,
                   color: AppColors.textSecondary,
@@ -1227,4 +1227,6 @@ class _SectionCard extends StatelessWidget {
     );
   }
 }
+
+
 

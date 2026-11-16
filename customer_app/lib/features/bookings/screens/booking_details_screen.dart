@@ -24,6 +24,8 @@ import '../../warranties/models/service_warranty_model.dart';
 import '../../warranties/screens/warranty_details_screen.dart';
 import '../../warranties/services/warranty_providers.dart';
 import '../../booking/providers/dodo_upi_provider.dart';
+import '../../call_bridge/services/call_bridge_service.dart';
+import '../../call_bridge/widgets/call_bridge_dialog.dart';
 
 class BookingDetailsScreen extends ConsumerStatefulWidget {
   final MyBookingModel booking;
@@ -76,6 +78,7 @@ class _BookingDetailsScreenState extends ConsumerState<BookingDetailsScreen> {
           child: Column(
             children: [
               _StatusBanner(booking: booking),
+              _CallVendorCard(booking: booking),
               if (booking.isPaymentFailed)
                 const _PaymentFailedInfoBanner(),
               if (booking.isCancelled && !booking.isCod)
@@ -1873,6 +1876,121 @@ class _RefundSuccessBanner extends StatelessWidget {
                   ),
                 ),
               ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Call Vendor card ──────────────────────────────────────────────────────────
+
+class _CallVendorCard extends ConsumerStatefulWidget {
+  final MyBookingModel booking;
+  const _CallVendorCard({required this.booking});
+
+  @override
+  ConsumerState<_CallVendorCard> createState() => _CallVendorCardState();
+}
+
+class _CallVendorCardState extends ConsumerState<_CallVendorCard> {
+  bool _calling = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final callEnabled =
+        ref.watch(callProviderEnabledProvider).valueOrNull ?? false;
+    final status = widget.booking.status;
+    final showCall = callEnabled &&
+        (status == BookingStatus.accepted || status == BookingStatus.enRoute);
+
+    if (!showCall) return const SizedBox.shrink();
+
+    final vendorName = widget.booking.vendorName ?? 'Your Technician';
+
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 4, 16, 0),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppColors.primary.withValues(alpha: 0.06),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.primary.withValues(alpha: 0.2)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.shield_rounded,
+                  size: 16, color: AppColors.primary),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      vendorName,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                        color: AppColors.textPrimary,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const Text(
+                      'Protected via DODO Virtual Call Bridge',
+                      style: TextStyle(
+                        fontSize: 10,
+                        color: AppColors.primary,
+                        fontWeight: FontWeight.w600,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              onPressed: _calling
+                  ? null
+                  : () async {
+                      setState(() => _calling = true);
+                      try {
+                        await CallBridgeDialog.show(
+                          context,
+                          bookingId: widget.booking.id,
+                          bookingNumber: widget.booking.displayBookingNumber,
+                          callerRole: 'customer',
+                          recipientName: vendorName,
+                          bookingStatus: status,
+                        );
+                      } finally {
+                        if (mounted) setState(() => _calling = false);
+                      }
+                    },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                elevation: 0,
+              ),
+              icon: const Icon(Icons.phone_rounded, size: 14),
+              label: const Text(
+                'Call Vendor',
+                style:
+                    TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+              ),
             ),
           ),
         ],

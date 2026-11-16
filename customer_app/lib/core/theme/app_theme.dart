@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../constants/app_colors.dart';
@@ -99,6 +99,7 @@ class AppTheme {
       useMaterial3: true,
       colorScheme: colorScheme,
       scaffoldBackgroundColor: scaffoldBg,
+      fontFamily: GoogleFonts.inter().fontFamily,
 
       // ── AppBar ──────────────────────────────────────────────────────────
       appBarTheme: AppBarTheme(
@@ -107,10 +108,10 @@ class AppTheme {
         elevation: 0,
         scrolledUnderElevation: 1,
         centerTitle: true,
-        titleTextStyle: GoogleFonts.poppins(
+        titleTextStyle: GoogleFonts.inter(
           color: textPrimary,
           fontSize: 18,
-          fontWeight: FontWeight.w600,
+          fontWeight: FontWeight.w700,
           letterSpacing: 0.1,
         ),
         iconTheme: IconThemeData(color: textPrimary),
@@ -136,16 +137,16 @@ class AppTheme {
         }),
         labelTextStyle: WidgetStateProperty.resolveWith((states) {
           if (states.contains(WidgetState.selected)) {
-            return GoogleFonts.poppins(
+            return GoogleFonts.inter(
               color: navSelected,
               fontSize: 12,
-              fontWeight: FontWeight.w600,
+              fontWeight: FontWeight.w700,
             );
           }
           return GoogleFonts.inter(
             color: navUnselected,
             fontSize: 12,
-            fontWeight: FontWeight.w400,
+            fontWeight: FontWeight.w500,
           );
         }),
         labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
@@ -177,9 +178,9 @@ class AppTheme {
           minimumSize: const Size.fromHeight(52),
           elevation: 0,
           shape: const StadiumBorder(),
-          textStyle: GoogleFonts.poppins(
+          textStyle: GoogleFonts.inter(
             fontSize: 16,
-            fontWeight: FontWeight.w600,
+            fontWeight: FontWeight.w700,
             letterSpacing: 0.2,
           ),
         ),
@@ -191,9 +192,9 @@ class AppTheme {
           foregroundColor: colorScheme.onPrimary,
           minimumSize: const Size.fromHeight(52),
           shape: const StadiumBorder(),
-          textStyle: GoogleFonts.poppins(
+          textStyle: GoogleFonts.inter(
             fontSize: 16,
-            fontWeight: FontWeight.w600,
+            fontWeight: FontWeight.w700,
           ),
         ),
       ),
@@ -204,9 +205,9 @@ class AppTheme {
           minimumSize: const Size(double.infinity, 52),
           side: BorderSide(color: primary, width: 1.5),
           shape: const StadiumBorder(),
-          textStyle: GoogleFonts.poppins(
+          textStyle: GoogleFonts.inter(
             fontSize: 16,
-            fontWeight: FontWeight.w600,
+            fontWeight: FontWeight.w700,
           ),
         ),
       ),
@@ -214,7 +215,7 @@ class AppTheme {
       textButtonTheme: TextButtonThemeData(
         style: TextButton.styleFrom(
           foregroundColor: primary,
-          textStyle: GoogleFonts.poppins(
+          textStyle: GoogleFonts.inter(
             fontSize: 14,
             fontWeight: FontWeight.w600,
           ),
@@ -287,55 +288,55 @@ class AppTheme {
         ),
       ),
 
-      // ── Typography — Poppins for display/headline, Inter for body ───────
+      // ── Typography ───────────────────────────────────────────────────────
       textTheme: TextTheme(
-        displayLarge: GoogleFonts.poppins(
+        displayLarge: GoogleFonts.inter(
           color: textPrimary,
           fontSize: 57,
-          fontWeight: FontWeight.w700,
+          fontWeight: FontWeight.w800,
           letterSpacing: -0.25,
         ),
-        displayMedium: GoogleFonts.poppins(
+        displayMedium: GoogleFonts.inter(
           color: textPrimary,
           fontSize: 45,
-          fontWeight: FontWeight.w700,
+          fontWeight: FontWeight.w800,
         ),
-        displaySmall: GoogleFonts.poppins(
+        displaySmall: GoogleFonts.inter(
           color: textPrimary,
           fontSize: 36,
-          fontWeight: FontWeight.w600,
+          fontWeight: FontWeight.w700,
         ),
-        headlineLarge: GoogleFonts.poppins(
+        headlineLarge: GoogleFonts.inter(
           color: textPrimary,
           fontSize: 32,
           fontWeight: FontWeight.w700,
         ),
-        headlineMedium: GoogleFonts.poppins(
+        headlineMedium: GoogleFonts.inter(
           color: textPrimary,
           fontSize: 24,
-          fontWeight: FontWeight.w600,
+          fontWeight: FontWeight.w700,
         ),
-        headlineSmall: GoogleFonts.poppins(
+        headlineSmall: GoogleFonts.inter(
           color: textPrimary,
           fontSize: 20,
           fontWeight: FontWeight.w600,
         ),
-        titleLarge: GoogleFonts.poppins(
+        titleLarge: GoogleFonts.inter(
+          color: textPrimary,
+          fontSize: 22,
+          fontWeight: FontWeight.w700,
+          letterSpacing: 0.1,
+        ),
+        titleMedium: GoogleFonts.inter(
           color: textPrimary,
           fontSize: 18,
           fontWeight: FontWeight.w600,
           letterSpacing: 0.1,
         ),
-        titleMedium: GoogleFonts.poppins(
+        titleSmall: GoogleFonts.inter(
           color: textPrimary,
           fontSize: 16,
-          fontWeight: FontWeight.w500,
-          letterSpacing: 0.1,
-        ),
-        titleSmall: GoogleFonts.poppins(
-          color: textPrimary,
-          fontSize: 14,
-          fontWeight: FontWeight.w500,
+          fontWeight: FontWeight.w600,
           letterSpacing: 0.1,
         ),
         bodyLarge: GoogleFonts.inter(
@@ -345,29 +346,29 @@ class AppTheme {
         ),
         bodyMedium: GoogleFonts.inter(
           color: textSecondary,
-          fontSize: 14,
+          fontSize: 15,
           fontWeight: FontWeight.w400,
         ),
         bodySmall: GoogleFonts.inter(
           color: textHint,
-          fontSize: 12,
+          fontSize: 13,
           fontWeight: FontWeight.w400,
         ),
         labelLarge: GoogleFonts.inter(
           color: textPrimary,
-          fontSize: 14,
+          fontSize: 15,
           fontWeight: FontWeight.w600,
           letterSpacing: 0.1,
         ),
         labelMedium: GoogleFonts.inter(
           color: textSecondary,
-          fontSize: 12,
+          fontSize: 13,
           fontWeight: FontWeight.w500,
           letterSpacing: 0.5,
         ),
         labelSmall: GoogleFonts.inter(
           color: textHint,
-          fontSize: 11,
+          fontSize: 12,
           fontWeight: FontWeight.w500,
           letterSpacing: 0.5,
         ),
@@ -375,3 +376,4 @@ class AppTheme {
     );
   }
 }
+

@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../../core/constants/app_colors.dart';
@@ -166,7 +166,7 @@ class _ServiceCardState extends State<_ServiceCard> {
                           node.name,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: GoogleFonts.poppins(
+                          style: GoogleFonts.inter(
                             fontSize: 13,
                             fontWeight: FontWeight.w600,
                             color: const Color(0xFF1A1714),
@@ -267,3 +267,5 @@ class _Skeleton extends StatelessWidget {
     );
   }
 }
+
+

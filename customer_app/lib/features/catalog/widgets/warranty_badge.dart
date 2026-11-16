@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../../core/widgets/app_modal_dialog.dart';
 
@@ -108,7 +108,7 @@ class WarrantyInfoDialog extends StatelessWidget {
                 const SizedBox(width: 8),
                 Text(
                   '$warrantyDays Day Warranty',
-                  style: GoogleFonts.poppins(
+                  style: GoogleFonts.inter(
                     fontSize: 14,
                     fontWeight: FontWeight.w700,
                     color: _kGreen,
@@ -175,3 +175,5 @@ class WarrantyInfoDialog extends StatelessWidget {
         .toList();
   }
 }
+
+

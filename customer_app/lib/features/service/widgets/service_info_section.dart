@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../models/service_model.dart';
@@ -25,7 +25,7 @@ class ServiceInfoSection extends StatelessWidget {
               ),
               child: Text(
                 service.categoryName!,
-                style: GoogleFonts.poppins(
+                style: GoogleFonts.inter(
                   fontSize: 11,
                   fontWeight: FontWeight.w600,
                   color: Colors.white,
@@ -37,7 +37,7 @@ class ServiceInfoSection extends StatelessWidget {
           // Service name
           Text(
             service.name,
-            style: GoogleFonts.poppins(
+            style: GoogleFonts.inter(
               fontSize: 20,
               fontWeight: FontWeight.w700,
               color: AppColors.textPrimary,
@@ -87,7 +87,7 @@ class ServiceInfoSection extends StatelessWidget {
               const SizedBox(width: 6),
               Text(
                 _formatPrice(service.startingPrice),
-                style: GoogleFonts.poppins(
+                style: GoogleFonts.inter(
                   fontSize: 22,
                   fontWeight: FontWeight.w800,
                   color: AppColors.textPrimary,
@@ -111,3 +111,5 @@ class ServiceInfoSection extends StatelessWidget {
     return '₹${price.toStringAsFixed(2)}';
   }
 }
+
+

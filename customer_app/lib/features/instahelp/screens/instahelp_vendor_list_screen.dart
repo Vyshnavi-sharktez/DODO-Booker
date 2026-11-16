@@ -1,4 +1,4 @@
-import 'dart:math' as math;
+﻿import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -521,7 +521,7 @@ class _SubHeader extends StatelessWidget {
                     ),
                     Text(
                       moduleLabel,
-                      style: GoogleFonts.poppins(
+                      style: GoogleFonts.inter(
                         fontSize: 14,
                         fontWeight: FontWeight.w600,
                         color: AppColors.textPrimary,
@@ -614,7 +614,7 @@ class _MobileHeader extends StatelessWidget {
                         moduleLabel,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: GoogleFonts.poppins(
+                        style: GoogleFonts.inter(
                           fontSize: 14,
                           fontWeight: FontWeight.w600,
                           color: AppColors.textPrimary,
@@ -744,7 +744,7 @@ class _FilterSidebar extends StatelessWidget {
           children: [
             Text(
               'Filter',
-              style: GoogleFonts.poppins(
+              style: GoogleFonts.inter(
                 fontSize: 15,
                 fontWeight: FontWeight.w600,
                 color: AppColors.textPrimary,
@@ -874,7 +874,7 @@ class _SectionTitle extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Text(
         text,
-        style: GoogleFonts.poppins(
+        style: GoogleFonts.inter(
           fontSize: 13,
           fontWeight: FontWeight.w600,
           color: AppColors.textPrimary,
@@ -1338,7 +1338,7 @@ class _VendorCardState extends State<_VendorCard> {
                             textAlign: TextAlign.center,
                             maxLines: mobile ? 1 : 2,
                             overflow: TextOverflow.ellipsis,
-                            style: GoogleFonts.poppins(
+                            style: GoogleFonts.inter(
                               fontSize: mobile ? 12 : 13,
                               fontWeight: FontWeight.w600,
                               color: AppColors.textPrimary,
@@ -1622,7 +1622,7 @@ class _EmptyState extends StatelessWidget {
               hasFilters
                   ? 'No vendors match your filters'
                   : 'No vendors found in this area',
-              style: GoogleFonts.poppins(
+              style: GoogleFonts.inter(
                 fontSize: 16,
                 fontWeight: FontWeight.w600,
                 color: AppColors.textPrimary,
@@ -1693,7 +1693,7 @@ class _ErrorState extends StatelessWidget {
             const SizedBox(height: 12),
             Text(
               'Failed to load vendors',
-              style: GoogleFonts.poppins(
+              style: GoogleFonts.inter(
                 fontSize: 15,
                 fontWeight: FontWeight.w600,
                 color: AppColors.textPrimary,
@@ -1801,3 +1801,5 @@ class _BorderedThumbShape extends SliderComponentShape {
     );
   }
 }
+
+

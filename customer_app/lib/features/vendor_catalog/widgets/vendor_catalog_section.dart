@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -117,8 +117,8 @@ class _MobileVendorServicesSectionState
               padding: const EdgeInsets.fromLTRB(20, 0, 20, 14),
               child: Text(
                 widget.title,
-                style: GoogleFonts.poppins(
-                  fontSize: 17,
+                style: GoogleFonts.inter(
+                  fontSize: 22,
                   fontWeight: FontWeight.w700,
                   color: AppColors.textPrimary,
                 ),
@@ -243,7 +243,7 @@ class _MobileCategoryGridItem extends StatelessWidget {
             child: Text(
               category.name,
               style: GoogleFonts.inter(
-                fontSize: 12,
+                fontSize: 14,
                 fontWeight: FontWeight.w600,
                 color: AppColors.textPrimary,
                 height: 1.2,
@@ -270,7 +270,7 @@ class _MobileCategoryFallback extends StatelessWidget {
       alignment: Alignment.center,
       child: Text(
         name.isNotEmpty ? name[0].toUpperCase() : '?',
-        style: GoogleFonts.poppins(
+        style: GoogleFonts.inter(
           fontSize: 22,
           fontWeight: FontWeight.w700,
           color: AppColors.textSecondary,
@@ -360,8 +360,8 @@ class _CategoryCardState extends State<_CategoryCard> {
                           cat.name,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: GoogleFonts.poppins(
-                            fontSize: 13,
+                          style: GoogleFonts.inter(
+                            fontSize: 15,
                             fontWeight: FontWeight.w600,
                             color: const Color(0xFF1A1714),
                             height: 1.25,
@@ -373,7 +373,7 @@ class _CategoryCardState extends State<_CategoryCard> {
                             child: Text(
                               '${cat.vendorCount} vendor${cat.vendorCount == 1 ? '' : 's'}',
                               style: GoogleFonts.inter(
-                                fontSize: 11,
+                                fontSize: 13,
                                 fontWeight: FontWeight.w600,
                                 color: const Color(0xFF1A1714),
                               ),
@@ -408,3 +408,5 @@ class _Placeholder extends StatelessWidget {
         ),
       );
 }
+
+

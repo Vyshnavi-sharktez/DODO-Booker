@@ -14,6 +14,7 @@ import 'cod_cash_confirmation_dialog.dart';
 import 'dispatch_countdown_timer.dart';
 import 'reject_dialog.dart';
 import 'service_photo_sheet.dart';
+import '../../../call_bridge/services/call_bridge_service.dart';
 import '../../../call_bridge/widgets/call_bridge_dialog.dart';
 
 class BookingCard extends ConsumerStatefulWidget {
@@ -562,6 +563,9 @@ class _BookingCardState extends ConsumerState<BookingCard> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
+    final callEnabled =
+        ref.watch(callProviderEnabledProvider).valueOrNull ?? false;
+
     final isAutoDispatching = _booking.dispatchStatus == 'dispatching';
 
     // Check if dispatch timer has elapsed on client side (only relevant during auto-dispatch)
@@ -781,7 +785,7 @@ class _BookingCardState extends ConsumerState<BookingCard> {
                 maxLines: 2,
               ),
 
-            if (['accepted', 'en_route', 'in_progress'].contains(_booking.status.toLowerCase())) ...[
+            if (callEnabled && ['accepted', 'en_route', 'in_progress'].contains(_booking.status.toLowerCase())) ...[
               const SizedBox(height: 8),
               Container(
                 padding: const EdgeInsets.all(12),

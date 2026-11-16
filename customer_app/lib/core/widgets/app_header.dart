@@ -1,4 +1,4 @@
-import 'dart:ui';
+﻿import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -20,6 +20,7 @@ import '../../features/catalog/models/catalog_node_model.dart';
 import '../../features/service_areas/providers/service_areas_providers.dart';
 import '../../routes/app_router.dart';
 import '../../features/wishlist/screens/wishlist_screen.dart';
+import '../search/search_scope.dart';
 import 'nav_search.dart';
 import 'page_sheet.dart';
 
@@ -29,11 +30,16 @@ class AppHeader extends ConsumerWidget implements PreferredSizeWidget {
   final VoidCallback onProfileTap;
   final bool isScrolled;
 
+  /// Optional search scope. Null (or omitted) means global search — existing
+  /// behaviour on all pages except VendorListScreen and VendorDetailScreen.
+  final SearchScope? searchScope;
+
   const AppHeader({
     super.key,
     required this.onLogoTap,
     required this.onProfileTap,
     this.isScrolled = false,
+    this.searchScope,
   });
 
   @override
@@ -89,14 +95,17 @@ class AppHeader extends ConsumerWidget implements PreferredSizeWidget {
                       child: isDesktop
                           ? _DesktopRow(
                               onLogoTap: onLogoTap,
-                              onProfileTap: onProfileTap)
+                              onProfileTap: onProfileTap,
+                              searchScope: searchScope)
                           : isWide
                               ? _WideRow(
                                   onLogoTap: onLogoTap,
-                                  onProfileTap: onProfileTap)
+                                  onProfileTap: onProfileTap,
+                                  searchScope: searchScope)
                               : _MobileRow(
                                   onLogoTap: onLogoTap,
-                                  onProfileTap: onProfileTap),
+                                  onProfileTap: onProfileTap,
+                                  searchScope: searchScope),
                     ),
                   ),
                 ),
@@ -118,7 +127,8 @@ class AppHeader extends ConsumerWidget implements PreferredSizeWidget {
 class _DesktopRow extends StatelessWidget {
   final VoidCallback onLogoTap;
   final VoidCallback onProfileTap;
-  const _DesktopRow({required this.onLogoTap, required this.onProfileTap});
+  final SearchScope? searchScope;
+  const _DesktopRow({required this.onLogoTap, required this.onProfileTap, this.searchScope});
 
   @override
   Widget build(BuildContext context) {
@@ -153,7 +163,7 @@ class _DesktopRow extends StatelessWidget {
           child: Center(
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 480),
-              child: const NavSearchBar(),
+              child: NavSearchBar(scope: searchScope),
             ),
           ),
         ),
@@ -188,7 +198,8 @@ class _DesktopRow extends StatelessWidget {
 class _WideRow extends StatelessWidget {
   final VoidCallback onLogoTap;
   final VoidCallback onProfileTap;
-  const _WideRow({required this.onLogoTap, required this.onProfileTap});
+  final SearchScope? searchScope;
+  const _WideRow({required this.onLogoTap, required this.onProfileTap, this.searchScope});
 
   @override
   Widget build(BuildContext context) {
@@ -209,7 +220,7 @@ class _WideRow extends StatelessWidget {
           child: Center(
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 400),
-              child: const NavSearchBar(),
+              child: NavSearchBar(scope: searchScope),
             ),
           ),
         ),
@@ -254,7 +265,8 @@ class _WideRow extends StatelessWidget {
 class _MobileRow extends StatelessWidget {
   final VoidCallback onLogoTap;
   final VoidCallback onProfileTap;
-  const _MobileRow({required this.onLogoTap, required this.onProfileTap});
+  final SearchScope? searchScope;
+  const _MobileRow({required this.onLogoTap, required this.onProfileTap, this.searchScope});
 
   void _showMenu(BuildContext context) {
     showModalBottomSheet<void>(
@@ -281,7 +293,7 @@ class _MobileRow extends StatelessWidget {
           ),
         ),
         const Spacer(),
-        const NavSearchButton(),
+        NavSearchButton(scope: searchScope),
         const SizedBox(width: 4),
         const _CartButton(),
         const SizedBox(width: 4),
@@ -1179,7 +1191,7 @@ class _DownloadAppButtonState extends State<_DownloadAppButton> {
               const SizedBox(width: 6),
               Text(
                 'Get App',
-                style: GoogleFonts.poppins(
+                style: GoogleFonts.inter(
                   fontSize: 13,
                   fontWeight: FontWeight.w700,
                   color: AppColors.primary,
@@ -1636,3 +1648,5 @@ class _ProfileAvatarState extends ConsumerState<_ProfileAvatar> {
     );
   }
 }
+
+

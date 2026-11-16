@@ -1,4 +1,5 @@
 ﻿import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/constants/app_colors.dart';
@@ -203,7 +204,7 @@ class _NotificationList extends StatelessWidget {
   }
 }
 
-class _NotificationTile extends StatelessWidget {
+class _NotificationTile extends StatefulWidget {
   final NotificationModel notification;
   final bool read;
   final VoidCallback onTap;
@@ -216,24 +217,48 @@ class _NotificationTile extends StatelessWidget {
     this.onRateService,
   });
 
+  @override
+  State<_NotificationTile> createState() => _NotificationTileState();
+}
+
+class _NotificationTileState extends State<_NotificationTile> {
   static const _months = [
     'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
     'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
   ];
 
+  static final _couponCodeRe = RegExp(r'Use code\s+(\S+)\s+to get');
+
+  bool _copied = false;
+
+  String? _extractCouponCode() {
+    final match = _couponCodeRe.firstMatch(widget.notification.message);
+    return match?.group(1);
+  }
+
+  Future<void> _copyCode(String code) async {
+    await Clipboard.setData(ClipboardData(text: code));
+    if (!mounted) return;
+    setState(() => _copied = true);
+    await Future.delayed(const Duration(seconds: 2));
+    if (mounted) setState(() => _copied = false);
+  }
+
   @override
   Widget build(BuildContext context) {
     final tt = Theme.of(context).textTheme;
-    final d = notification.createdAt.toLocal();
+    final d = widget.notification.createdAt.toLocal();
     final date = '${d.day} ${_months[d.month - 1]} - '
         '${d.hour.toString().padLeft(2, '0')}:${d.minute.toString().padLeft(2, '0')}';
+
+    final couponCode = _extractCouponCode();
 
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Expanded(
           child: InkWell(
-            onTap: onTap,
+            onTap: widget.onTap,
             child: Padding(
               padding: const EdgeInsets.fromLTRB(16, 12, 4, 12),
               child: Row(
@@ -246,7 +271,7 @@ class _NotificationTile extends StatelessWidget {
                       height: 8,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
-                        color: read ? Colors.transparent : AppColors.primary,
+                        color: widget.read ? Colors.transparent : AppColors.primary,
                       ),
                     ),
                   ),
@@ -255,18 +280,18 @@ class _NotificationTile extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          notification.title,
+                          widget.notification.title,
                           style: tt.bodySmall?.copyWith(
-                            fontWeight: read ? FontWeight.w500 : FontWeight.w700,
-                            color: read
+                            fontWeight: widget.read ? FontWeight.w500 : FontWeight.w700,
+                            color: widget.read
                                 ? AppColors.textSecondary
                                 : AppColors.textPrimary,
                           ),
                         ),
-                        if (notification.message.isNotEmpty) ...[
+                        if (widget.notification.message.isNotEmpty) ...[
                           const SizedBox(height: 3),
                           Text(
-                            notification.message,
+                            widget.notification.message,
                             style: tt.bodySmall?.copyWith(
                               color: AppColors.textSecondary,
                               height: 1.4,
@@ -280,12 +305,12 @@ class _NotificationTile extends StatelessWidget {
                           date,
                           style: tt.labelSmall?.copyWith(color: AppColors.textHint),
                         ),
-                        if (onRateService != null) ...[
+                        if (widget.onRateService != null) ...[
                           const SizedBox(height: 8),
                           MouseRegion(
                             cursor: SystemMouseCursors.click,
                             child: GestureDetector(
-                              onTap: onRateService,
+                              onTap: widget.onRateService,
                               child: Container(
                                 padding: const EdgeInsets.symmetric(
                                     horizontal: 10, vertical: 5),
@@ -307,6 +332,44 @@ class _NotificationTile extends StatelessWidget {
                                         fontSize: 12,
                                         fontWeight: FontWeight.w700,
                                         color: AppColors.gold,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                        if (couponCode != null) ...[
+                          const SizedBox(height: 8),
+                          MouseRegion(
+                            cursor: SystemMouseCursors.click,
+                            child: GestureDetector(
+                              onTap: _copied ? null : () => _copyCode(couponCode),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 10, vertical: 5),
+                                decoration: BoxDecoration(
+                                  color: AppColors.primary.withAlpha(20),
+                                  borderRadius: BorderRadius.circular(20),
+                                  border: Border.all(
+                                      color: AppColors.primary.withAlpha(100)),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(
+                                      _copied ? Icons.check_rounded : Icons.copy_rounded,
+                                      size: 13,
+                                      color: AppColors.primary,
+                                    ),
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      _copied ? 'Copied!' : 'Copy Code: $couponCode',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w700,
+                                        color: AppColors.primary,
                                       ),
                                     ),
                                   ],

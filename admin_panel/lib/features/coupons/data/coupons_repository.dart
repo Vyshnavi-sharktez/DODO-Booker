@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../domain/models/coupon.dart';
 
@@ -125,6 +126,55 @@ class CouponsRepository {
           'customer_id': cid,
         }).toList(),
       );
+    }
+  }
+
+  Future<void> sendCouponNotification(Coupon coupon) async {
+    final val = coupon.discountValue;
+    final valStr = val % 1 == 0 ? val.toInt().toString() : val.toString();
+    final discountLabel = coupon.discountType == 'percentage'
+        ? '$valStr% off'
+        : '₹$valStr off';
+
+    try {
+      if (coupon.customerEligibility == 'selected') {
+        if (coupon.selectedCustomerIds.isEmpty) return;
+        await _supabase.from('notifications').insert(
+          coupon.selectedCustomerIds
+              .map((cid) => {
+                    'user_type': 'customer',
+                    'user_id': cid,
+                    'title': 'New Coupon Unlocked For You!',
+                    'message':
+                        'Use code ${coupon.code} to get $discountLabel on your next booking.',
+                    'notification_type': 'offer',
+                    'is_read': false,
+                    'entity_type': 'coupon',
+                    'entity_id': coupon.id,
+                  })
+              .toList(),
+        );
+      } else {
+        final row = await _supabase
+            .from('broadcast_notifications')
+            .insert({
+              'title': 'New Coupon Available!',
+              'message':
+                  'Use code ${coupon.code} to get $discountLabel. Book now!',
+              'notification_type': 'offer',
+              'audience': 'customers',
+              'targeting_type': 'all',
+              'status': 'draft',
+            })
+            .select('id')
+            .single();
+        await _supabase.rpc(
+          'send_broadcast_notification',
+          params: {'p_broadcast_id': row['id'] as String},
+        );
+      }
+    } catch (e) {
+      debugPrint('[DODO][Coupons] sendCouponNotification failed: $e');
     }
   }
 
