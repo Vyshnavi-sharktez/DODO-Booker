@@ -509,7 +509,7 @@ class _WebContent extends StatelessWidget {
         // Headline
         Text.rich(
           TextSpan(
-            style: GoogleFonts.poppins(
+            style: GoogleFonts.inter(
               fontWeight: FontWeight.w800,
               color: Colors.white,
               height: 1.12,
@@ -736,7 +736,7 @@ class _ContinueButtonState extends State<_ContinueButton> {
               ],
               Text(
                 widget.checkState.webButtonLabel,
-                style: GoogleFonts.poppins(
+                style: GoogleFonts.inter(
                   fontSize: 14,
                   fontWeight: FontWeight.w600,
                   color: const Color(0xFF1A1714),
@@ -948,7 +948,7 @@ class _LocationPickerSheetState extends State<_LocationPickerSheet> {
                   children: [
                     Text(
                       'Choose a location',
-                      style: GoogleFonts.poppins(
+                      style: GoogleFonts.inter(
                         fontSize: 16,
                         fontWeight: FontWeight.w700,
                         color: AppColors.textPrimary,
@@ -1235,7 +1235,7 @@ class _MobileIdleHero extends StatelessWidget {
                 child: IgnorePointer(
                   child: Text(
                     'SERV\nICE',
-                    style: GoogleFonts.poppins(
+                    style: GoogleFonts.inter(
                       fontWeight: FontWeight.w800,
                       fontSize: 80,
                       color: const Color(0xFF1E1B17),
@@ -1254,7 +1254,7 @@ class _MobileIdleHero extends StatelessWidget {
                     // Brand
                     Text(
                       'DODO BOOKER',
-                      style: GoogleFonts.poppins(
+                      style: GoogleFonts.inter(
                         fontSize: 13,
                         fontWeight: FontWeight.w800,
                         color: Colors.white,
@@ -1275,7 +1275,7 @@ class _MobileIdleHero extends StatelessWidget {
                     // Headline
                     Text.rich(
                       TextSpan(
-                        style: GoogleFonts.poppins(
+                        style: GoogleFonts.inter(
                           fontSize: 28,
                           fontWeight: FontWeight.w800,
                           color: Colors.white,
@@ -1357,7 +1357,7 @@ class _MobileFetchingScreen extends StatelessWidget {
           const SizedBox(height: 28),
           Text(
             'Getting your location...',
-            style: GoogleFonts.poppins(
+            style: GoogleFonts.inter(
               fontSize: 22,
               fontWeight: FontWeight.w700,
               color: const Color(0xFF1A1714),
@@ -1505,7 +1505,7 @@ class _MobileSupportedScreen extends StatelessWidget {
           const SizedBox(height: 28),
           Text(
             'Great!',
-            style: GoogleFonts.poppins(
+            style: GoogleFonts.inter(
               fontSize: 22,
               fontWeight: FontWeight.w700,
               color: const Color(0xFF1A1714),
@@ -1561,7 +1561,7 @@ class _MobileSupportedScreen extends StatelessWidget {
               alignment: Alignment.center,
               child: Text(
                 'Continue to Home →',
-                style: GoogleFonts.poppins(
+                style: GoogleFonts.inter(
                   fontSize: 15,
                   fontWeight: FontWeight.w600,
                   color: Colors.white,
@@ -1618,7 +1618,7 @@ class _MobileNotSupportedScreen extends StatelessWidget {
           const SizedBox(height: 28),
           Text(
             "Sorry, we're not serving\nyour location yet.",
-            style: GoogleFonts.poppins(
+            style: GoogleFonts.inter(
               fontSize: 19,
               fontWeight: FontWeight.w700,
               color: const Color(0xFF1A1714),
@@ -1678,7 +1678,7 @@ class _MobileNotSupportedScreen extends StatelessWidget {
               alignment: Alignment.center,
               child: Text(
                 'Try Another Location →',
-                style: GoogleFonts.poppins(
+                style: GoogleFonts.inter(
                   fontSize: 15,
                   fontWeight: FontWeight.w600,
                   color: Colors.white,
@@ -1701,7 +1701,7 @@ class _MobileNotSupportedScreen extends StatelessWidget {
               alignment: Alignment.center,
               child: Text(
                 'Enter Location Manually',
-                style: GoogleFonts.poppins(
+                style: GoogleFonts.inter(
                   fontSize: 15,
                   fontWeight: FontWeight.w600,
                   color: const Color(0xFF1A1714),
@@ -1764,7 +1764,7 @@ class _GetStartedButton extends StatelessWidget {
                         Flexible(
                           child: Text(
                             checkState.mobileButtonLabel,
-                            style: GoogleFonts.poppins(
+                            style: GoogleFonts.inter(
                               fontSize: 13,
                               fontWeight: FontWeight.w600,
                               color: AppColors.primary,
@@ -1776,7 +1776,7 @@ class _GetStartedButton extends StatelessWidget {
                     )
                   : Text(
                       checkState.mobileButtonLabel,
-                      style: GoogleFonts.poppins(
+                      style: GoogleFonts.inter(
                         fontSize: 15,
                         fontWeight: FontWeight.w600,
                         color: AppColors.primary,
@@ -1806,3 +1806,5 @@ class _GetStartedButton extends StatelessWidget {
     );
   }
 }
+
+

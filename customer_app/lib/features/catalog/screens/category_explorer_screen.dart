@@ -228,7 +228,7 @@ class _CategoryExplorerScreenState
               ),
               title: Text(
                 'Services',
-                style: GoogleFonts.poppins(
+                style: GoogleFonts.inter(
                   fontSize: 16,
                   fontWeight: FontWeight.w700,
                   color: _kTextDark,
@@ -359,7 +359,7 @@ class _Sidebar extends StatelessWidget {
               padding: const EdgeInsets.fromLTRB(10, 0, 10, 18),
               child: Text(
                 'Categories',
-                style: GoogleFonts.poppins(
+                style: GoogleFonts.inter(
                   fontSize: 20,
                   fontWeight: FontWeight.w700,
                   color: _kTextDark,
@@ -742,7 +742,7 @@ class _RightPaneContent extends ConsumerWidget {
                           const SizedBox(height: 24),
                           Text(
                             'Services',
-                            style: GoogleFonts.poppins(
+                            style: GoogleFonts.inter(
                               fontSize: 15,
                               fontWeight: FontWeight.w700,
                               color: _kTextDark,
@@ -807,7 +807,7 @@ class _HeaderRow extends StatelessWidget {
       children: [
         Text(
           displayName,
-          style: GoogleFonts.poppins(
+          style: GoogleFonts.inter(
             fontSize: 24,
             fontWeight: FontWeight.w700,
             color: _kTextDark,
@@ -1085,7 +1085,7 @@ class _DesktopListCard extends ConsumerWidget {
                             ),
                           ),
                           Text('$qty',
-                              style: GoogleFonts.poppins(
+                              style: GoogleFonts.inter(
                                   fontSize: 13,
                                   fontWeight: FontWeight.w600,
                                   color: Colors.white)),
@@ -1157,7 +1157,7 @@ class _DesktopListCard extends ConsumerWidget {
               padding: const EdgeInsets.symmetric(horizontal: 10),
               child: Text(
                 '$qty',
-                style: GoogleFonts.poppins(
+                style: GoogleFonts.inter(
                   fontSize: 14,
                   fontWeight: FontWeight.w600,
                   color: _kTextDark,
@@ -1265,7 +1265,7 @@ class _DesktopListCard extends ConsumerWidget {
                     // Name
                     Text(
                       node.name,
-                      style: GoogleFonts.poppins(
+                      style: GoogleFonts.inter(
                         fontSize: 14,
                         fontWeight: FontWeight.w700,
                         color: _kTextDark,
@@ -1480,7 +1480,7 @@ class _DesktopListCard extends ConsumerWidget {
                   // Service name
                   Text(
                     node.name,
-                    style: GoogleFonts.poppins(
+                    style: GoogleFonts.inter(
                       fontSize: 20,
                       fontWeight: FontWeight.w700,
                       color: _kTextDark,
@@ -1681,7 +1681,7 @@ class _ServiceCardState extends State<_ServiceCard> {
                     children: [
                       Text(
                         node.name,
-                        style: GoogleFonts.poppins(
+                        style: GoogleFonts.inter(
                           fontSize: 15,
                           fontWeight: FontWeight.w600,
                           color: _kTextDark,
@@ -1713,7 +1713,7 @@ class _ServiceCardState extends State<_ServiceCard> {
                       if (node.basePrice != null) ...[
                         Text(
                           'from ₹${node.basePrice!.toStringAsFixed(0)}',
-                          style: GoogleFonts.poppins(
+                          style: GoogleFonts.inter(
                             fontSize: 14,
                             fontWeight: FontWeight.w600,
                             color: _kTextDark,
@@ -2151,7 +2151,7 @@ class _MobileCategoryGridItem extends StatelessWidget {
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
               textAlign: TextAlign.center,
-              style: GoogleFonts.poppins(
+              style: GoogleFonts.inter(
                 fontSize: 11,
                 fontWeight: FontWeight.w600,
                 color: _kTextDark,
@@ -2199,7 +2199,7 @@ class _CartPanel extends ConsumerWidget {
             ),
             child: Text(
               'Cart (${items.length})',
-              style: GoogleFonts.poppins(
+              style: GoogleFonts.inter(
                 fontSize: 16,
                 fontWeight: FontWeight.w700,
                 color: _kTextDark,
@@ -2236,7 +2236,7 @@ class _CartPanel extends ConsumerWidget {
                     ),
                     Text(
                       '₹${total.toInt()}',
-                      style: GoogleFonts.poppins(
+                      style: GoogleFonts.inter(
                         fontSize: 16,
                         fontWeight: FontWeight.w700,
                         color: _kTextDark,
@@ -2258,7 +2258,7 @@ class _CartPanel extends ConsumerWidget {
                       child: Center(
                         child: Text(
                           'Proceed to Checkout',
-                          style: GoogleFonts.poppins(
+                          style: GoogleFonts.inter(
                             fontSize: 13,
                             fontWeight: FontWeight.w600,
                             color: Colors.white,
@@ -2501,3 +2501,5 @@ class _PanelBreakdownRow extends StatelessWidget {
     );
   }
 }
+
+

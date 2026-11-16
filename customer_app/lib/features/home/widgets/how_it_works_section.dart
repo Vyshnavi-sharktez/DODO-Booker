@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/utils/icon_resolver.dart';
@@ -100,7 +100,7 @@ class HowItWorksSection extends StatelessWidget {
           Text(
             effectiveTitle,
             textAlign: TextAlign.center,
-            style: GoogleFonts.poppins(
+            style: GoogleFonts.inter(
               fontSize: isDesktop ? 32 : 22,
               fontWeight: FontWeight.w700,
               color: AppColors.textPrimary,
@@ -162,7 +162,7 @@ class _DesktopStepItem extends StatelessWidget {
       children: [
         Text(
           step.number,
-          style: GoogleFonts.poppins(
+          style: GoogleFonts.inter(
             fontSize: 26,
             fontWeight: FontWeight.w800,
             color: step.color,
@@ -182,7 +182,7 @@ class _DesktopStepItem extends StatelessWidget {
         Text(
           step.title,
           textAlign: TextAlign.center,
-          style: GoogleFonts.poppins(
+          style: GoogleFonts.inter(
             fontSize: 15,
             fontWeight: FontWeight.w700,
             color: AppColors.textPrimary,
@@ -248,7 +248,7 @@ class _MobileStepItem extends StatelessWidget {
       children: [
         Text(
           step.number,
-          style: GoogleFonts.poppins(
+          style: GoogleFonts.inter(
             fontSize: 12,
             fontWeight: FontWeight.w800,
             color: step.color,
@@ -340,3 +340,5 @@ class _WorkStep {
     required this.description,
   });
 }
+
+

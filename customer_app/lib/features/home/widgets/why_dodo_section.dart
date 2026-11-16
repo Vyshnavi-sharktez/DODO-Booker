@@ -1,4 +1,4 @@
-import 'dart:ui' show ImageFilter;
+﻿import 'dart:ui' show ImageFilter;
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../../core/constants/app_colors.dart';
@@ -182,7 +182,7 @@ class _DesktopLayout extends StatelessWidget {
               // Heading
               Text.rich(
                 TextSpan(
-                  style: GoogleFonts.poppins(
+                  style: GoogleFonts.inter(
                     fontWeight: FontWeight.w800,
                     fontSize: 36,
                     color: Colors.white,
@@ -245,7 +245,7 @@ class _MobileLayout extends StatelessWidget {
       children: [
         Text.rich(
           TextSpan(
-            style: GoogleFonts.poppins(
+            style: GoogleFonts.inter(
               fontWeight: FontWeight.w800,
               fontSize: 28,
               color: Colors.white,
@@ -320,7 +320,7 @@ class _TrustBadgeCard extends StatelessWidget {
                 children: [
                   Text(
                     'Trusted by thousands',
-                    style: GoogleFonts.poppins(
+                    style: GoogleFonts.inter(
                       fontSize: 14,
                       fontWeight: FontWeight.w700,
                       color: Colors.white,
@@ -431,7 +431,7 @@ class _TrustItemTile extends StatelessWidget {
               const SizedBox(height: 4),
               Text(
                 item.title,
-                style: GoogleFonts.poppins(
+                style: GoogleFonts.inter(
                   fontSize: 16,
                   fontWeight: FontWeight.w700,
                   color: Colors.white,
@@ -469,3 +469,5 @@ class _TrustGridItem {
     required this.hasDivider,
   });
 }
+
+

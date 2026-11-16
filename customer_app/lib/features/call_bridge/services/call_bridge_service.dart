@@ -74,19 +74,21 @@ final callBridgeServiceProvider = Provider<ExotelCallService>((ref) {
   return ExotelCallService(Supabase.instance.client);
 });
 
-final callProviderEnabledProvider = FutureProvider<bool>((ref) async {
-  try {
-    final row = await Supabase.instance.client
-        .from('call_provider_configs')
-        .select('is_enabled, account_sid, exophone')
-        .eq('provider', 'exotel')
-        .maybeSingle();
-    if (row == null) return false;
-    final enabled = row['is_enabled'] as bool? ?? false;
-    final sid = row['account_sid'] as String?;
-    final phone = row['exophone'] as String?;
-    return enabled && (sid?.isNotEmpty ?? false) && (phone?.isNotEmpty ?? false);
-  } catch (_) {
-    return false;
-  }
+// Streams call_provider_configs via Supabase Realtime.
+// Re-emits immediately whenever admin toggles is_enabled — no restart needed.
+final callProviderEnabledProvider = StreamProvider<bool>((ref) {
+  return Supabase.instance.client
+      .from('call_provider_configs')
+      .stream(primaryKey: ['id'])
+      .eq('provider', 'exotel')
+      .map((rows) {
+        if (rows.isEmpty) return false;
+        final row = rows.first;
+        final enabled = row['is_enabled'] as bool? ?? false;
+        final sid = row['account_sid'] as String?;
+        final phone = row['exophone'] as String?;
+        return enabled &&
+            (sid?.isNotEmpty ?? false) &&
+            (phone?.isNotEmpty ?? false);
+      });
 });

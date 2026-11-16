@@ -1,4 +1,4 @@
-import 'dart:math' as math;
+﻿import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../../../core/constants/app_colors.dart';
+import '../../../core/search/search_scope.dart';
 import '../../../core/widgets/app_header.dart';
 import '../../cart/providers/cart_provider.dart';
 import '../../cart/widgets/cart_side_panel.dart';
@@ -229,7 +230,7 @@ class _VendorDetailScreenState extends ConsumerState<VendorDetailScreen> {
                           const SizedBox(height: 12),
                           Text(
                             'Failed to load services',
-                            style: GoogleFonts.poppins(
+                            style: GoogleFonts.inter(
                               fontSize: 15,
                               fontWeight: FontWeight.w600,
                               color: AppColors.textPrimary,
@@ -277,7 +278,7 @@ class _VendorDetailScreenState extends ConsumerState<VendorDetailScreen> {
                                 Expanded(
                                   child: Text(
                                     'Services Offered (${filteredServices.length})',
-                                    style: GoogleFonts.poppins(
+                                    style: GoogleFonts.inter(
                                       fontSize: isWide ? 18 : 16,
                                       fontWeight: FontWeight.w700,
                                       color: AppColors.textPrimary,
@@ -390,7 +391,7 @@ class _VendorDetailScreenState extends ConsumerState<VendorDetailScreen> {
                                       _activeFilterCount > 0
                                           ? 'No services match your selected filters'
                                           : 'No services available',
-                                      style: GoogleFonts.poppins(
+                                      style: GoogleFonts.inter(
                                         fontSize: 15,
                                         fontWeight: FontWeight.w600,
                                         color: AppColors.textPrimary,
@@ -467,6 +468,10 @@ class _VendorDetailScreenState extends ConsumerState<VendorDetailScreen> {
                 context.go('/');
               },
               onProfileTap: () => openProfile(context),
+              searchScope: VendorDetailSearchScope(
+                vendorId: widget.vendorId,
+                vendorName: displayName,
+              ),
             )
           : null,
       body: isWide ? pageBody : SafeArea(bottom: false, child: pageBody),
@@ -717,7 +722,7 @@ class _VendorDetailSubHeader extends StatelessWidget {
                         vendorName,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: GoogleFonts.poppins(
+                        style: GoogleFonts.inter(
                           fontSize: 14,
                           fontWeight: FontWeight.w600,
                           color: AppColors.textPrimary,
@@ -790,7 +795,7 @@ class _VendorDetailFilterSidebar extends StatelessWidget {
           children: [
             Text(
               'Filter',
-              style: GoogleFonts.poppins(
+              style: GoogleFonts.inter(
                 fontSize: 15,
                 fontWeight: FontWeight.w600,
                 color: AppColors.textPrimary,
@@ -981,7 +986,7 @@ class _SectionTitle extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Text(
         text,
-        style: GoogleFonts.poppins(
+        style: GoogleFonts.inter(
           fontSize: 13,
           fontWeight: FontWeight.w600,
           color: AppColors.textPrimary,
@@ -1147,7 +1152,7 @@ class _ProfileDetails extends StatelessWidget {
         Text(
           displayName,
           textAlign: textAlign,
-          style: GoogleFonts.poppins(
+          style: GoogleFonts.inter(
             fontSize: 20,
             fontWeight: FontWeight.w700,
             color: AppColors.textPrimary,
@@ -1336,7 +1341,7 @@ class _ServiceCardState extends ConsumerState<_ServiceCard> {
                         s.serviceName,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: GoogleFonts.poppins(
+                        style: GoogleFonts.inter(
                           fontSize: 13,
                           fontWeight: FontWeight.w600,
                           color: AppColors.textPrimary,
@@ -1362,7 +1367,7 @@ class _ServiceCardState extends ConsumerState<_ServiceCard> {
                         children: [
                           Text(
                             '₹${displayPrice.toInt()}',
-                            style: GoogleFonts.poppins(
+                            style: GoogleFonts.inter(
                               fontSize: 13,
                               fontWeight: FontWeight.w700,
                               color: AppColors.textPrimary,
@@ -1460,7 +1465,7 @@ class _InstaHelpModeRow extends StatelessWidget {
             Expanded(
               child: Text(
                 label,
-                style: GoogleFonts.poppins(
+                style: GoogleFonts.inter(
                   fontSize: 14,
                   fontWeight: FontWeight.w600,
                   color: highlighted
@@ -1477,3 +1482,5 @@ class _InstaHelpModeRow extends StatelessWidget {
     );
   }
 }
+
+

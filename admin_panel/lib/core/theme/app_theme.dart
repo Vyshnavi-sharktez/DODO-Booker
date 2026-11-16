@@ -1,4 +1,5 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 /// Responsive breakpoints used across the admin panel.
 class AppBreakpoints {
@@ -37,12 +38,17 @@ class AppTheme {
         brightness: Brightness.light,
       ),
       scaffoldBackgroundColor: AppColors.background,
-      fontFamily: 'Roboto',
-      appBarTheme: const AppBarTheme(
+      fontFamily: GoogleFonts.inter().fontFamily,
+      appBarTheme: AppBarTheme(
         backgroundColor: AppColors.surface,
         foregroundColor: AppColors.textPrimary,
         elevation: 0,
         scrolledUnderElevation: 1,
+        titleTextStyle: GoogleFonts.inter(
+          color: AppColors.textPrimary,
+          fontSize: 18,
+          fontWeight: FontWeight.w700,
+        ),
       ),
       cardTheme: CardThemeData(
         color: AppColors.surface,
@@ -72,8 +78,8 @@ class AppTheme {
           borderSide: const BorderSide(color: AppColors.error),
         ),
         contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-        hintStyle: const TextStyle(color: AppColors.textSecondary, fontSize: 14),
-        labelStyle: const TextStyle(color: AppColors.textSecondary, fontSize: 14),
+        hintStyle: GoogleFonts.inter(color: AppColors.textSecondary, fontSize: 14),
+        labelStyle: GoogleFonts.inter(color: AppColors.textSecondary, fontSize: 14),
       ),
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
@@ -82,7 +88,7 @@ class AppTheme {
           minimumSize: const Size(double.infinity, 48),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
           elevation: 0,
-          textStyle: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+          textStyle: GoogleFonts.inter(fontSize: 15, fontWeight: FontWeight.w700),
         ),
       ),
       textButtonTheme: TextButtonThemeData(
@@ -92,6 +98,39 @@ class AppTheme {
         mouseCursor: WidgetStateMouseCursor.clickable,
       ),
       dividerTheme: const DividerThemeData(color: AppColors.border, thickness: 1),
+      textTheme: TextTheme(
+        displayLarge: GoogleFonts.inter(
+          color: AppColors.textPrimary, fontSize: 57, fontWeight: FontWeight.w800),
+        displayMedium: GoogleFonts.inter(
+          color: AppColors.textPrimary, fontSize: 45, fontWeight: FontWeight.w800),
+        displaySmall: GoogleFonts.inter(
+          color: AppColors.textPrimary, fontSize: 36, fontWeight: FontWeight.w700),
+        headlineLarge: GoogleFonts.inter(
+          color: AppColors.textPrimary, fontSize: 32, fontWeight: FontWeight.w700),
+        headlineMedium: GoogleFonts.inter(
+          color: AppColors.textPrimary, fontSize: 24, fontWeight: FontWeight.w700),
+        headlineSmall: GoogleFonts.inter(
+          color: AppColors.textPrimary, fontSize: 20, fontWeight: FontWeight.w600),
+        titleLarge: GoogleFonts.inter(
+          color: AppColors.textPrimary, fontSize: 22, fontWeight: FontWeight.w700),
+        titleMedium: GoogleFonts.inter(
+          color: AppColors.textPrimary, fontSize: 18, fontWeight: FontWeight.w600),
+        titleSmall: GoogleFonts.inter(
+          color: AppColors.textPrimary, fontSize: 16, fontWeight: FontWeight.w600),
+        bodyLarge: GoogleFonts.inter(
+          color: AppColors.textPrimary, fontSize: 16, fontWeight: FontWeight.w400),
+        bodyMedium: GoogleFonts.inter(
+          color: AppColors.textSecondary, fontSize: 15, fontWeight: FontWeight.w400),
+        bodySmall: GoogleFonts.inter(
+          color: AppColors.textSecondary, fontSize: 13, fontWeight: FontWeight.w400),
+        labelLarge: GoogleFonts.inter(
+          color: AppColors.textPrimary, fontSize: 15, fontWeight: FontWeight.w600),
+        labelMedium: GoogleFonts.inter(
+          color: AppColors.textSecondary, fontSize: 13, fontWeight: FontWeight.w500),
+        labelSmall: GoogleFonts.inter(
+          color: AppColors.textSecondary, fontSize: 12, fontWeight: FontWeight.w500),
+      ),
     );
   }
 }
+

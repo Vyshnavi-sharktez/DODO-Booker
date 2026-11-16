@@ -1,4 +1,4 @@
-import 'package:flutter/foundation.dart' show kIsWeb;
+﻿import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -430,7 +430,7 @@ class _CatalogNodeScreenState extends ConsumerState<CatalogNodeScreen> {
                               children: [
                                 Text(
                                   node.name,
-                                  style: GoogleFonts.poppins(
+                                  style: GoogleFonts.inter(
                                     fontSize: 20,
                                     fontWeight: FontWeight.w700,
                                     color: _kInk,
@@ -574,7 +574,7 @@ class _CatalogNodeScreenState extends ConsumerState<CatalogNodeScreen> {
                             padding: const EdgeInsets.fromLTRB(20, 20, 20, 8),
                             child: Text(
                               'FAQs',
-                              style: GoogleFonts.poppins(
+                              style: GoogleFonts.inter(
                                 fontSize: 15,
                                 fontWeight: FontWeight.w700,
                                 color: _kInk,
@@ -729,7 +729,7 @@ class _CatalogNodeScreenState extends ConsumerState<CatalogNodeScreen> {
                     padding: const EdgeInsets.fromLTRB(20, 20, 20, 4),
                     child: Text(
                       node.name,
-                      style: GoogleFonts.poppins(
+                      style: GoogleFonts.inter(
                         fontSize: 22,
                         fontWeight: FontWeight.w700,
                         color: _kInk,
@@ -868,7 +868,7 @@ class _CatalogNodeScreenState extends ConsumerState<CatalogNodeScreen> {
                     padding: const EdgeInsets.fromLTRB(20, 20, 20, 8),
                     child: Text(
                       'FAQs',
-                      style: GoogleFonts.poppins(
+                      style: GoogleFonts.inter(
                         fontSize: 15,
                         fontWeight: FontWeight.w700,
                         color: _kInk,
@@ -1267,7 +1267,7 @@ class _ServiceContentBlock extends StatelessWidget {
           // Title
           Text(
             node.name,
-            style: GoogleFonts.poppins(
+            style: GoogleFonts.inter(
               fontSize: 20,
               fontWeight: FontWeight.w700,
               color: _kInk,
@@ -1319,7 +1319,7 @@ class _ServiceContentBlock extends StatelessWidget {
                 const SizedBox(width: 8),
                 Text(
                   '₹${(startsAtPrice ?? displayPrice).toInt()}',
-                  style: GoogleFonts.poppins(
+                  style: GoogleFonts.inter(
                     fontSize: 22,
                     fontWeight: FontWeight.w800,
                     color: _kInk,
@@ -1378,7 +1378,7 @@ class _SectionHeaderRow extends StatelessWidget {
       children: [
         Text(
           title,
-          style: GoogleFonts.poppins(
+          style: GoogleFonts.inter(
             fontSize: 15,
             fontWeight: FontWeight.w700,
             color: _kInk,
@@ -1916,7 +1916,7 @@ class _AmcPlanCard extends StatelessWidget {
                       Expanded(
                         child: Text(
                           plan.planName,
-                          style: GoogleFonts.poppins(
+                          style: GoogleFonts.inter(
                             fontSize: 13,
                             fontWeight: FontWeight.w700,
                             color: _kInk,
@@ -1988,7 +1988,7 @@ class _AmcPlanCard extends StatelessWidget {
                           children: [
                             TextSpan(
                               text: '₹${plan.finalPrice.toInt()}',
-                              style: GoogleFonts.poppins(
+                              style: GoogleFonts.inter(
                                 fontSize: 14,
                                 fontWeight: FontWeight.w700,
                                 color: _kInk,
@@ -2093,7 +2093,7 @@ class _AccordionSectionState extends State<_AccordionSection> {
                     Expanded(
                       child: Text(
                         widget.label,
-                        style: GoogleFonts.poppins(
+                        style: GoogleFonts.inter(
                           fontSize: 15,
                           fontWeight: FontWeight.w700,
                           color: _kInk,
@@ -2280,7 +2280,7 @@ class _NodeInfoHeader extends StatelessWidget {
           ],
           Text(
             node.name,
-            style: GoogleFonts.poppins(
+            style: GoogleFonts.inter(
               fontSize: 22,
               fontWeight: FontWeight.w700,
               color: _kInk,
@@ -2329,7 +2329,7 @@ class _NodeInfoHeader extends StatelessWidget {
                 const SizedBox(width: 8),
                 Text(
                   '₹${(startsAtPrice ?? displayPrice).toInt()}',
-                  style: GoogleFonts.poppins(
+                  style: GoogleFonts.inter(
                     fontSize: 22,
                     fontWeight: FontWeight.w800,
                     color: _kInk,
@@ -2394,7 +2394,7 @@ class _ChildrenSection extends StatelessWidget {
           padding: const EdgeInsets.fromLTRB(20, 28, 20, 4),
           child: Text(
             node.isRoot ? 'All Services' : 'Browse ${node.name}',
-            style: GoogleFonts.poppins(
+            style: GoogleFonts.inter(
               fontSize: 17,
               fontWeight: FontWeight.w700,
               color: _kInk,
@@ -2573,7 +2573,7 @@ class _ChildListItemState extends State<_ChildListItem> {
                                 node.basePrice != null) ...[
                               Text(
                                 '₹${node.basePrice!.toInt()}',
-                                style: GoogleFonts.poppins(
+                                style: GoogleFonts.inter(
                                   fontSize: 14,
                                   fontWeight: FontWeight.w800,
                                   color: _kInk,
@@ -2942,7 +2942,7 @@ class _NodeBookingBar extends ConsumerWidget {
                     attrOptionPrice != null
                         ? '₹${(displayPrice * attrQty).toInt()}'
                         : '₹${displayPrice.toInt()}',
-                    style: GoogleFonts.poppins(
+                    style: GoogleFonts.inter(
                       fontSize: 17,
                       fontWeight: FontWeight.w800,
                       color: _kInk,
@@ -2984,7 +2984,7 @@ class _NodeBookingBar extends ConsumerWidget {
                   child: Center(
                     child: Text(
                       inCart ? '🛒  Proceed to Checkout' : '🛒  Add to Cart',
-                      style: GoogleFonts.poppins(
+                      style: GoogleFonts.inter(
                         fontSize: 13,
                         fontWeight: FontWeight.w600,
                         color: Colors.white,
@@ -3282,7 +3282,7 @@ class _WebScaffold extends ConsumerWidget {
             if (node.isLeafBookable) ...[
               Text(
                 'About this service',
-                style: GoogleFonts.poppins(
+                style: GoogleFonts.inter(
                   fontSize: 15,
                   fontWeight: FontWeight.w700,
                   color: _kInk,
@@ -3313,7 +3313,7 @@ class _WebScaffold extends ConsumerWidget {
 
               Text(
                 'FAQs',
-                style: GoogleFonts.poppins(
+                style: GoogleFonts.inter(
                   fontSize: 15,
                   fontWeight: FontWeight.w700,
                   color: _kInk,
@@ -3340,7 +3340,7 @@ class _WebScaffold extends ConsumerWidget {
                 node.reviewCount > 0
                     ? 'Reviews (${node.reviewCount})'
                     : 'Reviews',
-                style: GoogleFonts.poppins(
+                style: GoogleFonts.inter(
                   fontSize: 15,
                   fontWeight: FontWeight.w700,
                   color: _kInk,
@@ -3436,7 +3436,7 @@ class _WebScaffold extends ConsumerWidget {
                                 selectedAttrPrice != null
                                     ? '₹${(displayPrice * effectiveAttrQty).toInt()}'
                                     : '₹${(displayPrice * cartQty).toInt()}',
-                                style: GoogleFonts.poppins(
+                                style: GoogleFonts.inter(
                                   fontSize: 20,
                                   fontWeight: FontWeight.w800,
                                   color: _kInk,
@@ -3481,7 +3481,7 @@ class _WebScaffold extends ConsumerWidget {
                                   ),
                                   child: Text(
                                     'Done',
-                                    style: GoogleFonts.poppins(
+                                    style: GoogleFonts.inter(
                                       fontSize: 14,
                                       fontWeight: FontWeight.w600,
                                       color: Colors.white,
@@ -3508,7 +3508,7 @@ class _WebScaffold extends ConsumerWidget {
                                     inCart && selectedAttrPrice != null
                                         ? '🛒  Update Cart'
                                         : '🛒  Add to Cart',
-                                    style: GoogleFonts.poppins(
+                                    style: GoogleFonts.inter(
                                       fontSize: 14,
                                       fontWeight: FontWeight.w600,
                                       color: Colors.white,
@@ -3664,7 +3664,7 @@ class _WebQtyStepper extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 14),
             child: Text(
               '$quantity',
-              style: GoogleFonts.poppins(
+              style: GoogleFonts.inter(
                 fontSize: 14,
                 fontWeight: FontWeight.w700,
                 color: _kInk,
@@ -3908,7 +3908,7 @@ class _IncludedSection extends StatelessWidget {
         children: [
           Text(
             "What's Included",
-            style: GoogleFonts.poppins(
+            style: GoogleFonts.inter(
               fontSize: 15,
               fontWeight: FontWeight.w700,
               color: _kInk,
@@ -3967,7 +3967,7 @@ class _ExcludedSection extends StatelessWidget {
         children: [
           Text(
             "What's Excluded",
-            style: GoogleFonts.poppins(
+            style: GoogleFonts.inter(
               fontSize: 15,
               fontWeight: FontWeight.w700,
               color: _kInk,
@@ -4026,7 +4026,7 @@ class _BeforeAfterSection extends StatelessWidget {
         children: [
           Text(
             'Before & After',
-            style: GoogleFonts.poppins(
+            style: GoogleFonts.inter(
               fontSize: 15,
               fontWeight: FontWeight.w700,
               color: _kInk,
@@ -4305,7 +4305,7 @@ class _VariantChip extends StatelessWidget {
                     if (price > 0)
                       Text(
                         '₹${price.toInt()}',
-                        style: GoogleFonts.poppins(
+                        style: GoogleFonts.inter(
                           fontSize: 13,
                           fontWeight: FontWeight.w700,
                           color: fg,
@@ -4339,7 +4339,7 @@ class _VariantChip extends StatelessWidget {
                     ),
                     Text(
                       '$quantity',
-                      style: GoogleFonts.poppins(
+                      style: GoogleFonts.inter(
                         fontSize: 13,
                         fontWeight: FontWeight.w700,
                         color: fg,
@@ -4513,7 +4513,7 @@ class _WebHeader extends StatelessWidget {
                       ],
                       Text(
                         node.name,
-                        style: GoogleFonts.poppins(
+                        style: GoogleFonts.inter(
                           fontSize: 24,
                           fontWeight: FontWeight.w700,
                           color: _kInk,
@@ -4567,7 +4567,7 @@ class _WebHeader extends StatelessWidget {
                             const SizedBox(width: 8),
                             Text(
                               '₹${(startsAtPrice ?? displayPrice).toInt()}',
-                              style: GoogleFonts.poppins(
+                              style: GoogleFonts.inter(
                                 fontSize: 24,
                                 fontWeight: FontWeight.w800,
                                 color: _kInk,
@@ -4642,3 +4642,5 @@ class _WebHeader extends StatelessWidget {
 }
 
 // WarrantyBadge and WarrantyInfoDialog live in ../widgets/warranty_badge.dart
+
+

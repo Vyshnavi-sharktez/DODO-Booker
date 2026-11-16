@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -246,7 +246,7 @@ class _BannerTextAndButtons extends StatelessWidget {
       children: [
         Text(
           'Home services, whenever you need them.',
-          style: GoogleFonts.poppins(
+          style: GoogleFonts.inter(
             fontSize: isDesktop ? 22 : 18,
             fontWeight: FontWeight.w700,
             color: Colors.white,
@@ -573,7 +573,7 @@ class _BrandColumn extends StatelessWidget {
         Text(
           'DODO Booker',
           textAlign: textAlign,
-          style: GoogleFonts.poppins(
+          style: GoogleFonts.inter(
             fontSize: 20,
             fontWeight: FontWeight.w800,
             color: Colors.white,
@@ -640,7 +640,7 @@ class _LinkColumn extends StatelessWidget {
       children: [
         Text(
           title,
-          style: GoogleFonts.poppins(
+          style: GoogleFonts.inter(
             fontSize: 13,
             fontWeight: FontWeight.w600,
             color: Colors.white,
@@ -850,3 +850,5 @@ class _SocialLink {
   final String url;
   const _SocialLink(this.label, this.icon, this.url);
 }
+
+

@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:google_fonts/google_fonts.dart';
 
@@ -193,7 +193,7 @@ class _LocationPickerContentState extends State<_LocationPickerContent> {
           const SizedBox(height: 20),
           Text(
             'Select Your Location',
-            style: GoogleFonts.poppins(
+            style: GoogleFonts.inter(
               fontSize: 18,
               fontWeight: FontWeight.w700,
               color: AppColors.textPrimary,
@@ -355,7 +355,7 @@ class _LocationOptionState extends State<_LocationOption> {
                   children: [
                     Text(
                       widget.title,
-                      style: GoogleFonts.poppins(
+                      style: GoogleFonts.inter(
                         fontSize: 14,
                         fontWeight: FontWeight.w600,
                         color: AppColors.textPrimary,
@@ -383,3 +383,5 @@ class _LocationOptionState extends State<_LocationOption> {
     );
   }
 }
+
+

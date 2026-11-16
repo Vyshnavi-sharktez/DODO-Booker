@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 
@@ -99,18 +99,18 @@ class _WebLayout extends StatelessWidget {
                         const SizedBox(height: 10),
                         Text(
                           'Book a House Help',
-                          style: GoogleFonts.poppins(
-                            fontSize: 26,
+                          style: GoogleFonts.inter(
+                            fontSize: 34,
                             fontWeight: FontWeight.w800,
                             color: AppColors.primary,
                             height: 1.2,
                           ),
                         ),
-                        const SizedBox(height: 6),
+                        const SizedBox(height: 8),
                         Text(
                           'Professional assistance for your daily needs',
-                          style: GoogleFonts.poppins(
-                            fontSize: 13,
+                          style: GoogleFonts.inter(
+                            fontSize: 16,
                             color: AppColors.textSecondary,
                           ),
                         ),
@@ -216,8 +216,8 @@ class _MobileLayout extends StatelessWidget {
                             const SizedBox(height: 8),
                             Text(
                               'Book a House Help',
-                              style: GoogleFonts.poppins(
-                                fontSize: 20,
+                              style: GoogleFonts.inter(
+                                fontSize: 24,
                                 fontWeight: FontWeight.w800,
                                 color: AppColors.primary,
                                 height: 1.2,
@@ -226,8 +226,8 @@ class _MobileLayout extends StatelessWidget {
                             const SizedBox(height: 4),
                             Text(
                               'Get reliable household assistance\nfor your daily needs',
-                              style: GoogleFonts.poppins(
-                                fontSize: 12,
+                              style: GoogleFonts.inter(
+                                fontSize: 14,
                                 color: AppColors.textSecondary,
                                 height: 1.4,
                               ),
@@ -293,7 +293,7 @@ class _BadgeChip extends StatelessWidget {
           const SizedBox(width: 4),
           Text(
             'InstaHelp',
-            style: GoogleFonts.poppins(
+            style: GoogleFonts.inter(
               fontSize: 11,
               fontWeight: FontWeight.w700,
               color: _kBadgeText,
@@ -381,16 +381,16 @@ class _ModeCardState extends ConsumerState<_ModeCard> {
             const SizedBox(height: 8),
             Text(
               widget.title,
-              style: GoogleFonts.poppins(
-                fontSize: 12,
+              style: GoogleFonts.inter(
+                fontSize: 15,
                 fontWeight: FontWeight.w700,
                 color: AppColors.textPrimary,
               ),
             ),
             Text(
               widget.subtitle,
-              style: GoogleFonts.poppins(
-                fontSize: 10,
+              style: GoogleFonts.inter(
+                fontSize: 13,
                 color: AppColors.textSecondary,
               ),
             ),
@@ -423,3 +423,5 @@ class _Illustration extends StatelessWidget {
     );
   }
 }
+
+

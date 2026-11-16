@@ -1,4 +1,4 @@
-import 'package:flutter/gestures.dart';
+﻿import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -129,7 +129,7 @@ class _ReviewCard extends StatelessWidget {
                       review.customerName,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: GoogleFonts.poppins(
+                      style: GoogleFonts.inter(
                         fontSize: 13,
                         fontWeight: FontWeight.w600,
                         color: const Color(0xFF1A1714),
@@ -269,3 +269,5 @@ class _PointerScrollBehavior extends MaterialScrollBehavior {
   @override
   Widget buildScrollbar(context, child, details) => child;
 }
+
+

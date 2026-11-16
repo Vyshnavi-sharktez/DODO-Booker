@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -218,7 +218,7 @@ class _MobileHomeGreeting extends ConsumerWidget {
           Expanded(
             child: Text(
               isAuth && firstName.isNotEmpty ? 'Hello, $firstName!' : 'Hello!',
-              style: GoogleFonts.poppins(
+              style: GoogleFonts.inter(
                 fontSize: 20,
                 fontWeight: FontWeight.w700,
                 color: const Color(0xFF1A1714),
@@ -390,4 +390,6 @@ class _MobileSearchPill extends StatelessWidget {
     );
   }
 }
+
+
 

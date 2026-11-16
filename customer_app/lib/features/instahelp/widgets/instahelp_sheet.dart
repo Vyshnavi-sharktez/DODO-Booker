@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -178,9 +178,9 @@ class _InstaHelpContentState extends ConsumerState<InstaHelpContent>
               ),
               child: TabBar(
                 controller: _tab!,
-                labelStyle: GoogleFonts.poppins(
+                labelStyle: GoogleFonts.inter(
                     fontSize: 13.5, fontWeight: FontWeight.w600),
-                unselectedLabelStyle: GoogleFonts.poppins(
+                unselectedLabelStyle: GoogleFonts.inter(
                     fontSize: 13.5, fontWeight: FontWeight.w500),
                 labelColor: AppColors.primary,
                 unselectedLabelColor: AppColors.textSecondary,
@@ -307,7 +307,7 @@ class _InstaHelpContentState extends ConsumerState<InstaHelpContent>
                                   'InstaHelp',
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
-                                  style: GoogleFonts.poppins(
+                                  style: GoogleFonts.inter(
                                     fontSize: 16,
                                     fontWeight: FontWeight.w700,
                                     color: AppColors.primary,
@@ -317,7 +317,7 @@ class _InstaHelpContentState extends ConsumerState<InstaHelpContent>
                                   'Pick a mode and duration to get started',
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
-                                  style: GoogleFonts.poppins(
+                                  style: GoogleFonts.inter(
                                       fontSize: 11,
                                       color: AppColors.textSecondary),
                                 ),
@@ -509,7 +509,7 @@ class _ScheduledContentState extends ConsumerState<_ScheduledContent> {
                                       dateUnavailableMessage != null && dateUnavailableMessage.isNotEmpty
                                           ? dateUnavailableMessage
                                           : 'Not available on this date',
-                                      style: GoogleFonts.poppins(
+                                      style: GoogleFonts.inter(
                                         fontSize: 13,
                                         fontWeight: FontWeight.w600,
                                         color: AppColors.error,
@@ -603,7 +603,7 @@ class _ScheduledContentState extends ConsumerState<_ScheduledContent> {
                                         const SizedBox(width: 10),
                                         Text(
                                           'No slots available on this date.',
-                                          style: GoogleFonts.poppins(
+                                          style: GoogleFonts.inter(
                                               fontSize: 13,
                                               color: AppColors.textSecondary),
                                         ),
@@ -725,7 +725,7 @@ class _InstantContentState extends ConsumerState<_InstantContent> {
                     // ── Duration picker ───────────────────────────────────
                     Text(
                       'Select Duration',
-                      style: GoogleFonts.poppins(
+                      style: GoogleFonts.inter(
                         fontSize: 13,
                         fontWeight: FontWeight.w600,
                         color: AppColors.textPrimary,
@@ -905,7 +905,7 @@ class _DateChip extends StatelessWidget {
             ],
             Text(
               label,
-              style: GoogleFonts.poppins(
+              style: GoogleFonts.inter(
                 fontSize: 13,
                 fontWeight:
                     selected ? FontWeight.w700 : FontWeight.w500,
@@ -916,7 +916,7 @@ class _DateChip extends StatelessWidget {
               const SizedBox(width: 4),
               Text(
                 subLabel!,
-                style: GoogleFonts.poppins(
+                style: GoogleFonts.inter(
                   fontSize: 10,
                   color: selected
                       ? Colors.white.withValues(alpha: 0.7)
@@ -1028,10 +1028,10 @@ class _SlotPickerState extends State<_SlotPicker>
           ),
           child: TabBar(
             controller: _tab,
-            labelStyle: GoogleFonts.poppins(
+            labelStyle: GoogleFonts.inter(
                 fontSize: 12, fontWeight: FontWeight.w600),
             unselectedLabelStyle:
-                GoogleFonts.poppins(fontSize: 12, fontWeight: FontWeight.w400),
+                GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w400),
             labelColor: AppColors.primary,
             unselectedLabelColor: AppColors.textSecondary,
             indicatorColor: AppColors.primary,
@@ -1086,7 +1086,7 @@ class _SlotPickerState extends State<_SlotPicker>
                   padding: const EdgeInsets.symmetric(vertical: 12),
                   child: Text(
                     'No slots in the ${_periods[i].toLowerCase()}.',
-                    style: GoogleFonts.poppins(
+                    style: GoogleFonts.inter(
                         fontSize: 13, color: AppColors.textHint),
                   ),
                 );
@@ -1124,7 +1124,7 @@ class _SlotPickerState extends State<_SlotPicker>
                               children: [
                                 Text(
                                   slot.slotTime,
-                                  style: GoogleFonts.poppins(
+                                  style: GoogleFonts.inter(
                                     fontSize: 12,
                                     fontWeight: FontWeight.w400,
                                     color: AppColors.textHint,
@@ -1134,7 +1134,7 @@ class _SlotPickerState extends State<_SlotPicker>
                                 ),
                                 Text(
                                   'Sold Out',
-                                  style: GoogleFonts.poppins(
+                                  style: GoogleFonts.inter(
                                     fontSize: 10,
                                     fontWeight: FontWeight.w600,
                                     color: AppColors.error,
@@ -1144,7 +1144,7 @@ class _SlotPickerState extends State<_SlotPicker>
                             )
                           : Text(
                               slot.slotTime,
-                              style: GoogleFonts.poppins(
+                              style: GoogleFonts.inter(
                                 fontSize: 12,
                                 fontWeight: isSel
                                     ? FontWeight.w700
@@ -1197,7 +1197,7 @@ class _AvailabilityBanner extends StatelessWidget {
                 child: CircularProgressIndicator(strokeWidth: 2)),
             const SizedBox(width: 10),
             Text('Checking availability...',
-                style: GoogleFonts.poppins(
+                style: GoogleFonts.inter(
                     fontSize: 13, color: AppColors.textSecondary)),
           ],
         ),
@@ -1235,7 +1235,7 @@ class _AvailabilityBanner extends StatelessWidget {
           Icon(icon, size: 18, color: color),
           const SizedBox(width: 10),
           Text(message,
-              style: GoogleFonts.poppins(
+              style: GoogleFonts.inter(
                   fontSize: 13,
                   fontWeight: FontWeight.w600,
                   color: color)),
@@ -1354,7 +1354,7 @@ class _StepHeader extends StatelessWidget {
         const SizedBox(width: 8),
         Text(
           title,
-          style: GoogleFonts.poppins(
+          style: GoogleFonts.inter(
             fontSize: 13,
             fontWeight: FontWeight.w600,
             color: locked ? AppColors.textHint : AppColors.textPrimary,
@@ -1375,7 +1375,7 @@ class _LockedHint extends StatelessWidget {
       padding: const EdgeInsets.symmetric(vertical: 8),
       child: Text(
         text,
-        style: GoogleFonts.poppins(fontSize: 12, color: AppColors.textHint),
+        style: GoogleFonts.inter(fontSize: 12, color: AppColors.textHint),
       ),
     );
   }
@@ -1410,7 +1410,7 @@ class _ModeChip extends StatelessWidget {
           Flexible(
             child: Text(
               label,
-              style: GoogleFonts.poppins(
+              style: GoogleFonts.inter(
                   fontSize: 11, fontWeight: FontWeight.w500, color: color),
             ),
           ),
@@ -1469,7 +1469,7 @@ class _DurationCard extends StatelessWidget {
               duration.label,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: GoogleFonts.poppins(
+              style: GoogleFonts.inter(
                 fontSize: 12,
                 fontWeight: FontWeight.w700,
                 color: isSelected ? Colors.white : AppColors.textPrimary,
@@ -1479,7 +1479,7 @@ class _DurationCard extends StatelessWidget {
             if (duration.hasDiscount)
               Text(
                 _currency.format(duration.price),
-                style: GoogleFonts.poppins(
+                style: GoogleFonts.inter(
                   fontSize: 11,
                   color: isSelected
                       ? Colors.white.withValues(alpha: 0.5)
@@ -1493,7 +1493,7 @@ class _DurationCard extends StatelessWidget {
                 Expanded(
                   child: Text(
                     _currency.format(duration.finalPrice),
-                    style: GoogleFonts.poppins(
+                    style: GoogleFonts.inter(
                       fontSize: 13,
                       fontWeight: FontWeight.w700,
                       color:
@@ -1536,7 +1536,7 @@ class _DurationCard extends StatelessWidget {
                   duration.discountType == 'percentage'
                       ? '${duration.discountValue.toInt()}% off'
                       : '₹${duration.discountAmount.toInt()} off',
-                  style: GoogleFonts.poppins(
+                  style: GoogleFonts.inter(
                     fontSize: 10,
                     fontWeight: FontWeight.w600,
                     color: isSelected ? AppColors.gold : AppColors.success,
@@ -1642,7 +1642,7 @@ class _ActivityGroupsAccordionState extends State<_ActivityGroupsAccordion> {
             const SizedBox(width: 6),
             Text(
               'Activity Guide',
-              style: GoogleFonts.poppins(
+              style: GoogleFonts.inter(
                 fontSize: 13,
                 fontWeight: FontWeight.w600,
                 color: AppColors.textPrimary,
@@ -1672,7 +1672,7 @@ class _ActivityGroupsAccordionState extends State<_ActivityGroupsAccordion> {
                 child: Text(
                   'No activities configured for this mode yet.',
                   textAlign: TextAlign.center,
-                  style: GoogleFonts.poppins(
+                  style: GoogleFonts.inter(
                       fontSize: 12, color: AppColors.textSecondary),
                 ),
               );
@@ -1775,7 +1775,7 @@ class _ActivityGroupCard extends StatelessWidget {
                 Expanded(
                   child: Text(
                     activity.title,
-                    style: GoogleFonts.poppins(
+                    style: GoogleFonts.inter(
                       fontSize: 13,
                       fontWeight: FontWeight.w700,
                       color: AppColors.textPrimary,
@@ -1843,7 +1843,7 @@ class _ItemsSection extends StatelessWidget {
               Icon(icon, size: 11, color: color),
               const SizedBox(width: 4),
               Text(label,
-                  style: GoogleFonts.poppins(
+                  style: GoogleFonts.inter(
                       fontSize: 10,
                       fontWeight: FontWeight.w600,
                       color: color)),
@@ -1866,7 +1866,7 @@ class _ItemsSection extends StatelessWidget {
                 Expanded(
                   child: Text(
                     item,
-                    style: GoogleFonts.poppins(
+                    style: GoogleFonts.inter(
                         fontSize: 12,
                         height: 1.4,
                         color: AppColors.textSecondary),
@@ -1943,7 +1943,7 @@ class _BottomBar extends StatelessWidget {
             child: duration == null || !enabled
                 ? Text(
                     _hint,
-                    style: GoogleFonts.poppins(
+                    style: GoogleFonts.inter(
                         fontSize: 12, color: AppColors.textHint),
                   )
                 : Column(
@@ -1954,13 +1954,13 @@ class _BottomBar extends StatelessWidget {
                         duration!.label,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: GoogleFonts.poppins(
+                        style: GoogleFonts.inter(
                             fontSize: 12,
                             color: AppColors.textSecondary),
                       ),
                       Text(
                         _currency.format(duration!.finalPrice),
-                        style: GoogleFonts.poppins(
+                        style: GoogleFonts.inter(
                           fontSize: 20,
                           fontWeight: FontWeight.w700,
                           color: AppColors.primary,
@@ -2013,7 +2013,7 @@ class _BottomBar extends StatelessWidget {
             ),
             child: Text(
               'Book Now',
-              style: GoogleFonts.poppins(
+              style: GoogleFonts.inter(
                   fontSize: 15, fontWeight: FontWeight.w700),
             ),
           ),
@@ -2022,3 +2022,5 @@ class _BottomBar extends StatelessWidget {
     );
   }
 }
+
+

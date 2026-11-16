@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 
@@ -33,7 +33,7 @@ class CartSidePanel extends ConsumerWidget {
             ),
             child: Text(
               'Cart (${items.length})',
-              style: GoogleFonts.poppins(
+              style: GoogleFonts.inter(
                 fontSize: 16,
                 fontWeight: FontWeight.w700,
                 color: _kTextDark,
@@ -64,7 +64,7 @@ class CartSidePanel extends ConsumerWidget {
                             fontSize: 13, color: _kTextMuted)),
                     Text(
                       '₹${total.toInt()}',
-                      style: GoogleFonts.poppins(
+                      style: GoogleFonts.inter(
                         fontSize: 16,
                         fontWeight: FontWeight.w700,
                         color: _kTextDark,
@@ -86,7 +86,7 @@ class CartSidePanel extends ConsumerWidget {
                       child: Center(
                         child: Text(
                           'Proceed to Checkout',
-                          style: GoogleFonts.poppins(
+                          style: GoogleFonts.inter(
                             fontSize: 13,
                             fontWeight: FontWeight.w600,
                             color: Colors.white,
@@ -318,3 +318,5 @@ class _BreakdownRow extends StatelessWidget {
     );
   }
 }
+
+

@@ -203,7 +203,7 @@ class _PromoCouponCardState extends State<_PromoCouponCard> {
                       // Big headline: "10% OFF"
                       Text(
                         _headline,
-                        style: GoogleFonts.poppins(
+                        style: GoogleFonts.inter(
                           fontSize: 20,
                           fontWeight: FontWeight.w800,
                           color: const Color(0xFF1A1714),
@@ -506,7 +506,7 @@ class _SectionHeader extends StatelessWidget {
         children: [
           Text(
             title,
-            style: GoogleFonts.poppins(
+            style: GoogleFonts.inter(
               fontSize: 17,
               fontWeight: FontWeight.w700,
               color: AppColors.textPrimary,
@@ -773,7 +773,7 @@ class _CategoryIconFallback extends StatelessWidget {
       alignment: Alignment.center,
       child: Text(
         name.isNotEmpty ? name[0].toUpperCase() : '?',
-        style: GoogleFonts.poppins(
+        style: GoogleFonts.inter(
           fontSize: 22,
           fontWeight: FontWeight.w700,
           color: AppColors.textSecondary,
@@ -902,7 +902,7 @@ class _BannerCard extends StatelessWidget {
                   ),
                   child: Text(
                     'DAILY OFFER',
-                    style: GoogleFonts.poppins(
+                    style: GoogleFonts.inter(
                       fontSize: 9,
                       fontWeight: FontWeight.w800,
                       color: Colors.black,
@@ -913,7 +913,7 @@ class _BannerCard extends StatelessWidget {
                 const SizedBox(height: 8),
                 Text(
                   banner.title,
-                  style: GoogleFonts.poppins(
+                  style: GoogleFonts.inter(
                     fontSize: 18,
                     fontWeight: FontWeight.w800,
                     color: Colors.white,
@@ -947,7 +947,7 @@ class _BannerCard extends StatelessWidget {
                     ),
                     child: Text(
                       banner.actionLabel!,
-                      style: GoogleFonts.poppins(
+                      style: GoogleFonts.inter(
                         fontSize: 12,
                         fontWeight: FontWeight.w700,
                         color: Colors.black,
@@ -1034,7 +1034,7 @@ class _SubServiceCard extends StatelessWidget {
             const SizedBox(height: 6),
             Text(
               node.name,
-              style: GoogleFonts.poppins(
+              style: GoogleFonts.inter(
                 fontSize: 12,
                 fontWeight: FontWeight.w700,
                 color: AppColors.textPrimary,
@@ -1279,7 +1279,7 @@ class _PopularCard extends StatelessWidget {
             const SizedBox(height: 6),
             Text(
               node.name,
-              style: GoogleFonts.poppins(
+              style: GoogleFonts.inter(
                 fontSize: 12,
                 fontWeight: FontWeight.w700,
                 color: AppColors.textPrimary,
@@ -1359,7 +1359,7 @@ class _MobileWhyDodoSection extends StatelessWidget {
           padding: const EdgeInsets.fromLTRB(20, 0, 20, 14),
           child: Text(
             title,
-            style: GoogleFonts.poppins(
+            style: GoogleFonts.inter(
               fontSize: 17,
               fontWeight: FontWeight.w700,
               color: AppColors.textPrimary,
@@ -1508,7 +1508,7 @@ class _ReviewCard extends StatelessWidget {
               const SizedBox(width: 6),
               Text(
                 review.rating.toString(),
-                style: GoogleFonts.poppins(
+                style: GoogleFonts.inter(
                   fontSize: 13,
                   fontWeight: FontWeight.w700,
                   color: AppColors.textPrimary,
@@ -1544,7 +1544,7 @@ class _ReviewCard extends StatelessWidget {
                 alignment: Alignment.center,
                 child: Text(
                   review.initials,
-                  style: GoogleFonts.poppins(
+                  style: GoogleFonts.inter(
                     fontSize: 10,
                     fontWeight: FontWeight.w700,
                     color: AppColors.textSecondary,
@@ -1594,3 +1594,5 @@ class _ReviewCardSkeleton extends StatelessWidget {
     );
   }
 }
+
+
