@@ -4,8 +4,8 @@ import '../services/app_branding_provider.dart';
 
 /// Displays the customer-app brand logo loaded from Supabase at runtime.
 /// Falls back to the bundled asset while loading or when no URL is configured.
-/// A changed URL (new upload) is reflected after the provider is invalidated —
-/// which happens on every app resume via [App.didChangeAppLifecycleState].
+/// A changed URL propagates via Realtime immediately, or on the next app resume
+/// (whichever comes first) via [App.didChangeAppLifecycleState] → refetchAll.
 class BrandingLogo extends ConsumerWidget {
   const BrandingLogo({
     super.key,
