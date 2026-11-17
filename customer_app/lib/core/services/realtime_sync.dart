@@ -17,6 +17,7 @@ import '../../features/surge_fee/providers/surge_fee_provider.dart';
 import '../../features/tax/providers/tax_provider.dart';
 import '../../features/support/services/support_chat_providers.dart';
 import '../../features/warranties/services/warranty_providers.dart';
+import '../services/app_branding_provider.dart';
 
 /// Manages all Supabase Realtime subscriptions for the customer app.
 ///
@@ -424,6 +425,7 @@ class CustomerRealtimeSync {
 
   /// Called by the lifecycle observer on app resume after an extended pause.
   void refetchAll() {
+    _ref.invalidate(customerBrandingIconProvider);
     _invalidateCatalog();
     _invalidateConfig();
     _ref.invalidate(landingPageSectionsProvider);

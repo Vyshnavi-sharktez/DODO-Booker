@@ -12,6 +12,7 @@ import '../../features/notifications/presentation/providers/notifications_provid
 import '../../features/services/presentation/providers/services_provider.dart';
 import '../../features/subscription/presentation/providers/subscription_provider.dart';
 import '../../features/wallet/presentation/providers/wallet_provider.dart';
+import '../network/app_branding_provider.dart';
 
 /// Manages all Supabase Realtime subscriptions for the vendor app.
 ///
@@ -390,6 +391,7 @@ class VendorRealtimeSync {
 
   void refetchAll() {
     _invalidateBookings();
+    _ref.invalidate(vendorBrandingIconProvider);
     _ref.invalidate(subscriptionSettingsProvider);
     _ref.invalidate(mySubscriptionProvider);
     _ref.invalidate(catalogServicesProvider);

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
@@ -28,7 +30,10 @@ final _isoDateFmt = DateFormat('yyyy-MM-dd');
 // working and is still available for other assignments.
 //
 // Must stay in sync with get_vendor_busy_status RPC (supabase/migrations).
-const _kBusyStatuses = ['accepted', 'in_progress', 'awaiting_verification'];
+// Date-scoped: vendor committed to this specific date.
+const _kBusyStatusesDateScoped = ['accepted'];
+// Status-scoped: vendor is physically active right now — date is irrelevant.
+const _kBusyStatusesAnyDate = ['en_route', 'in_progress', 'awaiting_verification'];
 
 
 /// For AMC bookings: returns (vendorId, vendorName, completedDate) for the
@@ -58,25 +63,70 @@ final _amcLastVendorProvider = FutureProvider.autoDispose
   );
 });
 
-/// Single-query busy check: returns the set of vendor IDs that already have a
-/// committed booking on the given service date.
-/// Keyed as '$dateISO|$excludeBookingId' so the family auto-refreshes when
-/// the date picker changes without an extra query per vendor.
-final _vendorBusyProvider = FutureProvider.autoDispose
-    .family<Set<String>, String>((ref, params) async {
+/// Real-time busy check keyed as '$dateISO|$excludeBookingId'.
+///
+/// Fetches immediately on open, then re-fetches whenever the bookings table
+/// changes via a Supabase Realtime channel — no need to close/reopen the dialog.
+///
+/// Two-part logic:
+///   Part 1 — date-scoped: accepted bookings on the same date.
+///   Part 2 — status-scoped: en_route/in_progress/awaiting_verification
+///             regardless of date.
+final _vendorBusyProvider = StreamProvider.autoDispose
+    .family<Set<String>, String>((ref, params) {
   final pipe = params.indexOf('|');
   final date = params.substring(0, pipe);
   final excludeId = params.substring(pipe + 1);
-  final rows = await Supabase.instance.client
-      .from('bookings')
-      .select('vendor_id')
-      .eq('service_date', date)
-      .inFilter('status', _kBusyStatuses)
-      .neq('id', excludeId);
-  return {
-    for (final r in rows as List)
-      if (r['vendor_id'] != null) r['vendor_id'] as String,
-  };
+
+  final controller = StreamController<Set<String>>();
+
+  Future<void> fetchAndEmit() async {
+    try {
+      final client = Supabase.instance.client;
+      final results = await Future.wait([
+        client
+            .from('bookings')
+            .select('vendor_id')
+            .eq('service_date', date)
+            .inFilter('status', _kBusyStatusesDateScoped)
+            .neq('id', excludeId),
+        client
+            .from('bookings')
+            .select('vendor_id')
+            .inFilter('status', _kBusyStatusesAnyDate)
+            .neq('id', excludeId),
+      ]);
+      if (!controller.isClosed) {
+        controller.add({
+          for (final rows in results)
+            for (final r in rows as List)
+              if (r['vendor_id'] != null) r['vendor_id'] as String,
+        });
+      }
+    } catch (e) {
+      if (!controller.isClosed) controller.addError(e);
+    }
+  }
+
+  fetchAndEmit();
+
+  final channelName = 'vendor_busy_${date}_${excludeId.replaceAll('-', '')}';
+  final channel = Supabase.instance.client
+      .channel(channelName)
+      .onPostgresChanges(
+        event: PostgresChangeEvent.all,
+        schema: 'public',
+        table: 'bookings',
+        callback: (_) => fetchAndEmit(),
+      )
+      .subscribe();
+
+  ref.onDispose(() {
+    Supabase.instance.client.removeChannel(channel);
+    controller.close();
+  });
+
+  return controller.stream;
 });
 
 /// Single-query COD subscription check: returns the set of vendor IDs that

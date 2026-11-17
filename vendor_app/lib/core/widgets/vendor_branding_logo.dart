@@ -4,8 +4,8 @@ import '../network/app_branding_provider.dart';
 
 /// Displays the vendor-app brand logo loaded from Supabase at runtime.
 /// Falls back to the bundled asset while loading or when no URL is configured.
-/// A changed URL (new upload) is reflected after the provider is invalidated —
-/// which happens on every app resume via [VendorApp.didChangeAppLifecycleState].
+/// A changed URL propagates via Realtime immediately, or on the next app resume
+/// (whichever comes first) via [VendorApp.didChangeAppLifecycleState] → refetchAll.
 class VendorBrandingLogo extends ConsumerWidget {
   const VendorBrandingLogo({
     super.key,
