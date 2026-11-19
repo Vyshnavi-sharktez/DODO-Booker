@@ -1304,9 +1304,9 @@ class _MyServicesWideState extends ConsumerState<_MyServicesWide> {
         allRequests.where((r) => r.isActiveCustomService).toList();
 
     final pendingActionFor = {
-      // Pending price_change or legacy delete_service rows (via parentRequestId)
+      // Pending price_change, slot_config or legacy delete_service rows (via parentRequestId)
       ...allRequests
-          .where((r) => (r.isPriceChange || r.isDeleteService) && r.isPending)
+          .where((r) => (r.isPriceChange || r.isDeleteService || r.isSlotConfig) && r.isPending)
           .map((r) => r.parentRequestId)
           .whereType<String>(),
       // Inline deletion: the service itself is pending admin review
@@ -2287,9 +2287,9 @@ class _MyServicesNarrowState extends ConsumerState<_MyServicesNarrow> {
         allRequests.where((r) => r.isActiveCustomService).toList();
 
     final pendingActionFor = {
-      // Pending price_change or legacy delete_service rows (via parentRequestId)
+      // Pending price_change, slot_config or legacy delete_service rows (via parentRequestId)
       ...allRequests
-          .where((r) => (r.isPriceChange || r.isDeleteService) && r.isPending)
+          .where((r) => (r.isPriceChange || r.isDeleteService || r.isSlotConfig) && r.isPending)
           .map((r) => r.parentRequestId)
           .whereType<String>(),
       // Inline deletion: the service itself is pending admin review
@@ -2807,15 +2807,18 @@ class _CustomServiceRowState extends ConsumerState<_CustomServiceRow> {
     final vendor = ref.read(currentVendorUserProvider);
     if (vendor == null) return;
 
+    final ds = ref.read(servicesDatasourceProvider);
+    final existingMaxBookings = await ds.fetchMaxBookingsForService(s.id);
+    if (!mounted) return;
+
     final result = await showDialog<_EditServiceResult>(
       context: context,
-      builder: (_) => _EditCustomServiceDialog(service: s),
+      builder: (_) => _EditCustomServiceDialog(service: s, existingMaxBookings: existingMaxBookings),
     );
     if (result == null || !mounted) return;
 
     setState(() => _busy = true);
     try {
-      final ds = ref.read(servicesDatasourceProvider);
       String? uploadedImageUrl;
 
       if (result.pickedImageBytes != null && result.pickedFile != null) {
@@ -2833,9 +2836,13 @@ class _CustomServiceRowState extends ConsumerState<_CustomServiceRow> {
         );
       }
 
+      await ds.upsertMaxBookingsConfig(s.id, result.maxBookingsPerSlot);
+
       final nameChanged = result.name != s.serviceName;
       final priceChanged = result.price != s.activePrice;
-      if (nameChanged || priceChanged || uploadedImageUrl == null) {
+      final maxBookingsChanged = result.maxBookingsPerSlot != existingMaxBookings;
+
+      if (nameChanged || priceChanged) {
         await ds.submitPriceChangeRequest(
           vendorId: vendor.id,
           parentRequestId: s.id,
@@ -2847,14 +2854,27 @@ class _CustomServiceRowState extends ConsumerState<_CustomServiceRow> {
         );
       }
 
+      if (maxBookingsChanged) {
+        await ds.submitSlotConfigRequest(
+          vendorId: vendor.id,
+          parentRequestId: s.id,
+          serviceName: s.serviceName,
+          oldMaxBookings: existingMaxBookings,
+          newMaxBookings: result.maxBookingsPerSlot,
+          currentPrice: s.activePrice,
+        );
+      }
+
       if (mounted) {
         ref.invalidate(myServiceRequestsProvider);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              (nameChanged || priceChanged)
-                  ? 'Edit request submitted.'
-                  : 'Service image updated.',
+              (nameChanged || priceChanged || maxBookingsChanged)
+                  ? 'Changes submitted.'
+                  : uploadedImageUrl != null
+                      ? 'Image updated.'
+                      : 'No changes.',
             ),
           ),
         );
@@ -3115,15 +3135,18 @@ class _CustomServiceNarrowCardState
     final vendor = ref.read(currentVendorUserProvider);
     if (vendor == null) return;
 
+    final ds = ref.read(servicesDatasourceProvider);
+    final existingMaxBookings = await ds.fetchMaxBookingsForService(s.id);
+    if (!mounted) return;
+
     final result = await showDialog<_EditServiceResult>(
       context: context,
-      builder: (_) => _EditCustomServiceDialog(service: s),
+      builder: (_) => _EditCustomServiceDialog(service: s, existingMaxBookings: existingMaxBookings),
     );
     if (result == null || !mounted) return;
 
     setState(() => _busy = true);
     try {
-      final ds = ref.read(servicesDatasourceProvider);
       String? uploadedImageUrl;
 
       if (result.pickedImageBytes != null && result.pickedFile != null) {
@@ -3141,9 +3164,13 @@ class _CustomServiceNarrowCardState
         );
       }
 
+      await ds.upsertMaxBookingsConfig(s.id, result.maxBookingsPerSlot);
+
       final nameChanged = result.name != s.serviceName;
       final priceChanged = result.price != s.activePrice;
-      if (nameChanged || priceChanged || uploadedImageUrl == null) {
+      final maxBookingsChanged = result.maxBookingsPerSlot != existingMaxBookings;
+
+      if (nameChanged || priceChanged) {
         await ds.submitPriceChangeRequest(
           vendorId: vendor.id,
           parentRequestId: s.id,
@@ -3155,14 +3182,27 @@ class _CustomServiceNarrowCardState
         );
       }
 
+      if (maxBookingsChanged) {
+        await ds.submitSlotConfigRequest(
+          vendorId: vendor.id,
+          parentRequestId: s.id,
+          serviceName: s.serviceName,
+          oldMaxBookings: existingMaxBookings,
+          newMaxBookings: result.maxBookingsPerSlot,
+          currentPrice: s.activePrice,
+        );
+      }
+
       if (mounted) {
         ref.invalidate(myServiceRequestsProvider);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              (nameChanged || priceChanged)
-                  ? 'Edit request submitted.'
-                  : 'Service image updated.',
+              (nameChanged || priceChanged || maxBookingsChanged)
+                  ? 'Changes submitted.'
+                  : uploadedImageUrl != null
+                      ? 'Image updated.'
+                      : 'No changes.',
             ),
           ),
         );
@@ -4890,6 +4930,7 @@ class _CreateServiceDialogState extends ConsumerState<_CreateServiceDialog> {
   final _descCtrl = TextEditingController();
   final _priceCtrl = TextEditingController();
   final _discountCtrl = TextEditingController();
+  final _maxBookingsCtrl = TextEditingController(text: '1');
   final _picker = ImagePicker();
   XFile? _pickedFile;
   Uint8List? _pickedImageBytes;
@@ -4947,6 +4988,7 @@ class _CreateServiceDialogState extends ConsumerState<_CreateServiceDialog> {
     _descCtrl.dispose();
     _priceCtrl.dispose();
     _discountCtrl.dispose();
+    _maxBookingsCtrl.dispose();
     _warrantyDaysCtrl.dispose();
     _warrantyCoversCtrl.dispose();
     _warrantyExclusionsCtrl.dispose();
@@ -5156,6 +5198,9 @@ class _CreateServiceDialogState extends ConsumerState<_CreateServiceDialog> {
               .toList(),
         );
       }
+
+      final maxBookings = int.tryParse(_maxBookingsCtrl.text.trim()) ?? 1;
+      await ds.saveMaxBookingsConfig(requestId, maxBookings);
 
       ref.invalidate(myServiceRequestsProvider);
       if (mounted) {
@@ -5790,6 +5835,27 @@ class _CreateServiceDialogState extends ConsumerState<_CreateServiceDialog> {
                 pickedBytes: _pickedImageBytes,
                 onTap: _pickImage,
               ),
+              const SizedBox(height: 16),
+              _DialogFieldLabel('Max Bookings Per Slot', required: true),
+              const SizedBox(height: 6),
+              TextField(
+                controller: _maxBookingsCtrl,
+                keyboardType: TextInputType.number,
+                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                decoration: InputDecoration(
+                  hintText: 'e.g. 1',
+                  helperText: 'How many customers can book this slot at the same time.',
+                  helperStyle: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
+                  isDense: true,
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(8),
+                      borderSide: const BorderSide(color: AppColors.border, width: 0.8)),
+                  enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8),
+                      borderSide: const BorderSide(color: AppColors.border, width: 0.8)),
+                  focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8),
+                      borderSide: const BorderSide(color: AppColors.primary, width: 1.4)),
+                ),
+              ),
               const SizedBox(height: 20),
               const Divider(height: 1),
               const SizedBox(height: 20),
@@ -6096,19 +6162,22 @@ class _EditServiceResult {
   const _EditServiceResult({
     required this.name,
     required this.price,
+    required this.maxBookingsPerSlot,
     this.pickedFile,
     this.pickedImageBytes,
   });
 
   final String name;
   final double price;
+  final int maxBookingsPerSlot;
   final XFile? pickedFile;
   final Uint8List? pickedImageBytes;
 }
 
 class _EditCustomServiceDialog extends StatefulWidget {
-  const _EditCustomServiceDialog({required this.service});
+  const _EditCustomServiceDialog({required this.service, this.existingMaxBookings = 1});
   final VendorServiceRequestModel service;
+  final int existingMaxBookings;
 
   @override
   State<_EditCustomServiceDialog> createState() =>
@@ -6118,6 +6187,7 @@ class _EditCustomServiceDialog extends StatefulWidget {
 class _EditCustomServiceDialogState extends State<_EditCustomServiceDialog> {
   late final TextEditingController _nameCtrl;
   late final TextEditingController _priceCtrl;
+  late final TextEditingController _maxBookingsCtrl;
   final _picker = ImagePicker();
   XFile? _pickedFile;
   Uint8List? _pickedImageBytes;
@@ -6133,12 +6203,35 @@ class _EditCustomServiceDialogState extends State<_EditCustomServiceDialog> {
           ? widget.service.activePrice!.toStringAsFixed(0)
           : '',
     );
+    _maxBookingsCtrl = TextEditingController(
+      text: widget.existingMaxBookings.toString(),
+    );
+    _nameCtrl.addListener(_onChanged);
+    _priceCtrl.addListener(_onChanged);
+    _maxBookingsCtrl.addListener(_onChanged);
+  }
+
+  void _onChanged() => setState(() {});
+
+  bool get _hasChanges {
+    final nameChanged = _nameCtrl.text.trim() != widget.service.serviceName;
+    final originalPrice = widget.service.activePrice != null
+        ? widget.service.activePrice!.toStringAsFixed(0)
+        : '';
+    final priceChanged = _priceCtrl.text.trim() != originalPrice;
+    final maxChanged =
+        _maxBookingsCtrl.text.trim() != widget.existingMaxBookings.toString();
+    return nameChanged || priceChanged || maxChanged || _pickedFile != null;
   }
 
   @override
   void dispose() {
+    _nameCtrl.removeListener(_onChanged);
+    _priceCtrl.removeListener(_onChanged);
+    _maxBookingsCtrl.removeListener(_onChanged);
     _nameCtrl.dispose();
     _priceCtrl.dispose();
+    _maxBookingsCtrl.dispose();
     super.dispose();
   }
 
@@ -6162,6 +6255,7 @@ class _EditCustomServiceDialogState extends State<_EditCustomServiceDialog> {
     final newName = _nameCtrl.text.trim();
     final newPriceStr = _priceCtrl.text.trim();
     final newPrice = double.tryParse(newPriceStr);
+    final maxBookings = int.tryParse(_maxBookingsCtrl.text.trim());
 
     String? nameErr;
     String? priceErr;
@@ -6183,6 +6277,7 @@ class _EditCustomServiceDialogState extends State<_EditCustomServiceDialog> {
       _EditServiceResult(
         name: newName,
         price: newPrice!,
+        maxBookingsPerSlot: (maxBookings != null && maxBookings > 0) ? maxBookings : 1,
         pickedFile: _pickedFile,
         pickedImageBytes: _pickedImageBytes,
       ),
@@ -6218,6 +6313,18 @@ class _EditCustomServiceDialogState extends State<_EditCustomServiceDialog> {
                   labelText: 'Price (₹)',
                   prefixText: '₹ ',
                   errorText: _priceError,
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _maxBookingsCtrl,
+                keyboardType: TextInputType.number,
+                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                decoration: InputDecoration(
+                  labelText: 'Max Bookings Per Slot',
+                  hintText: 'e.g. 1',
+                  helperText: 'How many customers can book this slot at the same time.',
+                  helperStyle: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
                 ),
               ),
               const SizedBox(height: 16),
@@ -6257,14 +6364,14 @@ class _EditCustomServiceDialogState extends State<_EditCustomServiceDialog> {
               child: SizedBox(
                 height: 44,
                 child: FilledButton(
-                  onPressed: _submit,
+                  onPressed: _hasChanges ? _submit : null,
                   style: FilledButton.styleFrom(
                     minimumSize: Size.zero,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(8),
                     ),
                   ),
-                  child: const Text('Submit'),
+                  child: const Text('Send Request'),
                 ),
               ),
             ),

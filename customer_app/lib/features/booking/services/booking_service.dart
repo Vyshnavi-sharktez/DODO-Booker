@@ -166,10 +166,33 @@ class BookingService {
     bool isEnabled;
 
     if (globalMasterOn) {
-      // Master ON → use global for every service without querying service_scheduling.
+      // Master ON → slot structure (working days, times) comes from global.
+      // Capacity (max_bookings_per_slot) may be overridden at service level:
+      // if service_scheduling has its own max AND use_global_schedule = false,
+      // that max wins over the global max — same priority the lock_slot RPC uses.
       debugPrint('[DODO][Slots] CONFIG SOURCE: global (master override)');
       scheduleCfg = globalCfg;
       isEnabled = true;
+      if (serviceId.isNotEmpty) {
+        try {
+          final svcRows = await _client
+              .from('service_scheduling')
+              .select('max_bookings_per_slot, use_global_schedule')
+              .eq('service_id', serviceId);
+          if (svcRows.isNotEmpty) {
+            final svcRow = svcRows.first as Map<String, dynamic>;
+            final svcMax = (svcRow['max_bookings_per_slot'] as num?)?.toInt();
+            final useGlobal = (svcRow['use_global_schedule'] as bool?) ?? false;
+            if (svcMax != null && svcMax > 0) {
+              scheduleCfg = Map<String, dynamic>.from(globalCfg!)
+                ..['max_bookings_per_slot'] = svcMax;
+              debugPrint('[DODO][Slots] Service capacity override: max_bookings_per_slot=$svcMax');
+            }
+          }
+        } catch (e) {
+          debugPrint('[DODO][Slots] Warning: service capacity override check failed (non-fatal): $e');
+        }
+      }
     } else {
       // Master OFF → load the service's own row, then check per-service opt-in.
       Map<String, dynamic>? serviceCfg;
@@ -200,7 +223,14 @@ class BookingService {
 
       if (serviceOptedIn && globalCfg != null) {
         debugPrint('[DODO][Slots] CONFIG SOURCE: global (per-service opt-in)');
-        scheduleCfg = globalCfg;
+        // Slot structure from global, but product capacity may still override.
+        final svcMax = (serviceCfg?['max_bookings_per_slot'] as num?)?.toInt();
+        scheduleCfg = svcMax != null && svcMax > 0
+            ? (Map<String, dynamic>.from(globalCfg!)..['max_bookings_per_slot'] = svcMax)
+            : globalCfg;
+        if (svcMax != null && svcMax > 0) {
+          debugPrint('[DODO][Slots] Service capacity override (opted-in): max_bookings_per_slot=$svcMax');
+        }
       } else {
         debugPrint('[DODO][Slots] CONFIG SOURCE: service-specific (service_scheduling table)');
         scheduleCfg = serviceCfg;
@@ -288,15 +318,41 @@ class BookingService {
         .map((e) => (e as String).trim())
         .where((s) => s.isNotEmpty)
         .toList();
-    final maxBookings = (cfg['max_bookings_per_slot'] as num?)?.toInt() ?? 5;
+    var maxBookings = (cfg['max_bookings_per_slot'] as num?)?.toInt() ?? 5;
+
+    // Per-custom-service max_bookings override stored in catalog_node_configs.
+    // This is set by the vendor via the Edit/Create Service dialog and takes
+    // priority over the global/service-level schedule config.
+    if (serviceId.isNotEmpty) {
+      try {
+        final customRow = await _client
+            .from('catalog_node_configs')
+            .select('config')
+            .eq('custom_service_id', serviceId)
+            .eq('module', 'scheduling')
+            .maybeSingle();
+        if (customRow != null) {
+          final c = customRow['config'] as Map<String, dynamic>?;
+          final customMax = (c?['max_bookings_per_slot'] as num?)?.toInt();
+          if (customMax != null && customMax > 0) {
+            maxBookings = customMax;
+            debugPrint('[DODO][Slots] Custom service max_bookings override → $customMax');
+          }
+        }
+      } catch (e) {
+        debugPrint('[DODO][Slots] Warning: custom service config check failed (non-fatal): $e');
+      }
+    }
+
     debugPrint('[DODO][Slots] STAGE parse-slots: after trim=${labels.length} labels=$labels  maxBookings=$maxBookings');
 
     // ── Load existing booking counts for this service+date ───────────────────
-    // When vendorId is set, only count that vendor's bookings so capacity is
-    // vendor-specific (lets customers see slots the chosen vendor can still take).
+    // Two paths because VCS bookings store the service ID in
+    // booking_items.custom_service_id (bookings.service_id is NULL for VCS).
     final capacityMap = <String, int>{};
     if (serviceId.isNotEmpty) {
       try {
+        // Path A: catalog service bookings (service_id on the booking row)
         final baseQ = _client
             .from('bookings')
             .select('scheduled_time, status')
@@ -312,6 +368,33 @@ class BookingService {
           final t = row['scheduled_time'] as String?;
           if (t != null) capacityMap[t] = (capacityMap[t] ?? 0) + 1;
         }
+
+        // Path B: VCS custom-service bookings (service ID lives in booking_items)
+        final itemRows = await _client
+            .from('booking_items')
+            .select('booking_id')
+            .eq('custom_service_id', serviceId);
+        final vcsBookingIds = (itemRows as List)
+            .map((r) => (r as Map<String, dynamic>)['booking_id'] as String)
+            .toList();
+        if (vcsBookingIds.isNotEmpty) {
+          final vcsQ = _client
+              .from('bookings')
+              .select('scheduled_time, status')
+              .eq('service_date', dateStr)
+              .inFilter('id', vcsBookingIds)
+              .not('scheduled_time', 'is', null);
+          final vcsRows = vendorId != null
+              ? await vcsQ.eq('preferred_vendor_id', vendorId)
+              : await vcsQ;
+          for (final row in vcsRows) {
+            final status = (row['status'] as String?) ?? '';
+            if (status == 'cancelled' || status == 'rejected') continue;
+            final t = row['scheduled_time'] as String?;
+            if (t != null) capacityMap[t] = (capacityMap[t] ?? 0) + 1;
+          }
+        }
+
         debugPrint('[DODO][Slots] Capacity map: $capacityMap');
       } catch (e) {
         debugPrint('[DODO][Slots] Warning: could not load booking counts: $e');
@@ -377,7 +460,44 @@ class BookingService {
         continue;
       }
       final bookedCount = capacityMap[label] ?? 0;
-      final isAvailable = bookedCount < maxBookings;
+      // Count active slot_locks for this service+date+slot so that slots held
+      // by other customers in checkout are shown as unavailable.
+      // VCS locks are vendor-scoped; regular service locks have vendor_id NULL.
+      int lockCount = 0;
+      bool hasRejectionLock = false;
+      if (serviceId.isNotEmpty) {
+        try {
+          final nowIso = DateTime.now().toUtc().toIso8601String();
+          var checkoutQ = _client
+              .from('slot_locks')
+              .select('id')
+              .eq('service_id', serviceId)
+              .eq('service_date', dateStr)
+              .eq('slot_time', label)
+              .eq('lock_type', 'checkout')
+              .gt('expires_at', nowIso);
+          checkoutQ = vendorId != null
+              ? checkoutQ.eq('vendor_id', vendorId)
+              : checkoutQ.isFilter('vendor_id', null);
+          lockCount = ((await checkoutQ) as List).length;
+
+          var rejectionQ = _client
+              .from('slot_locks')
+              .select('id')
+              .eq('service_id', serviceId)
+              .eq('service_date', dateStr)
+              .eq('slot_time', label)
+              .eq('lock_type', 'rejection')
+              .gt('expires_at', nowIso);
+          rejectionQ = vendorId != null
+              ? rejectionQ.eq('vendor_id', vendorId)
+              : rejectionQ.isFilter('vendor_id', null);
+          hasRejectionLock = ((await rejectionQ) as List).isNotEmpty;
+        } catch (e) {
+          debugPrint('[DODO][Slots] Warning: slot_locks check failed (non-fatal): $e');
+        }
+      }
+      final isAvailable = !hasRejectionLock && (bookedCount + lockCount < maxBookings);
       debugPrint(
           '[DODO][Slots]   "$label" ($slotMin min) — KEPT  booked=$bookedCount/$maxBookings  available=$isAvailable');
       result.add(TimeSlotModel(

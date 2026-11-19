@@ -56,6 +56,7 @@ class VendorServiceRequestModel {
   bool get isPriceChange => requestType == 'price_change';
   bool get isDeleteService => requestType == 'delete_service';
   bool get isEditService => requestType == 'edit_service';
+  bool get isSlotConfig => requestType == 'slot_config';
 
   /// Shown in Custom Services: approved service, including while deletion is pending.
   bool get isActiveCustomService => isNewService && (isCompleted || isPendingDeletion);
@@ -86,6 +87,7 @@ class VendorServiceRequestModel {
         'price_change' => 'Price Change',
         'delete_service' => 'Deletion',
         'edit_service' => 'Edit Proposal',
+        'slot_config' => 'Slot Config Change',
         _ => 'New Service',
       };
 

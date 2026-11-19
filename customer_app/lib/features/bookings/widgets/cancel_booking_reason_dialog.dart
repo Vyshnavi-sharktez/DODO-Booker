@@ -1,5 +1,76 @@
 import 'package:flutter/material.dart';
 import '../../../core/constants/app_colors.dart';
+import '../../../models/cancellation_fee_info.dart';
+
+// ── Fee banner ────────────────────────────────────────────────────────────────
+
+class _CancellationFeeBanner extends StatelessWidget {
+  final CancellationFeeInfo feeInfo;
+  const _CancellationFeeBanner({required this.feeInfo});
+
+  @override
+  Widget build(BuildContext context) {
+    if (!feeInfo.hasFee) {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(
+          color: const Color(0xFF16A34A).withValues(alpha: 0.08),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: const Color(0xFF16A34A).withValues(alpha: 0.3)),
+        ),
+        child: Row(
+          children: const [
+            Icon(Icons.check_circle_outline_rounded, size: 16, color: Color(0xFF16A34A)),
+            SizedBox(width: 8),
+            Text('Free cancellation',
+                style: TextStyle(fontSize: 13, color: Color(0xFF16A34A), fontWeight: FontWeight.w500)),
+          ],
+        ),
+      );
+    }
+
+    final feeText = '₹${feeInfo.feeAmount.toStringAsFixed(0)}';
+    final String subtitle;
+    if (feeInfo.isCod) {
+      subtitle = '$feeText will be added to your outstanding balance and collected at next checkout.';
+    } else {
+      final refundText = '₹${feeInfo.refundAmount.toStringAsFixed(0)}';
+      subtitle = '$feeText cancellation fee — $refundText will be refunded.';
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: AppColors.error.withValues(alpha: 0.07),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: AppColors.error.withValues(alpha: 0.3)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Padding(
+            padding: EdgeInsets.only(top: 1),
+            child: Icon(Icons.warning_amber_rounded, size: 16, color: AppColors.error),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(feeInfo.reasonMessage,
+                    style: const TextStyle(
+                        fontSize: 13, color: AppColors.error, fontWeight: FontWeight.w600)),
+                const SizedBox(height: 2),
+                Text(subtitle,
+                    style: const TextStyle(fontSize: 12, color: AppColors.error)),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
 
 class CancelBookingResult {
   final String reason;
@@ -46,7 +117,10 @@ const List<CancelBookingReasonOption> kCancellationReasonOptions = [
 ];
 
 class CancelBookingReasonDialog extends StatefulWidget {
-  const CancelBookingReasonDialog({super.key});
+  const CancelBookingReasonDialog({super.key, CancellationFeeInfo? feeInfo})
+      : feeInfo = feeInfo ?? const CancellationFeeInfo(
+            feeAmount: 0, refundAmount: 0, isCod: false);
+  final CancellationFeeInfo feeInfo;
 
   @override
   State<CancelBookingReasonDialog> createState() =>
@@ -164,6 +238,10 @@ class _CancelBookingReasonDialogState
               ),
               const SizedBox(height: 16),
               const Divider(color: AppColors.border, height: 1),
+              const SizedBox(height: 12),
+
+              // Cancellation fee banner
+              _CancellationFeeBanner(feeInfo: widget.feeInfo),
               const SizedBox(height: 12),
 
               // Reason List

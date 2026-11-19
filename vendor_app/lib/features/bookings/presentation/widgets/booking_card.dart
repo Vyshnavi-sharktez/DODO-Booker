@@ -73,6 +73,17 @@ class _BookingCardState extends ConsumerState<BookingCard> {
 
   bool get _isDodoBooking => _booking.isDodoTeam;
 
+  // True when the booking date is still in the future (device local date).
+  // Acceptance is blocked until the actual booking date arrives.
+  bool get _isBeforeBookingDate {
+    final sd = _booking.serviceDate;
+    if (sd == null) return false;
+    final now = DateTime.now();
+    final todayMidnight = DateTime(now.year, now.month, now.day);
+    final serviceDay = DateTime(sd.year, sd.month, sd.day);
+    return serviceDay.isAfter(todayMidnight);
+  }
+
   String? get _actionLabel {
     if (_isDodoBooking) return null;
     return switch (_booking.status) {
@@ -1032,7 +1043,7 @@ class _BookingCardState extends ConsumerState<BookingCard> {
               SizedBox(
                 width: double.infinity,
                 child: FilledButton.icon(
-                  onPressed: _busy ? null : _handleAction,
+                  onPressed: (_busy || _isBeforeBookingDate) ? null : _handleAction,
                   style: FilledButton.styleFrom(
                     backgroundColor: const Color(0xFF5C6BC0),
                     padding: const EdgeInsets.symmetric(vertical: 12),
@@ -1048,6 +1059,16 @@ class _BookingCardState extends ConsumerState<BookingCard> {
                       : const Text("I'm On My Way"),
                 ),
               ),
+              if (_isBeforeBookingDate && _booking.serviceDate != null) ...[
+                const SizedBox(height: 6),
+                Text(
+                  'Service is scheduled for ${AppDateUtils.formatDisplay(_booking.serviceDate!)}.',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: AppColors.textHint,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ],
             ],
 
             // ── Actions: En Route (vendor only) — Start Service ───────────

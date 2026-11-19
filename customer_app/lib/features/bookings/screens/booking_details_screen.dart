@@ -15,6 +15,7 @@ import '../../reviews/services/review_providers.dart';
 import '../../reviews/widgets/review_modal.dart';
 import '../services/invoice_service.dart';
 import '../widgets/cancel_booking_reason_dialog.dart';
+import '../../../models/cancellation_fee_info.dart';
 import '../widgets/vendor_nearby_warning_dialog.dart';
 import '../../amc/screens/amc_contract_details_screen.dart';
 import '../../../core/widgets/page_sheet.dart';
@@ -151,9 +152,18 @@ class _BookingDetailsScreenState extends ConsumerState<BookingDetailsScreen> {
 
   Future<void> _confirmCancel(MyBookingModel b) async {
     debugPrint('[DODO][CancelFlow] Customer initiated cancel for booking ${b.id}');
+
+    // Calculate fee before showing dialog so customer can see it upfront
+    CancellationFeeInfo feeInfo = CancellationFeeInfo.free();
+    try {
+      feeInfo = await ref.read(bookingsServiceProvider).calculateCancellationFee(b.id);
+    } catch (e) {
+      debugPrint('[DODO][CancelFlow] Fee calculation failed (non-fatal): $e');
+    }
+
     final cancelResult = await showDialog<CancelBookingResult>(
       context: context,
-      builder: (_) => const CancelBookingReasonDialog(),
+      builder: (_) => CancelBookingReasonDialog(feeInfo: feeInfo),
     );
     if (cancelResult == null) {
       debugPrint('[DODO][CancelFlow] Customer dismissed CancelBookingReasonDialog');
@@ -948,6 +958,13 @@ class _PaymentCard extends StatelessWidget {
             value: '₹${booking.serviceChargeAmount.toStringAsFixed(2)}',
             tt: tt,
           ),
+        if (booking.cancellationFeeAmount > 0)
+          _PaymentRow(
+            label: 'Cancellation Fee',
+            value: '₹${booking.cancellationFeeAmount.toStringAsFixed(2)}',
+            tt: tt,
+            valueColor: AppColors.error,
+          ),
         const Divider(height: 16),
         _PaymentRow(
           label: 'Total Paid',
@@ -965,12 +982,14 @@ class _PaymentRow extends StatelessWidget {
   final String value;
   final TextTheme tt;
   final bool isTotal;
+  final Color? valueColor;
 
   const _PaymentRow({
     required this.label,
     required this.value,
     required this.tt,
     this.isTotal = false,
+    this.valueColor,
   });
 
   @override
@@ -993,7 +1012,10 @@ class _PaymentRow extends StatelessWidget {
                     color: AppColors.success,
                     fontWeight: FontWeight.w800,
                   )
-                : tt.bodySmall?.copyWith(fontWeight: FontWeight.w500),
+                : tt.bodySmall?.copyWith(
+                    fontWeight: FontWeight.w500,
+                    color: valueColor,
+                  ),
           ),
         ],
       ),

@@ -65,8 +65,8 @@ class _VendorInstaHelpPageState extends ConsumerState<VendorInstaHelpPage>
 
   @override
   void dispose() {
-    _innerTab.dispose();
     ref.read(vendorShellActionsProvider.notifier).state = null;
+    _innerTab.dispose();
     super.dispose();
   }
 
@@ -348,7 +348,7 @@ class _ModeTabContent extends ConsumerWidget {
             label: 'Financial configuration change was rejected',
             reason: financialRejectedReason,
           ),
-        VendorFinancialConfigSection(modeId: mode.id),
+        VendorFinancialConfigSection(modeId: mode.id, hasPending: hasFinancialPending),
         const SizedBox(height: 20),
         _DurationSection(modeId: mode.id, showSlotSchedule: showSlotConfig, isEligible: isEligible),
         if (showSlotConfig) ...[
@@ -360,7 +360,7 @@ class _ModeTabContent extends ConsumerWidget {
               label: 'Slot configuration change was rejected',
               reason: slotRejectedReason,
             ),
-          VendorSlotConfigSection(modeId: mode.id),
+          VendorSlotConfigSection(modeId: mode.id, hasPending: hasSlotPending),
         ],
         const SizedBox(height: 20),
         _ActivitiesSection(modeId: mode.id, isEligible: isEligible),
@@ -1370,6 +1370,13 @@ class _ModeReorderDialogState extends State<_ModeReorderDialog> {
     _ordered = List.of(widget.modes);
   }
 
+  bool get _hasChanges {
+    for (var i = 0; i < _ordered.length; i++) {
+      if (_ordered[i].id != widget.modes[i].id) return true;
+    }
+    return false;
+  }
+
   Future<void> _save() async {
     setState(() { _saving = true; _error = null; });
     try {
@@ -1452,7 +1459,7 @@ class _ModeReorderDialogState extends State<_ModeReorderDialog> {
           ),
           const SizedBox(width: 8),
           FilledButton(
-            onPressed: _saving ? null : _save,
+            onPressed: (_saving || !_hasChanges) ? null : _save,
             style: FilledButton.styleFrom(
               backgroundColor: AppColors.primary,
               minimumSize: const Size(90, 40),

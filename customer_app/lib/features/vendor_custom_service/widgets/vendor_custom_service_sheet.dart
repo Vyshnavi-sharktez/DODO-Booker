@@ -1410,9 +1410,10 @@ class _MobileBookingBar extends ConsumerWidget {
 
     final displayTotal = effectiveUnitPrice * effectiveQty;
 
+    final hasCartBar = ref.watch(cartItemCountProvider) > 0;
     return Container(
       padding: EdgeInsets.fromLTRB(
-          20, 14, 20, 14 + MediaQuery.of(context).padding.bottom),
+          20, 14, 20, 14 + MediaQuery.of(context).padding.bottom + (hasCartBar ? 66.0 : 0.0)),
       decoration: const BoxDecoration(
         color: Colors.white,
         border: Border(top: BorderSide(color: _kBorder, width: 1)),

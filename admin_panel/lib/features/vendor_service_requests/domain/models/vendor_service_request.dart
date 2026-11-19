@@ -102,6 +102,7 @@ class VendorServiceRequest {
   bool get isPriceChange => requestType == 'price_change';
   bool get isDeleteService => requestType == 'delete_service';
   bool get isEditService => requestType == 'edit_service';
+  bool get isSlotConfig => requestType == 'slot_config';
 
   String get statusLabel => switch (status) {
         'needs_catalog' => 'Needs Catalog',
@@ -116,6 +117,7 @@ class VendorServiceRequest {
         'price_change' => 'Price Change',
         'delete_service' => 'Deletion',
         'edit_service' => 'Edit Proposal',
+        'slot_config' => 'Slot Config Change',
         'instahelp_new_duration' => 'New Duration',
         'instahelp_edit_duration' => 'Edit Duration',
         'instahelp_delete_duration' => 'Delete Duration',

@@ -141,6 +141,7 @@ class MyBookingModel {
   final String? cancelledBy;
   final String? cancellationReason;
   final String? bookingNotes;
+  final double cancellationFeeAmount;
 
   const MyBookingModel({
     required this.id,
@@ -182,6 +183,7 @@ class MyBookingModel {
     this.cancelledBy,
     this.cancellationReason,
     this.bookingNotes,
+    this.cancellationFeeAmount = 0.0,
   });
 
   String get displayBookingNumber {
@@ -385,6 +387,7 @@ class MyBookingModel {
       cancelledBy: json['cancelled_by'] as String?,
       cancellationReason: json['cancellation_reason'] as String?,
       bookingNotes: notes,
+      cancellationFeeAmount: (json['cancellation_fee_amount'] as num?)?.toDouble() ?? 0.0,
     );
   }
 

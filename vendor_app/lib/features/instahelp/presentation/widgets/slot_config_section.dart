@@ -7,7 +7,8 @@ import '../providers/instahelp_vendor_providers.dart';
 
 class VendorSlotConfigSection extends ConsumerWidget {
   final String modeId;
-  const VendorSlotConfigSection({super.key, required this.modeId});
+  final bool hasPending;
+  const VendorSlotConfigSection({super.key, required this.modeId, this.hasPending = false});
 
   void _openEdit(BuildContext context, WidgetRef ref, InstaHelpSlotConfig? existing) {
     showDialog(
@@ -111,12 +112,12 @@ class VendorSlotConfigSection extends ConsumerWidget {
                 data: (config) => Row(mainAxisSize: MainAxisSize.min, children: [
                   if (config != null) ...[
                     OutlinedButton.icon(
-                      onPressed: () => _confirmDelete(context, ref),
+                      onPressed: hasPending ? null : () => _confirmDelete(context, ref),
                       icon: const Icon(Icons.delete_outline_rounded, size: 15),
                       label: const Text('Delete'),
                       style: OutlinedButton.styleFrom(
                         foregroundColor: AppColors.error,
-                        side: const BorderSide(color: AppColors.error),
+                        side: BorderSide(color: hasPending ? AppColors.border : AppColors.error),
                         minimumSize: const Size(0, 40),
                         tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
@@ -126,7 +127,7 @@ class VendorSlotConfigSection extends ConsumerWidget {
                     const SizedBox(width: 8),
                   ],
                   FilledButton.icon(
-                    onPressed: () => _openEdit(context, ref, config),
+                    onPressed: hasPending ? null : () => _openEdit(context, ref, config),
                     icon: const Icon(Icons.edit_rounded, size: 16),
                     label: Text(config == null ? 'Configure' : 'Edit'),
                     style: FilledButton.styleFrom(
@@ -292,10 +293,28 @@ class _SlotConfigDialogState extends State<_SlotConfigDialog> {
     _endTime = _parseTime(e?.endTime, const TimeOfDay(hour: 20, minute: 0));
     _intervalCtrl.text = (e?.slotIntervalMinutes ?? 60).toString();
     _maxCtrl.text = (e?.maxBookingsPerSlot ?? 10).toString();
+    _intervalCtrl.addListener(_onChanged);
+    _maxCtrl.addListener(_onChanged);
+  }
+
+  void _onChanged() => setState(() {});
+
+  bool get _hasChanges {
+    final e = widget.existing;
+    if (e == null) return true;
+    final origDays = Set.of(e.workingDays);
+    final daysChanged = !_workingDays.containsAll(origDays) || _workingDays.length != origDays.length;
+    final startChanged = _startTime != _parseTime(e.startTime, const TimeOfDay(hour: 8, minute: 0));
+    final endChanged = _endTime != _parseTime(e.endTime, const TimeOfDay(hour: 20, minute: 0));
+    final intervalChanged = _intervalCtrl.text.trim() != e.slotIntervalMinutes.toString();
+    final maxChanged = _maxCtrl.text.trim() != e.maxBookingsPerSlot.toString();
+    return daysChanged || startChanged || endChanged || intervalChanged || maxChanged || _isActive != e.isActive;
   }
 
   @override
   void dispose() {
+    _intervalCtrl.removeListener(_onChanged);
+    _maxCtrl.removeListener(_onChanged);
     _intervalCtrl.dispose();
     _maxCtrl.dispose();
     super.dispose();
@@ -414,7 +433,7 @@ class _SlotConfigDialogState extends State<_SlotConfigDialog> {
       actions: [
         TextButton(onPressed: _saving ? null : () => Navigator.of(context).pop(), child: const Text('Cancel')),
         FilledButton(
-          onPressed: _saving ? null : _save,
+          onPressed: (_saving || !_hasChanges) ? null : _save,
           style: FilledButton.styleFrom(
             backgroundColor: AppColors.primary,
             minimumSize: const Size(0, 40),

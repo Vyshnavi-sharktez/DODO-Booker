@@ -60,6 +60,12 @@ const _kNavGroups = <_NavGroup>[
         route: '/dashboard/rbac',
         requiredPermission: 'rbac.manage',
       ),
+      _NavItem(
+        label: 'SEO',
+        icon: Icons.travel_explore_rounded,
+        route: '/dashboard/seo',
+        requiredPermission: 'settings.manage',
+      ),
     ],
   ),
   _NavGroup(
@@ -349,12 +355,6 @@ const _kNavGroups = <_NavGroup>[
         requiredPermission: 'settings.manage',
       ),
       _NavItem(
-        label: 'SEO',
-        icon: Icons.travel_explore_rounded,
-        route: '/dashboard/seo',
-        requiredPermission: 'settings.manage',
-      ),
-      _NavItem(
         label: 'Landing Page',
         icon: Icons.web_rounded,
         route: '/dashboard/landing-page',
@@ -377,6 +377,12 @@ const _kNavGroups = <_NavGroup>[
         icon: Icons.sms_rounded,
         route: '/dashboard/campaigns',
         requiredPermission: 'campaign.read',
+      ),
+      _NavItem(
+        label: 'Cancellation Policy',
+        icon: Icons.money_off_rounded,
+        route: '/dashboard/cancellation-policy',
+        requiredPermission: 'settings.manage',
       ),
       _NavItem(
         label: 'Settings',

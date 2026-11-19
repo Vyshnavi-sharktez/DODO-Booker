@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../features/catalog/models/catalog_node_model.dart';
@@ -67,6 +68,36 @@ class _BookingScreenState extends ConsumerState<BookingScreen> {
       _errorMessage = null;
     });
     try {
+      // Lock slot before creating the booking
+      final dateStr = _date.toIso8601String().substring(0, 10);
+      try {
+        final lockId = await Supabase.instance.client.rpc('lock_slot', params: {
+          'p_service_date': dateStr,
+          'p_slot_time':    _slot!.label,
+          'p_lock_type':    'checkout',
+          'p_service_id':   widget.service.id,
+        });
+        if (!mounted) return;
+        if (lockId == null) {
+          setState(() {
+            _isCreating = false;
+            _step = 1;
+            _slot = null;
+            _errorMessage = 'This slot was just taken. Please choose another time.';
+          });
+          return;
+        }
+      } catch (e) {
+        debugPrint('[DODO][SlotLock] slot lock error: $e');
+        setState(() {
+          _isCreating = false;
+          _step = 1;
+          _slot = null;
+          _errorMessage = 'This slot was just taken. Please choose another time.';
+        });
+        return;
+      }
+
       final booking = await ref.read(bookingServiceProvider).createBooking(
             service: widget.service,
             address: _address!,
@@ -84,6 +115,12 @@ class _BookingScreenState extends ConsumerState<BookingScreen> {
       setState(() => _isCreating = false);
       if (isBookingRestrictionError(e)) {
         _showBookingRestrictedDialog();
+      } else if (e.toString().contains('slot_taken')) {
+        setState(() {
+          _step = 1;
+          _slot = null;
+          _errorMessage = 'This slot has just been taken. Please select another time slot.';
+        });
       } else {
         setState(() =>
             _errorMessage = 'Failed to confirm booking. Please try again.');

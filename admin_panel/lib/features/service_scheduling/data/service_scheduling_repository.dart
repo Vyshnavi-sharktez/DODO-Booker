@@ -11,6 +11,8 @@ class ServiceSchedulingConfig {
   final String? slotEndTime;        // generator input, e.g. "06:00 PM"
   final int slotIntervalHours;      // generator input
   final int slotIntervalMinutes;    // generator input
+  final int? checkoutHoldValue;     // null = use global setting
+  final String? checkoutHoldUnit;   // 'seconds' | 'minutes' | 'hours' | null
 
   const ServiceSchedulingConfig({
     required this.serviceId,
@@ -23,6 +25,8 @@ class ServiceSchedulingConfig {
     this.slotEndTime,
     this.slotIntervalHours = 0,
     this.slotIntervalMinutes = 30,
+    this.checkoutHoldValue,
+    this.checkoutHoldUnit,
   });
 
   factory ServiceSchedulingConfig.defaults(String serviceId) =>
@@ -35,6 +39,8 @@ class ServiceSchedulingConfig {
         slots: [],
         slotIntervalHours: 0,
         slotIntervalMinutes: 30,
+        checkoutHoldValue: null,
+        checkoutHoldUnit: null,
       );
 
   factory ServiceSchedulingConfig.fromMap(Map<String, dynamic> m) =>
@@ -50,6 +56,8 @@ class ServiceSchedulingConfig {
         slotEndTime: m['slot_end_time'] as String?,
         slotIntervalHours: (m['slot_interval_hours'] as int?) ?? 0,
         slotIntervalMinutes: (m['slot_interval_minutes'] as int?) ?? 30,
+        checkoutHoldValue: m['checkout_hold_value'] as int?,
+        checkoutHoldUnit: m['checkout_hold_unit'] as String?,
       );
 
   Map<String, dynamic> toUpsertMap() => {
@@ -63,6 +71,8 @@ class ServiceSchedulingConfig {
         'slot_end_time': slotEndTime,
         'slot_interval_hours': slotIntervalHours,
         'slot_interval_minutes': slotIntervalMinutes,
+        'checkout_hold_value': checkoutHoldValue,
+        'checkout_hold_unit': checkoutHoldUnit,
         'updated_at': DateTime.now().toUtc().toIso8601String(),
       };
 }

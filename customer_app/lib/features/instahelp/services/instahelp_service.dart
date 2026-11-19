@@ -184,6 +184,37 @@ class InstaHelpService {
     return row['id'] as String;
   }
 
+  Future<String?> getVendorIdForMode(String modeId) async {
+    final row = await _client
+        .from('instahelp_modes')
+        .select('vendor_id')
+        .eq('id', modeId)
+        .maybeSingle();
+    return row?['vendor_id'] as String?;
+  }
+
+  /// Attempts to lock a slot for checkout. Returns the lock UUID on success,
+  /// or null if the slot is already at capacity (another customer got there first).
+  Future<String?> lockSlot({
+    required String vendorId,
+    required String serviceDate,
+    required String slotTime,
+    required String modeId,
+    required String durationId,
+    String? customerId,
+  }) async {
+    final result = await _client.rpc('lock_slot', params: {
+      'p_vendor_id':    vendorId,
+      'p_service_date': serviceDate,
+      'p_slot_time':    slotTime,
+      'p_lock_type':    'checkout',
+      'p_mode_id':      modeId,
+      'p_duration_id':  durationId,
+      if (customerId != null) 'p_customer_id': customerId,
+    });
+    return result as String?;
+  }
+
   Future<BookingModel> createBooking({
     required String modeId,
     required String modeType,

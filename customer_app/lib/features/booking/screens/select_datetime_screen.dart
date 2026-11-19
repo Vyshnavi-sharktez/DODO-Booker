@@ -1,12 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../models/time_slot_model.dart';
 import '../services/booking_providers.dart';
 import '../widgets/date_selector.dart';
 import '../widgets/time_slot_card.dart';
 
-class SelectDatetimeScreen extends ConsumerWidget {
+class SelectDatetimeScreen extends ConsumerStatefulWidget {
   final DateTime selectedDate;
   final TimeSlotModel? selectedSlot;
   final ValueChanged<DateTime> onDateChanged;
@@ -22,13 +23,93 @@ class SelectDatetimeScreen extends ConsumerWidget {
     required this.serviceId,
   });
 
+  @override
+  ConsumerState<SelectDatetimeScreen> createState() =>
+      _SelectDatetimeScreenState();
+}
+
+class _SelectDatetimeScreenState extends ConsumerState<SelectDatetimeScreen> {
+  late String _currentDateStr;
+  RealtimeChannel? _channel;
+
   String _dateKey(DateTime d) =>
       '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final dateStr = _dateKey(selectedDate);
-    final slotsAsync = ref.watch(timeSlotsProvider((date: dateStr, serviceId: serviceId, parentNodeId: null, vendorId: null)));
+  void initState() {
+    super.initState();
+    _currentDateStr = _dateKey(widget.selectedDate);
+    _subscribeToSlotChanges();
+  }
+
+  @override
+  void didUpdateWidget(SelectDatetimeScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.selectedDate != widget.selectedDate) {
+      _currentDateStr = _dateKey(widget.selectedDate);
+    }
+    if (oldWidget.serviceId != widget.serviceId) {
+      _unsubscribe();
+      _subscribeToSlotChanges();
+    }
+  }
+
+  void _subscribeToSlotChanges() {
+    final client = Supabase.instance.client;
+    _channel = client
+        .channel('slot-changes-${widget.serviceId}')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'slot_locks',
+          filter: PostgresChangeFilter(
+            type: PostgresChangeFilterType.eq,
+            column: 'service_id',
+            value: widget.serviceId,
+          ),
+          callback: (_) => _invalidateSlots(),
+        )
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'bookings',
+          filter: PostgresChangeFilter(
+            type: PostgresChangeFilterType.eq,
+            column: 'service_id',
+            value: widget.serviceId,
+          ),
+          callback: (_) => _invalidateSlots(),
+        )
+        .subscribe();
+  }
+
+  void _invalidateSlots() {
+    if (!mounted) return;
+    ref.invalidate(timeSlotsProvider((
+      date: _currentDateStr,
+      serviceId: widget.serviceId,
+      parentNodeId: null,
+      vendorId: null,
+    )));
+  }
+
+  void _unsubscribe() {
+    if (_channel != null) {
+      Supabase.instance.client.removeChannel(_channel!);
+      _channel = null;
+    }
+  }
+
+  @override
+  void dispose() {
+    _unsubscribe();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final dateStr = _currentDateStr;
+    final slotsAsync = ref.watch(timeSlotsProvider((date: dateStr, serviceId: widget.serviceId, parentNodeId: null, vendorId: null)));
     final tt = Theme.of(context).textTheme;
 
     return SingleChildScrollView(
@@ -44,8 +125,8 @@ class SelectDatetimeScreen extends ConsumerWidget {
             ),
           ),
           DateSelector(
-            selectedDate: selectedDate,
-            onDateSelected: onDateChanged,
+            selectedDate: widget.selectedDate,
+            onDateSelected: widget.onDateChanged,
           ),
 
           const SizedBox(height: 20),
@@ -66,16 +147,16 @@ class SelectDatetimeScreen extends ConsumerWidget {
               if (slots.isEmpty) {
                 return _NoSlotsState(
                   onSelectTomorrow: () {
-                    onDateChanged(
-                      selectedDate.add(const Duration(days: 1)),
+                    widget.onDateChanged(
+                      widget.selectedDate.add(const Duration(days: 1)),
                     );
                   },
                 );
               }
               return _SlotsGrid(
                 slots: slots,
-                selectedSlot: selectedSlot,
-                onSlotSelected: onSlotSelected,
+                selectedSlot: widget.selectedSlot,
+                onSlotSelected: widget.onSlotSelected,
               );
             },
           ),

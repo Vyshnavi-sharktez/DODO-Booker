@@ -22,6 +22,9 @@ import '../../../models/addon_model.dart';
 import '../../category/services/category_providers.dart';
 import '../../service/widgets/service_addon_section.dart';
 import '../providers/global_cart_addons_provider.dart';
+import '../../vendor_catalog/providers/vcs_providers.dart';
+import '../../vendor_custom_service/models/vendor_custom_service_model.dart';
+import '../../vendor_custom_service/widgets/vendor_custom_service_sheet.dart';
 
 // ── Cart-page recommendation provider ─────────────────────────────────────────
 //
@@ -84,6 +87,32 @@ final _cartRecommendationsProvider =
   });
 
   return filtered.take(8).toList();
+});
+
+// ── VCS cart recommendations provider ─────────────────────────────────────────
+//
+// When the cart contains a VCS (catalog_vendor) item, recommendations come
+// from that same vendor's catalog — not the DODO catalog tree.
+final _vcsCartRecommendationsProvider =
+    FutureProvider.autoDispose<List<VendorCustomServiceModel>>((ref) async {
+  final cartItems = ref.watch(cartProvider);
+
+  final vcsItem = cartItems.where((i) => i.isCustomService).firstOrNull;
+  if (vcsItem == null || vcsItem.vendorId == null) return [];
+
+  final cartCustomIds = cartItems
+      .where((i) => i.customServiceId != null)
+      .map((i) => i.customServiceId!)
+      .toSet();
+
+  final services = await ref.read(
+    vendorVcsProvider((vendorId: vcsItem.vendorId!, categoryId: null)).future,
+  );
+
+  return services
+      .where((s) => !cartCustomIds.contains(s.id))
+      .take(8)
+      .toList();
 });
 
 class CartScreen extends ConsumerStatefulWidget {
@@ -1950,9 +1979,37 @@ class _CartRecommendations extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final cartItems = ref.watch(cartProvider);
+    final hasVcs = cartItems.any((i) => i.isCustomService);
+
+    if (hasVcs) {
+      final vcsServices =
+          ref.watch(_vcsCartRecommendationsProvider).valueOrNull;
+      if (vcsServices == null || vcsServices.isEmpty) {
+        return const SizedBox.shrink();
+      }
+      return _RecommendationStrip(
+        itemCount: vcsServices.length,
+        builder: (i) => _VcsRecommendationCard(service: vcsServices[i]),
+      );
+    }
+
     final nodes = ref.watch(_cartRecommendationsProvider).valueOrNull;
     if (nodes == null || nodes.isEmpty) return const SizedBox.shrink();
+    return _RecommendationStrip(
+      itemCount: nodes.length,
+      builder: (i) => ServiceRecommendationCard(node: nodes[i]),
+    );
+  }
+}
 
+class _RecommendationStrip extends StatelessWidget {
+  const _RecommendationStrip({required this.itemCount, required this.builder});
+  final int itemCount;
+  final Widget Function(int index) builder;
+
+  @override
+  Widget build(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -1970,13 +2027,171 @@ class _CartRecommendations extends ConsumerWidget {
           child: ListView.separated(
             scrollDirection: Axis.horizontal,
             padding: const EdgeInsets.only(right: 4),
-            itemCount: nodes.length,
+            itemCount: itemCount,
             separatorBuilder: (_, _) => const SizedBox(width: 12),
-            itemBuilder: (ctx, i) => ServiceRecommendationCard(node: nodes[i]),
+            itemBuilder: (_, i) => builder(i),
           ),
         ),
       ],
     );
   }
+}
+
+class _VcsRecommendationCard extends StatelessWidget {
+  const _VcsRecommendationCard({required this.service});
+  final VendorCustomServiceModel service;
+
+  @override
+  Widget build(BuildContext context) {
+    final hasDiscount = service.basePrice != null &&
+        service.basePrice! > service.activePrice;
+
+    return SizedBox(
+      width: 162,
+      child: GestureDetector(
+        onTap: () => VendorCustomServiceSheet.show(context, service),
+        child: Container(
+          decoration: BoxDecoration(
+            color: AppColors.surface,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: AppColors.border, width: 0.8),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withAlpha(10),
+                blurRadius: 8,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(13),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                SizedBox(
+                  height: 96,
+                  width: double.infinity,
+                  child: service.imageUrl != null
+                      ? Image.network(
+                          service.imageUrl!,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, _, _) => _placeholder,
+                        )
+                      : _placeholder,
+                ),
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          service.serviceName,
+                          style: const TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.textPrimary,
+                            height: 1.3,
+                          ),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        const SizedBox(height: 4),
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.baseline,
+                          textBaseline: TextBaseline.alphabetic,
+                          children: [
+                            Text(
+                              '₹${service.activePrice.toInt()}',
+                              style: const TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w800,
+                                color: AppColors.textPrimary,
+                              ),
+                            ),
+                            if (hasDiscount) ...[
+                              const SizedBox(width: 4),
+                              Text(
+                                '₹${service.basePrice!.toInt()}',
+                                style: const TextStyle(
+                                  fontSize: 10,
+                                  color: AppColors.textHint,
+                                  decoration: TextDecoration.lineThrough,
+                                  decorationColor: AppColors.textHint,
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                        if (service.rating > 0 && service.reviewCount > 0) ...[
+                          const SizedBox(height: 3),
+                          Row(
+                            children: [
+                              const Icon(Icons.star_rounded,
+                                  size: 12, color: AppColors.gold),
+                              const SizedBox(width: 2),
+                              Text(
+                                service.rating.toStringAsFixed(1),
+                                style: const TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w500,
+                                  color: AppColors.textSecondary,
+                                ),
+                              ),
+                              const SizedBox(width: 3),
+                              Text(
+                                '(${service.reviewCount})',
+                                style: const TextStyle(
+                                  fontSize: 10,
+                                  color: AppColors.textHint,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                        const Spacer(),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: RecButton(
+                                label: 'View',
+                                filled: false,
+                                onTap: () => VendorCustomServiceSheet.show(
+                                    context, service),
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                            Expanded(
+                              child: RecButton(
+                                label: 'Add',
+                                filled: true,
+                                onTap: () => VendorCustomServiceSheet.show(
+                                    context, service),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  static const Widget _placeholder = ColoredBox(
+    color: AppColors.primaryLight,
+    child: Center(
+      child: Icon(
+        Icons.home_repair_service_rounded,
+        size: 34,
+        color: AppColors.primary,
+      ),
+    ),
+  );
 }
 

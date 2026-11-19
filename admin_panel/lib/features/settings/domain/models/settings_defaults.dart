@@ -12,7 +12,6 @@ const Map<String, String> kSettingDefaults = {
   'max_booking_amount': '50000',
 
   // Booking
-  'booking_cancellation_window_hours': '24',
   'booking_reschedule_limit': '2',
   'amc_scheduling_window_days': '5',
   'default_warranty_days': '30',
@@ -44,6 +43,12 @@ const Map<String, String> kSettingDefaults = {
   // Restore Bin
   'deleted_bookings_retention_value': '30',
   'deleted_bookings_retention_unit': 'days',
+
+  // Slot Locking
+  'slot_checkout_hold_value':      '5',
+  'slot_checkout_hold_unit':       'minutes',
+  'slot_rejection_release_value':  '1',
+  'slot_rejection_release_unit':   'minutes',
 
   // Marketing
   'abandoned_cart_inactivity_value': '6',

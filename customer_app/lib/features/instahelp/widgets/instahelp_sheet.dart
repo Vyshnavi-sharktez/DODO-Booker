@@ -8,6 +8,7 @@ import '../models/instahelp_duration_model.dart';
 import '../models/instahelp_activity_model.dart';
 import '../models/instahelp_slot_model.dart';
 import '../providers/instahelp_providers.dart';
+import '../services/instahelp_service.dart';
 import 'instahelp_checkout_modal.dart';
 
 class InstaHelpSheet {
@@ -363,10 +364,13 @@ class _ScheduledContentState extends ConsumerState<_ScheduledContent> {
   DateTime? _selectedDate;
   InstaHelpDurationModel? _selectedDuration;
   InstaHelpSlotModel? _selectedSlot;
+  bool _locking = false;
+  String? _lockError;
 
   bool get _canContinue =>
       _selectedDate != null &&
-      _selectedDuration != null;
+      _selectedDuration != null &&
+      _selectedSlot != null;
 
   void _onDateSelected(DateTime d) {
     if (_selectedDate?.day != d.day ||
@@ -384,7 +388,73 @@ class _ScheduledContentState extends ConsumerState<_ScheduledContent> {
     setState(() {
       _selectedDuration = d;
       _selectedSlot = null;
+      _lockError = null;
     });
+  }
+
+  Future<void> _onBookNow() async {
+    final date = _selectedDate;
+    final duration = _selectedDuration;
+    final slot = _selectedSlot;
+    if (date == null || duration == null || slot == null) return;
+
+    setState(() {
+      _locking = true;
+      _lockError = null;
+    });
+
+    try {
+      final service = InstaHelpService();
+      final vendorId = await service.getVendorIdForMode(widget.modeId);
+      if (vendorId == null) throw Exception('Vendor not found for this mode.');
+
+      final dateStr = date.toIso8601String().substring(0, 10);
+      final lockId = await service.lockSlot(
+        vendorId: vendorId,
+        serviceDate: dateStr,
+        slotTime: slot.slotTime,
+        modeId: widget.modeId,
+        durationId: duration.id,
+      );
+
+      if (!mounted) return;
+
+      if (lockId == null) {
+        // Slot was taken by another customer just now
+        setState(() {
+          _lockError = 'This slot was just taken. Please select another time.';
+          _selectedSlot = null;
+        });
+        // Refresh slot availability
+        final slotsKey = (modeId: widget.modeId, durationId: duration.id, dateIso: dateStr);
+        ref.invalidate(instaHelpSlotsProvider(slotsKey));
+        return;
+      }
+
+      // Lock acquired — open checkout
+      final d = duration;
+      final mid = widget.modeId;
+      final mt = 'scheduled';
+      final rootCtx = GoRouter.of(context).routerDelegate.navigatorKey.currentContext;
+      Navigator.of(context).pop();
+      if (rootCtx != null) {
+        InstaHelpCheckoutModal.open(
+          rootCtx,
+          modeId: mid,
+          modeType: mt,
+          duration: d,
+          preselectedDate: date,
+          preselectedSlot: slot.slotTime,
+          assignedVendorId: widget.assignedVendorId,
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _lockError = 'Could not reserve slot. Please try again.');
+      }
+    } finally {
+      if (mounted) setState(() => _locking = false);
+    }
   }
 
   Future<void> _pickCustomDate() async {
@@ -585,7 +655,9 @@ class _ScheduledContentState extends ConsumerState<_ScheduledContent> {
                                   style: const TextStyle(
                                       color: AppColors.error, fontSize: 12)),
                               data: (slots) {
-                                if (slots.isEmpty) {
+                                final allUnavailable = slots.isNotEmpty &&
+                                    slots.every((s) => !s.isAvailable);
+                                if (slots.isEmpty || allUnavailable) {
                                   return Container(
                                     padding: const EdgeInsets.symmetric(
                                         horizontal: 16, vertical: 20),
@@ -601,11 +673,15 @@ class _ScheduledContentState extends ConsumerState<_ScheduledContent> {
                                             color: AppColors.textHint,
                                             size: 20),
                                         const SizedBox(width: 10),
-                                        Text(
-                                          'No slots available on this date.',
-                                          style: GoogleFonts.inter(
-                                              fontSize: 13,
-                                              color: AppColors.textSecondary),
+                                        Expanded(
+                                          child: Text(
+                                            allUnavailable
+                                                ? 'All slots are booked for this date — please choose a different date.'
+                                                : 'No slots available on this date.',
+                                            style: GoogleFonts.inter(
+                                                fontSize: 13,
+                                                color: AppColors.textSecondary),
+                                          ),
                                         ),
                                       ],
                                     ),
@@ -619,8 +695,10 @@ class _ScheduledContentState extends ConsumerState<_ScheduledContent> {
                                 return _SlotPicker(
                                   slots: slots,
                                   selected: _selectedSlot,
-                                  onSelect: (s) =>
-                                      setState(() => _selectedSlot = s),
+                                  onSelect: (s) => setState(() {
+                                    _selectedSlot = s;
+                                    _lockError = null;
+                                  }),
                                   isToday: isToday,
                                 );
                               },
@@ -643,10 +721,13 @@ class _ScheduledContentState extends ConsumerState<_ScheduledContent> {
               duration: _selectedDuration,
               selectedDate: _selectedDate,
               selectedSlot: _selectedSlot,
-              enabled: _canContinue,
+              enabled: _canContinue && !_locking,
               modeId: widget.modeId,
               modeType: 'scheduled',
               assignedVendorId: widget.assignedVendorId,
+              isLocking: _locking,
+              lockError: _lockError,
+              onBookNow: _onBookNow,
             ),
           ],
         ),
@@ -1892,6 +1973,9 @@ class _BottomBar extends StatelessWidget {
   final String modeType;
   final String? unavailableHint;
   final String? assignedVendorId;
+  final bool isLocking;
+  final String? lockError;
+  final VoidCallback? onBookNow;
 
   static final _currency =
       NumberFormat.currency(locale: 'en_IN', symbol: '₹', decimalDigits: 0);
@@ -1905,6 +1989,9 @@ class _BottomBar extends StatelessWidget {
     required this.modeType,
     this.unavailableHint,
     this.assignedVendorId,
+    this.isLocking = false,
+    this.lockError,
+    this.onBookNow,
   });
 
   String get _hint {
@@ -1924,6 +2011,40 @@ class _BottomBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final bottomInset = MediaQuery.paddingOf(context).bottom;
+
+    // Determine effective onPressed: scheduled mode uses onBookNow (locks slot
+    // first); instant/other modes open checkout directly as before.
+    VoidCallback? effectiveOnPressed;
+    if (enabled) {
+      if (modeType == 'scheduled' && onBookNow != null) {
+        effectiveOnPressed = onBookNow;
+      } else if (modeType != 'scheduled') {
+        effectiveOnPressed = () {
+          final d = duration!;
+          final mid = modeId;
+          final mt = modeType;
+          final date = selectedDate;
+          final slot = selectedSlot?.slotTime;
+          final rootCtx = GoRouter.of(context)
+              .routerDelegate
+              .navigatorKey
+              .currentContext;
+          Navigator.of(context).pop();
+          if (rootCtx != null) {
+            InstaHelpCheckoutModal.open(
+              rootCtx,
+              modeId: mid,
+              modeType: mt,
+              duration: d,
+              preselectedDate: date,
+              preselectedSlot: slot,
+              assignedVendorId: assignedVendorId,
+            );
+          }
+        };
+      }
+    }
+
     return Container(
       padding: EdgeInsets.fromLTRB(20, 12, 20, 14 + bottomInset),
       decoration: BoxDecoration(
@@ -1937,85 +2058,100 @@ class _BottomBar extends StatelessWidget {
           ),
         ],
       ),
-      child: Row(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Expanded(
-            child: duration == null || !enabled
-                ? Text(
-                    _hint,
-                    style: GoogleFonts.inter(
-                        fontSize: 12, color: AppColors.textHint),
-                  )
-                : Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        duration!.label,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: GoogleFonts.inter(
-                            fontSize: 12,
-                            color: AppColors.textSecondary),
-                      ),
-                      Text(
-                        _currency.format(duration!.finalPrice),
-                        style: GoogleFonts.inter(
-                          fontSize: 20,
-                          fontWeight: FontWeight.w700,
-                          color: AppColors.primary,
-                        ),
-                      ),
-                    ],
+          // Lock error banner
+          if (lockError != null) ...[
+            Container(
+              margin: const EdgeInsets.only(bottom: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: AppColors.error.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: AppColors.error.withValues(alpha: 0.3)),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.lock_outline_rounded, size: 14, color: AppColors.error),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      lockError!,
+                      style: GoogleFonts.inter(fontSize: 12, color: AppColors.error),
+                    ),
                   ),
-          ),
-          const SizedBox(width: 12),
-          ElevatedButton(
-            onPressed: enabled
-                ? () {
-                    final d = duration!;
-                    final mid = modeId;
-                    final mt = modeType;
-                    final date = selectedDate;
-                    final slot = selectedSlot?.slotTime;
-                    final rootCtx = GoRouter.of(context)
-                        .routerDelegate
-                        .navigatorKey
-                        .currentContext;
-                    Navigator.of(context).pop();
-                    if (rootCtx != null) {
-                      InstaHelpCheckoutModal.open(
-                        rootCtx,
-                        modeId: mid,
-                        modeType: mt,
-                        duration: d,
-                        preselectedDate: date,
-                        preselectedSlot: slot,
-                        assignedVendorId: assignedVendorId,
-                      );
-                    }
-                  }
-                : null,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.primary,
-              disabledBackgroundColor:
-                  AppColors.primary.withValues(alpha: 0.35),
-              foregroundColor: Colors.white,
-              disabledForegroundColor:
-                  Colors.white.withValues(alpha: 0.6),
-              minimumSize: const Size(0, 48),
-              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 28, vertical: 14),
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14)),
-              elevation: 0,
+                ],
+              ),
             ),
-            child: Text(
-              'Book Now',
-              style: GoogleFonts.inter(
-                  fontSize: 15, fontWeight: FontWeight.w700),
-            ),
+          ],
+          Row(
+            children: [
+              Expanded(
+                child: duration == null || !enabled
+                    ? Text(
+                        _hint,
+                        style: GoogleFonts.inter(
+                            fontSize: 12, color: AppColors.textHint),
+                      )
+                    : Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            duration!.label,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: GoogleFonts.inter(
+                                fontSize: 12,
+                                color: AppColors.textSecondary),
+                          ),
+                          Text(
+                            _currency.format(duration!.finalPrice),
+                            style: GoogleFonts.inter(
+                              fontSize: 20,
+                              fontWeight: FontWeight.w700,
+                              color: AppColors.primary,
+                            ),
+                          ),
+                        ],
+                      ),
+              ),
+              const SizedBox(width: 12),
+              ElevatedButton(
+                onPressed: effectiveOnPressed,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primary,
+                  disabledBackgroundColor:
+                      AppColors.primary.withValues(alpha: 0.35),
+                  foregroundColor: Colors.white,
+                  disabledForegroundColor:
+                      Colors.white.withValues(alpha: 0.6),
+                  minimumSize: const Size(0, 48),
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 28, vertical: 14),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14)),
+                  elevation: 0,
+                ),
+                child: isLocking
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
+                      )
+                    : Text(
+                        'Book Now',
+                        style: GoogleFonts.inter(
+                            fontSize: 15, fontWeight: FontWeight.w700),
+                      ),
+              ),
+            ],
           ),
         ],
       ),
