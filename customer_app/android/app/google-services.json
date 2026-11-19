@@ -7,6 +7,25 @@
   "client": [
     {
       "client_info": {
+        "mobilesdk_app_id": "1:793067837126:android:5193920c321e69869f29c7",
+        "android_client_info": {
+          "package_name": "com.dodobooker.customer"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAB9CfDeL5skfhYhI2InWUk3a-rosw7UL8"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
         "mobilesdk_app_id": "1:793067837126:android:04ff7ad0e5ee6df19f29c7",
         "android_client_info": {
           "package_name": "com.example.customer_app"
