@@ -86,6 +86,10 @@ class _ServiceSchedulingDialogState extends ConsumerState<ServiceSchedulingDialo
   late List<bool> _days; // index 0=Sun … 6=Sat
   late TextEditingController _maxBookings;
 
+  // Checkout hold override
+  late TextEditingController _holdValue;
+  String? _holdUnit; // null = use global
+
   // Slot generator inputs
   String? _startTime;
   String? _endTime;
@@ -102,6 +106,7 @@ class _ServiceSchedulingDialogState extends ConsumerState<ServiceSchedulingDialo
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
     _maxBookings = TextEditingController();
+    _holdValue = TextEditingController();
     _intervalHours = TextEditingController();
     _intervalMinutes = TextEditingController();
     _intervalHours.addListener(() => setState(() {}));
@@ -113,6 +118,7 @@ class _ServiceSchedulingDialogState extends ConsumerState<ServiceSchedulingDialo
   void dispose() {
     _tabController.dispose();
     _maxBookings.dispose();
+    _holdValue.dispose();
     _intervalHours.dispose();
     _intervalMinutes.dispose();
     for (final e in _calEntries) {
@@ -151,6 +157,8 @@ class _ServiceSchedulingDialogState extends ConsumerState<ServiceSchedulingDialo
     _useGlobalSchedule = cfg.useGlobalSchedule;
     _days = List.generate(7, (i) => cfg.workingDays.contains(i));
     _maxBookings.text = cfg.maxBookingsPerSlot.toString();
+    _holdValue.text = cfg.checkoutHoldValue?.toString() ?? '';
+    _holdUnit = cfg.checkoutHoldUnit;
     _startTime = cfg.slotStartTime;
     _endTime = cfg.slotEndTime;
     _intervalHours.text = cfg.slotIntervalHours.toString();
@@ -301,6 +309,7 @@ class _ServiceSchedulingDialogState extends ConsumerState<ServiceSchedulingDialo
           ? _generateSlots(_startTime!, _endTime!, iH, iM)
           : <String>[];
 
+      final holdVal = int.tryParse(_holdValue.text.trim());
       await _repo.upsert(ServiceSchedulingConfig(
         serviceId: widget.serviceId,
         isEnabled: _isEnabled,
@@ -312,6 +321,8 @@ class _ServiceSchedulingDialogState extends ConsumerState<ServiceSchedulingDialo
         slotEndTime: _endTime,
         slotIntervalHours: iH,
         slotIntervalMinutes: iM,
+        checkoutHoldValue: holdVal,
+        checkoutHoldUnit: holdVal != null ? (_holdUnit ?? 'minutes') : null,
       ));
       if (mounted) {
         Navigator.of(context).pop();
@@ -740,6 +751,95 @@ class _ServiceSchedulingDialogState extends ConsumerState<ServiceSchedulingDialo
                     ),
                     keyboardType: TextInputType.number,
                     inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                  ),
+                  const SizedBox(height: 20),
+
+                  // Checkout Hold Duration override
+                  const _SectionLabel('Checkout Hold Duration'),
+                  const SizedBox(height: 4),
+                  Text(
+                    'How long this slot stays reserved during checkout. '
+                    'Leave blank to use the global setting.',
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: AppColors.textSecondary,
+                      height: 1.4,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  _SectionCard(
+                    child: Row(
+                      children: [
+                        SizedBox(
+                          width: 80,
+                          child: TextField(
+                            controller: _holdValue,
+                            textAlign: TextAlign.center,
+                            keyboardType: TextInputType.number,
+                            inputFormatters: [
+                              FilteringTextInputFormatter.digitsOnly
+                            ],
+                            style: const TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                            ),
+                            decoration: InputDecoration(
+                              isDense: true,
+                              contentPadding: const EdgeInsets.symmetric(
+                                  horizontal: 8, vertical: 8),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              hintText: 'Global',
+                            ),
+                            onChanged: (_) => setState(() {}),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: DropdownButtonHideUnderline(
+                            child: DropdownButton<String?>(
+                              value: _holdUnit,
+                              isExpanded: true,
+                              style: const TextStyle(
+                                fontSize: 13,
+                                color: AppColors.textPrimary,
+                              ),
+                              hint: const Text(
+                                'Unit',
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  color: AppColors.textSecondary,
+                                ),
+                              ),
+                              items: const [
+                                DropdownMenuItem(
+                                    value: 'seconds',
+                                    child: Text('Seconds')),
+                                DropdownMenuItem(
+                                    value: 'minutes',
+                                    child: Text('Minutes')),
+                                DropdownMenuItem(
+                                    value: 'hours', child: Text('Hours')),
+                              ],
+                              onChanged: (v) =>
+                                  setState(() => _holdUnit = v),
+                            ),
+                          ),
+                        ),
+                        if (_holdUnit != null || _holdValue.text.isNotEmpty)
+                          IconButton(
+                            icon: const Icon(Icons.clear_rounded,
+                                size: 16, color: AppColors.textSecondary),
+                            tooltip: 'Use global setting',
+                            visualDensity: VisualDensity.compact,
+                            onPressed: () => setState(() {
+                              _holdValue.clear();
+                              _holdUnit = null;
+                            }),
+                          ),
+                      ],
+                    ),
                   ),
                   const SizedBox(height: 20),
 

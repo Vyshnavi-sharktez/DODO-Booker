@@ -160,6 +160,17 @@ class VendorDurationsNotifier
           table: 'instahelp_durations',
           callback: (_) => _load(),
         )
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'vendor_service_requests',
+          filter: PostgresChangeFilter(
+            type: PostgresChangeFilterType.eq,
+            column: 'mode_id',
+            value: _modeId,
+          ),
+          callback: (_) => _load(),
+        )
         .subscribe();
   }
 
@@ -298,6 +309,17 @@ class VendorActivitiesNotifier
           event: PostgresChangeEvent.all,
           schema: 'public',
           table: 'instahelp_activities',
+          callback: (_) => _load(),
+        )
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'vendor_service_requests',
+          filter: PostgresChangeFilter(
+            type: PostgresChangeFilterType.eq,
+            column: 'mode_id',
+            value: _modeId,
+          ),
           callback: (_) => _load(),
         )
         .subscribe();

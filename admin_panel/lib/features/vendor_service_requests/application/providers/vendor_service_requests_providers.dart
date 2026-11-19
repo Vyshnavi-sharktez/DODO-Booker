@@ -50,6 +50,11 @@ class VendorServiceRequestsNotifier
     await _load();
   }
 
+  Future<void> acceptSlotConfig(String id) async {
+    await _repo.acceptSlotConfig(id);
+    await _load();
+  }
+
   Future<void> complete(String id) async {
     await _repo.complete(id);
     await _load();

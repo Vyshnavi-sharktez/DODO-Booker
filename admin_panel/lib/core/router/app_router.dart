@@ -64,6 +64,7 @@ import '../../features/call_config/presentation/pages/call_config_page.dart';
 import '../../features/vendor_root_categories/presentation/pages/vendor_root_categories_page.dart';
 import '../../features/instahelp/presentation/pages/instahelp_orders_page.dart';
 import '../../features/instahelp/presentation/pages/vendor_instahelp_page.dart';
+import '../../features/cancellation_policy/presentation/pages/cancellation_policy_page.dart';
 import '../../shared/pages/unauthorized_page.dart';
 import '../rbac/permission_guard.dart';
 
@@ -591,6 +592,13 @@ final routerProvider = Provider<GoRouter>((ref) {
             name: 'vendorRootCategories',
             pageBuilder: (context, state) => const NoTransitionPage(
               child: VendorRootCategoriesPage(),
+            ),
+          ),
+          GoRoute(
+            path: '/dashboard/cancellation-policy',
+            name: 'cancellationPolicy',
+            pageBuilder: (context, state) => const NoTransitionPage(
+              child: CancellationPolicyPage(),
             ),
           ),
         ],

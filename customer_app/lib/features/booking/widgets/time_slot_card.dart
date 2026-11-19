@@ -23,35 +23,59 @@ class TimeSlotCard extends StatelessWidget {
       onTap: available ? onTap : null,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 180),
-        // No padding — the grid cell provides the size; alignment centres text.
         alignment: Alignment.center,
         decoration: BoxDecoration(
           color: isSelected
-              ? AppColors.primary          // dark near-black fill
+              ? AppColors.primary
               : available
-                  ? AppColors.surface      // white
-                  : AppColors.surfaceVariant, // muted warm-grey
+                  ? AppColors.surface
+                  : AppColors.surfaceVariant,
           borderRadius: BorderRadius.circular(10),
           border: Border.all(
             color: isSelected
                 ? AppColors.primary
-                : AppColors.border,        // same subtle border for both states
+                : available
+                    ? AppColors.border
+                    : AppColors.border.withValues(alpha: 0.5),
             width: 1,
           ),
         ),
-        child: Text(
-          slot.label,
-          textAlign: TextAlign.center,
-          style: TextStyle(
-            fontSize: 13,
-            fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
-            color: isSelected
-                ? Colors.white
-                : available
-                    ? AppColors.textPrimary
-                    : AppColors.textHint,  // dimmed; no strikethrough
-          ),
-        ),
+        child: available
+            ? Text(
+                slot.label,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                  color: isSelected ? Colors.white : AppColors.textPrimary,
+                ),
+              )
+            : Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    slot.label,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w400,
+                      color: AppColors.textHint,
+                      decoration: TextDecoration.lineThrough,
+                      decorationColor: AppColors.textHint,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    'Sold Out',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.error,
+                    ),
+                  ),
+                ],
+              ),
       ),
     );
   }

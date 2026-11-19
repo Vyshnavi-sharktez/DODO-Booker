@@ -7,7 +7,8 @@ import '../providers/instahelp_vendor_providers.dart';
 
 class VendorFinancialConfigSection extends ConsumerWidget {
   final String modeId;
-  const VendorFinancialConfigSection({super.key, required this.modeId});
+  final bool hasPending;
+  const VendorFinancialConfigSection({super.key, required this.modeId, this.hasPending = false});
 
   void _openEdit(BuildContext context, WidgetRef ref, InstaHelpFinancialConfig? existing) {
     showDialog(
@@ -62,7 +63,7 @@ class VendorFinancialConfigSection extends ConsumerWidget {
                 loading: () => const SizedBox.shrink(),
                 error: (_, _) => const SizedBox.shrink(),
                 data: (config) => FilledButton.icon(
-                  onPressed: () => _openEdit(context, ref, config),
+                  onPressed: hasPending ? null : () => _openEdit(context, ref, config),
                   icon: const Icon(Icons.edit_rounded, size: 16),
                   label: Text(config == null ? 'Configure' : 'Edit'),
                   style: FilledButton.styleFrom(
@@ -204,10 +205,30 @@ class _FinancialConfigDialogState extends State<_FinancialConfigDialog> {
     _scEnabled = e?.serviceChargeEnabled ?? false;
     _scType = e?.serviceChargeType ?? 'fixed';
     _scValueCtrl.text = _fmt(e?.serviceChargeValue ?? 0);
+    _gstCtrl.addListener(_onChanged);
+    _surgeValueCtrl.addListener(_onChanged);
+    _scValueCtrl.addListener(_onChanged);
+  }
+
+  void _onChanged() => setState(() {});
+
+  bool get _hasChanges {
+    final e = widget.existing;
+    if (e == null) return true;
+    return _gstCtrl.text.trim() != _fmt(e.gstPercent) ||
+        _surgeFeeEnabled != e.surgeFeeEnabled ||
+        _surgeFeeType != e.surgeFeeType ||
+        _surgeValueCtrl.text.trim() != _fmt(e.surgeFeeValue) ||
+        _scEnabled != e.serviceChargeEnabled ||
+        _scType != e.serviceChargeType ||
+        _scValueCtrl.text.trim() != _fmt(e.serviceChargeValue);
   }
 
   @override
   void dispose() {
+    _gstCtrl.removeListener(_onChanged);
+    _surgeValueCtrl.removeListener(_onChanged);
+    _scValueCtrl.removeListener(_onChanged);
     _gstCtrl.dispose();
     _surgeValueCtrl.dispose();
     _scValueCtrl.dispose();
@@ -384,7 +405,7 @@ class _FinancialConfigDialogState extends State<_FinancialConfigDialog> {
           child: const Text('Cancel'),
         ),
         FilledButton(
-          onPressed: _saving ? null : _save,
+          onPressed: (_saving || !_hasChanges) ? null : _save,
           style: FilledButton.styleFrom(
             backgroundColor: AppColors.primary,
             minimumSize: const Size(0, 40),

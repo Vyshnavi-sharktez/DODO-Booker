@@ -38,6 +38,25 @@ class _ServiceRequestDetailDialogState
     if (widget.request.isEditService) _loadParent();
   }
 
+  // ── Slot config accept ────────────────────────────────────────────────────
+  Future<void> _slotConfigAccept() async {
+    setState(() => _busy = true);
+    try {
+      await ref
+          .read(vendorServiceRequestsNotifierProvider.notifier)
+          .acceptSlotConfig(widget.request.id);
+      if (mounted) Navigator.of(context).pop();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e'), backgroundColor: AppColors.error),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
   // ── InstaHelp accept ──────────────────────────────────────────────────────
   Future<void> _instaHelpAccept() async {
     setState(() => _busy = true);
@@ -156,6 +175,11 @@ class _ServiceRequestDetailDialogState
     if (widget.request.isInstaHelp) {
       return '${widget.request.requestTypeLabel} — Pending Review';
     }
+    if (widget.request.isSlotConfig) {
+      return widget.request.isPending
+          ? 'Slot Config Change — Pending Review'
+          : widget.request.requestTypeLabel;
+    }
     if (!widget.request.isEditService) return widget.request.requestTypeLabel;
     if (_parentLoading || _liveParent == null) return 'Service Edit Pending Review';
     if (_changedSections.length == 1) {
@@ -253,9 +277,11 @@ class _ServiceRequestDetailDialogState
                             ? Icons.edit_note_rounded
                             : r.isDeleteService || r.isPendingDeletion
                                 ? Icons.delete_outline_rounded
-                                : r.isPriceChange
-                                    ? Icons.edit_outlined
-                                    : Icons.inbox_rounded,
+                                : r.isSlotConfig
+                                    ? Icons.schedule_rounded
+                                    : r.isPriceChange
+                                        ? Icons.edit_outlined
+                                        : Icons.inbox_rounded,
                     color: Colors.white,
                     size: 20,
                   ),
@@ -286,9 +312,11 @@ class _ServiceRequestDetailDialogState
                 padding: const EdgeInsets.all(24),
                 child: r.isInstaHelp
                     ? _buildInstaHelpBody(r)
-                    : r.isEditService
-                        ? _buildEditServiceBody(r)
-                        : _buildBody(r),
+                    : r.isSlotConfig
+                        ? _buildSlotConfigBody(r)
+                        : r.isEditService
+                            ? _buildEditServiceBody(r)
+                            : _buildBody(r),
               ),
             ),
 
@@ -413,6 +441,62 @@ class _ServiceRequestDetailDialogState
         const SizedBox(height: 20),
 
         dataSection(),
+
+        if (r.isRejected &&
+            r.rejectionReason != null &&
+            r.rejectionReason!.isNotEmpty) ...[
+          const SizedBox(height: 20),
+          const _SectionLabel('Rejection Reason'),
+          const SizedBox(height: 8),
+          _ReasonBox(reason: r.rejectionReason!),
+        ],
+
+        if (_showRejectForm) ...[
+          const SizedBox(height: 20),
+          const _SectionLabel('Rejection Reason *'),
+          const SizedBox(height: 8),
+          TextFormField(
+            controller: _reasonCtrl,
+            maxLines: 3,
+            autofocus: true,
+            decoration: const InputDecoration(
+              hintText: 'Explain why this request is being rejected…',
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  // ── slot_config body ───────────────────────────────────────────────────────
+
+  Widget _buildSlotConfigBody(VendorServiceRequest r) {
+    final data = r.requestData ?? {};
+    final oldMax = data['old_max_bookings'];
+    final newMax = data['new_max_bookings'];
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _StatusBadge(status: r.status),
+        const SizedBox(height: 20),
+
+        const _SectionLabel('Vendor'),
+        const SizedBox(height: 12),
+        _DetailRow('Business', r.vendorName),
+        if (r.vendorTier != null) _DetailRow('Tier', r.vendorTier!),
+        _DetailRow('Submitted', r.formattedDate),
+        const SizedBox(height: 20),
+
+        const _SectionLabel('Service Details'),
+        const SizedBox(height: 12),
+        _DetailRow('Service Name', r.serviceName),
+        const SizedBox(height: 20),
+
+        const _SectionLabel('Slot Config Change'),
+        const SizedBox(height: 12),
+        _DetailRow('Current Max Bookings/Slot', oldMax != null ? '$oldMax' : '—'),
+        _DetailRow('Requested Max Bookings/Slot', newMax != null ? '$newMax' : '—'),
 
         if (r.isRejected &&
             r.rejectionReason != null &&
@@ -843,7 +927,11 @@ class _ServiceRequestDetailDialogState
         r.requestType == 'instahelp_delete_duration' ||
         r.requestType == 'instahelp_delete_activity';
     final acceptLabel = isDeletion ? 'Approve Deletion' : 'Accept';
-    final onAccept = r.isInstaHelp ? _instaHelpAccept : _serviceAccept;
+    final onAccept = r.isInstaHelp
+        ? _instaHelpAccept
+        : r.isSlotConfig
+            ? _slotConfigAccept
+            : _serviceAccept;
 
     return Row(
       mainAxisAlignment: MainAxisAlignment.end,
@@ -892,7 +980,7 @@ class _ServiceRequestDetailDialogState
             icon: const Icon(Icons.help_outline_rounded, size: 16),
             label: const Text('Customer Q&A'),
           ),
-        if (r.isCompleted && !r.isPriceChange) ...[
+        if (r.isCompleted && !r.isPriceChange && !r.isSlotConfig) ...[
           const SizedBox(width: 8),
           Row(
             mainAxisSize: MainAxisSize.min,

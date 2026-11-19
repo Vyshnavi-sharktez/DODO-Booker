@@ -43,6 +43,15 @@ final bookingRefundStatusProvider = FutureProvider.autoDispose
   return row?['status'] as String?;
 });
 
+/// Total uncollected COD cancellation fees for the current customer.
+/// Refreshed on demand — call ref.invalidate(pendingCancellationFeesProvider)
+/// after a booking is cancelled or after fees are marked collected.
+final pendingCancellationFeesProvider = FutureProvider.autoDispose<double>((ref) async {
+  final isAuth = ref.watch(isAuthenticatedProvider);
+  if (!isAuth) return 0.0;
+  return ref.read(bookingsServiceProvider).getPendingCancellationFees();
+});
+
 // ── Processed bookings: separates regular bookings from AMC contracts ──────────
 
 class ProcessedBookings {

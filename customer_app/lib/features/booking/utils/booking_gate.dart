@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/widgets/app_modal_dialog.dart';
@@ -153,6 +154,55 @@ Future<void> launchBookingFlow(
   final subtotal = baseSubtotal + taxSettings.computeTax(baseSubtotal);
   final discountAmount = amcPlan != null ? 0.0 : (selectedCoupon?.calculateDiscount(subtotal) ?? 0.0);
   final finalTotal = (subtotal + pvSelection.fee - discountAmount).clamp(0.0, double.infinity);
+
+  // ── Step 5b: Slot lock ────────────────────────────────────────────────────
+  // Hold the slot for the checkout duration so no other customer can grab it
+  // while this customer is completing payment.
+  final dateStr = date.toIso8601String().substring(0, 10);
+  try {
+    final lockId = await Supabase.instance.client.rpc('lock_slot', params: {
+      'p_service_date': dateStr,
+      'p_slot_time':    slot.label as String,
+      'p_lock_type':    'checkout',
+      'p_service_id':   service.id,
+    });
+    if (!context.mounted) return;
+    if (lockId == null) {
+      await showDialog<void>(
+        context: context,
+        builder: (_) => AlertDialog(
+          title: const Text('Slot Not Available'),
+          content: const Text(
+              'This slot was just taken by another customer. Please go back and choose a different time.'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('OK'),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
+  } catch (e) {
+    debugPrint('[DODO][SlotLock] slot lock error: $e');
+    if (!context.mounted) return;
+    await showDialog<void>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Slot Not Available'),
+        content: const Text(
+            'This slot was just taken by another customer. Please go back and choose a different time.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
+    return;
+  }
 
   // ── Step 6: Payment ───────────────────────────────────────────────────────
   final payFuture = AppModalDialog.show<String>(
@@ -313,6 +363,21 @@ Future<void> launchBookingFlow(
     if (!context.mounted) return;
     if (isBookingRestrictionError(e)) {
       await showBookingRestrictedDialog(context);
+    } else if (e.toString().contains('slot_taken')) {
+      await showDialog<void>(
+        context: context,
+        builder: (_) => AlertDialog(
+          title: const Text('Slot Not Available'),
+          content: const Text(
+              'This slot has just been taken. Please select another time slot.'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('OK'),
+            ),
+          ],
+        ),
+      );
     } else {
       final message = e.toString().replaceFirst('Exception: ', '');
       ScaffoldMessenger.of(context).showSnackBar(

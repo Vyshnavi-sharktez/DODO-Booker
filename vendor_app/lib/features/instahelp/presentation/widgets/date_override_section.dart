@@ -291,10 +291,32 @@ class _DateOverrideDialogState extends State<_DateOverrideDialog> {
     _customStartCtrl.text = e?.customStartTime ?? '';
     _customEndCtrl.text = e?.customEndTime ?? '';
     _notesCtrl.text = e?.notes ?? '';
+    _customStartCtrl.addListener(_onChanged);
+    _customEndCtrl.addListener(_onChanged);
+    _notesCtrl.addListener(_onChanged);
+  }
+
+  void _onChanged() => setState(() {});
+
+  bool get _hasChanges {
+    final e = widget.existing;
+    if (e == null) return true;
+    bool _sameDay(DateTime a, DateTime b) =>
+        a.year == b.year && a.month == b.month && a.day == b.day;
+    return !_sameDay(_startDate, e.startDate) ||
+        !_sameDay(_endDate, e.endDate) ||
+        _isAvailable != e.isAvailable ||
+        _customHours != (e.customStartTime != null) ||
+        _customStartCtrl.text.trim() != (e.customStartTime ?? '') ||
+        _customEndCtrl.text.trim() != (e.customEndTime ?? '') ||
+        _notesCtrl.text.trim() != (e.notes ?? '');
   }
 
   @override
   void dispose() {
+    _customStartCtrl.removeListener(_onChanged);
+    _customEndCtrl.removeListener(_onChanged);
+    _notesCtrl.removeListener(_onChanged);
     _customStartCtrl.dispose();
     _customEndCtrl.dispose();
     _notesCtrl.dispose();
@@ -477,7 +499,7 @@ class _DateOverrideDialogState extends State<_DateOverrideDialog> {
           child: const Text('Cancel'),
         ),
         FilledButton(
-          onPressed: _saving ? null : _save,
+          onPressed: (_saving || !_hasChanges) ? null : _save,
           style: FilledButton.styleFrom(
             backgroundColor: AppColors.primary,
             minimumSize: const Size(0, 40),

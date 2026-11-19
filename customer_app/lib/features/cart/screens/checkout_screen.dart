@@ -27,6 +27,7 @@ import '../widgets/min_order_card.dart';
 import '../widgets/payment_selection_sheet.dart';
 import '../widgets/service_unavailable_dialog.dart';
 import '../../bookings/services/bookings_providers.dart';
+import '../../bookings/services/bookings_service.dart';
 import '../../loyalty/models/loyalty_settings_model.dart';
 import '../../loyalty/providers/loyalty_providers.dart';
 import '../../loyalty/services/loyalty_service.dart';
@@ -59,12 +60,60 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
   bool _usePoints = false;
   bool _placing = false;
   double _taxTotal = 0.0;
+  double _pendingCancellationFee = 0.0;
   TaxSettingsModel _displayTax = TaxSettingsModel.defaults;
   double _surgeTotal = 0.0;
   SurgeFeeModel _displaySurge = SurgeFeeModel.defaults;
   String? _selectedPreferredVendorId;
   double _preferredVendorFeeAmount = 0.0;
   double _serviceChargeTotal = 0.0;
+  Set<String> _soldOutServiceIds = {};
+  RealtimeChannel? _slotChannel;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchPendingCancellationFee();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ref.invalidate(timeSlotsProvider);
+      _subscribeSlotRealtime();
+    });
+  }
+
+  void _subscribeSlotRealtime() {
+    _slotChannel = Supabase.instance.client
+        .channel('checkout_slot_refresh')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'slot_locks',
+          callback: (_) {
+            if (mounted) ref.invalidate(timeSlotsProvider);
+          },
+        )
+        .onPostgresChanges(
+          event: PostgresChangeEvent.update,
+          schema: 'public',
+          table: 'bookings',
+          callback: (_) {
+            if (mounted) ref.invalidate(timeSlotsProvider);
+          },
+        )
+        .subscribe();
+  }
+
+  @override
+  void dispose() {
+    _slotChannel?.unsubscribe();
+    super.dispose();
+  }
+
+  Future<void> _fetchPendingCancellationFee() async {
+    try {
+      final fee = await BookingsService().getPendingCancellationFees();
+      if (mounted) setState(() => _pendingCancellationFee = fee);
+    } catch (_) {}
+  }
 
   static const _monthNames = [
     'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
@@ -121,7 +170,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
   double get _loyaltyDiscount => _loyaltyRedeemPoints.toDouble();
 
   double get _grandTotal =>
-      (_subtotal + _surge + _preferredVendorFeeAmount + _tax + _serviceChargeTotal - _discount - _loyaltyDiscount)
+      (_subtotal + _surge + _preferredVendorFeeAmount + _tax + _serviceChargeTotal + _pendingCancellationFee - _discount - _loyaltyDiscount)
           .clamp(0.0, double.infinity);
 
   Future<void> _pickDate() async {
@@ -141,9 +190,10 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       ),
     );
     if (picked != null) {
+      ref.invalidate(timeSlotsProvider);
       setState(() {
         _selectedDate = picked;
-        _selectedSlot = null; // reset slot when date changes
+        _selectedSlot = null;
       });
     }
   }
@@ -239,6 +289,63 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         if (!mounted) return;
         setState(() => _selectedCoupon = null);
         _showError(e.toString().replaceFirst('Exception: ', ''));
+        return;
+      }
+    }
+
+    // ── Slot lock ─────────────────────────────────────────────────────────────
+    // Lock every cart item's slot before opening the payment sheet.
+    // VCS locks are vendor-scoped; regular service locks have no vendor.
+    // If any item's slot is full, mark it sold-out and abort — do not remove.
+    setState(() => _soldOutServiceIds = {});
+    if (_selectedSlot != null && _selectedDate != null) {
+      final dateStr = _selectedDate!.toIso8601String().substring(0, 10);
+      final failedIds = <String>{};
+
+      // VCS item — single vendor-scoped lock
+      final vcsItem = items.cast<CartItem?>()
+          .firstWhere((i) => i!.isCustomService, orElse: () => null);
+      if (vcsItem != null && vcsItem.vendorId != null) {
+        try {
+          final lockId = await Supabase.instance.client.rpc('lock_slot', params: {
+            'p_vendor_id':    vcsItem.vendorId!,
+            'p_service_date': dateStr,
+            'p_slot_time':    _selectedSlot!.label,
+            'p_lock_type':    'checkout',
+            'p_service_id':   vcsItem.serviceId,
+          });
+          if (!mounted) return;
+          if (lockId == null) failedIds.add(vcsItem.serviceId);
+        } catch (e) {
+          debugPrint('[DODO][SlotLock] slot lock error: $e');
+          failedIds.add(vcsItem.serviceId);
+        }
+      }
+
+      // Regular non-AMC items — lock each individually
+      for (final item in items.where((i) => !i.isCustomService && !i.isAmc)) {
+        try {
+          final lockId = await Supabase.instance.client.rpc('lock_slot', params: {
+            'p_service_date': dateStr,
+            'p_slot_time':    _selectedSlot!.label,
+            'p_lock_type':    'checkout',
+            'p_service_id':   item.serviceId,
+          });
+          if (!mounted) return;
+          if (lockId == null) failedIds.add(item.serviceId);
+        } catch (e) {
+          debugPrint('[DODO][SlotLock] slot lock error: $e');
+          failedIds.add(item.serviceId);
+        }
+      }
+
+      if (failedIds.isNotEmpty) {
+        ref.invalidate(timeSlotsProvider);
+        setState(() {
+          _soldOutServiceIds = failedIds;
+          _selectedSlot = null;
+        });
+        _showError('An item from your cart is not available.');
         return;
       }
     }
@@ -416,6 +523,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       }
 
       ref.invalidate(myBookingsProvider);
+      ref.invalidate(timeSlotsProvider);
 
       // Record loyalty redemption after booking is confirmed
       if (redeemPoints > 0) {
@@ -430,6 +538,16 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
           ref.invalidate(loyaltyTransactionsProvider);
         } catch (e) {
           debugPrint('[DODO][Checkout] Loyalty redemption record failed (non-fatal): $e');
+        }
+      }
+
+      // Mark any outstanding COD cancellation fees as collected
+      if (_pendingCancellationFee > 0) {
+        try {
+          await BookingsService().markCancellationFeesCollected();
+          debugPrint('[DODO][Checkout] ✓ cancellation fees marked collected');
+        } catch (e) {
+          debugPrint('[DODO][Checkout] cancellation fee collection mark failed (non-fatal): $e');
         }
       }
 
@@ -481,6 +599,9 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       }
       if (isBookingRestrictionError(e)) {
         await showBookingRestrictedDialog(context);
+      } else if (e.toString().contains('slot_taken')) {
+        setState(() => _selectedSlot = null);
+        _showError('This slot has just been taken. Please select another time slot.');
       } else {
         _showError('Booking failed: $e');
       }
@@ -711,6 +832,14 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
           if (mounted && !_placing) _navigateBackToCart();
         });
       }
+      if (_soldOutServiceIds.isNotEmpty) {
+        final remaining = next.map((i) => i.serviceId).toSet();
+        if (!_soldOutServiceIds.any(remaining.contains)) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) setState(() => _soldOutServiceIds = {});
+          });
+        }
+      }
     });
 
     final items = ref.watch(cartProvider);
@@ -809,8 +938,36 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
 
     // ── Shared list content ─────────────────────────────────────────────────
     final listChildren = <Widget>[
+      // Sold-out banner — shown when a slot was full at checkout attempt
+      if (_soldOutServiceIds.isNotEmpty)
+        Container(
+          margin: const EdgeInsets.only(bottom: 12),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          decoration: BoxDecoration(
+            color: Colors.red.shade50,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: Colors.red.shade200, width: 0.8),
+          ),
+          child: Row(
+            children: [
+              Icon(Icons.error_outline_rounded,
+                  color: Colors.red.shade700, size: 16),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'A service just got sold out and is not available from your cart.',
+                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                        color: Colors.red.shade700,
+                      ),
+                ),
+              ),
+            ],
+          ),
+        ),
+
       // Order Summary — collapsible with quantity controls
-      _OrderSummarySection(items: items),
+      _OrderSummarySection(
+          items: items, soldOutServiceIds: _soldOutServiceIds),
       const SizedBox(height: 16),
 
       // Address
@@ -998,6 +1155,10 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       ),
       const SizedBox(height: 16),
 
+      // Cancellation Policy (only shown when at least one policy is enabled)
+      const _CancellationPolicySection(),
+      const SizedBox(height: 16),
+
       // Preferred Vendor
       if (items.isNotEmpty && (_selectedAddress?.hasCoordinates ?? false)) ...[
         _PreferredVendorSection(
@@ -1037,6 +1198,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
               _displayTax.applyOnServices &&
               _displayTax.displaySeparately,
           earnedPoints: earnedPoints,
+          pendingCancellationFee: _pendingCancellationFee,
         ),
       ),
     ];
@@ -1153,7 +1315,9 @@ class _SectionCard extends StatelessWidget {
 
 class _OrderSummarySection extends ConsumerStatefulWidget {
   final List<CartItem> items;
-  const _OrderSummarySection({required this.items});
+  final Set<String> soldOutServiceIds;
+  const _OrderSummarySection(
+      {required this.items, this.soldOutServiceIds = const {}});
 
   @override
   ConsumerState<_OrderSummarySection> createState() =>
@@ -1249,7 +1413,10 @@ class _OrderSummarySectionState
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
               child: Column(
                 children:
-                    items.map((item) => _CheckoutItemTile(item: item)).toList(),
+                    items.map((item) => _CheckoutItemTile(
+                          item: item,
+                          soldOut: widget.soldOutServiceIds.contains(item.serviceId),
+                        )).toList(),
               ),
             ),
           ],
@@ -1263,7 +1430,8 @@ class _OrderSummarySectionState
 
 class _CheckoutItemTile extends ConsumerWidget {
   final CartItem item;
-  const _CheckoutItemTile({required this.item});
+  final bool soldOut;
+  const _CheckoutItemTile({required this.item, this.soldOut = false});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -1292,12 +1460,42 @@ class _CheckoutItemTile extends ConsumerWidget {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(
-                            item.serviceName,
-                            style: tt.bodySmall
-                                ?.copyWith(fontWeight: FontWeight.w600),
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  item.serviceName,
+                                  style: tt.bodySmall?.copyWith(
+                                    fontWeight: FontWeight.w600,
+                                    color: soldOut
+                                        ? AppColors.textSecondary
+                                        : null,
+                                  ),
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                              if (soldOut) ...[
+                                const SizedBox(width: 6),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 6, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: Colors.red.shade100,
+                                    borderRadius: BorderRadius.circular(4),
+                                  ),
+                                  child: Text(
+                                    'Sold Out',
+                                    style: tt.labelSmall?.copyWith(
+                                      color: Colors.red.shade700,
+                                      fontWeight: FontWeight.w700,
+                                      fontSize: 9,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ],
                           ),
                           if (item.isAmc)
                             const _CheckoutAmcLabel()
@@ -2056,6 +2254,7 @@ class _PriceSummary extends StatelessWidget {
   final String taxLabel;
   final bool showTaxLine;
   final int earnedPoints;
+  final double pendingCancellationFee;
 
   const _PriceSummary({
     required this.subtotal,
@@ -2071,6 +2270,7 @@ class _PriceSummary extends StatelessWidget {
     this.taxLabel = 'GST (18%)',
     this.showTaxLine = true,
     this.earnedPoints = 0,
+    this.pendingCancellationFee = 0.0,
   });
 
   @override
@@ -2116,6 +2316,15 @@ class _PriceSummary extends StatelessWidget {
         if (showTaxLine && tax > 0) ...[
           const SizedBox(height: 8),
           _Row(label: taxLabel, value: '₹${tax.toInt()}', tt: tt),
+        ],
+        if (pendingCancellationFee > 0) ...[
+          const SizedBox(height: 8),
+          _Row(
+            label: 'Outstanding Cancellation Fee',
+            value: '₹${pendingCancellationFee.toInt()}',
+            tt: tt,
+            valueColor: AppColors.error,
+          ),
         ],
         if (earnedPoints > 0) ...[
           const SizedBox(height: 10),
@@ -2335,6 +2544,141 @@ class _PlaceBookingBar extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+
+// ── Cancellation Policy Section ───────────────────────────────────────────────
+
+class _CancellationPolicySlab {
+  final int fromMinutes;
+  final int? toMinutes;
+  final double feeAmount;
+  const _CancellationPolicySlab(
+      {required this.fromMinutes, this.toMinutes, required this.feeAmount});
+
+  String get rangeLabel {
+    String fmt(int m) {
+      final h = m / 60.0;
+      return h == h.truncateToDouble()
+          ? '${h.toInt()}h'
+          : '${h.toStringAsFixed(1)}h';
+    }
+    return toMinutes == null
+        ? '${fmt(fromMinutes)}+'
+        : '${fmt(fromMinutes)} – ${fmt(toMinutes!)}';
+  }
+}
+
+class _CancellationPolicyInfo {
+  final String label;
+  final List<_CancellationPolicySlab> slabs;
+  const _CancellationPolicyInfo({required this.label, required this.slabs});
+}
+
+final _cancellationPoliciesProvider =
+    FutureProvider.autoDispose<List<_CancellationPolicyInfo>>((ref) async {
+  final client = Supabase.instance.client;
+  final rows = await client
+      .from('cancellation_policies')
+      .select(
+          'label, policy_type, cancellation_policy_slabs(from_minutes, to_minutes, fee_amount, sort_order)')
+      .eq('is_enabled', true)
+      .order('policy_type');
+
+  return (rows as List).map((row) {
+    final slabRows = List<Map<String, dynamic>>.from(
+        row['cancellation_policy_slabs'] as List? ?? []);
+    slabRows.sort((a, b) {
+      final so = ((a['sort_order'] as num?) ?? 0)
+          .compareTo(((b['sort_order'] as num?) ?? 0));
+      if (so != 0) return so;
+      return ((a['from_minutes'] as num?) ?? 0)
+          .compareTo(((b['from_minutes'] as num?) ?? 0));
+    });
+    return _CancellationPolicyInfo(
+      label: row['label'] as String? ?? '',
+      slabs: slabRows
+          .map((s) => _CancellationPolicySlab(
+                fromMinutes: (s['from_minutes'] as num?)?.toInt() ?? 0,
+                toMinutes: (s['to_minutes'] as num?)?.toInt(),
+                feeAmount: (s['fee_amount'] as num?)?.toDouble() ?? 0,
+              ))
+          .toList(),
+    );
+  }).toList();
+});
+
+class _CancellationPolicySection extends ConsumerWidget {
+  const _CancellationPolicySection();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final policiesAsync = ref.watch(_cancellationPoliciesProvider);
+    return policiesAsync.when(
+      loading: () => const SizedBox.shrink(),
+      error: (_, __) => const SizedBox.shrink(),
+      data: (policies) {
+        final active = policies.where((p) => p.slabs.isNotEmpty).toList();
+        if (active.isEmpty) return const SizedBox.shrink();
+
+        return _SectionCard(
+          title: 'Cancellation Policy',
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              for (int i = 0; i < active.length; i++) ...[
+                if (active.length > 1) ...[
+                  if (i > 0) const SizedBox(height: 12),
+                  Text(
+                    active[i].label,
+                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                          color: AppColors.textSecondary,
+                          fontWeight: FontWeight.w600,
+                          letterSpacing: 0.3,
+                        ),
+                  ),
+                  const SizedBox(height: 6),
+                ],
+                ...active[i].slabs.map((slab) => Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 6),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              slab.rangeLabel,
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .bodySmall
+                                  ?.copyWith(
+                                    color: AppColors.textPrimary,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                            ),
+                          ),
+                          Text(
+                            slab.feeAmount == 0
+                                ? 'Free'
+                                : '₹${slab.feeAmount.toStringAsFixed(0)}',
+                            style: Theme.of(context)
+                                .textTheme
+                                .bodySmall
+                                ?.copyWith(
+                                  color: slab.feeAmount == 0
+                                      ? const Color(0xFF16A34A)
+                                      : AppColors.error,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                          ),
+                        ],
+                      ),
+                    )),
+              ],
+            ],
+          ),
+        );
+      },
     );
   }
 }

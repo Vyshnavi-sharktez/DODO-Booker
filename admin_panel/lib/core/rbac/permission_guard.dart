@@ -77,6 +77,7 @@ const Map<String, String> routePermissions = {
   '/call-config': 'call.config',
   '/vendor-root-categories': 'vendor.read',
   '/instahelp': 'settings.manage',
+  '/cancellation-policy': 'settings.manage',
 };
 
 // Dynamic route patterns: a prefix match maps to its module permission.

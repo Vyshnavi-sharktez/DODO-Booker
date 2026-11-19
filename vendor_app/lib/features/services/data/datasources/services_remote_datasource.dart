@@ -280,6 +280,56 @@ class ServicesRemoteDatasource {
     return _client.storage.from('vendor-requests').getPublicUrl(path);
   }
 
+  Future<void> saveMaxBookingsConfig(String requestId, int maxBookings) async {
+    await _client.from('catalog_node_configs').insert({
+      'module': 'scheduling',
+      'custom_service_id': requestId,
+      'config': {
+        'is_enabled': true,
+        'max_bookings_per_slot': maxBookings,
+        'working_days': <int>[],
+        'slots': <String>[],
+      },
+      'is_enabled': true,
+    });
+  }
+
+  Future<int> fetchMaxBookingsForService(String requestId) async {
+    final data = await _client
+        .from('catalog_node_configs')
+        .select('config')
+        .eq('custom_service_id', requestId)
+        .eq('module', 'scheduling')
+        .maybeSingle();
+    if (data == null) return 1;
+    final config = data['config'] as Map<String, dynamic>?;
+    return (config?['max_bookings_per_slot'] as num?)?.toInt() ?? 1;
+  }
+
+  Future<void> upsertMaxBookingsConfig(String requestId, int maxBookings) async {
+    final config = {
+      'is_enabled': true,
+      'max_bookings_per_slot': maxBookings,
+      'working_days': <int>[],
+      'slots': <String>[],
+    };
+    final existing = await _client
+        .from('catalog_node_configs')
+        .select('id')
+        .eq('custom_service_id', requestId)
+        .eq('module', 'scheduling')
+        .maybeSingle();
+    if (existing != null) {
+      await _client
+          .from('catalog_node_configs')
+          .update({'config': config, 'is_enabled': true})
+          .eq('custom_service_id', requestId)
+          .eq('module', 'scheduling');
+    } else {
+      await saveMaxBookingsConfig(requestId, maxBookings);
+    }
+  }
+
   Future<void> insertServiceAttributes(
     String requestId,
     List<Map<String, dynamic>> attrs,
@@ -317,6 +367,27 @@ class ServicesRemoteDatasource {
     await _client.rpc('delete_vendor_service_request', params: {
       'p_request_id': requestId,
       'p_vendor_id': vendorId,
+    });
+  }
+
+  Future<void> submitSlotConfigRequest({
+    required String vendorId,
+    required String parentRequestId,
+    required String serviceName,
+    required int oldMaxBookings,
+    required int newMaxBookings,
+    double? currentPrice,
+  }) async {
+    await _client.from('vendor_service_requests').insert({
+      'vendor_id': vendorId,
+      'service_name': serviceName,
+      'request_type': 'slot_config',
+      'parent_request_id': parentRequestId,
+      if (currentPrice != null) 'price': currentPrice,
+      'request_data': {
+        'old_max_bookings': oldMaxBookings,
+        'new_max_bookings': newMaxBookings,
+      },
     });
   }
 

@@ -4642,5 +4642,3 @@ class _WebHeader extends StatelessWidget {
 }
 
 // WarrantyBadge and WarrantyInfoDialog live in ../widgets/warranty_badge.dart
-
-

@@ -96,10 +96,34 @@ class _VendorDurationFormDialogState extends State<VendorDurationFormDialog> {
     _slotEnd = _parseHHMM(e?.slotEndTime ?? '20:00');
     _slotInterval = TextEditingController(text: (e?.slotIntervalMinutes ?? 60).toString());
     _maxBookings = TextEditingController(text: (e?.maxBookingsPerSlot ?? 10).toString());
+    _slotInterval.addListener(_onChanged);
+    _maxBookings.addListener(_onChanged);
+  }
+
+  void _onChanged() => setState(() {});
+
+  bool get _hasChanges {
+    final e = widget.existing;
+    if (e == null) return true;
+    final v = double.tryParse(_durationValue.text.trim());
+    final durChanged = v == null || _toMinutes(v, _durationUnit) != e.durationMinutes;
+    final priceChanged = _price.text.trim() != e.price.toStringAsFixed(2);
+    final discTypeChanged = _discountType != (e.discountType ?? 'none');
+    final origDiscVal = e.discountValue > 0 ? e.discountValue.toStringAsFixed(0) : '';
+    final discValChanged = _discountValue.text.trim() != origDiscVal;
+    final activeChanged = _isActive != e.isActive;
+    final startChanged = _slotStart != _parseHHMM(e.slotStartTime);
+    final endChanged = _slotEnd != _parseHHMM(e.slotEndTime);
+    final intervalChanged = _slotInterval.text.trim() != e.slotIntervalMinutes.toString();
+    final maxChanged = _maxBookings.text.trim() != e.maxBookingsPerSlot.toString();
+    return durChanged || priceChanged || discTypeChanged || discValChanged ||
+        activeChanged || startChanged || endChanged || intervalChanged || maxChanged;
   }
 
   @override
   void dispose() {
+    _slotInterval.removeListener(_onChanged);
+    _maxBookings.removeListener(_onChanged);
     _durationValue.dispose();
     _price.dispose();
     _discountValue.dispose();
@@ -224,7 +248,7 @@ class _VendorDurationFormDialogState extends State<VendorDurationFormDialog> {
                           ),
                           const SizedBox(width: 12),
                           SizedBox(
-                            width: 120,
+                            width: 140,
                             child: DropdownButtonFormField<String>(
                               // ignore: deprecated_member_use
                               value: _durationUnit,
@@ -399,7 +423,7 @@ class _VendorDurationFormDialogState extends State<VendorDurationFormDialog> {
                   ),
                   const SizedBox(width: 12),
                   FilledButton(
-                    onPressed: _saving ? null : _submit,
+                    onPressed: (_saving || !_hasChanges) ? null : _submit,
                     style: FilledButton.styleFrom(
                         backgroundColor: AppColors.primary,
                         minimumSize: const Size(0, 44),

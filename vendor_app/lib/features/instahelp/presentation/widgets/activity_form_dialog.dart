@@ -43,10 +43,31 @@ class _VendorActivityFormDialogState extends State<VendorActivityFormDialog> {
     _newIncludedCtrl = TextEditingController();
     _newExcludedCtrl = TextEditingController();
     _isActive = e?.isActive ?? true;
+    _title.addListener(_onChanged);
+  }
+
+  void _onChanged() => setState(() {});
+
+  bool _listEquals(List<String> a, List<String> b) {
+    if (a.length != b.length) return false;
+    for (var i = 0; i < a.length; i++) {
+      if (a[i] != b[i]) return false;
+    }
+    return true;
+  }
+
+  bool get _hasChanges {
+    final e = widget.existing;
+    if (e == null) return true;
+    return _title.text.trim() != e.title ||
+        !_listEquals(_includedItems, e.includedItems) ||
+        !_listEquals(_excludedItems, e.excludedItems) ||
+        _isActive != e.isActive;
   }
 
   @override
   void dispose() {
+    _title.removeListener(_onChanged);
     _title.dispose();
     _newIncludedCtrl.dispose();
     _newExcludedCtrl.dispose();
@@ -295,7 +316,7 @@ class _VendorActivityFormDialogState extends State<VendorActivityFormDialog> {
                   ),
                   const SizedBox(width: 12),
                   FilledButton(
-                    onPressed: _saving ? null : _submit,
+                    onPressed: (_saving || !_hasChanges) ? null : _submit,
                     style: FilledButton.styleFrom(
                         backgroundColor: AppColors.primary,
                         minimumSize: const Size(0, 44),

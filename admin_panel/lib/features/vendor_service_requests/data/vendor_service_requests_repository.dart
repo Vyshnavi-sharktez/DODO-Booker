@@ -58,6 +58,12 @@ class VendorServiceRequestsRepository {
     });
   }
 
+  Future<void> acceptSlotConfig(String id) async {
+    await _supabase
+        .from('vendor_service_requests')
+        .update({'status': 'completed'}).eq('id', id);
+  }
+
   Future<void> complete(String id) async {
     await _supabase
         .from('vendor_service_requests')

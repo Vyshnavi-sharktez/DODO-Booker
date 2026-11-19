@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../models/my_booking_model.dart';
+import '../../../models/cancellation_fee_info.dart';
 
 class BookingsService {
   static const _phoneKey = 'dodo_auth_phone';
@@ -22,6 +23,7 @@ class BookingsService {
     address, notes, created_at,
     completion_otp, otp_verified_at,
     cancelled_by, cancellation_reason,
+    cancellation_fee_amount,
     is_amc, amc_contract_id, amc_plan_name, amc_recurrence_interval, amc_visit_number,
     booking_items(
       service_id,
@@ -261,23 +263,41 @@ class BookingsService {
     );
   }
 
-  Future<bool> cancelBooking(String bookingId, {String? reason, String? remarks}) async {
+  /// Cancels a booking via the cancel_booking_with_fee RPC which atomically
+  /// records the applicable cancellation fee. Returns the fee charged.
+  Future<double> cancelBooking(String bookingId, {String? reason, String? remarks}) async {
     debugPrint('[DODO][Booking] Cancel requested for bookingId=$bookingId');
-    debugPrint('[DODO][Booking] Updating booking status');
-    final updateData = <String, dynamic>{
-      'status': 'cancelled',
-      'cancelled_by': 'customer',
-      'cancelled_at': DateTime.now().toUtc().toIso8601String(),
-    };
-    if (reason != null) updateData['cancellation_reason'] = reason;
-    if (remarks != null) updateData['cancellation_remarks'] = remarks;
+    final result = await _client.rpc('cancel_booking_with_fee', params: {
+      'p_booking_id': bookingId,
+      if (reason != null) 'p_reason': reason,
+      if (remarks != null) 'p_remarks': remarks,
+    });
+    final fee = (result as Map<String, dynamic>?)?['cancellation_fee_amount'];
+    final feeAmount = (fee as num?)?.toDouble() ?? 0.0;
+    debugPrint('[DODO][Booking] Booking cancelled — fee=₹$feeAmount');
+    return feeAmount;
+  }
 
-    await _client.from('bookings').update(updateData).eq('id', bookingId);
-    debugPrint('[DODO][Booking] Booking cancelled successfully');
-    // Admin and vendor notifications are handled by the DB trigger
-    // fn_notify_admin_booking_status_change which routes by cancelled_by.
-    // No Dart inserts needed here.
+  /// Returns the fee and refund context that would apply if cancelled now.
+  Future<CancellationFeeInfo> calculateCancellationFee(String bookingId) async {
+    final result = await _client.rpc('calculate_cancellation_fee', params: {
+      'p_booking_id': bookingId,
+    });
+    if (result is Map<String, dynamic>) {
+      return CancellationFeeInfo.fromJson(result);
+    }
+    return CancellationFeeInfo.free();
+  }
 
-    return true;
+  /// Returns the total uncollected COD cancellation fees for the current customer.
+  Future<double> getPendingCancellationFees() async {
+    final result = await _client.rpc('get_pending_cancellation_fees');
+    final total = (result as Map<String, dynamic>?)?['total_pending_fee'];
+    return (total as num?)?.toDouble() ?? 0.0;
+  }
+
+  /// Marks all pending COD cancellation fees as collected after a successful booking.
+  Future<void> markCancellationFeesCollected() async {
+    await _client.rpc('mark_cancellation_fees_collected');
   }
 }
