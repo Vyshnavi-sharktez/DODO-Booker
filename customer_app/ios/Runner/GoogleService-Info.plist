@@ -9,7 +9,7 @@
 	<key>PLIST_VERSION</key>
 	<string>1</string>
 	<key>BUNDLE_ID</key>
-	<string>com.example.customerApp</string>
+	<string>com.dodobooker.customer</string>
 	<key>PROJECT_ID</key>
 	<string>dodo-booker-10507</string>
 	<key>STORAGE_BUCKET</key>
@@ -25,6 +25,6 @@
 	<key>IS_SIGNIN_ENABLED</key>
 	<true></true>
 	<key>GOOGLE_APP_ID</key>
-	<string>1:793067837126:ios:678e655492e617079f29c7</string>
+	<string>1:793067837126:ios:4b01eafac0bf9c0a9f29c7</string>
 </dict>
 </plist>

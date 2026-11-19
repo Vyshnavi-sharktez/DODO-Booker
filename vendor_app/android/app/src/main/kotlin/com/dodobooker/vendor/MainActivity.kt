@@ -1,4 +1,4 @@
-package com.example.admin_panel
+package com.dodobooker.vendor
 
 import io.flutter.embedding.android.FlutterActivity
 
