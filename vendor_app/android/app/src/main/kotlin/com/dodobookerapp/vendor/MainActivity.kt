@@ -1,4 +1,4 @@
-package com.dodobooker.vendor
+﻿package com.dodobookerapp.vendor
 
 import io.flutter.embedding.android.FlutterActivity
 

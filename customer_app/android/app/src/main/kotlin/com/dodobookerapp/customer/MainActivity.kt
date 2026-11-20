@@ -1,4 +1,4 @@
-package com.dodobooker.customer
+﻿package com.dodobookerapp.customer
 
 import io.flutter.embedding.android.FlutterActivity
 
