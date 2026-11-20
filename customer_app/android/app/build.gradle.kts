@@ -1,4 +1,4 @@
-// plugins {
+﻿// plugins {
 //     id("com.android.application")
 //     id("kotlin-android")
 //     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
@@ -52,7 +52,7 @@ plugins {
 }
 
 android {
-    namespace = "com.dodobooker.customer"
+    namespace = "com.dodobookerapp.customer"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
@@ -69,7 +69,7 @@ android {
     defaultConfig {
         // TODO: Specify your own unique Application ID
         // (https://developer.android.com/studio/build/application-id.html).
-        applicationId = "com.dodobooker.customer"
+        applicationId = "com.dodobookerapp.customer"
 
         // You can update the following values to match your application needs.
         // For more information, see:
