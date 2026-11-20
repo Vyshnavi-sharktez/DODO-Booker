@@ -7,3 +7,7 @@ testsprite_tests/tmp/
 **/.env
 **/.env.*
 !**/.env.example
+# Android signing
+**/android/key.properties
+**/*.keystore
+**/*.jks
