@@ -120,8 +120,6 @@ class _WelcomeBanner extends StatelessWidget {
                   ],
                 ),
               ),
-              const SizedBox(width: 12),
-              const _RefreshButton(),
               if (wide) ...[
                 const SizedBox(width: 12),
                 const Icon(Icons.rocket_launch_rounded,
@@ -135,61 +133,6 @@ class _WelcomeBanner extends StatelessWidget {
   }
 }
 
-class _RefreshButton extends ConsumerStatefulWidget {
-  const _RefreshButton();
-
-  @override
-  ConsumerState<_RefreshButton> createState() => _RefreshButtonState();
-}
-
-class _RefreshButtonState extends ConsumerState<_RefreshButton> {
-  bool _loading = false;
-
-  Future<void> _refresh() async {
-    if (_loading) return;
-    setState(() => _loading = true);
-    await Future.wait([
-      ref.read(bookingsNotifierProvider.notifier).refresh(),
-      ref.read(vendorsNotifierProvider.notifier).refresh(),
-      ref.read(customersNotifierProvider.notifier).refresh(),
-      ref.read(dodoTeamsNotifierProvider.notifier).refresh(),
-      ref.read(categoriesNotifierProvider.notifier).refresh(),
-      ref.read(subCategoriesNotifierProvider.notifier).refresh(),
-      ref.read(servicesNotifierProvider.notifier).refresh(),
-      ref.read(couponsNotifierProvider.notifier).refresh(),
-      ref.read(vendorSettlementNotifierProvider.notifier).refresh(),
-    ]);
-    if (mounted) setState(() => _loading = false);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Tooltip(
-      message: 'Refresh dashboard',
-      child: InkWell(
-        onTap: _refresh,
-        borderRadius: BorderRadius.circular(8),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: 0.15),
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: Colors.white.withValues(alpha: 0.3)),
-          ),
-          child: _loading
-              ? const SizedBox(
-                  width: 16,
-                  height: 16,
-                  child: CircularProgressIndicator(
-                      strokeWidth: 2, color: Colors.white),
-                )
-              : const Icon(Icons.refresh_rounded,
-                  size: 18, color: Colors.white),
-        ),
-      ),
-    );
-  }
-}
 
 // ── Overview cards — 8 key metrics ────────────────────────────────────────────
 

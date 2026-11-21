@@ -26,6 +26,7 @@ class _InvoiceConfigCardState extends State<InvoiceConfigCard> {
   final _emailCtrl       = TextEditingController();
   final _prefixCtrl      = TextEditingController();
   final _footerCtrl      = TextEditingController();
+  final _bankDetailsCtrl = TextEditingController();
 
   String? _logoUrl;
 
@@ -57,6 +58,7 @@ class _InvoiceConfigCardState extends State<InvoiceConfigCard> {
     _emailCtrl.dispose();
     _prefixCtrl.dispose();
     _footerCtrl.dispose();
+    _bankDetailsCtrl.dispose();
     super.dispose();
   }
 
@@ -73,6 +75,7 @@ class _InvoiceConfigCardState extends State<InvoiceConfigCard> {
       _emailCtrl.text       = cfg.companyEmail ?? '';
       _prefixCtrl.text      = cfg.invoicePrefix;
       _footerCtrl.text      = cfg.footerNote ?? '';
+      _bankDetailsCtrl.text = cfg.bankDetails ?? '';
       _logoUrl              = cfg.logoUrl;
       _templatePdfUrl       = cfg.templatePdfUrl;
       _templatePdfName      = cfg.templatePdfName;
@@ -230,6 +233,7 @@ class _InvoiceConfigCardState extends State<InvoiceConfigCard> {
         logoUrl:         _logoUrl,
         invoicePrefix:   _prefixCtrl.text.trim().isEmpty ? 'INV' : _prefixCtrl.text.trim(),
         footerNote:      _footerCtrl.text.trim().isEmpty  ? null : _footerCtrl.text.trim(),
+        bankDetails:     _bankDetailsCtrl.text.trim().isEmpty ? null : _bankDetailsCtrl.text.trim(),
         templatePdfUrl:  _templatePdfUrl,
         templatePdfName: _templatePdfName,
       );
@@ -270,11 +274,6 @@ class _InvoiceConfigCardState extends State<InvoiceConfigCard> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _Section(
-            title: 'Invoice PDF Template',
-            children: [_buildTemplateSection()],
-          ),
-          const SizedBox(height: 20),
           _Section(
             title: 'Branding',
             children: [
@@ -367,6 +366,20 @@ class _InvoiceConfigCardState extends State<InvoiceConfigCard> {
               ),
             ],
           ),
+          const SizedBox(height: 20),
+          _Section(
+            title: 'Bank Details',
+            children: [
+              _field(
+                controller: _bankDetailsCtrl,
+                label: 'Bank Details',
+                hint: 'e.g. Bank: HDFC Bank\nAccount Name: DODO Booker Pvt Ltd\nAccount No: 1234567890\nIFSC: HDFC0001234\nBranch: Hyderabad',
+                maxLines: 5,
+                helperText: 'Displayed at the bottom of every invoice.',
+                onChanged: (_) => _markDirty(),
+              ),
+            ],
+          ),
           const SizedBox(height: 28),
           Row(
             children: [
@@ -394,57 +407,6 @@ class _InvoiceConfigCardState extends State<InvoiceConfigCard> {
           ),
         ],
       ),
-    );
-  }
-
-  // ── PDF template section widget ────────────────────────────────────────────
-
-  Widget _buildTemplateSection() {
-    final hasTemplate = _templatePdfUrl != null && _templatePdfName != null;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          'Upload your branded invoice PDF. When a template is active, the system '
-          'will use its design (logo, colours, header, footer) and fill in the '
-          'actual booking data automatically.',
-          style: TextStyle(fontSize: 12, color: Color(0xFF5F6368)),
-        ),
-        const SizedBox(height: 16),
-        if (hasTemplate) ...[
-          _TemplateFileCard(
-            filename: _templatePdfName!,
-            onPreview: _previewTemplate,
-            onReplace: _uploadingTemplate ? null : _pickAndUploadTemplate,
-            onRemove:  _uploadingTemplate ? null : _removeTemplate,
-          ),
-        ] else ...[
-          OutlinedButton.icon(
-            onPressed: _uploadingTemplate ? null : _pickAndUploadTemplate,
-            icon: _uploadingTemplate
-                ? const SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Icon(Icons.upload_file_rounded, size: 18),
-            label: Text(_uploadingTemplate ? 'Uploading…' : 'Upload Invoice PDF Template'),
-          ),
-          const SizedBox(height: 8),
-          const Text(
-            'PDF files only · Max 10 MB',
-            style: TextStyle(fontSize: 11, color: Color(0xFF9AA0A6)),
-          ),
-        ],
-        if (_templateUploadError != null) ...[
-          const SizedBox(height: 8),
-          Text(
-            _templateUploadError!,
-            style: const TextStyle(fontSize: 12, color: Colors.red),
-          ),
-        ],
-      ],
     );
   }
 

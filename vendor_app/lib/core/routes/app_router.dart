@@ -20,7 +20,6 @@ import '../../features/profile/presentation/pages/edit_profile_page.dart';
 import '../../features/profile/presentation/pages/profile_page.dart';
 import '../../features/documents/presentation/pages/documents_page.dart';
 import '../../features/notifications/presentation/pages/notifications_page.dart';
-import '../../features/settings/presentation/pages/settings_page.dart';
 import '../../features/subscription/data/subscription_repository.dart';
 import '../../features/subscription/domain/models/subscription_plan.dart';
 import '../../features/subscription/presentation/pages/subscription_page.dart';
@@ -164,11 +163,6 @@ final routerProvider = Provider<GoRouter>((ref) {
             path: RoutePaths.documents,
             name: RouteNames.documents,
             builder: (context, state) => const DocumentsPage(),
-          ),
-          GoRoute(
-            path: RoutePaths.settings,
-            name: RouteNames.settings,
-            builder: (context, state) => const SettingsPage(),
           ),
           GoRoute(
             path: RoutePaths.instahelp,

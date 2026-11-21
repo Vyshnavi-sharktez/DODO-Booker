@@ -6,6 +6,7 @@ import '../../../../core/constants/app_colors.dart';
 import '../../../../core/routes/route_names.dart';
 
 import '../../../subscription/presentation/providers/subscription_provider.dart';
+import '../../../auth/presentation/providers/auth_controller.dart';
 import '../../domain/models/vendor_profile.dart';
 import '../providers/profile_provider.dart';
 import '../widgets/profile_header.dart';
@@ -253,7 +254,9 @@ class _ProfileBody extends StatelessWidget {
           ),
         ),
         _SubscriptionTile(),
-        const SizedBox(height: 16),
+        const SizedBox(height: 8),
+        const _LogoutButton(),
+        const SizedBox(height: 24),
       ],
     );
   }
@@ -336,6 +339,54 @@ class _InfoItem extends StatelessWidget {
           : null,
       onTap: onTap,
       dense: true,
+    );
+  }
+}
+
+class _LogoutButton extends ConsumerWidget {
+  const _LogoutButton();
+
+  Future<void> _confirmLogout(BuildContext context, WidgetRef ref) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Log out'),
+        content: const Text('Are you sure you want to log out?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: AppColors.error),
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Log out'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    await ref.read(authControllerProvider.notifier).signOut();
+    if (context.mounted) context.goNamed(RouteNames.login);
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: OutlinedButton.icon(
+        onPressed: () => _confirmLogout(context, ref),
+        icon: const Icon(Icons.logout_rounded, color: AppColors.error),
+        label: const Text(
+          'Log out',
+          style: TextStyle(color: AppColors.error, fontWeight: FontWeight.w600),
+        ),
+        style: OutlinedButton.styleFrom(
+          minimumSize: const Size(double.infinity, 48),
+          side: const BorderSide(color: AppColors.error),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        ),
+      ),
     );
   }
 }

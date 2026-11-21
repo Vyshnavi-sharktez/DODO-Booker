@@ -17,9 +17,13 @@ import '../../../routes/app_router.dart';
 //   'services'   → catalog node detail screen for the one applicable service,
 //                  or category explorer when multiple services are scoped
 
-VoidCallback _couponNavCallback(BuildContext ctx, CouponModel coupon) {
+VoidCallback? _couponNavCallback(BuildContext ctx, CouponModel coupon) {
   final type = coupon.applicabilityType;
   final ids = coupon.applicableNodeIds;
+
+  if (type == 'all') {
+    return () => ctx.go(AppRoutes.home);
+  }
 
   if (type == 'categories' && ids.length == 1) {
     return () => ctx.push(
@@ -33,8 +37,8 @@ VoidCallback _couponNavCallback(BuildContext ctx, CouponModel coupon) {
     return () => ctx.push('/catalog/$nodeId');
   }
 
-  // 'all', multiple categories, multiple services → top-level browse
-  return () => ctx.push(AppRoutes.categoryExplorer);
+  // multiple categories or multiple services → no navigation
+  return null;
 }
 
 // ── Layout constants ─────────────────────────────────────────────────────────────
@@ -794,7 +798,7 @@ class _CodeButton extends StatelessWidget {
           ],
         ),
         child: Text(
-          'Use Code: $code →',
+          onNavigate != null ? 'Use Code: $code →' : 'Use Code: $code',
           style: const TextStyle(
             color: Colors.black,
             fontSize: 13,

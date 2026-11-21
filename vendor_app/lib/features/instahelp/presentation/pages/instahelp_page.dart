@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import '../../../../core/constants/app_colors.dart';
+import '../../../../core/routes/route_names.dart';
 import '../../../../core/widgets/vendor_scaffold.dart';
 import '../../../auth/presentation/providers/auth_controller.dart';
 import '../../domain/models/instahelp_duration.dart';
@@ -34,33 +36,13 @@ class _VendorInstaHelpPageState extends ConsumerState<VendorInstaHelpPage>
   void _setShellActions() {
     final vendor = ref.read(currentVendorUserProvider);
     if (vendor == null) return;
-    final modes = ref.read(vendorModesProvider(vendor.id)).valueOrNull ?? [];
     ref.read(vendorShellActionsProvider.notifier).state = [
-      if (modes.isNotEmpty)
-        IconButton(
-          icon: const Icon(Icons.swap_vert_rounded),
-          tooltip: 'Reorder Modes',
-          onPressed: () => _openReorder(modes),
-        ),
       IconButton(
         icon: const Icon(Icons.refresh_rounded),
         tooltip: 'Refresh',
         onPressed: () => ref.invalidate(vendorModesProvider(vendor.id)),
       ),
     ];
-  }
-
-  void _openReorder(List<InstaHelpMode> modes) {
-    final vendor = ref.read(currentVendorUserProvider);
-    if (vendor == null) return;
-    showDialog(
-      context: context,
-      builder: (ctx) => _ModeReorderDialog(
-        modes: modes,
-        onSave: (reordered) =>
-            ref.read(vendorModesProvider(vendor.id).notifier).reorder(reordered),
-      ),
-    );
   }
 
   @override
@@ -140,8 +122,47 @@ class _InstaHelpConfigTab extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final isEligible =
-        ref.watch(vendorInstaHelpEligibilityProvider(vendorId)).valueOrNull ?? true;
+    final eligibilityAsync = ref.watch(vendorInstaHelpEligibilityProvider(vendorId));
+    final isEligible = eligibilityAsync.valueOrNull ?? true;
+
+    if (eligibilityAsync.hasValue && !isEligible) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 32),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.lock_outline_rounded, size: 64, color: AppColors.textHint),
+              const SizedBox(height: 20),
+              const Text(
+                'You have no subscription',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: AppColors.textPrimary),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                'An active InstaHelp subscription is required to add or activate services.',
+                style: TextStyle(fontSize: 14, color: AppColors.textSecondary),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 28),
+              SizedBox(
+                width: 180,
+                child: FilledButton(
+                  onPressed: () => context.push(RoutePaths.browsePlans),
+                  style: FilledButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                  child: const Text('Browse Plans', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
     return Column(
       children: [
         // Inner TabBar: Scheduled | Instant | Car Wash
@@ -212,11 +233,7 @@ class _EnableInstaHelpCardState extends ConsumerState<_EnableInstaHelpCard> {
     try {
       await ref.read(vendorModesProvider(widget.vendorId).notifier).initialize();
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e'), backgroundColor: AppColors.error),
-        );
-      }
+      if (mounted) _showErrorDialog(context, 'Error: $e');
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -299,26 +316,6 @@ class _ModeTabContent extends ConsumerWidget {
     return ListView(
       padding: const EdgeInsets.all(24),
       children: [
-        if (!isEligible)
-          Container(
-            margin: const EdgeInsets.only(bottom: 20),
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            decoration: BoxDecoration(
-              color: AppColors.error.withValues(alpha: 0.07),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: AppColors.error.withValues(alpha: 0.3)),
-            ),
-            child: const Row(children: [
-              Icon(Icons.lock_outline_rounded, color: AppColors.error, size: 18),
-              SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  'An active InstaHelp subscription is required to add or activate services.',
-                  style: TextStyle(fontSize: 13, color: AppColors.error),
-                ),
-              ),
-            ]),
-          ),
         Container(
           decoration: BoxDecoration(
             color: Colors.white,
@@ -562,11 +559,7 @@ class _RejectedRequestRow extends ConsumerWidget {
             try {
               await ref.read(instaHelpVendorRepoProvider).dismissRejectedRequest(id);
             } catch (e) {
-              if (context.mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('Failed to dismiss: $e'), backgroundColor: AppColors.error),
-                );
-              }
+              if (context.mounted) _showErrorDialog(context, 'Failed to dismiss: $e');
             }
           },
         ),
@@ -665,11 +658,7 @@ class _DurationSectionState extends ConsumerState<_DurationSection> {
       try {
         await ref.read(vendorDurationsProvider(widget.modeId).notifier).delete(d.id);
       } catch (e) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Delete failed: $e'), backgroundColor: AppColors.error),
-          );
-        }
+        if (mounted) _showErrorDialog(context, 'Delete failed: $e');
       }
     }
   }
@@ -707,11 +696,7 @@ class _DurationSectionState extends ConsumerState<_DurationSection> {
       try {
         await ref.read(vendorDurationsProvider(widget.modeId).notifier).reorder(reordered);
       } catch (e) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Reorder failed: $e'), backgroundColor: AppColors.error),
-          );
-        }
+        if (mounted) _showErrorDialog(context, 'Reorder failed: $e');
       }
     }
   }
@@ -811,6 +796,11 @@ class _DurationSectionState extends ConsumerState<_DurationSection> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   if (durations.isNotEmpty) ...[
+                    SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
                     // Header row
                     Container(
                       color: AppColors.background,
@@ -908,11 +898,10 @@ class _DurationSectionState extends ConsumerState<_DurationSection> {
                                     : Switch(
                                         value: d.isActive,
                                         onChanged: (v) async {
-                                          final messenger = ScaffoldMessenger.of(context);
                                           try {
                                             await ref.read(vendorDurationsProvider(widget.modeId).notifier).toggleActive(d.id, isActive: v);
                                           } catch (e) {
-                                            messenger.showSnackBar(SnackBar(content: Text('$e'), backgroundColor: AppColors.error));
+                                            if (context.mounted) _showErrorDialog(context, '$e');
                                           }
                                         },
                                         activeTrackColor: AppColors.success,
@@ -936,6 +925,9 @@ class _DurationSectionState extends ConsumerState<_DurationSection> {
                           ]),
                         );
                       }).toList(),
+                    ),
+                        ],
+                      ),
                     ),
                   ],
                   if (pendingNew.isNotEmpty) ...[
@@ -1091,11 +1083,7 @@ class _ActivitiesSection extends ConsumerWidget {
       try {
         await ref.read(vendorActivitiesProvider(modeId).notifier).delete(a.id);
       } catch (e) {
-        if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Delete failed: $e'), backgroundColor: AppColors.error),
-          );
-        }
+        if (context.mounted) _showErrorDialog(context, 'Delete failed: $e');
       }
     }
   }
@@ -1249,11 +1237,7 @@ class _ActivitiesSection extends ConsumerWidget {
                                     try {
                                       await ref.read(vendorActivitiesProvider(modeId).notifier).toggleActive(a.id, isActive: v);
                                     } catch (e) {
-                                      if (context.mounted) {
-                                        ScaffoldMessenger.of(context).showSnackBar(
-                                          SnackBar(content: Text('$e'), backgroundColor: AppColors.error),
-                                        );
-                                      }
+                                      if (context.mounted) _showErrorDialog(context, '$e');
                                     }
                                   },
                                   activeTrackColor: AppColors.success,
@@ -1348,141 +1332,37 @@ class _PendingActivityRow extends StatelessWidget {
   }
 }
 
-// ── Mode reorder dialog ───────────────────────────────────────────────────────
 
-class _ModeReorderDialog extends StatefulWidget {
-  final List<InstaHelpMode> modes;
-  final Future<void> Function(List<InstaHelpMode>) onSave;
-  const _ModeReorderDialog({required this.modes, required this.onSave});
+// ── Error dialog helper ───────────────────────────────────────────────────────
 
-  @override
-  State<_ModeReorderDialog> createState() => _ModeReorderDialogState();
-}
-
-class _ModeReorderDialogState extends State<_ModeReorderDialog> {
-  late List<InstaHelpMode> _ordered;
-  bool _saving = false;
-  String? _error;
-
-  @override
-  void initState() {
-    super.initState();
-    _ordered = List.of(widget.modes);
-  }
-
-  bool get _hasChanges {
-    for (var i = 0; i < _ordered.length; i++) {
-      if (_ordered[i].id != widget.modes[i].id) return true;
-    }
-    return false;
-  }
-
-  Future<void> _save() async {
-    setState(() { _saving = true; _error = null; });
-    try {
-      await widget.onSave(_ordered);
-      if (mounted) Navigator.of(context).pop();
-    } catch (e) {
-      if (mounted) setState(() => _error = e.toString());
-    } finally {
-      if (mounted) setState(() => _saving = false);
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AlertDialog(
+void _showErrorDialog(BuildContext context, String message) {
+  showDialog(
+    context: context,
+    builder: (ctx) => AlertDialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      title: const Text('Reorder Modes', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
-      content: SizedBox(
-        width: 320,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Text(
-              'Drag to change the order customers see these modes.',
-              style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
-            ),
-            const SizedBox(height: 12),
-            SizedBox(
-              height: _ordered.length * 60.0,
-              child: ReorderableListView(
-                shrinkWrap: true,
-                onReorder: (oldIndex, newIndex) {
-                  setState(() {
-                    if (newIndex > oldIndex) newIndex--;
-                    final item = _ordered.removeAt(oldIndex);
-                    _ordered.insert(newIndex, item);
-                  });
-                },
-                children: [
-                  for (final mode in _ordered)
-                    ListTile(
-                      key: ValueKey(mode.id),
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 8),
-                      leading: Container(
-                        width: 36,
-                        height: 36,
-                        decoration: BoxDecoration(
-                          color: AppColors.primary.withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Icon(_modeIcon(mode.modeType), size: 18, color: AppColors.primary),
-                      ),
-                      title: Text(mode.displayName,
-                          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
-                      subtitle: Text(mode.isActive ? 'Active' : 'Inactive',
-                          style: TextStyle(fontSize: 11,
-                              color: mode.isActive ? AppColors.success : AppColors.textSecondary)),
-                      trailing: const Icon(Icons.drag_handle_rounded, color: AppColors.textSecondary),
-                    ),
-                ],
-              ),
-            ),
-            if (_error != null) ...[
-              const SizedBox(height: 8),
-              Text(_error!, style: const TextStyle(color: AppColors.error, fontSize: 12)),
-            ],
-          ],
-        ),
-      ),
+      title: const Row(children: [
+        Icon(Icons.error_outline_rounded, color: AppColors.error, size: 20),
+        SizedBox(width: 8),
+        Text('Error', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+      ]),
+      content: Text(message, style: const TextStyle(fontSize: 14)),
       actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
       actions: [
-        Row(mainAxisAlignment: MainAxisAlignment.end, children: [
-          OutlinedButton(
-            onPressed: _saving ? null : () => Navigator.of(context).pop(),
-            style: OutlinedButton.styleFrom(
-              minimumSize: const Size(90, 40),
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-            ),
-            child: const Text('Cancel'),
-          ),
-          const SizedBox(width: 8),
-          FilledButton(
-            onPressed: (_saving || !_hasChanges) ? null : _save,
+        Align(
+          alignment: Alignment.centerRight,
+          child: FilledButton(
+            onPressed: () => Navigator.of(ctx).pop(),
             style: FilledButton.styleFrom(
               backgroundColor: AppColors.primary,
-              minimumSize: const Size(90, 40),
-              padding: const EdgeInsets.symmetric(horizontal: 16),
+              minimumSize: const Size(80, 40),
+              padding: const EdgeInsets.symmetric(horizontal: 24),
             ),
-            child: _saving
-                ? const SizedBox(width: 18, height: 18,
-                    child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                : const Text('Save Order'),
+            child: const Text('OK'),
           ),
-        ]),
+        ),
       ],
-    );
-  }
-
-  IconData _modeIcon(String type) {
-    switch (type) {
-      case 'scheduled': return Icons.schedule_rounded;
-      case 'instant':   return Icons.flash_on_rounded;
-      case 'car_wash':  return Icons.local_car_wash_rounded;
-      default:          return Icons.miscellaneous_services_rounded;
-    }
-  }
+    ),
+  );
 }
 
 // ── Arrow button for position controls ───────────────────────────────────────

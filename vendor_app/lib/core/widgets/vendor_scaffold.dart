@@ -35,7 +35,6 @@ class VendorScaffold extends ConsumerWidget {
     if (location == RoutePaths.notifications)    return 'Notifications';
     if (location == RoutePaths.profile)          return 'My Profile';
     if (location == RoutePaths.documents)        return 'My Documents';
-    if (location == RoutePaths.settings)         return 'Settings';
     if (location == RoutePaths.instahelp)        return 'InstaHelp';
     if (location == RoutePaths.subscription)     return 'My Subscription';
     if (location == RoutePaths.browsePlans)      return 'Browse Plans';
@@ -78,12 +77,6 @@ class VendorScaffold extends ConsumerWidget {
       label: 'Profile',
       icon: Icons.person_outline_rounded,
       selectedIcon: Icons.person_rounded,
-    ),
-    _NavTab(
-      path: RoutePaths.settings,
-      label: 'Settings',
-      icon: Icons.settings_outlined,
-      selectedIcon: Icons.settings_rounded,
     ),
   ];
 
@@ -130,7 +123,6 @@ class VendorScaffold extends ConsumerWidget {
     final isTabPage = location == RoutePaths.dashboard ||
         location == RoutePaths.bookings ||
         location == RoutePaths.services ||
-        location == RoutePaths.settings ||
         location == RoutePaths.instahelp;
 
     void openPanel() =>
@@ -984,6 +976,45 @@ class _VendorProfilePanelState extends ConsumerState<_VendorProfilePanel> {
           icon: Icons.workspace_premium_rounded,
           label: 'Subscription',
           onTap: () => _pushRoute(RoutePaths.subscription),
+        ),
+        const Divider(height: 1, thickness: 1, color: AppColors.border),
+        ListTile(
+          leading: const Icon(Icons.logout_rounded,
+              size: 20, color: AppColors.error),
+          title: const Text(
+            'Log out',
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w500,
+              color: AppColors.error,
+            ),
+          ),
+          dense: true,
+          onTap: () async {
+            final confirmed = await showDialog<bool>(
+              context: context,
+              builder: (ctx) => AlertDialog(
+                title: const Text('Log out'),
+                content: const Text('Are you sure you want to log out?'),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.of(ctx).pop(false),
+                    child: const Text('Cancel'),
+                  ),
+                  FilledButton(
+                    style: FilledButton.styleFrom(
+                        backgroundColor: AppColors.error),
+                    onPressed: () => Navigator.of(ctx).pop(true),
+                    child: const Text('Log out'),
+                  ),
+                ],
+              ),
+            );
+            if (confirmed != true || !mounted) return;
+            await ref.read(authControllerProvider.notifier).signOut();
+            if (!mounted) return;
+            context.goNamed(RouteNames.login);
+          },
         ),
         const SizedBox(height: 16),
       ],

@@ -16,19 +16,25 @@ class CustomerInvoiceRecord {
 class CustomerInvoiceConfig {
   final String companyName;
   final String companyTagline;
+  final String? companyAddress;
+  final String? companyPhone;
   final String? companyGstin;
   final String? logoUrl;
   final String invoicePrefix;
   final String? footerNote;
+  final String? bankDetails;
   final String? templatePdfUrl;
 
   const CustomerInvoiceConfig({
     required this.companyName,
     required this.companyTagline,
+    this.companyAddress,
+    this.companyPhone,
     this.companyGstin,
     this.logoUrl,
     required this.invoicePrefix,
     this.footerNote,
+    this.bankDetails,
     this.templatePdfUrl,
   });
 
@@ -43,10 +49,13 @@ class CustomerInvoiceConfig {
         companyName: (m['company_name'] as String?) ?? 'DODO BOOKER',
         companyTagline:
             (m['company_tagline'] as String?) ?? 'Home Services Platform',
+        companyAddress: m['company_address'] as String?,
+        companyPhone: m['company_phone'] as String?,
         companyGstin: m['company_gstin'] as String?,
         logoUrl: m['logo_url'] as String?,
         invoicePrefix: (m['invoice_prefix'] as String?) ?? 'INV',
         footerNote: m['footer_note'] as String?,
+        bankDetails: m['bank_details'] as String?,
         templatePdfUrl: m['template_pdf_url'] as String?,
       );
 }

@@ -333,7 +333,7 @@ class RefundQueriesService {
 
   Future<Map<String, String>> createRefundRequest({
     required String bookingId,
-    required String issueCategoryId,
+    String? issueCategoryId,
     required String description,
     required double requestedAmount,
     List<String> evidenceUrls = const [],

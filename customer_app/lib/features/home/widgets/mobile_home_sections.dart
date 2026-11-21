@@ -127,24 +127,29 @@ class _PromoCouponCardState extends State<_PromoCouponCard> {
           ? widget.coupon.description!
           : widget.coupon.applicabilityLabel;
 
+  bool get _showViewServices {
+    final type = widget.coupon.applicabilityType;
+    final ids = widget.coupon.applicableNodeIds;
+    if (type == 'all') return true;
+    return ids.length == 1;
+  }
+
   Future<void> _onViewServices() async {
-    if (widget.coupon.applicabilityType == 'all' ||
-        widget.coupon.applicableNodeIds.isEmpty) {
-      context.push(AppRoutes.search);
+    final type = widget.coupon.applicabilityType;
+    final ids = widget.coupon.applicableNodeIds;
+
+    if (type == 'all' || ids.isEmpty) {
+      context.push(AppRoutes.categoryExplorer);
       return;
     }
     setState(() => _loading = true);
-    final node = await CatalogService()
-        .fetchNode(widget.coupon.applicableNodeIds.first);
+    final node = await CatalogService().fetchNode(ids.first);
     if (!mounted) return;
     setState(() => _loading = false);
     if (node == null) {
-      context.push(AppRoutes.search);
+      context.push(AppRoutes.categoryExplorer);
       return;
     }
-    // openCatalogNode handles routing:
-    // - category/non-bookable node → CategoryExplorerScreen
-    // - leaf bookable node (service/product) → detail sheet
     openCatalogNode(context, node);
   }
 
@@ -228,6 +233,7 @@ class _PromoCouponCardState extends State<_PromoCouponCard> {
                       ),
                       const SizedBox(height: 8),
                       // Dark CTA
+                      if (_showViewServices)
                       GestureDetector(
                         onTap: _loading ? null : _onViewServices,
                         child: Container(
@@ -410,7 +416,6 @@ class MobileHomeSectionRenderer extends ConsumerWidget {
           title: section.config['title'] as String? ?? section.sectionName,
           asyncNodes: nodes,
           onNodeTap: (n) => _openNode(context, n),
-          onSeeAll: () => context.push(AppRoutes.search),
         );
 
       case 'sub_services':
@@ -419,7 +424,6 @@ class MobileHomeSectionRenderer extends ConsumerWidget {
           title: section.config['title'] as String? ?? section.sectionName,
           asyncNodes: nodes,
           onNodeTap: (n) => openCatalogNode(context, n),
-          onSeeAll: () => context.push(AppRoutes.search),
         );
 
       case 'special_offers':
@@ -446,7 +450,6 @@ class MobileHomeSectionRenderer extends ConsumerWidget {
           title: section.config['title'] as String? ?? section.sectionName,
           asyncNodes: nodes,
           onNodeTap: (n) => openCatalogNode(context, n),
-          onSeeAll: () => context.push(AppRoutes.search),
         );
 
       case 'why_dodo':
@@ -569,13 +572,11 @@ class _MobileServicesSection extends StatefulWidget {
   final String title;
   final AsyncValue<List<CatalogNodeModel>> asyncNodes;
   final ValueChanged<CatalogNodeModel> onNodeTap;
-  final VoidCallback onSeeAll;
 
   const _MobileServicesSection({
     required this.title,
     required this.asyncNodes,
     required this.onNodeTap,
-    required this.onSeeAll,
   });
 
   @override
@@ -970,13 +971,11 @@ class _MobileSubServicesSection extends StatelessWidget {
   final String title;
   final AsyncValue<List<CatalogNodeModel>> asyncNodes;
   final ValueChanged<CatalogNodeModel> onNodeTap;
-  final VoidCallback onSeeAll;
 
   const _MobileSubServicesSection({
     required this.title,
     required this.asyncNodes,
     required this.onNodeTap,
-    required this.onSeeAll,
   });
 
   @override
@@ -1213,13 +1212,11 @@ class _MobilePopularSection extends StatelessWidget {
   final String title;
   final AsyncValue<List<CatalogNodeModel>> asyncNodes;
   final ValueChanged<CatalogNodeModel> onNodeTap;
-  final VoidCallback onSeeAll;
 
   const _MobilePopularSection({
     required this.title,
     required this.asyncNodes,
     required this.onNodeTap,
-    required this.onSeeAll,
   });
 
   @override
