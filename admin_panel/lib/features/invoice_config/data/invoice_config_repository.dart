@@ -11,6 +11,7 @@ class InvoiceConfigData {
   final String? logoUrl;
   final String invoicePrefix;
   final String? footerNote;
+  final String? bankDetails;
   final String? templatePdfUrl;
   final String? templatePdfName;
 
@@ -25,6 +26,7 @@ class InvoiceConfigData {
     this.logoUrl,
     required this.invoicePrefix,
     this.footerNote,
+    this.bankDetails,
     this.templatePdfUrl,
     this.templatePdfName,
   });
@@ -46,6 +48,7 @@ class InvoiceConfigData {
         logoUrl: m['logo_url'] as String?,
         invoicePrefix: (m['invoice_prefix'] as String?) ?? 'INV',
         footerNote: m['footer_note'] as String?,
+        bankDetails: m['bank_details'] as String?,
         templatePdfUrl: m['template_pdf_url'] as String?,
         templatePdfName: m['template_pdf_name'] as String?,
       );
@@ -60,6 +63,7 @@ class InvoiceConfigData {
         'logo_url': logoUrl,
         'invoice_prefix': invoicePrefix,
         'footer_note': footerNote,
+        'bank_details': bankDetails,
         'template_pdf_url': templatePdfUrl,
         'template_pdf_name': templatePdfName,
         'updated_at': DateTime.now().toUtc().toIso8601String(),

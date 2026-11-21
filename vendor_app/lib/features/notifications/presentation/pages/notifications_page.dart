@@ -57,6 +57,18 @@ class _NotificationsPageState extends ConsumerState<NotificationsPage> {
         RouteNames.services,
         queryParameters: {'tab': '2'},
       );
+    } else if (n.notificationType == 'new_customer_question' ||
+        n.entityType == 'customer_question') {
+      debugPrint('[NOTIF][Vendor] navigating → ${RouteNames.services} tab=0 subTab=2');
+      router.pushNamed(
+        RouteNames.services,
+        queryParameters: {'tab': '0', 'subTab': '2'},
+      );
+    } else if (n.entityType == 'vendor_document' ||
+        n.notificationType == 'document_approved' ||
+        n.notificationType == 'document_rejected') {
+      debugPrint('[NOTIF][Vendor] navigating → ${RouteNames.documents}');
+      router.pushNamed(RouteNames.documents);
     }
   }
 

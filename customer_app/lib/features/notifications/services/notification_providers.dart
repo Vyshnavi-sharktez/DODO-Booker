@@ -26,6 +26,7 @@ class NotificationsNotifier
     extends StateNotifier<AsyncValue<List<NotificationModel>>> {
   final NotificationService _service;
   final Ref _ref;
+  final _seenIds = <String>{};
 
   NotificationsNotifier(this._service, this._ref)
       : super(const AsyncLoading()) {
@@ -63,6 +64,7 @@ class NotificationsNotifier
     }
     try {
       final n = NotificationModel.fromJson(record);
+      if (!_seenIds.add(n.id)) return;
       if (current.any((e) => e.id == n.id)) return;
       if (mounted) state = AsyncData([n, ...current]);
     } catch (_) {

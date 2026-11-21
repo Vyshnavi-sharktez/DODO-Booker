@@ -95,7 +95,7 @@ class _CouponFormDialogState extends ConsumerState<CouponFormDialog> {
     _isActive = e?.isActive ?? true;
     _applicabilityType = e?.applicabilityType ?? 'all';
     _applicableNodeIds = List<String>.from(e?.applicableNodeIds ?? []);
-    _customerEligibility = e?.customerEligibility ?? 'all';
+    _customerEligibility = e?.customerEligibility ?? 'all_customers';
     _selectedCustomerIds = List<String>.from(e?.selectedCustomerIds ?? []);
   }
 
@@ -162,7 +162,7 @@ class _CouponFormDialogState extends ConsumerState<CouponFormDialog> {
         applicableNodeIds: _applicabilityType == 'all' ? [] : _applicableNodeIds,
         customerEligibility: _customerEligibility,
         selectedCustomerIds:
-            _customerEligibility == 'all' ? [] : _selectedCustomerIds,
+            _customerEligibility == 'selected' ? _selectedCustomerIds : [],
         maxOrderWiseLimit: (_customerEligibility == 'all' && mowText.isNotEmpty)
             ? int.tryParse(mowText)
             : null,
@@ -664,6 +664,30 @@ class _CouponFormDialogState extends ConsumerState<CouponFormDialog> {
                             ?.copyWith(color: AppColors.textSecondary),
                       ),
                       const SizedBox(height: 8),
+
+                      RadioListTile<String>(
+                        value: 'all_customers',
+                        groupValue: _customerEligibility,
+                        onChanged: (v) {
+                          if (v != null) {
+                            setState(() {
+                              _customerEligibility = v;
+                              _selectedCustomerIds = [];
+                            });
+                          }
+                        },
+                        contentPadding: EdgeInsets.zero,
+                        dense: true,
+                        visualDensity: VisualDensity.compact,
+                        title: const Text('All Customers',
+                            style: TextStyle(
+                                fontSize: 13.5, fontWeight: FontWeight.w500)),
+                        subtitle: Text(
+                            'Coupon is applicable to all customers with no additional restrictions.',
+                            style: TextStyle(
+                                fontSize: 12,
+                                color: AppColors.textSecondary)),
+                      ),
 
                       RadioListTile<String>(
                         value: 'all',

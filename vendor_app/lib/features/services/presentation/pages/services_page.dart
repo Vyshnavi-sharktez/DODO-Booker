@@ -424,6 +424,40 @@ class _ServicesPageState extends ConsumerState<ServicesPage> {
   }
 
   void _showCreateServiceDialog(BuildContext context) {
+    final sub = ref.read(mySubscriptionProvider).valueOrNull;
+    if (sub == null || !sub.isActive) {
+      showDialog<void>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          titlePadding: const EdgeInsets.fromLTRB(24, 16, 8, 0),
+          title: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Expanded(child: Text('Not included in your plan')),
+              IconButton(
+                icon: const Icon(Icons.close_rounded, size: 20),
+                onPressed: () => Navigator.of(ctx).pop(),
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(),
+              ),
+            ],
+          ),
+          content: const Text(
+            'An active subscription is required to create custom services.',
+          ),
+          actions: [
+            FilledButton(
+              onPressed: () {
+                Navigator.of(ctx).pop();
+                context.push(RoutePaths.browsePlans);
+              },
+              child: const Text('Browse Plans'),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
     final profile = ref.read(vendorProfileProvider).valueOrNull;
     final incomplete =
         profile == null || profile.businessName.trim().isEmpty;

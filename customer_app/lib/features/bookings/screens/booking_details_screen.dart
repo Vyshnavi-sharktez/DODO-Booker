@@ -1,4 +1,6 @@
-﻿import 'package:flutter/material.dart';
+﻿import 'dart:io';
+
+import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/constants/app_colors.dart';
@@ -246,6 +248,15 @@ class _BookingDetailsScreenState extends ConsumerState<BookingDetailsScreen> {
     try {
       final profile = await ref.read(profileProvider.future);
       await InvoiceService.downloadInvoice(booking: b, customer: profile);
+      if (!mounted) return;
+      final message = Platform.isAndroid
+          ? 'Invoice saved to Downloads'
+          : Platform.isIOS
+              ? 'Invoice saved — open Files app to view'
+              : 'Invoice downloaded';
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(message)),
+      );
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -865,13 +876,25 @@ class _AddressCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final addr = booking.address;
+    final tt = Theme.of(context).textTheme;
     return _SectionCard(
       title: 'SERVICE ADDRESS',
       children: [
-        _DetailRow(
-          icon: Icons.location_on_rounded,
-          label: addr.label,
-          value: addr.fullAddress,
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Icon(Icons.location_on_rounded, size: 16, color: AppColors.primary),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                addr.fullAddress,
+                style: tt.bodySmall?.copyWith(
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.textPrimary,
+                ),
+              ),
+            ),
+          ],
         ),
       ],
     );

@@ -146,7 +146,6 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
                       _WelcomeHeader(
                         greeting: greeting,
                         name: vendorName,
-                        onRefresh: () => ref.invalidate(dashboardStatsProvider),
                       ),
                       const SizedBox(height: 20),
 
@@ -367,12 +366,10 @@ class _WelcomeHeader extends StatelessWidget {
   const _WelcomeHeader({
     required this.greeting,
     required this.name,
-    required this.onRefresh,
   });
 
   final String greeting;
   final String name;
-  final VoidCallback onRefresh;
 
   @override
   Widget build(BuildContext context) {
@@ -423,49 +420,12 @@ class _WelcomeHeader extends StatelessWidget {
               ],
             ),
           ),
-          const SizedBox(width: 12),
-          _HeroButton(
-            icon: Icons.refresh_rounded,
-            onTap: onRefresh,
-            tooltip: 'Refresh',
-          ),
         ],
       ),
     );
   }
 }
 
-class _HeroButton extends StatelessWidget {
-  const _HeroButton({
-    required this.icon,
-    required this.onTap,
-    required this.tooltip,
-  });
-
-  final IconData icon;
-  final VoidCallback onTap;
-  final String tooltip;
-
-  @override
-  Widget build(BuildContext context) {
-    return Tooltip(
-      message: tooltip,
-      child: Material(
-        color: Colors.white.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(10),
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(10),
-          child: SizedBox(
-            width: 40,
-            height: 40,
-            child: Icon(icon, color: Colors.white, size: 20),
-          ),
-        ),
-      ),
-    );
-  }
-}
 
 // ── Section header ────────────────────────────────────────────────────────────
 

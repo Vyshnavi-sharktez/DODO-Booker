@@ -4,7 +4,6 @@ import 'package:go_router/go_router.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../routes/app_router.dart';
 import '../models/booking_for_refund_model.dart';
-import '../models/refund_issue_category_model.dart';
 import '../services/refund_queries_providers.dart';
 
 class RefundQueryFormScreen extends ConsumerStatefulWidget {
@@ -29,7 +28,6 @@ class _RefundQueryFormScreenState
   final _formKey = GlobalKey<FormState>();
   final _descCtrl = TextEditingController();
 
-  RefundIssueCategoryModel? _selectedCategory;
   bool _submitting = false;
 
   @override
@@ -40,17 +38,12 @@ class _RefundQueryFormScreenState
 
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
-    if (_selectedCategory == null) {
-      _showError('Please select an issue category.');
-      return;
-    }
-
     setState(() => _submitting = true);
     try {
       final svc = ref.read(refundQueriesServiceProvider);
       final result = await svc.createRefundRequest(
         bookingId: widget.booking.id,
-        issueCategoryId: _selectedCategory!.id,
+        issueCategoryId: null,
         description: _descCtrl.text.trim(),
         requestedAmount: widget.booking.totalAmount,
       );
@@ -102,7 +95,6 @@ class _RefundQueryFormScreenState
   @override
   Widget build(BuildContext context) {
     final tt = Theme.of(context).textTheme;
-    final categoriesAsync = ref.watch(refundIssueCategoriesProvider);
 
     final formFields = [
       // ── Booking summary banner ───────────────────────────────────────
@@ -163,75 +155,6 @@ class _RefundQueryFormScreenState
           ],
         ),
       ),
-
-      const SizedBox(height: 20),
-
-      // ── Issue category ───────────────────────────────────────────────
-      _SectionHeader('Issue Category'),
-      categoriesAsync.when(
-        loading: () => const Padding(
-          padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          child: LinearProgressIndicator(),
-        ),
-        error: (_, __) => Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          child: Text(
-            'Could not load categories',
-            style: tt.bodySmall?.copyWith(color: AppColors.error),
-          ),
-        ),
-        data: (categories) => Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: categories.map((cat) {
-              final selected = _selectedCategory?.id == cat.id;
-              return GestureDetector(
-                onTap: () => setState(() => _selectedCategory = cat),
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 150),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 14,
-                    vertical: 9,
-                  ),
-                  decoration: BoxDecoration(
-                    color: selected ? AppColors.primary : AppColors.surface,
-                    borderRadius: BorderRadius.circular(24),
-                    border: Border.all(
-                      color:
-                          selected ? AppColors.primary : AppColors.border,
-                      width: selected ? 0 : 0.8,
-                    ),
-                  ),
-                  child: Text(
-                    cat.label,
-                    style: tt.labelMedium?.copyWith(
-                      color:
-                          selected ? Colors.white : AppColors.textPrimary,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
-              );
-            }).toList(),
-          ),
-        ),
-      ),
-
-      if (_selectedCategory?.description != null) ...[
-        const SizedBox(height: 8),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: Text(
-            _selectedCategory!.description!,
-            style: tt.bodySmall?.copyWith(
-              color: AppColors.textSecondary,
-              height: 1.5,
-            ),
-          ),
-        ),
-      ],
 
       const SizedBox(height: 20),
 

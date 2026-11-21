@@ -13,6 +13,8 @@ import '../../reviews/widgets/review_modal.dart';
 import '../../catalog/utils/catalog_launcher.dart';
 import '../../refund_queries/screens/refund_queries_flow.dart';
 import '../../vendor_custom_service/widgets/vendor_custom_service_sheet.dart';
+import '../../warranties/screens/warranty_details_screen.dart';
+import '../../warranties/services/warranty_providers.dart';
 import '../models/notification_model.dart';
 import '../services/notification_providers.dart';
 import '../../support/screens/support_chat_screen.dart';
@@ -113,6 +115,23 @@ class _NotificationsModalState extends ConsumerState<NotificationsModal> {
       Navigator.of(context).pop();
       if (targetContext.mounted) {
         SupportChatScreen.show(targetContext);
+      }
+    } else if (n.entityType == 'service_warranty') {
+      final warrantyId = n.entityId!;
+      final targetContext = Navigator.of(context).context;
+      Navigator.of(context).pop();
+      final warranty =
+          await ref.read(warrantyByIdProvider(warrantyId).future);
+      if (warranty != null && targetContext.mounted) {
+        final booking =
+            await ref.read(bookingByIdProvider(warranty.bookingId).future);
+        if (booking != null && targetContext.mounted) {
+          WarrantyDetailsScreen.showAsModal(
+            targetContext,
+            booking: booking,
+            warranty: warranty,
+          );
+        }
       }
     }
   }

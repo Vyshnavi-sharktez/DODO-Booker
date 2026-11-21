@@ -25,6 +25,25 @@ class _ReviewModalState extends ConsumerState<ReviewModal> {
   int _selectedRating = 0;
   final _textController = TextEditingController();
   bool _isSubmitting = false;
+  bool _loadingExisting = true;
+  ReviewModel? _existingReview;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadExistingReview();
+  }
+
+  Future<void> _loadExistingReview() async {
+    try {
+      final existing = await ref
+          .read(reviewServiceProvider)
+          .getReviewForBooking(widget.bookingId);
+      if (mounted) setState(() { _existingReview = existing; _loadingExisting = false; });
+    } catch (_) {
+      if (mounted) setState(() => _loadingExisting = false);
+    }
+  }
 
   @override
   void dispose() {
@@ -34,27 +53,18 @@ class _ReviewModalState extends ConsumerState<ReviewModal> {
 
   @override
   Widget build(BuildContext context) {
-    final reviewAsync = ref.watch(bookingReviewProvider(widget.bookingId));
-
     return AppModalDialog(
       title: 'Rate Your Service',
       subtitle: Text(widget.serviceName),
-      child: reviewAsync.when(
-        loading: () => const SizedBox(
-          height: 120,
-          child: Center(child: CircularProgressIndicator()),
-        ),
-        error: (e, _) => const _ErrorBody(message: 'Unable to load review. Please try again.'),
-        data: (existing) => existing != null
-            ? _ExistingReviewBody(review: existing)
-            : _ReviewForm(
-                selectedRating: _selectedRating,
-                controller: _textController,
-                isSubmitting: _isSubmitting,
-                onRatingChanged: (r) => setState(() => _selectedRating = r),
-                onSubmit: () => _submit(),
-              ),
-      ),
+      child: _existingReview != null
+          ? _ExistingReviewBody(review: _existingReview!)
+          : _ReviewForm(
+              selectedRating: _selectedRating,
+              controller: _textController,
+              isSubmitting: _isSubmitting || _loadingExisting,
+              onRatingChanged: (r) => setState(() => _selectedRating = r),
+              onSubmit: _loadingExisting ? () {} : () => _submit(),
+            ),
     );
   }
 

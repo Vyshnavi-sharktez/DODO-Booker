@@ -40,7 +40,7 @@ class Coupon {
     this.updatedAt,
     this.applicabilityType = 'all',
     this.applicableNodeIds = const [],
-    this.customerEligibility = 'all',
+    this.customerEligibility = 'all_customers',
     this.selectedCustomerIds = const [],
     this.maxOrderWiseLimit,
   });

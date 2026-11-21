@@ -184,7 +184,11 @@ class _VendorAssignmentPageState
             }
           }
 
-          if (assignmentType != 'Unassigned') {
+          // DB trigger fn_notify_customer_vendor_assigned handles the customer
+          // notification for the first External Vendor assignment (NULL→non-null
+          // vendor_id). Skip app-side creation for that case to avoid duplicates.
+          if (assignmentType != 'Unassigned' &&
+              !(isFirstAssignment && assignmentType == 'External Vendor')) {
             try {
               await ref
                   .read(notificationsNotifierProvider.notifier)
